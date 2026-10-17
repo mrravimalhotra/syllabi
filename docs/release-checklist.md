@@ -44,4 +44,5 @@ Tick each one and note anything odd. Use your phone for the starred (★) checks
 | T-21 | Browser DevTools console on each page | No Content-Security-Policy reports (then CSP can be enforced) |
 | T-22 | My books: upload a Word (.docx) worksheet | Indexed as text pages; quota barely moves (no page reading) |
 | T-23 | Sample paper, Total marks 80, for a chapter you uploaded | Sections A–D with marks and word limits, tagged questions, marks add up to 80, answer key |
+| T-25 ★ | Upload phone photos of a Computer chapter with code (e.g. HTML), then ask "Write the basic structure of an HTML document" | Answer has a code block that keeps its indentation; on the phone only the code box scrolls; the PDF shows the code in a typewriter-style font |
 | T-24 | Step-by-step solution: "Answer all questions in this worksheet" with a worksheet photo or upload | Every question answered in order, each sized to its marks |

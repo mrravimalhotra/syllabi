@@ -55,6 +55,7 @@ Input for BMAD planning (PRD, epics, stories). Written 2026-10-17 from a read of
 | A18 | Onboarding, empty states, friendly errors | ⚠️ | |
 | A19 | Upload Word (.docx) worksheets | ✅ | 2026-10-17: text read in the browser, indexed directly |
 | A20 | Answers and papers follow Indian school exam conventions | ✅ | 2026-10-17: question types, marks-to-length, A–D section pattern, total marks choice (20/40/80/100) |
+| A21 | Code in answers (HTML, Python, etc.) | ✅ | 2026-10-17: code blocks styled and scrollable on screen, monospace with indentation in the PDF (Noto Sans Mono); page reading copies code exactly and labels side boxes and figures |
 
 ### B. School / teacher / parent
 | # | Standard | Status | Note |
