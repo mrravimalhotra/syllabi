@@ -8,7 +8,8 @@ import { splitQuestions } from "@/lib/rag/split-questions";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 
 // Mirrors the app's limits (src/app/dashboard/library/page.tsx and dashboard/page.tsx).
-const BOOK_MAX_PAGES = 30;
+const BOOK_MAX_PAGES = 60;
+const BOOK_MAX_IMAGES_PER_REQUEST = 8;
 const BOOK_BATCH_CHARS = 3 * 1024 * 1024;
 const ATTACH_MAX_IMAGES = 12;
 const ATTACH_MAX_CHARS = 3_000_000;
@@ -112,7 +113,10 @@ async function analyse(file: File): Promise<FileReport> {
   }
 
   report.imageKB = imageSizes.map((s) => Math.round((s * 3) / 4 / 1024));
-  report.bookUploadBatches = batchesFor([...imageSizes, ...textSizes], BOOK_BATCH_CHARS);
+  report.bookUploadBatches = Math.max(
+    batchesFor([...imageSizes, ...textSizes], BOOK_BATCH_CHARS),
+    Math.ceil(imageSizes.length / BOOK_MAX_IMAGES_PER_REQUEST)
+  );
   const oversize = imageSizes.filter((s) => s > BOOK_BATCH_CHARS).length;
   if (oversize) report.notes.push(`${oversize} page image(s) bigger than one upload request allows`);
   const attachTotal = imageSizes.slice(0, ATTACH_MAX_IMAGES).reduce((a, b) => a + b, 0);

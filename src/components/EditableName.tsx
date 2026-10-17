@@ -91,7 +91,7 @@ export function EditableName({ value, onSave, className }: EditableNameProps) {
       <button
         onClick={() => setEditing(true)}
         aria-label={`Rename ${value}`}
-        className="text-slate-300 opacity-0 group-hover:opacity-100 hover:text-slate-600"
+        className="p-1 text-slate-400 hover:text-slate-600 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100"
       >
         <PencilIcon />
       </button>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { downscaleImageFile } from "@/lib/downscale-image";
+import { EditableName } from "@/components/EditableName";
 
 type SourceType = "textbook" | "exercise" | "past_paper" | "notes";
 
@@ -12,7 +13,10 @@ const SOURCE_TYPE_OPTIONS: { value: SourceType; label: string }[] = [
   { value: "notes", label: "Notes" },
 ];
 
-const MAX_PAGES = 30;
+const MAX_PAGES = 60;
+// Page images per request: each is read by the AI (several seconds each), so
+// a request stays well inside the server's 300-second limit.
+const MAX_IMAGES_PER_BATCH = 8;
 
 // Base64 characters per request. Keeps each request under Vercel's ~4.5 MB
 // body limit (JSON overhead included); larger books go up in several batches.
@@ -56,14 +60,20 @@ function groupByContiguousSourceType(pageList: PendingPage[]): PendingPage[][] {
   return groups;
 }
 
-/** Splits pages into batches that each stay under a base64-size budget, so one request never gets too large to send reliably. */
+/**
+ * Splits pages into batches that each stay under a base64-size budget (so one
+ * request never gets too large to send reliably) and under a number of page
+ * images (so the AI reading in one request finishes in time).
+ */
 function chunkBySize(pageList: PendingPage[], maxChars: number): PendingPage[][] {
   const batches: PendingPage[][] = [];
   let current: PendingPage[] = [];
   let currentChars = 0;
+  const imagesIn = (batch: PendingPage[]) => batch.filter((p) => p.text === undefined).length;
   for (const page of pageList) {
     const size = page.text?.length ?? page.imageBase64.length;
-    if (current.length > 0 && currentChars + size > maxChars) {
+    const tooManyImages = page.text === undefined && imagesIn(current) >= MAX_IMAGES_PER_BATCH;
+    if (current.length > 0 && (currentChars + size > maxChars || tooManyImages)) {
       batches.push(current);
       current = [];
       currentChars = 0;
@@ -195,6 +205,17 @@ export default function LibraryPage() {
 
   function setPageSourceType(id: string, sourceType: SourceType) {
     setPages((prev) => prev.map((p) => (p.id === id ? { ...p, sourceType } : p)));
+  }
+
+  async function renameBook(id: string, title: string) {
+    const res = await fetch(`/api/library/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error ?? "Rename failed");
+    setDocuments((prev) => prev.map((d) => (d.id === id ? { ...d, title: data.document.title } : d)));
   }
 
   async function deleteBook(doc: DocumentRowView) {
@@ -462,7 +483,9 @@ export default function LibraryPage() {
           <tbody>
             {documents.map((d) => (
               <tr key={d.id} className="border-b border-slate-100 last:border-0">
-                <td className="px-4 py-3 text-slate-900">{d.title}</td>
+                <td className="px-4 py-3 text-slate-900">
+                  <EditableName value={d.title} onSave={(title) => renameBook(d.id, title)} />
+                </td>
                 <td className="px-4 py-3 text-xs text-slate-500">
                   {[d.subject, d.grade].filter(Boolean).join(" · ") || "—"}
                 </td>
