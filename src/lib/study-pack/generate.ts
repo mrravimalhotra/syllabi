@@ -10,7 +10,7 @@ import { evidenceFound } from "@/lib/study-pack/verify";
 import { autoKeyFor } from "@/lib/study-pack/auto-key";
 import { levelLine } from "@/lib/generation/level";
 import { languageLine, type AnswerLanguage } from "@/lib/generation/language";
-import type { PackQuestion, StudyPack, VocabularyItem, WalkthroughPart } from "@/lib/study-pack/types";
+import { SCENE_BACKDROPS, SCENE_MOTIONS, type PackQuestion, type Scene, type StudyPack, type VocabularyItem, type WalkthroughPart } from "@/lib/study-pack/types";
 
 // About 40 dense textbook pages; longer books should be split into chapters.
 const MAX_CHAPTER_CHARS = 150_000;
@@ -106,6 +106,21 @@ function vocabulary(v: unknown): VocabularyItem[] {
     .filter((x) => x.word && x.meaning && !seen.has(x.word.toLowerCase()) && seen.add(x.word.toLowerCase()));
 }
 
+const EMOJI = /^\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic}|[\u{1F3FB}-\u{1F3FF}])*$/u;
+
+/** A scene from the AI's reply, kept only if every part is one of the allowed choices (never free text that could be run). */
+export function scene(v: unknown): Scene | null {
+  const x = record(v);
+  const backdrop = SCENE_BACKDROPS.find((b) => b === x.backdrop);
+  if (!backdrop) return null;
+  const actors = list(x.actors, 4)
+    .map(record)
+    .map((a) => ({ emoji: str(a.emoji, 16), motion: SCENE_MOTIONS.find((m) => m === a.motion) ?? "float" }))
+    .filter((a) => EMOJI.test(a.emoji));
+  if (actors.length === 0) return null;
+  return { backdrop, actors, caption: str(x.caption, 80) };
+}
+
 function question(v: unknown, chapterText: string | null, practice: boolean): PackQuestion | null {
   const x = record(v);
   const q = str(x.question);
@@ -152,6 +167,7 @@ function buildPack(
       feelings: kind === "story" ? str(p.feelings) || null : null,
       vocabulary: vocabulary(p.vocabulary),
       narration: str(p.narration),
+      scene: scene(p.scene),
     }))
     .filter((p) => p.title && p.summary);
 

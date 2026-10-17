@@ -181,6 +181,23 @@ await test("My Books: lists books with reading progress", async (page, ctx) => {
   await page.getByText("Science Notes").first().waitFor();
 });
 
+await test("Switching screens shows the last list at once while it refreshes", async (page, ctx) => {
+  let calls = 0;
+  await ctx.route("**/api/me", (r) => json(r, me));
+  await ctx.route("**/api/library*", async (r) => {
+    calls++;
+    if (calls > 2) await new Promise((res) => setTimeout(res, 3000)); // a slow refresh
+    return json(r, { documents: books });
+  });
+  await page.goto(`${BASE}/dashboard/library`, { waitUntil: "networkidle" });
+  await page.getByText("Maths Chapter 3").first().waitFor();
+  await page.locator('a[href="/dashboard"]:visible').last().evaluate((el) => el.click());
+  await page.waitForURL(/\/dashboard$/);
+  await page.locator('a[href="/dashboard/library"]:visible').last().evaluate((el) => el.click());
+  await page.waitForURL(/\/dashboard\/library/);
+  await page.getByText("Maths Chapter 3").first().waitFor({ timeout: 1500 });
+});
+
 await test("My Books: a failed list shows a retry message", async (page, ctx) => {
   await ctx.route("**/api/me", (r) => json(r, me));
   await ctx.route("**/api/library*", (r) => json(r, { error: "Couldn't load your books." }, 500));

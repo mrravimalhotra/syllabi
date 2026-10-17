@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { SPEECH_LANG } from "@/lib/generation/language";
 
 const noop = () => () => {};
@@ -25,29 +25,46 @@ function pickVoice(text: string, language: string): SpeechSynthesisVoice | undef
 }
 
 /**
- * Read-aloud with the browser's built-in speech (no cost, works offline on
- * most phones). One thing speaks at a time; `speakingId` says which.
+ * Read-aloud. First choice is a natural, child-friendly voice made on the
+ * server (and kept there, so each text is made once); if that is unavailable
+ * (allowance used up, offline), the phone's own built-in voice reads it.
+ * One thing speaks at a time; `speakingId` says which, `loadingId` which is
+ * still being prepared.
  */
 export function useSpeech(language = "en") {
-  const supported = useSyncExternalStore(
+  const browserVoice = useSyncExternalStore(
     noop,
     () => "speechSynthesis" in window,
     () => false
   );
   const [speakingId, setSpeakingId] = useState<string | null>(null);
+  const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [rate, setRate] = useState(0.95);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const requestRef = useRef<AbortController | null>(null);
+  // Voices already fetched this visit, so pressing Read aloud again is instant.
+  const clipsRef = useRef(new Map<string, string>());
+
+  const halt = useCallback(() => {
+    requestRef.current?.abort();
+    requestRef.current = null;
+    audioRef.current?.pause();
+    audioRef.current = null;
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  }, []);
 
   const stop = useCallback(() => {
-    if (supported) window.speechSynthesis.cancel();
+    halt();
     setSpeakingId(null);
-  }, [supported]);
+    setLoadingId(null);
+  }, [halt]);
 
-  const speak = useCallback(
+  const speakWithDevice = useCallback(
     (id: string, text: string) => {
-      if (!supported) return;
-      window.speechSynthesis.cancel();
-      if (speakingId === id) {
+      if (!browserVoice) {
         setSpeakingId(null);
+        setNotice("This phone can't read aloud.");
         return;
       }
       const utterance = new SpeechSynthesisUtterance(text);
@@ -65,15 +82,75 @@ export function useSpeech(language = "en") {
       setSpeakingId(id);
       window.speechSynthesis.speak(utterance);
     },
-    [supported, speakingId, rate, language]
+    [browserVoice, language, rate]
   );
 
-  // Stop talking when the page closes or the view goes away.
-  useEffect(() => () => {
-    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
-  }, []);
+  const speak = useCallback(
+    async (id: string, text: string) => {
+      const wasSpeaking = speakingId === id || loadingId === id;
+      halt();
+      setSpeakingId(null);
+      setLoadingId(null);
+      setNotice(null);
+      if (wasSpeaking) return; // pressing the same button again stops it
 
-  return { supported, speakingId, speak, stop, rate, setRate };
+      const clipKey = `${language}|${text}`;
+      let url = clipsRef.current.get(clipKey);
+      if (!url) {
+        const controller = new AbortController();
+        requestRef.current = controller;
+        setLoadingId(id);
+        try {
+          const res = await fetch("/api/speech", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            signal: controller.signal,
+            body: JSON.stringify({ text, language }),
+          });
+          if (!res.ok) throw new Error(`speech ${res.status}`);
+          url = URL.createObjectURL(await res.blob());
+          clipsRef.current.set(clipKey, url);
+        } catch {
+          if (controller.signal.aborted) return;
+          setLoadingId(null);
+          setNotice("The natural voice isn't available right now, so this phone's own voice is reading instead.");
+          speakWithDevice(id, text);
+          return;
+        }
+        if (controller.signal.aborted) return;
+        requestRef.current = null;
+        setLoadingId(null);
+      }
+
+      const audio = new Audio(url);
+      audio.playbackRate = rate;
+      audio.onended = () => setSpeakingId((current) => (current === id ? null : current));
+      audio.onerror = () => {
+        clipsRef.current.delete(clipKey);
+        setSpeakingId(null);
+      };
+      audioRef.current = audio;
+      setSpeakingId(id);
+      audio.play().catch(() => {
+        // The phone refused to start sound (it wants a tap): say so plainly.
+        setSpeakingId(null);
+        setNotice("Your phone didn't start the sound. Press Read aloud again.");
+      });
+    },
+    [speakingId, loadingId, halt, language, rate, speakWithDevice]
+  );
+
+  // Stop talking when the page closes or the view goes away, and free the stored clips.
+  useEffect(() => {
+    const clips = clipsRef.current;
+    return () => {
+      halt();
+      for (const url of clips.values()) URL.revokeObjectURL(url);
+      clips.clear();
+    };
+  }, [halt]);
+
+  return { supported: true, speakingId, loadingId, notice, speak, stop, rate, setRate };
 }
 
 export type Speech = ReturnType<typeof useSpeech>;

@@ -122,3 +122,30 @@ body {
     margin: 16mm 14mm;
   }
 }
+
+/* Study-pack scenes: emoji that move over a coloured backdrop. Each motion is
+   a gentle loop; "scene-lively" (while the voice reads) makes it quicker. */
+@keyframes scene-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12%); } }
+@keyframes scene-bounce { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-28%); } 60% { transform: translateY(-28%); } 80% { transform: translateY(0) scaleY(0.92); } }
+@keyframes scene-sway { 0%, 100% { transform: rotate(-9deg); } 50% { transform: rotate(9deg); } }
+@keyframes scene-spin { to { transform: rotate(360deg); } }
+@keyframes scene-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.22); } }
+@keyframes scene-walk { 0%, 100% { transform: translateX(-35%) scaleX(1); } 49% { transform: translateX(35%) scaleX(1); } 51% { transform: translateX(35%) scaleX(-1); } 99% { transform: translateX(-35%) scaleX(-1); } }
+@keyframes scene-fly { 0% { transform: translate(-40%, 10%); } 50% { transform: translate(40%, -25%); } 100% { transform: translate(-40%, 10%); } }
+@keyframes scene-grow { 0%, 15% { transform: scale(0.45); } 70%, 100% { transform: scale(1.1); } }
+
+.scene-actor {
+  animation-duration: calc(var(--scene-seconds, 3s) / var(--scene-speed, 1));
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
+  transform-origin: 50% 85%;
+}
+.scene-float { animation-name: scene-float; }
+.scene-bounce { animation-name: scene-bounce; }
+.scene-sway { animation-name: scene-sway; }
+.scene-spin { animation-name: scene-spin; animation-timing-function: linear; transform-origin: 50% 50%; }
+.scene-pulse { animation-name: scene-pulse; transform-origin: 50% 50%; }
+.scene-walk { animation-name: scene-walk; animation-duration: calc(var(--scene-seconds, 3s) * 2 / var(--scene-speed, 1)); }
+.scene-fly { animation-name: scene-fly; animation-duration: calc(var(--scene-seconds, 3s) * 2 / var(--scene-speed, 1)); }
+.scene-grow { animation-name: scene-grow; animation-direction: alternate; transform-origin: 50% 100%; }
+.scene-lively { --scene-speed: 1.7; }

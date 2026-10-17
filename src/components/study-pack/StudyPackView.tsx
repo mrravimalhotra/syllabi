@@ -21,6 +21,7 @@ import { PrintButton } from "@/components/PrintButton";
 import { PdfButton } from "@/components/PdfButton";
 import { Badge, Spinner, button, card, cx, input } from "@/components/ui";
 import { useSpeech, type Speech } from "@/components/study-pack/useSpeech";
+import { SceneView } from "@/components/study-pack/SceneView";
 import { normaliseResponse } from "@/lib/study-pack/auto-key";
 import { packToMarkdown } from "@/lib/study-pack/markdown";
 import type { PackQuestion, PackSection, StudyPack } from "@/lib/study-pack/types";
@@ -156,6 +157,11 @@ export function StudyPackView({
             </select>
           </div>
         )}
+        {speech.notice && (
+          <p role="status" className="text-xs text-amber-700">
+            {speech.notice}
+          </p>
+        )}
       </header>
 
       <div role="tablist" aria-label="Study pack sections" className="-mx-1 flex gap-1 overflow-x-auto px-1 print:hidden">
@@ -216,15 +222,16 @@ export function StudyPackView({
 function ListenButton({ id, text, speech, label = "Listen" }: { id: string; text: string; speech: Speech; label?: string }) {
   if (!speech.supported || !text) return null;
   const speaking = speech.speakingId === id;
+  const loading = speech.loadingId === id;
   return (
     <button
       type="button"
-      onClick={() => speech.speak(id, text)}
-      className={cx(button.small, speaking && "border-brand-500 text-brand-700")}
-      aria-pressed={speaking}
+      onClick={() => void speech.speak(id, text)}
+      className={cx(button.small, (speaking || loading) && "border-brand-500 text-brand-700")}
+      aria-pressed={speaking || loading}
     >
-      {speaking ? <StopIcon className="h-4 w-4" /> : <SpeakerIcon className="h-4 w-4" />}
-      {speaking ? "Stop" : label}
+      {loading ? <Spinner className="h-4 w-4" /> : speaking ? <StopIcon className="h-4 w-4" /> : <SpeakerIcon className="h-4 w-4" />}
+      {loading ? "Getting the voice… (tap to cancel)" : speaking ? "Stop" : label}
     </button>
   );
 }
@@ -275,6 +282,8 @@ function Walkthrough({ pack, speech }: { pack: StudyPack; speech: Speech }) {
           </div>
           <ListenButton id={`part-${index}`} text={part.narration} speech={speech} label="Read aloud" />
         </div>
+
+        {part.scene && <SceneView scene={part.scene} speaking={speech.speakingId === `part-${index}`} />}
 
         <p className="text-[15px] leading-7 text-slate-700">{part.summary}</p>
 

@@ -57,3 +57,9 @@ Optional backups: `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `MISTRAL_API_KEY` (and `
 2. **Backup AI keys:** the owner was at step 1 for Groq (create a key at https://console.groq.com/keys). Next step: Vercel → syllabi → Settings → Environment Variables → add `GROQ_API_KEY` → redeploy → Admin → Health shows "Backup AI: groq" green. Then OpenRouter, then Mistral, one at a time.
 3. **Known loose ends:** the owner's two "History Unit 1 Bhakti Movement" books are the two halves of one upload made before the one-book fix (fine to keep). The old R2 bucket `studysprint` holds orphan files and can be deleted. There is no vector index on `chunks` (migration 6 dropped it); consider HNSW once libraries are large. Set `APP_URL` in Vercel so a preview deployment can't overwrite the address the background timer calls.
 4. **Possible next features** (ask the owner first): practice history (`practice_sessions` table), more practice exercises using the worked-example engines, child profiles.
+
+
+## Optional environment variables added later
+
+- `TTS_VOICE` (default `Leda`; other female Gemini voices: Aoede, Laomedeia, Sulafat, Zephyr) and `TTS_MODEL` (default `gemini-2.5-flash-preview-tts`): the study-pack read-aloud voice. Gemini speech has a small free daily allowance; each text is made once and stored in R2 under `speech/`.
+- `NEXT_PUBLIC_SITE_URL` and `APP_URL`: fixed addresses for password-reset links and the background timer.

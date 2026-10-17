@@ -1,4 +1,6 @@
 import { googleAdapter } from "@/lib/llm/providers/google";
+import { scene } from "@/lib/study-pack/generate";
+import { pcmToWav, splitForSpeech } from "@/lib/tts/wav";
 
 process.env.GOOGLE_API_KEY = "test-key";
 
@@ -47,5 +49,20 @@ check("the main model was tried once", calls.filter((m) => m === "gemini-flash-l
 calls.length = 0;
 const second = await googleAdapter.generateCompletion({ ...base });
 check("the next question skips the busy model", !calls.includes("gemini-flash-latest") && second.standInFor === "gemini-flash-latest", calls.join(","));
+
+// Study-pack scenes: only fixed choices and real emoji get through.
+const good = scene({ backdrop: "forest", actors: [{ emoji: "🌳", motion: "sway" }, { emoji: "🐦", motion: "fly" }, { emoji: "👩🏽‍🏫", motion: "bounce" }], caption: "A bird in the trees" });
+check("a valid scene is kept", good?.backdrop === "forest" && good.actors.length === 3, JSON.stringify(good));
+check("an unknown backdrop is dropped", scene({ backdrop: "<script>", actors: [{ emoji: "🌳", motion: "sway" }], caption: "x" }) === null);
+check("text that is not an emoji is dropped", scene({ backdrop: "sky", actors: [{ emoji: "<img onerror=x>", motion: "sway" }, { emoji: "abc", motion: "fly" }], caption: "x" }) === null);
+check("an unknown motion becomes a gentle float", scene({ backdrop: "sky", actors: [{ emoji: "☀️", motion: "explode" }], caption: "x" })?.actors[0].motion === "float");
+check("no more than 4 actors", (scene({ backdrop: "sky", actors: Array(9).fill({ emoji: "⭐", motion: "spin" }), caption: "x" })?.actors.length ?? 0) === 4);
+
+// Speech audio: a WAV header and sensible splitting of long text.
+const wav = pcmToWav(Buffer.alloc(48_000));
+check("WAV audio has a valid header", wav.toString("ascii", 0, 4) === "RIFF" && wav.toString("ascii", 8, 12) === "WAVE" && wav.length === 48_044);
+const long = Array(40).fill("This is one sentence about plants.").join(" ");
+const parts = splitForSpeech(long, 300);
+check("long text is split at sentence ends under the limit", parts.length > 1 && parts.every((p) => p.length <= 300 && p.endsWith(".")), parts.map((p) => p.length).join(","));
 
 process.exit(failures ? 1 : 0);

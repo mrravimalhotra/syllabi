@@ -16,6 +16,8 @@ export interface WalkthroughPart {
   vocabulary: VocabularyItem[];
   /** Plain text to read aloud to the child. */
   narration: string;
+  /** An animated picture for this part; absent in packs made before scenes. */
+  scene?: Scene | null;
 }
 
 export interface PackQuestion {
@@ -72,3 +74,19 @@ export type AutoKey =
   | { kind: "blank"; answers: string[] };
 
 export type PackSection = "textbookQuestions" | "practiceQuestions";
+
+/** The backdrops a study-pack scene can use. */
+export const SCENE_BACKDROPS = ["sky", "forest", "ocean", "night", "desert", "village", "city", "classroom", "mountain", "temple", "space", "lab"] as const;
+export type SceneBackdrop = (typeof SCENE_BACKDROPS)[number];
+
+/** How a scene's picture moves. Fixed list: the AI picks from it, so nothing it writes is ever run as code. */
+export const SCENE_MOTIONS = ["float", "bounce", "sway", "spin", "pulse", "walk", "fly", "grow"] as const;
+export type SceneMotion = (typeof SCENE_MOTIONS)[number];
+
+/** A small animated picture for a walkthrough part: emoji that move over a coloured backdrop. */
+export interface Scene {
+  backdrop: SceneBackdrop;
+  actors: { emoji: string; motion: SceneMotion }[];
+  /** A few words under the picture, e.g. "The sun warms the plant". */
+  caption: string;
+}

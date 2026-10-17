@@ -13,6 +13,8 @@ const CSP = [
   // photo previews are data: URLs.
   "img-src 'self' data: blob: https://*.r2.cloudflarestorage.com",
   "font-src 'self' data:",
+  // Read-aloud voice clips are played from in-memory blobs.
+  "media-src 'self' blob:",
   "connect-src 'self' https://*.supabase.co",
   // pdf.js renders uploaded PDFs in a worker.
   "worker-src 'self' blob:",

@@ -72,9 +72,19 @@ Write the chapter overview and walkthrough.
     which words show it. Empty string for information chapters.
   - "vocabulary": 3 to 5 words or phrases copied from this part of the chapter, each with
     a meaning a child understands, as used in this chapter.
-  - "narration": 5 to 7 sentences to read aloud to the child, warm and direct, plain text
-    with no Markdown or emojis. Use the book's language and explain its harder words
-    inside the narration rather than simplifying them away.`;
+  - "narration": 5 to 7 sentences to read aloud to a child, in the voice of a kind,
+    cheerful teacher telling a story: short, lively sentences, a friendly opening, and
+    one question or little wonder to keep the child curious ("Can you guess what
+    happened next?"). Plain text with no Markdown, brackets or emojis, because it is
+    spoken. Use the book's language and explain its harder words inside the narration
+    rather than simplifying them away.
+  - "scene": a small animated picture for this part, made only from the fixed choices
+    below so it can be drawn safely: "backdrop" (one of sky, forest, ocean, night,
+    desert, village, city, classroom, mountain, temple, space, lab), "actors" (2 to 4
+    items, each one emoji that shows something from this part, with a "motion" of
+    float, bounce, sway, spin, pulse, walk, fly or grow that suits it, e.g. a sun
+    that pulses, a bird that flies, a plant that grows), and "caption" (at most 8
+    words saying what the picture shows).`;
 
 export const QUESTIONS_SYSTEM = `${RULES}
 
@@ -127,8 +137,20 @@ export const WALKTHROUGH_SCHEMA = {
           feelings: STRING,
           vocabulary: VOCAB,
           narration: STRING,
+          scene: {
+            type: "object",
+            properties: {
+              backdrop: STRING,
+              actors: {
+                type: "array",
+                items: { type: "object", properties: { emoji: STRING, motion: STRING }, required: ["emoji", "motion"] },
+              },
+              caption: STRING,
+            },
+            required: ["backdrop", "actors", "caption"],
+          },
         },
-        required: ["title", "summary", "whyItMatters", "feelings", "vocabulary", "narration"],
+        required: ["title", "summary", "whyItMatters", "feelings", "vocabulary", "narration", "scene"],
       },
     },
   },
