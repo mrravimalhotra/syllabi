@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { embed } from "@/lib/llm";
+import { embed, embedMany } from "@/lib/llm";
+import { splitQuestions } from "@/lib/rag/split-questions";
 import { downloadFile } from "@/lib/storage";
 import type { CompletionImage } from "@/lib/llm/types";
 import type { MatchedChunk } from "@/types/database";
@@ -18,6 +19,9 @@ export interface RetrievalResult {
 }
 
 const MATCH_COUNT = 8;
+// Worksheets: matches per question, and the most passages sent in total.
+const MATCHES_PER_QUESTION = 4;
+const MAX_TOTAL_MATCHES = 48;
 const COVERAGE_THRESHOLD = 0.55;
 // Caps how many source page images get sent to the model per request — request
 // size/cost scale with image count, and a handful of the top matches is enough.
@@ -25,26 +29,51 @@ const MAX_SOURCE_IMAGES = 4;
 
 /**
  * The reusable RAG retrieval core: embed the query, then run a vector search
- * over the owner's private library in pgvector via the `match_owner_chunks` RPC. Every generation route
- * (solutions, notes, sample papers, ad-hoc) calls this same function.
+ * over the owner's private library in pgvector via the `match_owner_chunks`
+ * RPC. A worksheet with several questions gets one search per question (one
+ * batched embedding call), so every question finds its own material.
  */
 export async function retrieveContext(query: string, scope: RetrievalScope): Promise<RetrievalResult> {
-  const { embedding } = await embed(query);
-  const admin = createAdminClient();
+  const questions = splitQuestions(query);
+  if (questions.length === 0) {
+    const { embedding } = await embed(query);
+    const chunks = await search(embedding, scope, MATCH_COUNT);
+    const topSimilarity = chunks[0]?.similarity ?? 0;
+    return { chunks, coverageLow: chunks.length === 0 || topSimilarity < COVERAGE_THRESHOLD };
+  }
 
+  const embeddings = await embedMany(questions);
+  const perQuestion = await Promise.all(embeddings.map((e) => search(e.embedding, scope, MATCHES_PER_QUESTION)));
+
+  // Interleave (each question's best match first, then second best, ...) so
+  // the total cap never starves later questions; drop duplicates.
+  const seen = new Set<string>();
+  const chunks: MatchedChunk[] = [];
+  for (let rank = 0; rank < MATCHES_PER_QUESTION; rank++) {
+    for (const matches of perQuestion) {
+      const chunk = matches[rank];
+      if (chunk && !seen.has(chunk.id) && chunks.length < MAX_TOTAL_MATCHES) {
+        seen.add(chunk.id);
+        chunks.push(chunk);
+      }
+    }
+  }
+
+  // Coverage is low when at least half the questions found nothing close.
+  const weak = perQuestion.filter((m) => (m[0]?.similarity ?? 0) < COVERAGE_THRESHOLD).length;
+  return { chunks, coverageLow: chunks.length === 0 || weak * 2 >= perQuestion.length };
+}
+
+async function search(embedding: number[], scope: RetrievalScope, count: number): Promise<MatchedChunk[]> {
+  const admin = createAdminClient();
   const { data, error } = await admin.rpc("match_owner_chunks", {
     query_embedding: embedding,
     match_owner_id: scope.ownerId,
     match_document_ids: scope.documentIds?.length ? scope.documentIds : null,
-    match_count: MATCH_COUNT,
+    match_count: count,
   });
-
   if (error) throw new Error(`Vector search failed: ${error.message}`);
-
-  const chunks = (data ?? []) as MatchedChunk[];
-  const topSimilarity = chunks[0]?.similarity ?? 0;
-
-  return { chunks, coverageLow: chunks.length === 0 || topSimilarity < COVERAGE_THRESHOLD };
+  return (data ?? []) as MatchedChunk[];
 }
 
 /**

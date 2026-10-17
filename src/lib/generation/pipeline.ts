@@ -89,7 +89,8 @@ export async function runGeneration({
   };
 }
 
-const MAX_SEARCH_QUERY_CHARS = 2000;
+// Long enough for a whole worksheet; each question is then searched on its own.
+const MAX_SEARCH_QUERY_CHARS = 12000;
 
 /** Transcribes attached photos into text for the knowledge-base search, counting the call against the quota. */
 async function transcribePhotos(studentId: string, photos: CompletionImage[]): Promise<string> {

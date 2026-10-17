@@ -1,5 +1,5 @@
 import { getLlmSetting } from "@/lib/llm/config";
-import { googleAdapter } from "@/lib/llm/providers/google";
+import { googleAdapter, googleEmbedMany } from "@/lib/llm/providers/google";
 import { anthropicAdapter } from "@/lib/llm/providers/anthropic";
 import { openaiAdapter } from "@/lib/llm/providers/openai";
 import type { CompletionRequest, CompletionResult, EmbeddingResult, LlmProviderAdapter } from "@/lib/llm/types";
@@ -31,6 +31,13 @@ export async function generateCompletion(req: CompletionRequest): Promise<Comple
 export async function embed(text: string): Promise<EmbeddingResult> {
   const { model } = await getLlmSetting("embedding");
   return googleAdapter.embed(text, model);
+}
+
+/** Embeds many texts in as few requests as possible; results are in input order. */
+export async function embedMany(texts: string[]): Promise<EmbeddingResult[]> {
+  if (texts.length === 0) return [];
+  const { model } = await getLlmSetting("embedding");
+  return googleEmbedMany(texts, model);
 }
 
 export type { CompletionRequest, CompletionResult, CompletionImage, NormalizedUsage } from "@/lib/llm/types";

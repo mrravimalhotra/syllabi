@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { extractPageText } from "@/lib/ingestion/extract";
 import { chunkPageText } from "@/lib/ingestion/chunk";
-import { embed } from "@/lib/llm";
+import { embedMany } from "@/lib/llm";
 import { recordTokenUsage } from "@/lib/llm/usage";
 import { uploadSourceFile } from "@/lib/storage";
 import type { DocumentRow } from "@/types/database";
@@ -20,7 +20,7 @@ const MIME_EXTENSIONS: Record<string, string> = {
  * files), which is indexed directly with no image and no AI reading step.
  */
 export type IngestPage =
-  | { pageNumber: number; imageBase64: string; mimeType: string; text?: undefined }
+  | { pageNumber: number; imageBase64: string; mimeType: string; hint?: string; text?: undefined }
   | { pageNumber: number; text: string; imageBase64?: undefined; mimeType?: undefined };
 
 export interface IngestDocumentInput {
@@ -111,7 +111,7 @@ export async function ingestDocument(input: IngestDocumentInput): Promise<string
           if (error) stage("saving the page preview", page.pageNumber, error);
         }
 
-        const extraction = await extractPageText(page.imageBase64, page.mimeType).catch((err) =>
+        const extraction = await extractPageText(page.imageBase64, page.mimeType, page.hint).catch((err) =>
           stage("reading the page", page.pageNumber, err)
         );
         await recordTokenUsage({
@@ -125,22 +125,25 @@ export async function ingestDocument(input: IngestDocumentInput): Promise<string
       }
       const textChunks = chunkPageText(pageText, page.pageNumber);
 
-      let embeddingTokens = 0;
-      let embeddingModel = "";
-      for (const chunk of textChunks) {
-        const result = await embed(chunk.content).catch((err) => stage("indexing the page", page.pageNumber, err));
-        embeddingTokens += result.usage.totalTokens;
-        embeddingModel = result.model;
-        const { error: insertError } = await admin.from("chunks").insert({
-          document_id: documentId,
-          owner_id: input.ownerId,
-          source_type: input.sourceType,
-          page_number: page.pageNumber,
-          section_label: chunk.sectionLabel,
-          content: chunk.content,
-          image_path: imagePath,
-          embedding: result.embedding,
-        });
+      // One request embeds all of the page's chunks; one insert saves them.
+      const embeddings = await embedMany(textChunks.map((c) => c.content)).catch((err) =>
+        stage("indexing the page", page.pageNumber, err)
+      );
+      const embeddingTokens = embeddings.reduce((sum, e) => sum + e.usage.totalTokens, 0);
+      const embeddingModel = embeddings[0]?.model ?? "";
+      if (textChunks.length > 0) {
+        const { error: insertError } = await admin.from("chunks").insert(
+          textChunks.map((chunk, i) => ({
+            document_id: documentId,
+            owner_id: input.ownerId,
+            source_type: input.sourceType,
+            page_number: page.pageNumber,
+            section_label: chunk.sectionLabel,
+            content: chunk.content,
+            image_path: imagePath,
+            embedding: embeddings[i].embedding,
+          }))
+        );
         if (insertError) stage("saving the page", page.pageNumber, insertError);
       }
       if (embeddingTokens > 0) {

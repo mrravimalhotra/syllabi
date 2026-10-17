@@ -92,3 +92,53 @@ export const googleAdapter: LlmProviderAdapter = {
     };
   },
 };
+
+// Gemini's batch endpoint takes at most 100 texts per request.
+const EMBED_BATCH_SIZE = 100;
+
+/**
+ * Embeds many texts with as few requests as possible (one per 100 texts), in
+ * input order. Used to index a page's chunks and to search for each question
+ * of a multi-question worksheet separately.
+ */
+export async function googleEmbedMany(texts: string[], model: string): Promise<EmbeddingResult[]> {
+  const apiKey = process.env.GOOGLE_API_KEY;
+  if (!apiKey) throw new Error("GOOGLE_API_KEY is not configured");
+
+  const results: EmbeddingResult[] = [];
+  for (let start = 0; start < texts.length; start += EMBED_BATCH_SIZE) {
+    const batch = texts.slice(start, start + EMBED_BATCH_SIZE);
+    const response = await withNetworkRetry(() =>
+      fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:batchEmbedContents?key=${apiKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requests: batch.map((text) => ({
+            model: `models/${model}`,
+            content: { parts: [{ text }] },
+            outputDimensionality: 768,
+          })),
+        }),
+      })
+    );
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new Error(`Gemini batchEmbedContents failed (${response.status}): ${errorBody}`);
+    }
+    const data = (await response.json()) as { embeddings: { values: number[] }[] };
+    if (data.embeddings?.length !== batch.length) {
+      throw new Error(`Gemini batchEmbedContents returned ${data.embeddings?.length ?? 0} embeddings for ${batch.length} texts`);
+    }
+    data.embeddings.forEach((e, i) => {
+      // The embeddings API doesn't return token usage; approximate for quota purposes.
+      const approxTokens = Math.ceil(batch[i].length / 4);
+      results.push({
+        embedding: e.values,
+        provider: "google",
+        model,
+        usage: { inputTokens: approxTokens, outputTokens: 0, totalTokens: approxTokens },
+      });
+    });
+  }
+  return results;
+}
