@@ -223,8 +223,8 @@ export default function DashboardPage() {
           images.push(...content.pictures);
           if (content.skippedPictures.length) notes.push(`${file.name}: some pictures can't be read; save it as PDF if they matter.`);
         } else if (file.type === "application/pdf") {
-          const { pdfToPageImages } = await import("@/lib/pdf-to-images");
-          images.push(...(await pdfToPageImages(file, MAX_PHOTOS)));
+          const { readPdfPages } = await import("@/lib/pdf-to-images");
+          images.push(...(await readPdfPages(file, MAX_PHOTOS)));
         } else if (file.type.startsWith("image/")) {
           images.push(await downscaleImageFile(file));
         } else {
@@ -290,7 +290,7 @@ export default function DashboardPage() {
           isPack
             ? {
                 documentId: chosenPackBook || undefined,
-                photos: chosenPackBook ? [] : photos.map((p) => ({ data: p.imageBase64, mimeType: p.mimeType })),
+                photos: chosenPackBook ? [] : photos.map((p) => ({ data: p.imageBase64, mimeType: p.mimeType, text: p.text })),
                 focus: prompt.trim(),
                 language,
               }
@@ -298,7 +298,7 @@ export default function DashboardPage() {
           prompt: tab === "sample_paper" ? `${prompt.trim()}\n\nTotal marks: ${totalMarks}`.trim() : prompt.trim(),
           documentIds: activeBookIds,
           language,
-          photos: photos.map((p) => ({ data: p.imageBase64, mimeType: p.mimeType })),
+          photos: photos.map((p) => ({ data: p.imageBase64, mimeType: p.mimeType, text: p.text })),
           attachedText: attachedDocs
             .map((d) => `Attached file "${d.name}":\n${d.text}`)
             .join("\n\n")

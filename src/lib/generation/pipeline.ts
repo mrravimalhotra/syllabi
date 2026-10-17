@@ -56,8 +56,11 @@ export async function runGeneration({
   // that text joins the typed prompt as the search query.
   let searchQuery = prompt;
   if (photos.length > 0) {
-    const transcription = await transcribePhotos(student.id, photos);
-    searchQuery = `${prompt}\n\n${transcription}`.trim().slice(0, MAX_SEARCH_QUERY_CHARS);
+    // Digital PDF pages bring their own text; only the rest are transcribed.
+    const known = photos.filter((p) => p.text).map((p) => p.text!);
+    const unread = photos.filter((p) => !p.text);
+    const transcription = unread.length > 0 ? await transcribePhotos(student.id, unread) : "";
+    searchQuery = [prompt, ...known, transcription].join("\n\n").trim().slice(0, MAX_SEARCH_QUERY_CHARS);
   }
 
   const retrieval = await retrieveContext(searchQuery, { ownerId: student.id, documentIds });

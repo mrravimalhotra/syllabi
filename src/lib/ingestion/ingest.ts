@@ -21,7 +21,10 @@ const MIME_EXTENSIONS: Record<string, string> = {
  */
 export type IngestPage =
   | { pageNumber: number; imageBase64: string; mimeType: string; hint?: string; text?: undefined }
-  | { pageNumber: number; text: string; imageBase64?: undefined; mimeType?: undefined };
+  | { pageNumber: number; text: string; imageBase64?: undefined; mimeType?: undefined }
+  // A digital PDF page: its own text (no AI reading) plus its image, kept so
+  // answers see the page itself (diagrams, fractions, layout).
+  | { pageNumber: number; text: string; imageBase64: string; mimeType: string; hint?: undefined };
 
 export interface IngestDocumentInput {
   title: string;
@@ -136,11 +139,9 @@ export async function ingestDocument(input: IngestDocumentInput): Promise<string
   try {
     await forEachLimited(input.pages, PAGES_AT_ONCE, async (page) => {
       let imagePath: string | null = null;
-      let pageText: string;
 
-      if (page.text !== undefined) {
-        pageText = page.text;
-      } else {
+      // Store the page image (scans, photos, PDF pages); Word text has none.
+      if (page.imageBase64 !== undefined) {
         const ext = MIME_EXTENSIONS[page.mimeType] ?? "bin";
         const path = `sources/${documentId}/page-${page.pageNumber}.${ext}`;
         imagePath = path;
@@ -153,7 +154,14 @@ export async function ingestDocument(input: IngestDocumentInput): Promise<string
           const { error } = await admin.from("documents").update({ storage_path: path }).eq("id", documentId);
           if (error) stage("saving the page preview", page.pageNumber, error);
         }
+      }
 
+      // Text from Word files and digital PDFs is used as it is; only pages
+      // without text (scans, photos) are read by the AI.
+      let pageText: string;
+      if (page.text !== undefined) {
+        pageText = page.text;
+      } else {
         const extraction = await extractPageText(page.imageBase64, page.mimeType, page.hint).catch((err) =>
           stage("reading the page", page.pageNumber, err)
         );
@@ -166,6 +174,7 @@ export async function ingestDocument(input: IngestDocumentInput): Promise<string
         });
         pageText = extraction.text;
       }
+
       const textChunks = chunkPageText(pageText, page.pageNumber);
 
       // A retried batch may have saved this page already: replace, don't duplicate.

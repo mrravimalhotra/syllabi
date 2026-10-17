@@ -41,7 +41,7 @@ interface UploadBody {
   /** The uploader confirms they own this copy and will use it only for their own child's/students' study. */
   rightsConfirmed: boolean;
   /** Page images (scans, photos, PDF pages), or text extracted in the browser from Word files. */
-  pages: ({ imageBase64: string; mimeType: string; hint?: string } | { text: string })[];
+  pages: ({ imageBase64: string; mimeType: string; hint?: string } | { text: string; imageBase64?: string; mimeType?: string })[];
   /** Present from the 2nd request onward when a large upload is split into batches — appends to that document instead of creating a new one. */
   documentId?: string;
   /** Page numbering offset for this batch within its document. Defaults to 1. */
@@ -94,7 +94,17 @@ export async function POST(request: Request) {
   const isValidPage = (p: unknown): boolean => {
     const page = p as { imageBase64?: unknown; mimeType?: unknown; text?: unknown; hint?: unknown } | null;
     if (typeof page?.text === "string") {
-      return page.text.trim().length > 0 && page.text.length <= MAX_PAGE_TEXT_CHARS;
+      const textOk = page.text.trim().length > 0 && page.text.length <= MAX_PAGE_TEXT_CHARS;
+      // A digital PDF page may carry its image too.
+      if (page.imageBase64 === undefined) return textOk;
+      return (
+        textOk &&
+        typeof page.imageBase64 === "string" &&
+        page.imageBase64.length > 0 &&
+        page.imageBase64.length <= MAX_PAGE_BASE64_CHARS &&
+        typeof page.mimeType === "string" &&
+        PAGE_MIME_TYPES.has(page.mimeType)
+      );
     }
     return (
       typeof page?.imageBase64 === "string" &&
@@ -143,9 +153,13 @@ export async function POST(request: Request) {
       finalize: body.finalize,
       pages: body.pages.map((p, i) => {
         const pageNumber = startPageNumber + i;
-        return "text" in p
-          ? { pageNumber, text: p.text }
-          : { pageNumber, imageBase64: p.imageBase64, mimeType: p.mimeType, hint: p.hint };
+        if ("text" in p) {
+          const withImage = p as { text: string; imageBase64?: string; mimeType?: string };
+          return withImage.imageBase64 && withImage.mimeType
+            ? { pageNumber, text: p.text, imageBase64: withImage.imageBase64, mimeType: withImage.mimeType }
+            : { pageNumber, text: p.text };
+        }
+        return { pageNumber, imageBase64: p.imageBase64, mimeType: p.mimeType, hint: p.hint };
       }),
     });
 

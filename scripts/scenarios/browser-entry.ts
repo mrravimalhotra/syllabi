@@ -2,10 +2,9 @@
 // browser-side code (the same functions My books and the question form use),
 // so the report shows what Syllabi would actually do with each file.
 import { readDocx } from "@/lib/docx-to-text";
-import { pdfToPageImages } from "@/lib/pdf-to-images";
+import { readPdfPages } from "@/lib/pdf-to-images";
 import { downscaleImageFile } from "@/lib/downscale-image";
 import { splitQuestions } from "@/lib/rag/split-questions";
-import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 
 // Mirrors the app's limits (src/app/dashboard/library/page.tsx and dashboard/page.tsx).
 const BOOK_MAX_PAGES = 60;
@@ -24,6 +23,10 @@ export interface FileReport {
   textLayerChars: number | null;
   questionsFromText: number | null;
   imageKB: number[];
+  /** Pages the AI must read (scans, photos); the rest are read by code. */
+  aiPages: number;
+  /** A short sample of code-read text, to eyeball its quality. */
+  sample: string;
   bookUploadBatches: number;
   notes: string[];
 }
@@ -41,27 +44,6 @@ function batchesFor(sizes: number[], cap: number): number {
   return current > 0 ? batches + 1 : batches;
 }
 
-async function pdfText(file: File): Promise<string> {
-  const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
-  let text = "";
-  for (let p = 1; p <= pdf.numPages; p++) {
-    const content = await (await pdf.getPage(p)).getTextContent();
-    let line = "";
-    let lastY: number | null = null;
-    for (const item of content.items as { str: string; transform: number[] }[]) {
-      const y = item.transform[5];
-      if (lastY !== null && Math.abs(y - lastY) > 2) {
-        text += line + "\n";
-        line = "";
-      }
-      line += item.str;
-      lastY = y;
-    }
-    text += line + "\n";
-  }
-  return text;
-}
-
 async function analyse(file: File): Promise<FileReport> {
   const name = file.name;
   const lower = name.toLowerCase();
@@ -75,6 +57,8 @@ async function analyse(file: File): Promise<FileReport> {
     textLayerChars: null,
     questionsFromText: null,
     imageKB: [],
+    aiPages: 0,
+    sample: "",
     bookUploadBatches: 0,
     notes: [],
   };
@@ -96,26 +80,30 @@ async function analyse(file: File): Promise<FileReport> {
     if (content.skippedPictures.length) report.notes.push("some pictures unreadable (EMF/WMF): suggest saving as PDF");
     if (content.pictures.length > ATTACH_MAX_IMAGES) report.notes.push(`as a question attachment, only ${ATTACH_MAX_IMAGES} of ${content.pictures.length} pictures are sent`);
   } else if (lower.endsWith(".pdf")) {
-    const pages = await pdfToPageImages(file);
-    const text = await pdfText(file);
+    const pages = await readPdfPages(file);
     report.pages = pages.length;
-    imageSizes = pages.map((p) => p.imageBase64.length);
+    imageSizes = pages.filter((p) => p.imageBase64).map((p) => p.imageBase64!.length);
+    report.textPages = pages.filter((p) => p.text !== undefined).length;
+    report.aiPages = pages.length - report.textPages;
+    const text = pages.map((p) => p.text ?? "").join("\n\n");
     report.textLayerChars = text.replace(/\s/g, "").length;
-    report.kind = report.textLayerChars < 50 * pages.length ? "PDF (scanned)" : "PDF (text)";
-    report.questionsFromText = report.textLayerChars > 0 ? splitQuestions(text).length : null;
+    report.sample = text.replace(/\s+/g, " ").slice(0, 90);
+    report.kind = report.aiPages === 0 ? "PDF (text)" : report.textPages === 0 ? "PDF (scanned)" : "PDF (mixed)";
+    report.questionsFromText = report.textPages > 0 ? splitQuestions(text).length : null;
     if (pages.length > BOOK_MAX_PAGES) report.notes.push(`book upload takes ${BOOK_MAX_PAGES} pages at a time: upload in ${Math.ceil(pages.length / BOOK_MAX_PAGES)} parts`);
     if (pages.length > ATTACH_MAX_IMAGES) report.notes.push(`as a question attachment, only the first ${ATTACH_MAX_IMAGES} pages are sent; upload it to My books instead`);
   } else {
     const image = await downscaleImageFile(file);
     report.kind = "Photo";
     report.pages = 1;
+    report.aiPages = 1;
     imageSizes = [image.imageBase64.length];
   }
 
   report.imageKB = imageSizes.map((s) => Math.round((s * 3) / 4 / 1024));
   report.bookUploadBatches = Math.max(
     batchesFor([...imageSizes, ...textSizes], BOOK_BATCH_CHARS),
-    Math.ceil(imageSizes.length / BOOK_MAX_IMAGES_PER_REQUEST)
+    Math.ceil(report.aiPages / BOOK_MAX_IMAGES_PER_REQUEST)
   );
   const oversize = imageSizes.filter((s) => s > BOOK_BATCH_CHARS).length;
   if (oversize) report.notes.push(`${oversize} page image(s) bigger than one upload request allows`);

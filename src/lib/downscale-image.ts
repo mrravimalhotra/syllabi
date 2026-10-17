@@ -4,6 +4,8 @@ export interface DownscaledImage {
   /** Size of the original file (or rendered PDF page) and of the shrunk JPEG, in bytes, for the "saved X MB" note. */
   originalBytes?: number;
   bytes?: number;
+  /** Digital PDF pages: the page's own text, so the AI needn't transcribe it. */
+  text?: string;
 }
 
 // Shrunk the way chat apps (e.g. WhatsApp) shrink photos: a 1600 px longest

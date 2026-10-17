@@ -91,8 +91,8 @@ server.close();
 
 // Report
 const lines = [
-  "| File | Type | Pages / pictures | Questions found | Book upload | Notes |",
-  "|---|---|---|---|---|---|",
+  "| File | Type | Pages / pictures | Read by AI | Questions found | Book upload | Notes |",
+  "|---|---|---|---|---|---|---|",
 ];
 for (const r of rows) {
   if (!r.ok) {
@@ -102,9 +102,11 @@ for (const r of rows) {
   const shape =
     r.kind === "Word"
       ? `${r.textPages} text part(s), ${r.pictures} picture(s)${r.skippedPictures ? `, ${r.skippedPictures} unreadable` : ""}`
-      : `${r.pages} page(s), largest ${Math.max(...r.imageKB)} KB`;
+      : `${r.pages} page(s)${r.imageKB.length ? `, largest image ${Math.max(...r.imageKB)} KB` : ", no images"}`;
+  const ai = r.kind === "Word" ? `${r.pictures} picture(s)` : `${r.aiPages} of ${r.pages} page(s)`;
   const questions = r.questionsFromText === null ? "after AI reading" : String(r.questionsFromText);
-  lines.push(`| ${r.name} | ${r.kind} | ${shape} | ${questions} | ${r.bookUploadBatches} request(s) | ${r.notes.join("; ")} |`);
+  const sample = r.sample ? `text: "${r.sample.replace(/\|/g, "/")}..."` : "";
+  lines.push(`| ${r.name} | ${r.kind} | ${shape} | ${ai} | ${questions} | ${r.bookUploadBatches} request(s) | ${[...r.notes, sample].filter(Boolean).join("; ")} |`);
 }
 const failed = rows.filter((r) => !r.ok).length;
 const summary = `${rows.length} file(s), ${rows.length - failed} processed, ${failed} failed.`;

@@ -39,7 +39,8 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Each page must be a JPEG, PNG or WebP image" }, { status: 400 });
       }
       chars += p.data.length;
-      photos.push({ data: p.data, mimeType: p.mimeType });
+      const text = typeof p.text === "string" && p.text.trim() ? p.text.slice(0, 20_000) : undefined;
+      photos.push({ data: p.data, mimeType: p.mimeType, ...(text ? { text } : {}) });
     }
     if (chars > MAX_PHOTO_BASE64_CHARS) {
       return NextResponse.json({ error: "Those pages are too large together. Add the chapter to My books instead." }, { status: 400 });

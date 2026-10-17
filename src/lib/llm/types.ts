@@ -10,6 +10,8 @@ export interface CompletionImage {
   /** Base64-encoded image bytes (no data: prefix). */
   data: string;
   mimeType: string;
+  /** The image's text when already known (a digital PDF page), so it needn't be transcribed. */
+  text?: string;
 }
 
 export interface CompletionRequest {

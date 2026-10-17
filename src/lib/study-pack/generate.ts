@@ -57,8 +57,14 @@ export async function loadBook(documentId: string, ownerId: string): Promise<Cha
   return { text: text.trim(), source: `${book.title}${range}` };
 }
 
-/** Attached photos of a chapter, transcribed once so both calls (and the quote check) can use the text. */
+/**
+ * Attached pages of a chapter as text, so both calls (and the quote check) can
+ * use it: digital PDF pages bring their own text; only photos and scans are
+ * transcribed, once.
+ */
 async function transcribe(studentId: string, photos: CompletionImage[]): Promise<Chapter> {
+  const source = `${photos.length} attached page${photos.length > 1 ? "s" : ""}`;
+  if (photos.every((p) => p.text)) return { text: photos.map((p) => p.text).join("\n\n"), source };
   const result = await generateCompletion({
     taskType: "ocr_extraction",
     systemInstructions:

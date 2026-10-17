@@ -51,6 +51,8 @@ interface PendingPage {
   mimeType: string;
   /** Text pages, read in the browser from Word files. */
   text?: string;
+  /** Digital PDF pages: the page's own text (no AI reading needed), sent with its image. */
+  pdfText?: string;
   /** For pictures from Word files: where the picture was, for the page reader. */
   hint?: string;
   sourceType: SourceType;
@@ -91,10 +93,12 @@ function chunkBySize(pageList: PendingPage[], maxChars: number): PendingPage[][]
   const batches: PendingPage[][] = [];
   let current: PendingPage[] = [];
   let currentChars = 0;
-  const imagesIn = (batch: PendingPage[]) => batch.filter((p) => p.text === undefined).length;
+  // Only pages the AI has to read count towards the per-request limit.
+  const needsReading = (p: PendingPage) => p.text === undefined && p.pdfText === undefined;
+  const imagesIn = (batch: PendingPage[]) => batch.filter(needsReading).length;
   for (const page of pageList) {
-    const size = page.text?.length ?? page.imageBase64.length;
-    const tooManyImages = page.text === undefined && imagesIn(current) >= MAX_IMAGES_PER_BATCH;
+    const size = page.text?.length ?? page.imageBase64.length + (page.pdfText?.length ?? 0);
+    const tooManyImages = needsReading(page) && imagesIn(current) >= MAX_IMAGES_PER_BATCH;
     if (current.length > 0 && (currentChars + size > maxChars || tooManyImages)) {
       batches.push(current);
       current = [];
@@ -190,17 +194,19 @@ export default function LibraryPage() {
           );
         } else if (file.type === "application/pdf") {
           // pdf.js is large; load it only when a PDF is actually picked.
-          const { pdfToPageImages } = await import("@/lib/pdf-to-images");
-          const rasterized = await pdfToPageImages(file);
+          // Digital PDFs carry their own text: those pages need no AI reading.
+          const { readPdfPages } = await import("@/lib/pdf-to-images");
+          const pdfPages = await readPdfPages(file);
           originalBytes += file.size;
-          rasterized.forEach((p) => (shrunkBytes += p.bytes ?? 0));
-          rasterized.forEach((p, i) =>
+          pdfPages.forEach((p) => (shrunkBytes += p.bytes ?? 0));
+          pdfPages.forEach((p, i) =>
             newPages.push({
               id: `${file.name}-${i}-${Date.now()}`,
               imageBase64: p.imageBase64,
               mimeType: p.mimeType,
+              pdfText: p.text,
               sourceType: defaultSourceType,
-              origin: rasterized.length > 1 ? `${file.name} (p.${i + 1})` : file.name,
+              origin: pdfPages.length > 1 ? `${file.name} (p.${i + 1})` : file.name,
             })
           );
         } else {
@@ -218,9 +224,9 @@ export default function LibraryPage() {
       }
 
       // The same photo picked twice would be read (and paid for) twice.
-      const seen = new Set(pages.map((p) => imageFingerprint(p.text ?? p.imageBase64)));
+      const seen = new Set(pages.map((p) => imageFingerprint(p.text ?? p.pdfText ?? p.imageBase64)));
       const unique = newPages.filter((p) => {
-        const fingerprint = imageFingerprint(p.text ?? p.imageBase64);
+        const fingerprint = imageFingerprint(p.text ?? p.pdfText ?? p.imageBase64);
         if (seen.has(fingerprint)) return false;
         seen.add(fingerprint);
         return true;
@@ -238,6 +244,10 @@ export default function LibraryPage() {
         notes.push(`Shrunk from ${formatBytes(originalBytes)} to ${formatBytes(shrunkBytes)} for a faster upload.`);
       }
       if (duplicates > 0) notes.push(`${duplicates} duplicate page${duplicates > 1 ? "s" : ""} skipped.`);
+      const codeRead = unique.filter((p) => p.pdfText !== undefined).length;
+      if (codeRead > 0) {
+        notes.push(`${codeRead} PDF page${codeRead > 1 ? "s have" : " has"} its own text, so no AI reading is needed (quicker, and uses less of your allowance).`);
+      }
       setShrinkNote(notes.length ? notes.join(" ") : null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to read one of the selected files");
@@ -330,8 +340,12 @@ export default function LibraryPage() {
                     grade: grade.trim(),
                     rightsConfirmed,
                     sourceType: group[0].sourceType,
-                    pages: batches[i].map(({ imageBase64, mimeType, text, hint }) =>
-                      text !== undefined ? { text } : { imageBase64, mimeType, hint }
+                    pages: batches[i].map(({ imageBase64, mimeType, text, pdfText, hint }) =>
+                      text !== undefined
+                        ? { text }
+                        : pdfText !== undefined
+                          ? { text: pdfText, imageBase64, mimeType }
+                          : { imageBase64, mimeType, hint }
                     ),
                     documentId: currentDocumentId,
                     startPageNumber: pageOffset,
@@ -686,6 +700,14 @@ const PageCard = memo(function PageCard({
         <span className="absolute bottom-1.5 left-1.5 rounded-md bg-slate-900/70 px-1.5 py-0.5 text-[10px] font-medium text-white">
           {index + 1}
         </span>
+        {page.pdfText !== undefined && (
+          <span
+            className="absolute right-1.5 bottom-1.5 rounded-md bg-emerald-600/90 px-1.5 py-0.5 text-[10px] font-medium text-white"
+            title="This page's text is read straight from the PDF: no AI needed"
+          >
+            Text
+          </span>
+        )}
         <button
           type="button"
           onClick={() => onRemove(page.id)}

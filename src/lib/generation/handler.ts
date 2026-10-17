@@ -40,7 +40,8 @@ function parsePhotos(raw: unknown): CompletionImage[] | string {
       return "Each photo must be a JPEG, PNG or WebP image";
     }
     totalChars += p.data.length;
-    photos.push({ data: p.data, mimeType: p.mimeType });
+    const text = typeof p.text === "string" && p.text.trim() ? p.text.slice(0, MAX_ATTACHED_TEXT_CHARS) : undefined;
+    photos.push({ data: p.data, mimeType: p.mimeType, ...(text ? { text } : {}) });
   }
   if (totalChars > MAX_PHOTO_BASE64_CHARS) return "Photos are too large — attach fewer or smaller photos";
   return photos;
