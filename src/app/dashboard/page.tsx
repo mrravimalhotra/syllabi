@@ -127,6 +127,7 @@ export default function DashboardPage() {
   const [showBooks, setShowBooks] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
+  const busyRef = useRef(false);
   const resultRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -228,11 +229,14 @@ export default function DashboardPage() {
 
   async function submit(e?: React.FormEvent) {
     e?.preventDefault();
-    if (loading || readingFiles) return;
+    // A ref, not state: two quick triggers (double click, Ctrl+Enter) in the
+    // same moment would both still see the old state.
+    if (busyRef.current || readingFiles) return;
     if (!prompt.trim() && photos.length === 0 && attachedDocs.length === 0) {
       setError("Type a question or attach a photo or file first.");
       return;
     }
+    busyRef.current = true;
     setLoading(true);
     setError(null);
     setNotice(null);
@@ -257,10 +261,12 @@ export default function DashboardPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Couldn't generate an answer right now. Please try again.");
+      setLoading(false);
       setResult(data);
       setPhotos([]);
       setAttachedDocs([]);
-      await loadMe();
+      // Refresh the usage bar in the background; the answer is already shown.
+      loadMe().catch(() => {});
     } catch (err) {
       if (controller.signal.aborted) {
         setNotice("Stopped waiting. If the answer finishes anyway, it will appear in My Documents.");
@@ -275,6 +281,7 @@ export default function DashboardPage() {
       }
     } finally {
       abortRef.current = null;
+      busyRef.current = false;
       setLoading(false);
     }
   }
