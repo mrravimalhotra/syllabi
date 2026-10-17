@@ -37,7 +37,11 @@ const nextConfig: NextConfig = {
     "/api/documents/**": ["src/lib/pdf/fonts/**/*"],
   },
   async headers() {
-    return [{ source: "/:path*", headers: SECURITY_HEADERS }];
+    return [
+      { source: "/:path*", headers: SECURITY_HEADERS },
+      // The PDF reading worker is large and rarely changes: keep it on the phone for a day.
+      { source: "/pdf.worker.min.mjs", headers: [{ key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" }] },
+    ];
   },
 };
 

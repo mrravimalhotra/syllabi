@@ -91,3 +91,4 @@ Tick each one and note anything odd. Use your phone for the starred (★) checks
 | T-64 | My Books: delete a book, then reload | Book is gone at once; a storage hiccup never leaves a listed book without pages |
 | T-65 | Re-read a book's failed pages ("Try again") when your monthly allowance is used up | Clear 429 message about the allowance, not a spinner |
 | T-66 | Admin → Health | All lines green; "Background page reading" shows the timer and the page counts |
+| T-67 ★ | Open the same answer's PDF twice, then rename the answer and open it again | Second open is much faster; after a rename the new title appears; every page of the app still loads when signed in and shows the sign-in page when signed out |

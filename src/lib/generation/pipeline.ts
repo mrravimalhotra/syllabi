@@ -74,8 +74,11 @@ export async function runGeneration({
   photos = [],
   language = "auto",
 }: GenerationInput): Promise<GenerationOutput> {
-  const quota = await checkQuota(student.id);
-  if (quota.overQuota) throw new QuotaExceededError(quota);
+  // The allowance check runs alongside the (cheap) photo reading and search
+  // below instead of before them, and still stops the request before the
+  // main AI call.
+  const quotaCheck = checkQuota(student.id);
+  quotaCheck.catch(() => {}); // reported where it is awaited below
 
   // The knowledge-base search needs text, so photos are transcribed first and
   // that text joins the typed prompt as the search query.
@@ -84,11 +87,19 @@ export async function runGeneration({
     // Digital PDF pages bring their own text; only the rest are transcribed.
     const known = photos.filter((p) => p.text).map((p) => p.text!);
     const unread = photos.filter((p) => !p.text);
+    if (unread.length > 0) {
+      // Reading photos uses the AI, so the allowance is checked first.
+      const early = await quotaCheck;
+      if (early.overQuota) throw new QuotaExceededError(early);
+    }
     const transcription = unread.length > 0 ? await transcribePhotos(student.id, unread) : "";
     searchQuery = [prompt, ...known, transcription].join("\n\n").trim().slice(0, MAX_SEARCH_QUERY_CHARS);
   }
 
   const retrieval = await retrieveContext(searchQuery, { ownerId: student.id, documentIds });
+
+  const quota = await quotaCheck;
+  if (quota.overQuota) throw new QuotaExceededError(quota);
 
   const { images: sourcePageImages, byPath: sourceImages } = await loadSourceImages(retrieval.chunks);
 

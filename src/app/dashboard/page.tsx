@@ -179,7 +179,7 @@ export default function DashboardPage() {
 
   async function loadBooks() {
     try {
-      const res = await fetch("/api/library");
+      const res = await fetch("/api/library?progress=0");
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setBooks((data.documents as Book[]).filter((b) => b.status === "ready"));

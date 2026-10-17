@@ -10,25 +10,31 @@ import { cleanText } from "@/lib/validate";
 // loop or a mistake from filling the database with empty books.
 const MAX_BOOKS = 300;
 
-/** Lists the caller's own books, with how far each has been read. */
-export async function GET() {
+/**
+ * Lists the caller's own books, with how far each has been read. The book
+ * pickers don't show progress, so they ask for ?progress=0 and skip that work.
+ */
+export async function GET(request: Request) {
   const auth = await authenticate();
   if ("response" in auth) return auth.response;
   const user = auth.account;
 
-  const { data, error } = await createAdminClient()
-    .from("documents")
-    .select("id, title, subject, grade, source_type, status, created_at")
-    .eq("owner_id", user.id)
-    .order("created_at", { ascending: false })
-    .limit(MAX_BOOKS);
-  if (error) return errorResponse(error, "library GET", "Couldn't load your books. Reload the page to try again.");
-
+  const withProgress = new URL(request.url).searchParams.get("progress") !== "0";
   try {
-    const progress = await pageProgress(user.id);
+    // The list and the reading progress are independent: ask for both at once.
+    const [{ data, error }, progress] = await Promise.all([
+      createAdminClient()
+        .from("documents")
+        .select("id, title, subject, grade, source_type, status, created_at")
+        .eq("owner_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(MAX_BOOKS),
+      withProgress ? pageProgress(user.id) : Promise.resolve({} as Awaited<ReturnType<typeof pageProgress>>),
+    ]);
+    if (error) throw error;
     return NextResponse.json({ documents: data.map((d) => ({ ...d, pages: progress[d.id] ?? null })) });
   } catch (err) {
-    return errorResponse(err, "library GET progress", "Couldn't load your books. Reload the page to try again.");
+    return errorResponse(err, "library GET", "Couldn't load your books. Reload the page to try again.");
   }
 }
 

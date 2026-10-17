@@ -222,8 +222,14 @@ export default function LibraryPage() {
   const reading = documents.some((d) => d.status === "processing" && d.pages);
   useEffect(() => {
     if (!reading) return;
-    const timer = setInterval(() => void load(), 10_000);
-    return () => clearInterval(timer);
+    // A hidden tab (phone locked, another app open) doesn't need updates; it refreshes when shown again.
+    const refresh = () => !document.hidden && void load();
+    const timer = setInterval(refresh, 10_000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+    };
   }, [reading]);
 
   async function addFiles(fileList: FileList | null) {

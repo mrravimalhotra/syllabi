@@ -44,15 +44,18 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getClaims checks the sign-in token on this server (no round trip to the
+  // sign-in service when the project uses signing keys), and refreshes it when it
+  // is about to expire. Whether the account may still use Syllabi is checked
+  // against its database row below and in each API route.
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const userId = typeof claimsData?.claims?.sub === "string" ? claimsData.claims.sub : null;
 
   const { pathname } = request.nextUrl;
   const isPublic = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
   const isApi = pathname.startsWith("/api/");
 
-  if (!user && !isPublic) {
+  if (!userId && !isPublic) {
     if (isApi) return apiError(401, "Your session has ended. Please sign in again.");
     const url = request.nextUrl.clone();
     url.pathname = "/login";
@@ -60,18 +63,19 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && !isPublic) {
+  // API routes check the account row themselves (authenticate in lib/api.ts),
+  // so only pages need the lookup here: it saves a database round trip per request.
+  if (userId && !isPublic && !isApi) {
     const { data: student, error: studentError } = await supabase
       .from("students")
       .select("role, active")
-      .eq("id", user.id)
+      .eq("id", userId)
       .single();
 
     // A database failure is not the same as "no access": say it's temporary,
     // instead of sending approved people to the "awaiting approval" page.
     if (studentError && studentError.code !== "PGRST116") {
       console.error("[middleware] couldn't read the account row", studentError);
-      if (isApi) return apiError(503, "Syllabi can't reach its database right now. Wait a minute and try again.");
       return new NextResponse(
         "Syllabi can't reach its database right now. Wait a minute, then reload this page. Your books and answers are safe.",
         { status: 503, headers: { "content-type": "text/plain; charset=utf-8", "retry-after": "30" } }
@@ -81,21 +85,19 @@ export async function updateSession(request: NextRequest) {
     // Revoked/unapproved accounts are blocked here, before any protected route
     // runs. During private testing only admins get in, even if approved.
     if (!student || !student.active || (!signupsOpen() && student.role !== "admin")) {
-      if (isApi) return apiError(403, "Your account doesn't have access right now.");
       const url = request.nextUrl.clone();
       url.pathname = "/pending";
       return NextResponse.redirect(url);
     }
 
-    if ((pathname.startsWith("/admin") || pathname.startsWith("/api/admin/")) && student.role !== "admin") {
-      if (isApi) return apiError(403, "Admins only.");
+    if (pathname.startsWith("/admin") && student.role !== "admin") {
       const url = request.nextUrl.clone();
       url.pathname = "/dashboard";
       return NextResponse.redirect(url);
     }
   }
 
-  if (user && (pathname === "/login" || pathname === "/signup")) {
+  if (userId && (pathname === "/login" || pathname === "/signup")) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     return NextResponse.redirect(url);

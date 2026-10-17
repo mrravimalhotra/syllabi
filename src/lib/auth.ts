@@ -28,13 +28,13 @@ const NO_ROWS = "PGRST116";
  */
 export const getCurrentStudent = cache(async (): Promise<Student | null> => {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return null;
+  // The token is verified on this server where possible (see updateSession).
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const userId = typeof claimsData?.claims?.sub === "string" ? claimsData.claims.sub : null;
+  if (!userId) return null;
 
   for (let attempt = 1; ; attempt++) {
-    const { data, error } = await supabase.from("students").select("*").eq("id", user.id).single();
+    const { data, error } = await supabase.from("students").select("*").eq("id", userId).single();
     if (!error) return data as Student;
     if (error.code === NO_ROWS) return null;
     if (attempt >= 2) {
