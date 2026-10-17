@@ -4,6 +4,7 @@
 // warning in that case even though pdfToPageImages itself only ever runs in
 // the browser, invoked from a file-input change handler.
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
+import { MAX_DIMENSION, encodeCanvas } from "@/lib/downscale-image";
 
 // Rendered once per uploaded PDF, entirely client-side — the worker file is a
 // static copy of node_modules/pdfjs-dist/build/pdf.worker.min.mjs in /public
@@ -13,13 +14,15 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 // A 30-page batch's payload scales directly with this — 1.5x is ample for OCR
 // legibility without ballooning the upload (2x nearly doubled real-world
 // payloads on multi-page, full-color scanned textbooks).
+// Longest side and JPEG quality are shared with photos (downscale-image.ts).
 const RENDER_SCALE = 1.5;
-const JPEG_QUALITY = 0.82;
-const MAX_DIMENSION = 1800; // px, longest side; same cap as photos (downscale-image.ts)
 
 export interface RasterizedPage {
   imageBase64: string;
   mimeType: string;
+  /** This page's share of the PDF file's size, and the shrunk JPEG's size, in bytes. */
+  originalBytes?: number;
+  bytes?: number;
 }
 
 /**
@@ -44,10 +47,15 @@ export async function pdfToPageImages(file: File, maxPages = Infinity): Promise<
     canvas.width = viewport.width;
     canvas.height = viewport.height;
 
+    const context = canvas.getContext("2d");
+    if (context) {
+      context.fillStyle = "#fff";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+    }
     await page.render({ canvas, viewport }).promise;
 
-    const dataUrl = canvas.toDataURL("image/jpeg", JPEG_QUALITY);
-    pages.push({ imageBase64: dataUrl.split(",")[1] ?? "", mimeType: "image/jpeg" });
+    const { imageBase64, bytes } = encodeCanvas(canvas);
+    pages.push({ imageBase64, mimeType: "image/jpeg", originalBytes: file.size / pdf.numPages, bytes });
   }
 
   return pages;

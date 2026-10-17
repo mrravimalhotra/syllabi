@@ -1,9 +1,9 @@
 "use client";
 
 import { memo, useCallback, useEffect, useState } from "react";
-import { downscaleImageFile } from "@/lib/downscale-image";
+import { downscaleImageFile, formatBytes, imageFingerprint } from "@/lib/downscale-image";
 import { EditableName } from "@/components/EditableName";
-import { BookIcon, TrashIcon, UploadIcon, XIcon } from "@/components/icons";
+import { BookIcon, CheckIcon, TrashIcon, UploadIcon, XIcon } from "@/components/icons";
 import {
   Alert,
   Badge,
@@ -124,6 +124,7 @@ export default function LibraryPage() {
   // Pages sent so far in the current upload, for the progress bar.
   const [pagesSent, setPagesSent] = useState(0);
   const [dragging, setDragging] = useState(false);
+  const [shrinkNote, setShrinkNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -152,6 +153,9 @@ export default function LibraryPage() {
     setProcessingFiles(true);
     try {
       const newPages: PendingPage[] = [];
+      // Photo and PDF sizes before and after shrinking, for the note under the drop area.
+      let originalBytes = 0;
+      let shrunkBytes = 0;
       for (const file of Array.from(fileList)) {
         if (file.name.toLowerCase().endsWith(".docx")) {
           // Word files: read the text right here (no page reading needed), and
@@ -188,6 +192,8 @@ export default function LibraryPage() {
           // pdf.js is large; load it only when a PDF is actually picked.
           const { pdfToPageImages } = await import("@/lib/pdf-to-images");
           const rasterized = await pdfToPageImages(file);
+          originalBytes += file.size;
+          rasterized.forEach((p) => (shrunkBytes += p.bytes ?? 0));
           rasterized.forEach((p, i) =>
             newPages.push({
               id: `${file.name}-${i}-${Date.now()}`,
@@ -199,6 +205,8 @@ export default function LibraryPage() {
           );
         } else {
           const downscaled = await downscaleImageFile(file);
+          originalBytes += file.size;
+          shrunkBytes += downscaled.bytes ?? 0;
           newPages.push({
             id: `${file.name}-${Date.now()}`,
             imageBase64: downscaled.imageBase64,
@@ -209,14 +217,28 @@ export default function LibraryPage() {
         }
       }
 
-      setPages((prev) => {
-        const combined = [...prev, ...newPages];
-        if (combined.length > MAX_PAGES) {
-          setError(`Up to ${MAX_PAGES} pages per upload — ${combined.length} selected, extra pages were dropped.`);
-          return combined.slice(0, MAX_PAGES);
-        }
-        return combined;
+      // The same photo picked twice would be read (and paid for) twice.
+      const seen = new Set(pages.map((p) => imageFingerprint(p.text ?? p.imageBase64)));
+      const unique = newPages.filter((p) => {
+        const fingerprint = imageFingerprint(p.text ?? p.imageBase64);
+        if (seen.has(fingerprint)) return false;
+        seen.add(fingerprint);
+        return true;
       });
+      const duplicates = newPages.length - unique.length;
+
+      const combined = [...pages, ...unique];
+      if (combined.length > MAX_PAGES) {
+        setError(`Up to ${MAX_PAGES} pages per upload: ${combined.length} selected, so the extra pages were left out.`);
+      }
+      setPages(combined.slice(0, MAX_PAGES));
+
+      const notes: string[] = [];
+      if (originalBytes > 0 && shrunkBytes > 0 && shrunkBytes < originalBytes) {
+        notes.push(`Shrunk from ${formatBytes(originalBytes)} to ${formatBytes(shrunkBytes)} for a faster upload.`);
+      }
+      if (duplicates > 0) notes.push(`${duplicates} duplicate page${duplicates > 1 ? "s" : ""} skipped.`);
+      setShrinkNote(notes.length ? notes.join(" ") : null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to read one of the selected files");
     } finally {
@@ -491,9 +513,16 @@ export default function LibraryPage() {
               )}
             </span>
             <span className="mt-1 text-xs text-slate-500">
-              Photos, PDF or Word (.docx), up to {MAX_PAGES} pages. Word files are read as text, pictures included.
+              Photos, PDF or Word (.docx), up to {MAX_PAGES} pages. Large photos are shrunk automatically, like in
+              WhatsApp.
             </span>
           </label>
+
+          {shrinkNote && pages.length > 0 && (
+            <p className="flex items-center gap-1.5 text-xs text-emerald-700">
+              <CheckIcon className="h-4 w-4" /> {shrinkNote}
+            </p>
+          )}
 
           {pages.length > 0 && (
             <div className="space-y-2">

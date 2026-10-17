@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { memo, useEffect, useRef, useState } from "react";
-import { downscaleImageFile, type DownscaledImage } from "@/lib/downscale-image";
+import { downscaleImageFile, imageFingerprint, type DownscaledImage } from "@/lib/downscale-image";
 import { AnswerView, type Answer } from "@/components/AnswerView";
 import {
   ArrowRightIcon,
@@ -214,7 +214,12 @@ export default function DashboardPage() {
     const kept: DownscaledImage[] = [...photos];
     let size = kept.reduce((sum, p) => sum + p.imageBase64.length, 0);
     let dropped = 0;
+    // Skip a photo or page that is already attached.
+    const seen = new Set(kept.map((p) => imageFingerprint(p.imageBase64)));
     for (const image of images) {
+      const fingerprint = imageFingerprint(image.imageBase64);
+      if (seen.has(fingerprint)) continue;
+      seen.add(fingerprint);
       if (kept.length < MAX_PHOTOS && size + image.imageBase64.length <= MAX_ATTACHMENT_BASE64_CHARS) {
         kept.push(image);
         size += image.imageBase64.length;
