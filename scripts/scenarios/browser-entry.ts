@@ -9,7 +9,7 @@ import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 
 // Mirrors the app's limits (src/app/dashboard/library/page.tsx and dashboard/page.tsx).
 const BOOK_MAX_PAGES = 60;
-const BOOK_MAX_IMAGES_PER_REQUEST = 8;
+const BOOK_MAX_IMAGES_PER_REQUEST = 4;
 const BOOK_BATCH_CHARS = 3 * 1024 * 1024;
 const ATTACH_MAX_IMAGES = 12;
 const ATTACH_MAX_CHARS = 3_000_000;

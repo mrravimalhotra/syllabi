@@ -11,12 +11,30 @@ const TRANSIENT =
 
 const DELAYS_MS = [2000, 6000];
 
+// Rate limits (429) say how long to wait ("Please retry in 23.4s" or
+// "retryDelay":"23s"); wait that long, up to this cap, a few times.
+const RATE_LIMIT_ATTEMPTS = 4;
+const MAX_RATE_LIMIT_WAIT_MS = 30_000;
+
+function rateLimitWaitMs(message: string): number | null {
+  if (!/\b429\b|RESOURCE_EXHAUSTED/i.test(message)) return null;
+  const match = message.match(/retry in ([\d.]+)\s*s/i) ?? message.match(/"retryDelay":\s*"([\d.]+)s"/);
+  const seconds = match ? Number(match[1]) : 10;
+  return Math.min(Math.ceil(seconds * 1000) + 500, MAX_RATE_LIMIT_WAIT_MS);
+}
+
 export async function withNetworkRetry<T>(fn: () => Promise<T>): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     try {
       return await fn();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      const rateLimitWait = rateLimitWaitMs(message);
+      if (rateLimitWait !== null) {
+        if (attempt >= RATE_LIMIT_ATTEMPTS - 1) throw err;
+        await new Promise((resolve) => setTimeout(resolve, rateLimitWait));
+        continue;
+      }
       if (attempt >= DELAYS_MS.length || !TRANSIENT.test(message)) throw err;
       await new Promise((resolve) => setTimeout(resolve, DELAYS_MS[attempt]));
     }

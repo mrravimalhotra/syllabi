@@ -42,6 +42,20 @@ export interface IngestDocumentInput {
   finalize?: boolean;
 }
 
+// Pages read at the same time. Reading a scanned page takes Gemini 15-25s, so
+// one at a time made a 12-page chapter take minutes; more than 3 at once runs
+// into the free tier's requests-per-minute limit.
+const PAGES_AT_ONCE = 3;
+
+/** Runs `fn` on every item, at most `limit` at a time; rejects on the first failure. */
+async function forEachLimited<T>(items: T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) await fn(items[next++]);
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+}
+
 /**
  * Full ingestion pipeline for one uploaded document: vision text extraction per
  * page → chunking → embedding → pgvector insert, owned by (and searchable only
@@ -91,7 +105,7 @@ export async function ingestDocument(input: IngestDocumentInput): Promise<string
   };
 
   try {
-    for (const page of input.pages) {
+    await forEachLimited(input.pages, PAGES_AT_ONCE, async (page) => {
       let imagePath: string | null = null;
       let pageText: string;
 
@@ -155,7 +169,7 @@ export async function ingestDocument(input: IngestDocumentInput): Promise<string
           usage: { inputTokens: embeddingTokens, outputTokens: 0, totalTokens: embeddingTokens },
         });
       }
-    }
+    });
 
     if (input.finalize !== false) {
       await admin.from("documents").update({ status: "ready" }).eq("id", documentId);

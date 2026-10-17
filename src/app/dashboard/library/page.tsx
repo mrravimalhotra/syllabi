@@ -30,9 +30,10 @@ const SOURCE_TYPE_OPTIONS: { value: SourceType; label: string }[] = [
 ];
 
 const MAX_PAGES = 60;
-// Page images per request: each is read by the AI (several seconds each), so
-// a request stays well inside the server's 300-second limit.
-const MAX_IMAGES_PER_BATCH = 8;
+// Page images per request. Small, so the progress bar moves every half minute
+// or so, and each request stays well inside the server's 300-second limit even
+// when the AI's rate limit makes it wait.
+const MAX_IMAGES_PER_BATCH = 4;
 
 // Base64 characters per request. Keeps each request under Vercel's ~4.5 MB
 // body limit (JSON overhead included); larger books go up in several batches.
