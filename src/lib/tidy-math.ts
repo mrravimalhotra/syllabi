@@ -59,9 +59,20 @@ function superscript(s: string): string {
   return [...s].every((c) => c in SUPERSCRIPTS) ? [...s].map((c) => SUPERSCRIPTS[c]).join("") : `^(${s})`;
 }
 
-/** Converts common LaTeX math in `text` to plain Unicode; text without LaTeX passes through unchanged. */
+/**
+ * Converts common LaTeX math in `text` to plain Unicode; text without LaTeX
+ * passes through unchanged. Code (``` blocks and `inline` spans) is left
+ * exactly as written, since backslashes and $ are normal there.
+ */
 export function tidyMath(text: string): string {
   if (!/[\\$]/.test(text)) return text;
+  return text
+    .split(/(```[\s\S]*?(?:```|$)|`[^`\n]*`)/g)
+    .map((part) => (part.startsWith("`") ? part : tidyProse(part)))
+    .join("");
+}
+
+function tidyProse(text: string): string {
   return text
     .replace(/\$\$([\s\S]+?)\$\$/g, "$1")
     .replace(/\\\[([\s\S]+?)\\\]/g, "$1")

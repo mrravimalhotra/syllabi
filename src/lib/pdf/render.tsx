@@ -24,10 +24,12 @@ Font.register({
     { src: path.join(FONT_DIR, "NotoSansDevanagari-Bold.ttf"), fontWeight: 700 },
   ],
 });
+Font.register({ family: "NotoSansMono", src: path.join(FONT_DIR, "NotoSansMono-Regular.ttf") });
 // Don't hyphenate: the default English rules split words (and formulas) oddly.
 Font.registerHyphenationCallback((word) => [word]);
 
 const FONT_FAMILY = ["NotoSans", "NotoSansMath", "NotoSansDevanagari"];
+const CODE_FONT_FAMILY = ["NotoSansMono", ...FONT_FAMILY];
 
 const styles = StyleSheet.create({
   page: { paddingTop: 40, paddingBottom: 50, paddingHorizontal: 44, fontSize: 11, fontFamily: FONT_FAMILY },
@@ -43,6 +45,15 @@ const styles = StyleSheet.create({
   listItem: { flexDirection: "row", marginBottom: 3, lineHeight: 1.5 },
   listMarker: { width: 18 },
   listText: { flex: 1 },
+  codeBlock: {
+    marginVertical: 6,
+    padding: 8,
+    backgroundColor: "#f8fafc",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 3,
+  },
+  codeLine: { fontFamily: CODE_FONT_FAMILY, fontSize: 9, lineHeight: 1.4 },
   rule: { borderBottomWidth: 1, borderBottomColor: "#e2e8f0", marginVertical: 8 },
   table: { marginVertical: 6, borderTopWidth: 1, borderLeftWidth: 1, borderColor: "#cbd5e1" },
   tableRow: { flexDirection: "row" },
@@ -88,8 +99,8 @@ function splitTableRow(line: string): string[] {
 
 /**
  * Markdown renderer for the subset the prompts ask for: headings (#, ##, ###),
- * bullet and numbered lists (indented for nesting), tables, horizontal rules,
- * paragraphs, and bold.
+ * bullet and numbered lists (indented for nesting), tables, ``` code blocks,
+ * horizontal rules, paragraphs, and bold.
  */
 function ContentBody({ text }: { text: string }) {
   const lines = text.split("\n");
@@ -99,6 +110,25 @@ function ContentBody({ text }: { text: string }) {
     const raw = lines[i];
     const line = raw.trim();
     if (!line) continue;
+
+    if (line.startsWith("```")) {
+      const code: string[] = [];
+      i++;
+      while (i < lines.length && !lines[i].trim().startsWith("```")) code.push(lines[i++]);
+      blocks.push(
+        <View key={i} style={styles.codeBlock}>
+          {code.map((codeLine, c) => (
+            <Text key={c} style={styles.codeLine}>
+              {/* Keep indentation: leading spaces/tabs become non-breaking spaces. */}
+              {codeLine
+                .replace(/\t/g, "  ")
+                .replace(/^ +/, (spaces) => "\u00a0".repeat(spaces.length)) || "\u00a0"}
+            </Text>
+          ))}
+        </View>
+      );
+      continue;
+    }
 
     if (line.startsWith("|")) {
       const rows: string[][] = [];

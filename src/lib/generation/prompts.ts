@@ -10,7 +10,9 @@ insufficient, or the user explicitly asks for something beyond the curriculum.
 Never fabricate a source or citation.
 
 Formatting: the answer is shown on screen, often on a phone, and exported to a printable PDF.
-Use Markdown headings (#, ##, ###), bullet and numbered lists, **bold**, and simple tables only.
+Use Markdown headings (#, ##, ###), bullet and numbered lists, **bold**, simple tables, and
+code blocks only. Put code (HTML, Python, formulas, commands) in \`\`\` code blocks with the
+language name, and tag or keyword names inline in backticks, e.g. \`<body>\`.
 Write math in plain Unicode, not LaTeX: x², √x, ≤, ≥, ≠, ×, ÷, π, θ, °, ½, and (a)/(b) for
 fractions. Keep lines and tables narrow enough to read on a phone. Answer in the language
 the user writes in.`;
@@ -32,7 +34,10 @@ school uses a different pattern, in which case follow the school):
   "mention any N" means exactly that many distinct points. When a question states marks
   or a word limit, stick to it.
 - Model answers use the textbook's own terms, names and dates, add an example from the
-  chapter where it helps, and for true or false give the correct statement when false.`;
+  chapter where it helps, and for true or false give the correct statement when false.
+- Computer studies: "write the code" answers give complete, correct code in a code block
+  (correctly nested and closed, lower-case tags), then one line on what it displays.
+  "Differentiate between" answers use a short two-column table.`;
 
 export function systemInstructionsFor(taskType: GenerationTaskType): string {
   switch (taskType) {

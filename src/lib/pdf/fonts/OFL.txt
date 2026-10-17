@@ -1,4 +1,4 @@
-Noto Sans, Noto Sans Devanagari and Noto Sans Math — Copyright 2022 The Noto Project Authors (https://github.com/notofonts).
+Noto Sans, Noto Sans Devanagari, Noto Sans Math and Noto Sans Mono — Copyright 2022 The Noto Project Authors (https://github.com/notofonts).
 Downloaded unmodified from https://github.com/notofonts/notofonts.github.io (hinted TTF).
 
 SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
