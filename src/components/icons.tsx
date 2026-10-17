@@ -240,15 +240,3 @@ export const VolumeOffIcon = (p: IconProps) => (
     <path d="M22 9l-6 6M16 9l6 6" />
   </Icon>
 );
-
-export const ArrowUpIcon = (p: IconProps) => (
-  <Icon {...p}>
-    <path d="M12 19V5M5 12l7-7 7 7" />
-  </Icon>
-);
-
-export const ArrowDownIcon = (p: IconProps) => (
-  <Icon {...p}>
-    <path d="M12 5v14M19 12l-7 7-7-7" />
-  </Icon>
-);

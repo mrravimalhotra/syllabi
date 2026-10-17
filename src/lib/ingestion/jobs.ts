@@ -181,7 +181,7 @@ export async function readQueuedPages(origin: string | null): Promise<void> {
 }
 
 /** Asks the app (a fresh server run) to read queued pages; returns at once. */
-export async function startRun(origin: string): Promise<void> {
+async function startRun(origin: string): Promise<void> {
   const token = await jobToken();
   if (!token) return;
   await fetch(`${origin}/api/jobs/pages`, {

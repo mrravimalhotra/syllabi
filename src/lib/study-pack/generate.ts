@@ -135,7 +135,7 @@ function question(v: unknown, chapterText: string | null, practice: boolean): Pa
 }
 
 /** Turns the two model replies into a clean pack, checking every quote against the chapter. */
-export function buildPack(
+function buildPack(
   walk: Record<string, unknown>,
   qa: Record<string, unknown>,
   chapterText: string | null,

@@ -4,7 +4,7 @@
 
 import type { IngestPage } from "@/lib/ingestion/ingest";
 
-export const MAX_PAGES_PER_REQUEST = 30;
+const MAX_PAGES_PER_REQUEST = 30;
 const PAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 // One page image, base64. The browser downscales pages to ~1600 px JPEGs, far below this.
 const MAX_PAGE_BASE64_CHARS = 3 * 1024 * 1024;
@@ -12,7 +12,7 @@ const MAX_PAGE_BASE64_CHARS = 3 * 1024 * 1024;
 const MAX_PAGE_TEXT_CHARS = 20_000;
 
 const SOURCE_TYPES = new Set(["textbook", "exercise", "past_paper", "notes"]);
-export type SourceType = "textbook" | "exercise" | "past_paper" | "notes";
+type SourceType = "textbook" | "exercise" | "past_paper" | "notes";
 
 /** A page as the browser sends it; `sourceType` is the page's own kind within its book. */
 export type UploadPage = (

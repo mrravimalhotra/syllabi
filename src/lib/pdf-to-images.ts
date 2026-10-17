@@ -1,8 +1,8 @@
 // The "legacy" build (not the default package-root export) is the variant meant
 // to run safely wherever it's evaluated, including Next.js's server-side render
 // pass of this client component — the default build logs a Node-environment
-// warning in that case even though pdfToPageImages itself only ever runs in
-// the browser, invoked from a file-input change handler.
+// warning in that case even though reading a PDF only ever runs in the browser,
+// invoked from a file-input change handler.
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import { MAX_DIMENSION, encodeCanvas } from "@/lib/downscale-image";
 
@@ -16,50 +16,6 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 // payloads on multi-page, full-color scanned textbooks).
 // Longest side and JPEG quality are shared with photos (downscale-image.ts).
 const RENDER_SCALE = 1.5;
-
-export interface RasterizedPage {
-  imageBase64: string;
-  mimeType: string;
-  /** This page's share of the PDF file's size, and the shrunk JPEG's size, in bytes. */
-  originalBytes?: number;
-  bytes?: number;
-}
-
-/**
- * Rasterizes every page of a PDF into a JPEG image in the browser, so a PDF
- * upload can feed the same per-page pipeline as directly-selected page images
- * — the server and ingestion code never need to know a PDF was involved.
- */
-export async function pdfToPageImages(file: File, maxPages = Infinity): Promise<RasterizedPage[]> {
-  const buffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
-  const pages: RasterizedPage[] = [];
-
-  for (let pageNumber = 1; pageNumber <= Math.min(pdf.numPages, maxPages); pageNumber++) {
-    const page = await pdf.getPage(pageNumber);
-    // Large-format or high-resolution PDFs would otherwise render huge page
-    // images; cap the longest side like photos (enough for AI reading).
-    const natural = page.getViewport({ scale: 1 });
-    const scale = Math.min(RENDER_SCALE, MAX_DIMENSION / Math.max(natural.width, natural.height));
-    const viewport = page.getViewport({ scale });
-
-    const canvas = document.createElement("canvas");
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-
-    const context = canvas.getContext("2d");
-    if (context) {
-      context.fillStyle = "#fff";
-      context.fillRect(0, 0, canvas.width, canvas.height);
-    }
-    await page.render({ canvas, viewport }).promise;
-
-    const { imageBase64, bytes } = encodeCanvas(canvas);
-    pages.push({ imageBase64, mimeType: "image/jpeg", originalBytes: file.size / pdf.numPages, bytes });
-  }
-
-  return pages;
-}
 
 /**
  * One PDF page. Every page has its rendered image (answers are always written
@@ -124,7 +80,7 @@ function itemsToText(items: { str: string; transform: number[]; width: number; h
 }
 
 /** True when a page's text layer is real, readable text (not a scanned page, a legacy-font scramble or broken equations). */
-export function usableText(text: string, fontNames: string[]): boolean {
+function usableText(text: string, fontNames: string[]): boolean {
   const compact = text.replace(/\s+/g, "");
   if (compact.length < 20) return false;
   if (fontNames.some((f) => LEGACY_INDIC_FONT.test(f))) return false;

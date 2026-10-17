@@ -14,6 +14,8 @@ type Values = Record<string, string>;
 interface InputField {
   key: string;
   label: string;
+  /** One line under the field saying what is accepted. */
+  hint?: string;
   placeholder?: string;
   options?: { value: string; label: string }[];
   /** Hidden when another field has a given value (e.g. the second fraction when simplifying). */
@@ -81,7 +83,7 @@ const TOPICS: Topic[] = [
     id: "lcm-hcf",
     label: "LCM and HCF",
     fields: [
-      { key: "numbers", label: "Numbers (2 to 6)", placeholder: "e.g. 12, 18, 30" },
+      { key: "numbers", label: "Numbers to find the LCM or HCF of", hint: "Type 2 to 6 whole numbers, separated by commas.", placeholder: "e.g. 12, 18, 30" },
       {
         key: "want",
         label: "Find",
@@ -94,7 +96,7 @@ const TOPICS: Topic[] = [
     ],
     problem: (v) => {
       const numbers = numberList(v.numbers ?? "")?.map(Number);
-      if (!numbers || numbers.length < 2) return "Type at least two whole numbers, separated by commas.";
+      if (!numbers || numbers.length < 2) return "Type at least two whole numbers separated by commas, for example 12, 18, 30.";
       if (numbers.some((n) => !Number.isInteger(n) || n < 1)) return "LCM and HCF need whole numbers above 0.";
       return { kind: "lcm-hcf", numbers, want: (v.want as "lcm" | "hcf" | "both") ?? "both" };
     },
@@ -109,10 +111,10 @@ const TOPICS: Topic[] = [
   {
     id: "add",
     label: "Column addition",
-    fields: [{ key: "numbers", label: "Numbers to add (2 to 4)", placeholder: "e.g. 4567, 789" }],
+    fields: [{ key: "numbers", label: "Numbers to add", hint: "Type 2 to 4 numbers, separated by commas. Decimals are fine.", placeholder: "e.g. 4567, 789" }],
     problem: (v) => {
       const numbers = numberList(v.numbers ?? "");
-      if (!numbers || numbers.length < 2) return "Type two to four numbers, separated by commas.";
+      if (!numbers || numbers.length < 2) return "Type two to four numbers separated by commas, for example 4567, 789. Check that each one is a number.";
       return { kind: "column", op: "add", numbers };
     },
     example: () => ({ numbers: Array.from({ length: rand(2, 3) }, () => rand(100, 9999)).join(", ") }),
@@ -224,6 +226,28 @@ const TOPICS: Topic[] = [
   },
 ];
 
+/** Why a worked example can't be drawn for this problem, in words the parent can act on. */
+function tooLargeMessage(p: WorkedProblem): string {
+  switch (p.kind) {
+    case "lcm-hcf":
+      return p.numbers.length > 6
+        ? `That is ${p.numbers.length} numbers; the ladder method here handles up to 6. Remove some and try again.`
+        : "LCM and HCF work with whole numbers up to 1,000,000. Use smaller numbers.";
+    case "column":
+      return p.numbers.length > 4
+        ? `That is ${p.numbers.length} numbers; column addition here handles up to 4. Remove some and try again.`
+        : "Column sums here handle numbers of up to 12 digits in total. Use smaller numbers.";
+    case "division":
+      return "Long division here handles a number of up to 12 digits divided by a number of up to 6 digits. Use smaller numbers.";
+    case "multiplication":
+      return "Long multiplication here handles a first number of up to 8 digits and a second of up to 4 digits (the decimal point doesn't count). Use smaller numbers.";
+    case "fraction":
+      return "Fractions here handle tops and bottoms up to 100,000. Use smaller numbers.";
+    case "convert":
+      return "That amount has too many digits (up to 10 are allowed). Use a shorter number.";
+  }
+}
+
 const DEFAULTS: Values = { decimals: "no", want: "both", op: "add", from: "km", to: "m" };
 
 /**
@@ -247,7 +271,7 @@ export function TutorialsCard() {
     }
     const example = solve(problem);
     if (!example) {
-      setProblemError("Those numbers are too big for a worked example (too many digits). Try smaller ones.");
+      setProblemError(tooLargeMessage(problem));
       return;
     }
     setProblemError(null);
@@ -315,7 +339,7 @@ export function TutorialsCard() {
           {topic.fields
             .filter((f) => !f.hiddenWhen?.(values))
             .map((f) => (
-              <Field key={`${topic.id}-${f.key}`} label={f.label} htmlFor={`tut-${f.key}`}>
+              <Field key={`${topic.id}-${f.key}`} label={f.label} htmlFor={`tut-${f.key}`} hint={f.hint}>
                 {f.options ? (
                   <select
                     id={`tut-${f.key}`}

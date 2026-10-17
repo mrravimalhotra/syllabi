@@ -90,5 +90,3 @@ export function openAiCompatibleAdapter(provider: OpenAiCompatible): LlmProvider
     },
   };
 }
-
-export const openaiAdapter = openAiCompatibleAdapter("openai");

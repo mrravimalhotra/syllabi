@@ -2,7 +2,7 @@
 // a Hindi, Marathi or French chapter (a language subject, or a Hindi- or
 // Marathi-medium book) gets answers in that language.
 
-export const ANSWER_LANGUAGES = ["auto", "en", "hi", "mr", "fr"] as const;
+const ANSWER_LANGUAGES = ["auto", "en", "hi", "mr", "fr"] as const;
 export type AnswerLanguage = (typeof ANSWER_LANGUAGES)[number];
 
 /** Each language's name in that language, as shown in the pickers. */

@@ -9,7 +9,7 @@ import { getSignedUrl as presign } from "@aws-sdk/s3-request-presigner";
 
 // Cloudflare R2 is S3-compatible, so the AWS SDK talks to it directly — only the
 // endpoint differs. This is the one file that knows about R2; every caller in the
-// app just imports uploadPdf/uploadSourceFile/downloadFile/getSignedUrl below.
+// app just imports uploadSourceFile/downloadFile/getSignedUrl below.
 // Chosen over Supabase Storage because every uploaded scanned page's image is now
 // kept (see chunks.image_path) and re-served on every generation that cites it —
 // R2's free tier (10GB) comfortably covers that, and it charges no egress fees for
@@ -31,14 +31,6 @@ function client() {
     endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
     credentials: { accessKeyId, secretAccessKey },
   });
-}
-
-/** Uploads a PDF buffer to R2 and returns its storage path (object key). */
-export async function uploadPdf(path: string, buffer: Buffer): Promise<string> {
-  await client().send(
-    new PutObjectCommand({ Bucket: BUCKET, Key: path, Body: buffer, ContentType: "application/pdf" })
-  );
-  return path;
 }
 
 /** Returns a time-limited signed download URL for a stored object. */
