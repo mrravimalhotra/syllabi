@@ -24,7 +24,7 @@ import {
   type GenerationResult,
   type MeResponse,
 } from "@/app/dashboard/_ask/constants";
-import { GeneratingCard, Thumb } from "@/app/dashboard/_ask/Parts";
+import { GeneratingCard, Thumb, TimingNote } from "@/app/dashboard/_ask/Parts";
 import { OFFLINE_MESSAGE, failedRequestMessage } from "@/lib/http-errors";
 import { formatDate } from "@/lib/format";
 import {
@@ -73,6 +73,8 @@ export default function DashboardPage() {
 
   const abortRef = useRef<AbortController | null>(null);
   const busyRef = useRef(false);
+  // The last request sent, kept for finding the calculations in the question just answered.
+  const [lastBody, setLastBody] = useState<Record<string, unknown> | null>(null);
   // The answer as written so far (streamed), shown while it is still being made.
   const [draft, setDraft] = useState("");
   const draftRef = useRef("");
@@ -252,6 +254,20 @@ export default function DashboardPage() {
     await send(ROUTE_BY_TASK[tab], body, tab);
   }
 
+  /** Switching kind starts that kind afresh: the text, attachments, messages and the last answer from the other kind are cleared. */
+  function chooseTab(next: GenerationTaskType) {
+    if (next === tab || busyRef.current) return;
+    setTab(next);
+    setPrompt("");
+    setPhotos([]);
+    setAttachedDocs([]);
+    setError(null);
+    setNotice(null);
+    setResult(null);
+    setWorked(null);
+    setOpenWorked(null);
+  }
+
   /** Sends one request; also used by "Make a new answer", which resends the last one with fresh: true. */
   async function send(route: string, body: Record<string, unknown>, task: GenerationTaskType) {
     busyRef.current = true;
@@ -262,6 +278,7 @@ export default function DashboardPage() {
     setWorked(null);
     setOpenWorked(null);
     lastRequestRef.current = { route, body, task };
+    setLastBody(body);
     draftRef.current = "";
     setDraft("");
     const controller = new AbortController();
@@ -334,7 +351,6 @@ export default function DashboardPage() {
   }
 
   // Calculations in the question just answered, each with its worked example.
-  const lastBody = lastRequestRef.current?.body;
   const workedInQuestion = useMemo(() => {
     if (!result || !lastBody) return [];
     const text = [lastBody.prompt, lastBody.attachedText].filter((t) => typeof t === "string").join("\n");
@@ -411,7 +427,7 @@ export default function DashboardPage() {
               type="button"
               role="radio"
               aria-checked={selected}
-              onClick={() => setTab(t.value)}
+              onClick={() => chooseTab(t.value)}
               className={cx(
                 "flex items-center gap-3 rounded-xl border p-3 text-left transition",
                 selected
@@ -759,6 +775,7 @@ export default function DashboardPage() {
           ) : (
             <AnswerView answer={result} />
           )}
+          {result.timings && <TimingNote timings={result.timings} />}
           {!result.pack && workedInQuestion.length > 0 && (
             <div className="space-y-3 print:hidden">
               <div className="flex flex-wrap items-center gap-2">

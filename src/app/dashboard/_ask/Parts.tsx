@@ -5,6 +5,7 @@ import { CheckIcon } from "@/components/icons";
 import { Markdown } from "@/components/Markdown";
 import { Skeleton, Spinner, button, card, cx } from "@/components/ui";
 import type { DownscaledImage } from "@/lib/downscale-image";
+import type { GenerationResult } from "@/app/dashboard/_ask/constants";
 
 export const Thumb = memo(function Thumb({ image, alt }: { image: DownscaledImage; alt: string }) {
   return (
@@ -19,6 +20,24 @@ export const Thumb = memo(function Thumb({ image, alt }: { image: DownscaledImag
 });
 
 /** Shown while an answer is being written: progress steps and a placeholder answer. */
+const seconds = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
+
+/** Where the time went for an answer, in one muted line (to see what is slow). */
+export function TimingNote({ timings }: { timings: NonNullable<GenerationResult["timings"]> }) {
+  const parts = [
+    `Made in ${seconds(timings.totalMs)}`,
+    timings.readingPhotosMs > 0 ? `reading photos ${seconds(timings.readingPhotosMs)}` : null,
+    `searching books ${seconds(timings.searchMs)}`,
+    timings.loadingImagesMs > 0 ? `page images ${seconds(timings.loadingImagesMs)}` : null,
+    timings.firstWordsMs !== null ? `first words after ${seconds(timings.firstWordsMs)}` : null,
+    `AI writing ${seconds(timings.writingMs)}`,
+    timings.repairMs > 0 ? `fixing after checks ${seconds(timings.repairMs)}` : null,
+    `saving ${seconds(timings.savedMs)}`,
+    timings.model,
+  ].filter(Boolean);
+  return <p className="text-xs text-slate-400 print:hidden">{parts.join(" · ")}</p>;
+}
+
 export function GeneratingCard({ steps, draft, onStop }: { steps: { after: number; text: string }[]; draft: string; onStop: () => void }) {
   const [seconds, setSeconds] = useState(0);
   useEffect(() => {

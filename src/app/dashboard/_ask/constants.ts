@@ -29,6 +29,18 @@ export type GenerationResult = Answer & {
   pack?: StudyPack;
   /** Set when the saved answer to the same question was returned (no AI used). */
   reusedFrom?: string;
+  /** Where the time went on the server (milliseconds), for finding what is slow. */
+  timings?: {
+    totalMs: number;
+    readingPhotosMs: number;
+    searchMs: number;
+    loadingImagesMs: number;
+    firstWordsMs: number | null;
+    writingMs: number;
+    repairMs: number;
+    savedMs: number;
+    model: string;
+  };
 };
 
 export const TABS: {

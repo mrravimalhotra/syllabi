@@ -160,6 +160,20 @@ await test("Ask: a stream that stops early says what to do", async (page, ctx) =
   await page.getByText(/connection dropped before the answer finished/).first().waitFor({ timeout: 10000 });
 });
 
+await test("Ask: switching kind clears the text and the old answer", async (page, ctx) => {
+  await baseRoutes(ctx);
+  await ctx.route("**/api/generate/**", (r) => json(r, { ...answer, text: "Plants make food from sunlight.", timings: { totalMs: 6200, readingPhotosMs: 0, searchMs: 900, loadingImagesMs: 0, firstWordsMs: 2400, writingMs: 4800, repairMs: 0, savedMs: 100, model: "google / gemini-flash-latest" } }));
+  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.locator("textarea").fill("Explain photosynthesis");
+  await page.getByRole("button", { name: /^Generate$/ }).click();
+  await page.getByText("Plants make food from sunlight.").first().waitFor({ timeout: 10000 });
+  await page.getByText(/Made in 6\.2s/).first().waitFor();
+  await page.getByRole("radio", { name: /Notes/ }).click();
+  await page.getByText("Plants make food from sunlight.").first().waitFor({ state: "detached", timeout: 5000 });
+  if ((await page.locator("textarea").inputValue()) !== "") throw new Error("The text box was not cleared when switching kind.");
+  await page.getByText(/Revision notes for the chapter on Motion/).first().waitFor();
+});
+
 await test("My Books: lists books with reading progress", async (page, ctx) => {
   await baseRoutes(ctx);
   await page.goto(`${BASE}/dashboard/library`, { waitUntil: "networkidle" });

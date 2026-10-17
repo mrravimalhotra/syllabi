@@ -41,6 +41,25 @@ export interface GenerationOutput {
   searchSuggestionsHtml?: string;
   /** What Syllabi's own code checked (calculations), shown with the answer. */
   checks: AnswerCheck[];
+  /** Where the time went, in milliseconds, to find out what is slow. */
+  timings: GenerationTimings;
+}
+
+export interface GenerationTimings {
+  /** Reading attached photos (0 when there were none). */
+  readingPhotosMs: number;
+  /** Finding passages in the books (embedding the question and searching). */
+  searchMs: number;
+  /** Loading the source page images the answer will cite. */
+  loadingImagesMs: number;
+  /** From sending the request to the AI until its first words (null when not streamed). */
+  firstWordsMs: number | null;
+  /** The AI writing the whole first draft. */
+  writingMs: number;
+  /** Fixing a draft that failed Syllabi's checks (0 when it passed). */
+  repairMs: number;
+  /** Which service and model wrote the answer. */
+  model: string;
 }
 
 /** All code checks that apply to this kind of answer. */
@@ -83,6 +102,15 @@ export async function runGeneration({
   // The allowance check runs alongside the (cheap) photo reading and search
   // below instead of before them, and still stops the request before the
   // main AI call.
+  const timings: GenerationTimings = {
+    readingPhotosMs: 0,
+    searchMs: 0,
+    loadingImagesMs: 0,
+    firstWordsMs: null,
+    writingMs: 0,
+    repairMs: 0,
+    model: "",
+  };
   const quotaCheck = checkQuota(student.id);
   quotaCheck.catch(() => {}); // reported where it is awaited below
 
@@ -98,16 +126,22 @@ export async function runGeneration({
       const early = await quotaCheck;
       if (early.overQuota) throw new QuotaExceededError(early);
     }
+    const photosStart = Date.now();
     const transcription = unread.length > 0 ? await transcribePhotos(student.id, unread) : "";
+    timings.readingPhotosMs = Date.now() - photosStart;
     searchQuery = [prompt, ...known, transcription].join("\n\n").trim().slice(0, MAX_SEARCH_QUERY_CHARS);
   }
 
+  const searchStart = Date.now();
   const retrieval = await retrieveContext(searchQuery, { ownerId: student.id, documentIds });
+  timings.searchMs = Date.now() - searchStart;
 
   const quota = await quotaCheck;
   if (quota.overQuota) throw new QuotaExceededError(quota);
 
+  const imagesStart = Date.now();
   const { images: sourcePageImages, byPath: sourceImages } = await loadSourceImages(retrieval.chunks);
+  timings.loadingImagesMs = Date.now() - imagesStart;
 
   const photoNote =
     photos.length > 0
@@ -125,7 +159,19 @@ export async function runGeneration({
     allowSearchGrounding: retrieval.coverageLow,
     temperature: TEMPERATURE[taskType],
   };
-  let result = await generateCompletion({ ...request, onText, onRestart });
+  const writingStart = Date.now();
+  let result = await generateCompletion({
+    ...request,
+    onText:
+      onText &&
+      ((delta) => {
+        timings.firstWordsMs ??= Date.now() - writingStart;
+        onText(delta);
+      }),
+    onRestart,
+  });
+  timings.writingMs = Date.now() - writingStart;
+  timings.model = `${result.provider} / ${result.model}`;
   await recordTokenUsage({
     studentId: student.id,
     taskType,
@@ -141,6 +187,7 @@ export async function runGeneration({
   let checks = runChecks(result.text);
   const problems = checks.filter((c) => !c.ok);
   if (problems.length > 0) {
+    const repairStart = Date.now();
     const repaired = await generateCompletion({
       ...request,
       prompt:
@@ -156,6 +203,7 @@ export async function runGeneration({
       model: repaired.model,
       usage: repaired.usage,
     });
+    timings.repairMs = Date.now() - repairStart;
     const recheck = runChecks(repaired.text);
     // Keep the repair only if it really has fewer problems.
     if (recheck.filter((c) => !c.ok).length < problems.length) {
@@ -171,6 +219,7 @@ export async function runGeneration({
     usedSearchGrounding: Boolean(result.usedSearchGrounding),
     searchSuggestionsHtml: result.searchSuggestionsHtml,
     checks,
+    timings,
   };
 }
 

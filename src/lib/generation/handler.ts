@@ -52,6 +52,7 @@ function titleFor(typedPrompt: string, hasAttachedText: boolean): string {
  */
 export function createGenerationRoute(taskType: GenerationTaskType) {
   return async function POST(request: Request) {
+    const requestStart = Date.now();
     const auth = await authenticate();
     if ("response" in auth) return auth.response;
     const student = auth.account;
@@ -121,6 +122,7 @@ export function createGenerationRoute(taskType: GenerationTaskType) {
           image_path: s.image_path,
           similarity: s.similarity,
         }));
+        const savingStart = Date.now();
         const admin = createAdminClient();
         const { data: doc, error } = await admin
           .from("generated_documents")
@@ -139,6 +141,8 @@ export function createGenerationRoute(taskType: GenerationTaskType) {
           .single();
         // The answer is still shown even if saving it failed.
         if (error) console.error("[generate] saving answer", error);
+        const timings = { ...result.timings, totalMs: Date.now() - requestStart, savedMs: Date.now() - savingStart };
+        console.log(`[generate:timing] ${JSON.stringify({ taskType, ...timings, answerChars: result.text.length })}`);
 
         // Give the on-screen result the same source images the PDF embeds, so a
         // diagram/map is visible before the PDF is even opened.
@@ -152,6 +156,7 @@ export function createGenerationRoute(taskType: GenerationTaskType) {
           usedSearchGrounding: result.usedSearchGrounding,
           searchSuggestionsHtml: result.searchSuggestionsHtml ?? null,
           checks: result.checks,
+          timings,
           // Made on demand from the saved answer (null if saving failed).
           pdfUrl: doc ? `/api/documents/${doc.id}/pdf` : null,
         };
