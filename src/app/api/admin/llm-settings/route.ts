@@ -18,6 +18,17 @@ export async function GET() {
   return NextResponse.json({ settings: data });
 }
 
+const TASK_TYPES = new Set<TaskType>([
+  "ocr_extraction",
+  "embedding",
+  "solution",
+  "notes",
+  "sample_paper",
+  "ad_hoc",
+  "coverage_check",
+]);
+const PROVIDERS = new Set<Provider>(["google", "anthropic", "openai"]);
+
 interface PatchBody {
   taskType: TaskType;
   provider: Provider;
@@ -33,14 +44,19 @@ export async function PATCH(request: Request) {
   }
 
   const body = (await request.json().catch(() => null)) as PatchBody | null;
-  if (!body?.taskType || !body.provider || !body.model?.trim()) {
-    return NextResponse.json({ error: "taskType, provider, and model are required" }, { status: 400 });
+  const model = typeof body?.model === "string" ? body.model.trim() : "";
+  if (!body || !TASK_TYPES.has(body.taskType) || !PROVIDERS.has(body.provider) || !/^[\w.:\-/]{1,100}$/.test(model)) {
+    return NextResponse.json({ error: "Choose a task, a provider and a valid model name" }, { status: 400 });
+  }
+  // Embeddings must stay on Google: the search index is built from Google's 768-dimension vectors.
+  if (body.taskType === "embedding" && body.provider !== "google") {
+    return NextResponse.json({ error: "Embeddings must use Google (the search index depends on it)" }, { status: 400 });
   }
 
   const supabaseAdmin = createAdminClient();
   const { data, error } = await supabaseAdmin
     .from("llm_settings")
-    .update({ provider: body.provider, model: body.model.trim(), updated_by: admin.id })
+    .update({ provider: body.provider, model, updated_by: admin.id, updated_at: new Date().toISOString() })
     .eq("task_type", body.taskType)
     .select()
     .single();

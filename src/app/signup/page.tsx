@@ -1,12 +1,13 @@
 import { SignUpForm } from "@/components/SignUpForm";
 import { signupsOpen } from "@/lib/access";
+import { SIGNUP_ERRORS, pick } from "@/lib/auth-messages";
 
 export default async function SignupPage({
   searchParams,
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
-  const { error } = await searchParams;
+  const error = pick(SIGNUP_ERRORS, (await searchParams).error);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">

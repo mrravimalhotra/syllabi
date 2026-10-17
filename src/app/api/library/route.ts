@@ -5,6 +5,7 @@ import { ingestDocument } from "@/lib/ingestion/ingest";
 import { checkQuota } from "@/lib/quota";
 import type { DocumentRow } from "@/types/database";
 import { userMessage } from "@/lib/errors";
+import { cleanText, isUuid } from "@/lib/validate";
 
 export const maxDuration = 300; // vision extraction + embedding per page can take a while
 
@@ -68,8 +69,16 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!body?.title?.trim() || !SOURCE_TYPES.has(body.sourceType) || !body.pages?.length) {
-    return NextResponse.json({ error: "title, sourceType, and pages are required" }, { status: 400 });
+  const title = cleanText(body?.title, 200);
+  if (!title || !body || !SOURCE_TYPES.has(body.sourceType) || !Array.isArray(body.pages) || body.pages.length === 0) {
+    return NextResponse.json({ error: "A title, a type and at least one page are required" }, { status: 400 });
+  }
+  const startPageNumber = body.startPageNumber ?? 1;
+  if (!Number.isInteger(startPageNumber) || startPageNumber < 1 || startPageNumber > 10_000) {
+    return NextResponse.json({ error: "Invalid page number" }, { status: 400 });
+  }
+  if (body.documentId !== undefined && !isUuid(body.documentId)) {
+    return NextResponse.json({ error: "Book not found" }, { status: 404 });
   }
   if (body.rightsConfirmed !== true) {
     return NextResponse.json(
@@ -124,15 +133,15 @@ export async function POST(request: Request) {
 
   try {
     const documentId = await ingestDocument({
-      title: body.title.trim(),
+      title,
       ownerId: user.id,
-      subject: body.subject?.trim() || null,
-      grade: body.grade?.trim() || null,
+      subject: cleanText(body.subject, 100),
+      grade: cleanText(body.grade, 50),
       sourceType: body.sourceType,
       documentId: body.documentId,
       finalize: body.finalize,
       pages: body.pages.map((p, i) => {
-        const pageNumber = (body.startPageNumber ?? 1) + i;
+        const pageNumber = startPageNumber + i;
         return "text" in p
           ? { pageNumber, text: p.text }
           : { pageNumber, imageBase64: p.imageBase64, mimeType: p.mimeType, hint: p.hint };

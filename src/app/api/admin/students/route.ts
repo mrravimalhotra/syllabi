@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { userMessage } from "@/lib/errors";
+import { isUuid } from "@/lib/validate";
+
+// Upper bound for a monthly token quota (keeps the value a sane integer).
+const MAX_QUOTA = 1_000_000_000;
 
 export async function GET() {
   try {
@@ -17,13 +21,10 @@ export async function GET() {
     .order("created_at", { ascending: false });
   if (error) return NextResponse.json({ error: userMessage(error, "admin/students") }, { status: 500 });
 
-  // Attach current-month usage for each student in one batch.
-  const usageByStudent = new Map<string, number>();
-  await Promise.all(
-    (students ?? []).map(async (s) => {
-      const { data } = await admin.rpc("student_monthly_usage", { p_student_id: s.id });
-      usageByStudent.set(s.id, (data as number) ?? 0);
-    })
+  // Everyone's current-month usage in one query.
+  const { data: usage } = await admin.rpc("monthly_usage_all");
+  const usageByStudent = new Map<string, number>(
+    ((usage ?? []) as { student_id: string; used: number }[]).map((u) => [u.student_id, u.used])
   );
 
   return NextResponse.json({
@@ -46,13 +47,19 @@ export async function PATCH(request: Request) {
   }
 
   const body = (await request.json().catch(() => null)) as PatchBody | null;
-  if (!body?.id) return NextResponse.json({ error: "id is required" }, { status: 400 });
+  if (!isUuid(body?.id)) return NextResponse.json({ error: "id is required" }, { status: 400 });
 
   // Only these fields are editable here; anything else in the body is ignored.
   const updates: Omit<PatchBody, "id"> = {};
   if (typeof body.active === "boolean") updates.active = body.active;
   if (body.role === "student" || body.role === "admin") updates.role = body.role;
-  if (Number.isInteger(body.token_quota) && (body.token_quota as number) >= 0) updates.token_quota = body.token_quota;
+  if (body.token_quota !== undefined) {
+    if (!Number.isInteger(body.token_quota) || body.token_quota < 0 || body.token_quota > MAX_QUOTA) {
+      return NextResponse.json({ error: `Quota must be a whole number from 0 to ${MAX_QUOTA.toLocaleString()}` }, { status: 400 });
+    }
+    updates.token_quota = body.token_quota;
+  }
+  if (Object.keys(updates).length === 0) return NextResponse.json({ error: "Nothing to change" }, { status: 400 });
   const { id } = body;
   const admin = createAdminClient();
   const { data, error } = await admin.from("students").update(updates).eq("id", id).select().single();
