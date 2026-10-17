@@ -53,7 +53,8 @@ supabase/migrations/   schema, RLS policies, match_chunks() / student_monthly_us
 
 1. Create a project at [supabase.com](https://supabase.com) (free tier is enough for a pilot).
 2. In the SQL editor, run `supabase/migrations/0001_init.sql`, then
-   `0002_chunk_images.sql`, in order. This enables `pgvector`, creates every
+   `0002_chunk_images.sql`, `0003_flash_tier_defaults.sql` and
+   `0004_tighten_rls.sql`, in order. This enables `pgvector`, creates every
    table, the `match_chunks`/`student_monthly_usage` RPCs, and RLS policies.
 3. In Authentication settings, disable "Confirm email" for faster pilot onboarding, or
    configure your SMTP provider if you want email confirmation.
