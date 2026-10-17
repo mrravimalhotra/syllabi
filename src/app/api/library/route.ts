@@ -13,6 +13,8 @@ const MAX_PAGES_PER_REQUEST = 30;
 const PAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 // One page image, base64. The browser downscales pages to ~1800 px JPEGs, far below this.
 const MAX_PAGE_BASE64_CHARS = 3 * 1024 * 1024;
+// One text page from a Word file; the browser splits documents into ~3,000-character pages.
+const MAX_PAGE_TEXT_CHARS = 20_000;
 
 /** Lists the caller's own books. */
 export async function GET() {
@@ -37,7 +39,8 @@ interface UploadBody {
   sourceType: DocumentRow["source_type"];
   /** The uploader confirms they own this copy and will use it only for their own child's/students' study. */
   rightsConfirmed: boolean;
-  pages: { imageBase64: string; mimeType: string }[];
+  /** Page images (scans, photos, PDF pages), or text extracted in the browser from Word files. */
+  pages: ({ imageBase64: string; mimeType: string } | { text: string })[];
   /** Present from the 2nd request onward when a large upload is split into batches — appends to that document instead of creating a new one. */
   documentId?: string;
   /** Page numbering offset for this batch within its document. Defaults to 1. */
@@ -77,17 +80,25 @@ export async function POST(request: Request) {
   if (body.pages.length > MAX_PAGES_PER_REQUEST) {
     return NextResponse.json({ error: `Upload at most ${MAX_PAGES_PER_REQUEST} pages per request` }, { status: 400 });
   }
-  // Pages arrive as images (PDFs are turned into page images in the browser).
-  const badPage = body.pages.findIndex(
-    (p) =>
-      typeof p?.imageBase64 !== "string" ||
-      p.imageBase64.length === 0 ||
-      p.imageBase64.length > MAX_PAGE_BASE64_CHARS ||
-      !PAGE_MIME_TYPES.has(p.mimeType)
-  );
+  // Pages arrive as images (PDFs are turned into page images in the browser)
+  // or as text (Word files are read in the browser).
+  const isValidPage = (p: unknown): boolean => {
+    const page = p as { imageBase64?: unknown; mimeType?: unknown; text?: unknown } | null;
+    if (typeof page?.text === "string") {
+      return page.text.trim().length > 0 && page.text.length <= MAX_PAGE_TEXT_CHARS;
+    }
+    return (
+      typeof page?.imageBase64 === "string" &&
+      page.imageBase64.length > 0 &&
+      page.imageBase64.length <= MAX_PAGE_BASE64_CHARS &&
+      typeof page.mimeType === "string" &&
+      PAGE_MIME_TYPES.has(page.mimeType)
+    );
+  };
+  const badPage = body.pages.findIndex((p) => !isValidPage(p));
   if (badPage !== -1) {
     return NextResponse.json(
-      { error: `Page ${badPage + 1} isn't a JPEG, PNG or WebP image, or is too large.` },
+      { error: `Page ${badPage + 1} isn't a JPEG, PNG or WebP image or Word text, or is too large.` },
       { status: 400 }
     );
   }
@@ -119,11 +130,12 @@ export async function POST(request: Request) {
       sourceType: body.sourceType,
       documentId: body.documentId,
       finalize: body.finalize,
-      pages: body.pages.map((p, i) => ({
-        pageNumber: (body.startPageNumber ?? 1) + i,
-        imageBase64: p.imageBase64,
-        mimeType: p.mimeType,
-      })),
+      pages: body.pages.map((p, i) => {
+        const pageNumber = (body.startPageNumber ?? 1) + i;
+        return "text" in p
+          ? { pageNumber, text: p.text }
+          : { pageNumber, imageBase64: p.imageBase64, mimeType: p.mimeType };
+      }),
     });
 
     return NextResponse.json({ documentId, status: body.finalize === false ? "processing" : "ready" });

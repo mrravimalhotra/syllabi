@@ -14,11 +14,14 @@ const MIME_EXTENSIONS: Record<string, string> = {
   "image/webp": "webp",
 };
 
-export interface IngestPage {
-  pageNumber: number;
-  imageBase64: string;
-  mimeType: string;
-}
+/**
+ * One page to index: either a page image (scans, photos, PDF pages), which is
+ * stored and read by the AI, or text already extracted in the browser (Word
+ * files), which is indexed directly with no image and no AI reading step.
+ */
+export type IngestPage =
+  | { pageNumber: number; imageBase64: string; mimeType: string; text?: undefined }
+  | { pageNumber: number; text: string; imageBase64?: undefined; mimeType?: undefined };
 
 export interface IngestDocumentInput {
   title: string;
@@ -89,29 +92,38 @@ export async function ingestDocument(input: IngestDocumentInput): Promise<string
 
   try {
     for (const page of input.pages) {
-      const ext = MIME_EXTENSIONS[page.mimeType] ?? "bin";
-      const imagePath = `sources/${documentId}/page-${page.pageNumber}.${ext}`;
+      let imagePath: string | null = null;
+      let pageText: string;
 
-      await uploadSourceFile(imagePath, Buffer.from(page.imageBase64, "base64"), page.mimeType).catch((err) =>
-        stage("saving the page image", page.pageNumber, err)
-      );
+      if (page.text !== undefined) {
+        pageText = page.text;
+      } else {
+        const ext = MIME_EXTENSIONS[page.mimeType] ?? "bin";
+        const path = `sources/${documentId}/page-${page.pageNumber}.${ext}`;
+        imagePath = path;
 
-      if (page.pageNumber === 1 && !input.documentId) {
-        const { error } = await admin.from("documents").update({ storage_path: imagePath }).eq("id", documentId);
-        if (error) stage("saving the page preview", page.pageNumber, error);
+        await uploadSourceFile(path, Buffer.from(page.imageBase64, "base64"), page.mimeType).catch((err) =>
+          stage("saving the page image", page.pageNumber, err)
+        );
+
+        if (page.pageNumber === 1 && !input.documentId) {
+          const { error } = await admin.from("documents").update({ storage_path: path }).eq("id", documentId);
+          if (error) stage("saving the page preview", page.pageNumber, error);
+        }
+
+        const extraction = await extractPageText(page.imageBase64, page.mimeType).catch((err) =>
+          stage("reading the page", page.pageNumber, err)
+        );
+        await recordTokenUsage({
+          studentId: input.ownerId,
+          taskType: "ocr_extraction",
+          provider: extraction.provider,
+          model: extraction.model,
+          usage: extraction.usage,
+        });
+        pageText = extraction.text;
       }
-
-      const extraction = await extractPageText(page.imageBase64, page.mimeType).catch((err) =>
-        stage("reading the page", page.pageNumber, err)
-      );
-      await recordTokenUsage({
-        studentId: input.ownerId,
-        taskType: "ocr_extraction",
-        provider: extraction.provider,
-        model: extraction.model,
-        usage: extraction.usage,
-      });
-      const textChunks = chunkPageText(extraction.text, page.pageNumber);
+      const textChunks = chunkPageText(pageText, page.pageNumber);
 
       let embeddingTokens = 0;
       let embeddingModel = "";

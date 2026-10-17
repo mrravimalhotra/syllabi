@@ -20,8 +20,11 @@ const MAX_BATCH_BASE64_CHARS = 3 * 1024 * 1024;
 
 interface PendingPage {
   id: string;
+  /** Image pages (scans, photos, PDF pages); empty for text pages. */
   imageBase64: string;
   mimeType: string;
+  /** Text pages, read in the browser from Word files. */
+  text?: string;
   sourceType: SourceType;
   /** Original file name, shown so pages from a multi-page PDF are still traceable to their source. */
   origin: string;
@@ -57,13 +60,14 @@ function chunkBySize(pageList: PendingPage[], maxChars: number): PendingPage[][]
   let current: PendingPage[] = [];
   let currentChars = 0;
   for (const page of pageList) {
-    if (current.length > 0 && currentChars + page.imageBase64.length > maxChars) {
+    const size = page.text?.length ?? page.imageBase64.length;
+    if (current.length > 0 && currentChars + size > maxChars) {
       batches.push(current);
       current = [];
       currentChars = 0;
     }
     current.push(page);
-    currentChars += page.imageBase64.length;
+    currentChars += size;
   }
   if (current.length > 0) batches.push(current);
   return batches;
@@ -112,7 +116,21 @@ export default function LibraryPage() {
     try {
       const newPages: PendingPage[] = [];
       for (const file of Array.from(fileList)) {
-        if (file.type === "application/pdf") {
+        if (file.name.toLowerCase().endsWith(".docx")) {
+          // Word files: read the text right here; no page images needed.
+          const { docxToTextPages } = await import("@/lib/docx-to-text");
+          const textPages = await docxToTextPages(file);
+          textPages.forEach((text, i) =>
+            newPages.push({
+              id: `${file.name}-${i}-${Date.now()}`,
+              imageBase64: "",
+              mimeType: "",
+              text,
+              sourceType: defaultSourceType,
+              origin: textPages.length > 1 ? `${file.name} (part ${i + 1})` : file.name,
+            })
+          );
+        } else if (file.type === "application/pdf") {
           // pdf.js is large; load it only when a PDF is actually picked.
           const { pdfToPageImages } = await import("@/lib/pdf-to-images");
           const rasterized = await pdfToPageImages(file);
@@ -216,7 +234,9 @@ export default function LibraryPage() {
               grade: grade.trim(),
               rightsConfirmed,
               sourceType: group[0].sourceType,
-              pages: batches[i].map(({ imageBase64, mimeType }) => ({ imageBase64, mimeType })),
+              pages: batches[i].map(({ imageBase64, mimeType, text }) =>
+                text !== undefined ? { text } : { imageBase64, mimeType }
+              ),
               documentId,
               startPageNumber: pageOffset,
               finalize: i === batches.length - 1,
@@ -254,7 +274,7 @@ export default function LibraryPage() {
       <div>
         <h1 className="text-lg font-semibold text-slate-900">My books</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Upload photos or a PDF of your child&apos;s or student&apos;s books, exercises and past
+          Upload photos, a PDF or a Word file of your child&apos;s or student&apos;s books, worksheets and past
           papers. Syllabi reads every page so answers come from these books. Your books are private:
           only you can see and search them. Reading pages uses part of your monthly token quota.
         </p>
@@ -314,7 +334,7 @@ export default function LibraryPage() {
           <div className="mt-1 rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center">
             <input
               type="file"
-              accept="image/*,application/pdf"
+              accept="image/*,application/pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
               multiple
               onChange={(e) => {
                 addFiles(e.target.files);
@@ -324,7 +344,8 @@ export default function LibraryPage() {
               className="block w-full cursor-pointer text-sm text-slate-600 file:mr-4 file:cursor-pointer file:rounded-md file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-slate-700"
             />
             <p className="mt-2 text-xs text-slate-400">
-              JPG, PNG, or PDF (each page rasterized automatically) — up to {MAX_PAGES} pages total
+              Photos (JPG, PNG), PDF or Word (.docx) — up to {MAX_PAGES} pages total. Word files are read as text
+              (pictures inside them are skipped).
             </p>
             {processingFiles && <p className="mt-2 text-xs text-slate-500">Processing pages...</p>}
           </div>
@@ -340,12 +361,20 @@ export default function LibraryPage() {
                 {pages.map((p, i) => (
                   <li key={p.id} className="rounded-md border border-slate-200 bg-white p-2">
                     <div className="relative">
-                      {/* eslint-disable-next-line @next/next/no-img-element -- local data-URI preview, not a remote image */}
-                      <img
-                        src={`data:${p.mimeType};base64,${p.imageBase64}`}
-                        alt={`Page ${i + 1}`}
-                        className="h-24 w-full rounded object-cover"
-                      />
+                      {p.text !== undefined ? (
+                        <p className="h-24 overflow-hidden whitespace-pre-line rounded bg-slate-50 p-1.5 text-[9px] leading-tight text-slate-600">
+                          {p.text.slice(0, 400)}
+                        </p>
+                      ) : (
+                        <>
+                          {/* eslint-disable-next-line @next/next/no-img-element -- local data-URI preview, not a remote image */}
+                          <img
+                            src={`data:${p.mimeType};base64,${p.imageBase64}`}
+                            alt={`Page ${i + 1}`}
+                            className="h-24 w-full rounded object-cover"
+                          />
+                        </>
+                      )}
                       <button
                         type="button"
                         onClick={() => removePage(p.id)}
