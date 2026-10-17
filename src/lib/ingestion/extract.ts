@@ -1,4 +1,13 @@
 import { generateCompletion, type CompletionResult } from "@/lib/llm";
+import { getLlmSetting } from "@/lib/llm/config";
+import { BlockedReplyError, DAILY_LIMIT } from "@/lib/errors";
+
+// A second model to read a page with when the configured one can't: Google's
+// free tier gives each model its own daily allowance, and a different model
+// may not decline a page the first one did.
+const SECOND_MODEL = "gemini-flash-lite-latest";
+// Partial text worth keeping when every model declines to copy the whole page.
+const MIN_PARTIAL_CHARS = 200;
 
 const EXTRACTION_SYSTEM_PROMPT = `You transcribe scanned or photographed textbook, worksheet and question-paper pages
 into clean, well-structured text for a study app's search index. Pages are often phone
@@ -41,19 +50,58 @@ edges. Transcribe only the main page.
 /**
  * Extracts clean text from one scanned/photographed page using the LLM's native
  * vision input — no dedicated OCR vendor needed (Requirement: no OCR bill).
+ * When the configured model has used up its free daily allowance, or declines
+ * the page (published text it won't copy word for word), a second model reads
+ * it; if that declines too, partial text is kept when there is enough of it.
  */
 export async function extractPageText(imageBase64: string, mimeType: string, hint?: string): Promise<CompletionResult> {
-  const result = await generateCompletion({
-    taskType: "ocr_extraction",
-    systemInstructions: EXTRACTION_SYSTEM_PROMPT,
-    // Pictures from Word files are not whole pages: say where they came from,
-    // so the transcription starts with that context (e.g. which question).
-    prompt: hint
-      ? `This is a picture from a Word document, not a whole page. ${hint}\nStart your transcription with that context in one line, then transcribe the picture.`
-      : "Transcribe this page.",
-    images: [{ data: imageBase64, mimeType }],
-    temperature: 0,
-  });
+  const read = async (model?: string, temperature = 0) => {
+    const result = await generateCompletion({
+      taskType: "ocr_extraction",
+      systemInstructions: EXTRACTION_SYSTEM_PROMPT,
+      // Pictures from Word files are not whole pages: say where they came from,
+      // so the transcription starts with that context (e.g. which question).
+      prompt: hint
+        ? `This is a picture from a Word document, not a whole page. ${hint}\nStart your transcription with that context in one line, then transcribe the picture.`
+        : "Transcribe this page.",
+      images: [{ data: imageBase64, mimeType }],
+      temperature,
+      ...(model ? { model } : {}),
+    });
+    return { ...result, text: result.text.trim() };
+  };
 
-  return { ...result, text: result.text.trim() };
+  try {
+    return await read();
+  } catch (first) {
+    const blocked = first instanceof BlockedReplyError;
+    const dailyLimit = DAILY_LIMIT.test(first instanceof Error ? first.message : String(first));
+    const { provider, model } = await getLlmSetting("ocr_extraction");
+    if (!(blocked || dailyLimit) || provider !== "google" || model === SECOND_MODEL) {
+      if (blocked && first.partialText.trim().length >= MIN_PARTIAL_CHARS) return partialResult(first, model);
+      throw first;
+    }
+    console.warn(`[extract] ${model} ${dailyLimit ? "is out of free daily requests" : "declined the page"}; reading it with ${SECOND_MODEL}`);
+    try {
+      return await read(SECOND_MODEL, blocked ? 0.3 : 0);
+    } catch (second) {
+      // Keep whichever partial text is longer; otherwise report the first problem.
+      const partials = [first, second].filter((e): e is BlockedReplyError => e instanceof BlockedReplyError);
+      const best = partials.sort((a, b) => b.partialText.length - a.partialText.length)[0];
+      if (best && best.partialText.trim().length >= MIN_PARTIAL_CHARS) return partialResult(best, model);
+      throw dailyLimit ? first : second;
+    }
+  }
+}
+
+/** A declined page's partial text, used as the page's text when it is long enough. */
+function partialResult(err: BlockedReplyError, model: string): CompletionResult {
+  return {
+    text: `${err.partialText.trim()}\n\n[The rest of this page couldn't be read.]`,
+    truncated: true,
+    provider: "google",
+    model,
+    usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+    usedSearchGrounding: false,
+  };
 }

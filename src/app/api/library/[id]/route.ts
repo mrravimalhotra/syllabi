@@ -5,7 +5,10 @@ import { deletePrefix } from "@/lib/storage";
 import { userMessage } from "@/lib/errors";
 import { cleanText, isUuid } from "@/lib/validate";
 
-/** Renames one of the caller's books (title, subject, grade). */
+/**
+ * Renames one of the caller's books (title, subject, grade), or with
+ * { ready: true } marks an upload finished once its pages are in.
+ */
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentStudent();
   if (!user || !user.active) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -13,6 +16,22 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const { id } = await params;
   if (!isUuid(id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const body = await request.json().catch(() => null);
+
+  if (body?.ready === true) {
+    const admin = createAdminClient();
+    const { count } = await admin.from("chunks").select("id", { count: "exact", head: true }).eq("document_id", id).eq("owner_id", user.id);
+    if (!count) return NextResponse.json({ error: "No pages of this book were saved." }, { status: 400 });
+    const { data, error } = await admin
+      .from("documents")
+      .update({ status: "ready" })
+      .eq("id", id)
+      .eq("owner_id", user.id)
+      .select("id, title, subject, grade, source_type, status, created_at")
+      .maybeSingle();
+    if (error) return NextResponse.json({ error: userMessage(error, "library PATCH ready") }, { status: 500 });
+    if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json({ document: data });
+  }
 
   const updates: { title?: string; subject?: string | null; grade?: string | null } = {};
   if (body?.title !== undefined) {

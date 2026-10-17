@@ -5,7 +5,7 @@ import { embedMany } from "@/lib/llm";
 import { recordTokenUsage } from "@/lib/llm/usage";
 import { uploadSourceFile } from "@/lib/storage";
 import type { DocumentRow } from "@/types/database";
-import { UserError } from "@/lib/errors";
+import { BlockedReplyError, DAILY_LIMIT, UserError } from "@/lib/errors";
 
 const MIME_EXTENSIONS: Record<string, string> = {
   "image/jpeg": "jpg",
@@ -45,19 +45,33 @@ export interface IngestDocumentInput {
   finalize?: boolean;
 }
 
-/** A failed upload batch, with the book it belongs to so the browser can retry or clean up. */
+/**
+ * A failed upload batch, with the book it belongs to so the browser can retry
+ * or clean up, and whether trying again soon could help.
+ */
 export class IngestError extends UserError {
   constructor(
     message: string,
-    readonly documentId: string
+    readonly documentId: string,
+    readonly retryable = true
   ) {
     super(message);
   }
 }
 
+/** True when trying the same page again soon can't succeed (daily allowance used up, page declined). */
+function hopeless(err: unknown): boolean {
+  return err instanceof BlockedReplyError || DAILY_LIMIT.test(err instanceof Error ? err.message : String(err));
+}
+
 /** A short, plain reason for a failure, from the provider's error text. */
 function failureReason(err: unknown): string {
   const message = err instanceof Error ? err.message : String(err);
+  if (DAILY_LIMIT.test(message)) {
+    return " (the AI's free daily allowance is used up; it resets around 12:30 to 1:30 pm India time, or an admin can enable billing)";
+  }
+  if (err instanceof BlockedReplyError && err.finishReason === "RECITATION") return " (the AI declined to copy this page's printed text)";
+  if (err instanceof BlockedReplyError) return " (the AI's safety filter refused this page)";
   if (/\b429\b|RESOURCE_EXHAUSTED|quota/i.test(message)) return " (the AI's free-tier limit was reached; wait a minute)";
   if (/\b50[0-4]\b|overloaded|UNAVAILABLE/i.test(message)) return " (the AI service was busy)";
   if (/SAFETY|blocked|safety filter/i.test(message)) return " (the AI's safety filter refused this page)";
@@ -130,10 +144,7 @@ export async function ingestDocument(input: IngestDocumentInput): Promise<string
   // detail goes to the server log; the user sees the page and step only.
   const stage = (label: string, pageNumber: number, err: unknown): never => {
     console.error(`[ingest] page ${pageNumber} (${label})`, err);
-    throw new IngestError(
-      `Page ${pageNumber}: ${label} failed${failureReason(err)}.`,
-      documentId!
-    );
+    throw new IngestError(`Page ${pageNumber}: ${label} failed${failureReason(err)}.`, documentId!, !hopeless(err));
   };
 
   try {
@@ -150,7 +161,7 @@ export async function ingestDocument(input: IngestDocumentInput): Promise<string
           stage("saving the page image", page.pageNumber, err)
         );
 
-        if (page.pageNumber === 1 && !input.documentId) {
+        if (page.pageNumber === 1) {
           const { error } = await admin.from("documents").update({ storage_path: path }).eq("id", documentId);
           if (error) stage("saving the page preview", page.pageNumber, error);
         }
@@ -220,7 +231,10 @@ export async function ingestDocument(input: IngestDocumentInput): Promise<string
     }
   } catch (err) {
     await admin.from("documents").update({ status: "failed" }).eq("id", documentId);
-    throw err;
+    if (err instanceof IngestError) throw err;
+    // Anything unlabelled still names its book, so the browser retries into it rather than starting a new one.
+    console.error("[ingest]", err);
+    throw new IngestError("Saving the pages failed. Please try again.", documentId!);
   }
 
   return documentId;

@@ -6,16 +6,11 @@ import { checkQuota } from "@/lib/quota";
 import type { DocumentRow } from "@/types/database";
 import { userMessage } from "@/lib/errors";
 import { cleanText, isUuid } from "@/lib/validate";
+import { checkPages, isPageNumber, toIngestPages, type UploadPage } from "@/lib/ingestion/upload-pages";
 
 export const maxDuration = 300; // vision extraction + embedding per page can take a while
 
 const SOURCE_TYPES = new Set<DocumentRow["source_type"]>(["textbook", "exercise", "past_paper", "notes"]);
-const MAX_PAGES_PER_REQUEST = 30;
-const PAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
-// One page image, base64. The browser downscales pages to ~1800 px JPEGs, far below this.
-const MAX_PAGE_BASE64_CHARS = 3 * 1024 * 1024;
-// One text page from a Word file; the browser splits documents into ~3,000-character pages.
-const MAX_PAGE_TEXT_CHARS = 20_000;
 
 /** Lists the caller's own books. */
 export async function GET() {
@@ -40,17 +35,20 @@ interface UploadBody {
   sourceType: DocumentRow["source_type"];
   /** The uploader confirms they own this copy and will use it only for their own child's/students' study. */
   rightsConfirmed: boolean;
-  /** Page images (scans, photos, PDF pages), or text extracted in the browser from Word files. */
-  pages: ({ imageBase64: string; mimeType: string; hint?: string } | { text: string; imageBase64?: string; mimeType?: string })[];
-  /** Present from the 2nd request onward when a large upload is split into batches — appends to that document instead of creating a new one. */
+  /**
+   * Without pages, this only creates the book (status "processing") and
+   * returns its id; the browser then adds pages to it with
+   * POST /api/library/[id]/pages and marks it ready with PATCH. Creating it
+   * first means a retried page can never start a second copy of the book.
+   */
+  pages?: UploadPage[];
+  /** Older single-request uploads: append this batch to a book already started. */
   documentId?: string;
-  /** Page numbering offset for this batch within its document. Defaults to 1. */
   startPageNumber?: number;
-  /** Whether this batch is the last one for its document (marks it "ready"). Defaults to true. */
   finalize?: boolean;
 }
 
-/** Uploads (a batch of) pages of one of the caller's books, then reads and indexes them. */
+/** Creates one of the caller's books, or (older clients) uploads a batch of its pages and reads them. */
 export async function POST(request: Request) {
   const user = await getCurrentStudent();
   if (!user || !user.active) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -70,15 +68,8 @@ export async function POST(request: Request) {
   }
 
   const title = cleanText(body?.title, 200);
-  if (!title || !body || !SOURCE_TYPES.has(body.sourceType) || !Array.isArray(body.pages) || body.pages.length === 0) {
-    return NextResponse.json({ error: "A title, a type and at least one page are required" }, { status: 400 });
-  }
-  const startPageNumber = body.startPageNumber ?? 1;
-  if (!Number.isInteger(startPageNumber) || startPageNumber < 1 || startPageNumber > 10_000) {
-    return NextResponse.json({ error: "Invalid page number" }, { status: 400 });
-  }
-  if (body.documentId !== undefined && !isUuid(body.documentId)) {
-    return NextResponse.json({ error: "Book not found" }, { status: 404 });
+  if (!title || !body || !SOURCE_TYPES.has(body.sourceType)) {
+    return NextResponse.json({ error: "A title and a type are required" }, { status: 400 });
   }
   if (body.rightsConfirmed !== true) {
     return NextResponse.json(
@@ -86,51 +77,39 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
-  if (body.pages.length > MAX_PAGES_PER_REQUEST) {
-    return NextResponse.json({ error: `Upload at most ${MAX_PAGES_PER_REQUEST} pages per request` }, { status: 400 });
-  }
-  // Pages arrive as images (PDFs are turned into page images in the browser)
-  // or as text (Word files are read in the browser).
-  const isValidPage = (p: unknown): boolean => {
-    const page = p as { imageBase64?: unknown; mimeType?: unknown; text?: unknown; hint?: unknown } | null;
-    if (typeof page?.text === "string") {
-      const textOk = page.text.trim().length > 0 && page.text.length <= MAX_PAGE_TEXT_CHARS;
-      // A digital PDF page may carry its image too.
-      if (page.imageBase64 === undefined) return textOk;
-      return (
-        textOk &&
-        typeof page.imageBase64 === "string" &&
-        page.imageBase64.length > 0 &&
-        page.imageBase64.length <= MAX_PAGE_BASE64_CHARS &&
-        typeof page.mimeType === "string" &&
-        PAGE_MIME_TYPES.has(page.mimeType)
-      );
-    }
-    return (
-      typeof page?.imageBase64 === "string" &&
-      page.imageBase64.length > 0 &&
-      page.imageBase64.length <= MAX_PAGE_BASE64_CHARS &&
-      typeof page.mimeType === "string" &&
-      PAGE_MIME_TYPES.has(page.mimeType) &&
-      (page.hint === undefined || (typeof page.hint === "string" && page.hint.length <= 500))
-    );
-  };
-  const badPage = body.pages.findIndex((p) => !isValidPage(p));
-  if (badPage !== -1) {
-    return NextResponse.json(
-      { error: `Page ${badPage + 1} isn't a JPEG, PNG or WebP image or Word text, or is too large.` },
-      { status: 400 }
-    );
-  }
-
   // Reading and indexing pages costs tokens, so it counts against the quota.
   const quota = await checkQuota(user.id);
   if (quota.overQuota) {
     return NextResponse.json({ error: "Monthly token quota exceeded. Contact an admin to raise your limit." }, { status: 429 });
   }
 
-  if (body.documentId) {
-    const admin = createAdminClient();
+  const admin = createAdminClient();
+  if (body.pages === undefined) {
+    const { data, error } = await admin
+      .from("documents")
+      .insert({
+        title,
+        owner_id: user.id,
+        subject: cleanText(body.subject, 100),
+        grade: cleanText(body.grade, 50),
+        rights_confirmed_at: new Date().toISOString(),
+        source_type: body.sourceType,
+        storage_path: null,
+        uploaded_by: user.id,
+        status: "processing",
+      })
+      .select("id")
+      .single();
+    if (error || !data) return NextResponse.json({ error: userMessage(error, "library POST create", "Couldn't start the upload. Please try again.") }, { status: 500 });
+    return NextResponse.json({ documentId: data.id });
+  }
+
+  const checked = checkPages(body.pages);
+  if ("error" in checked) return NextResponse.json({ error: checked.error }, { status: 400 });
+  const startPageNumber = body.startPageNumber ?? 1;
+  if (!isPageNumber(startPageNumber)) return NextResponse.json({ error: "Invalid page number" }, { status: 400 });
+  if (body.documentId !== undefined) {
+    if (!isUuid(body.documentId)) return NextResponse.json({ error: "Book not found" }, { status: 404 });
     const { data: existing } = await admin
       .from("documents")
       .select("id")
@@ -151,18 +130,8 @@ export async function POST(request: Request) {
       sourceType: body.sourceType,
       documentId: body.documentId,
       finalize: body.finalize,
-      pages: body.pages.map((p, i) => {
-        const pageNumber = startPageNumber + i;
-        if ("text" in p) {
-          const withImage = p as { text: string; imageBase64?: string; mimeType?: string };
-          return withImage.imageBase64 && withImage.mimeType
-            ? { pageNumber, text: p.text, imageBase64: withImage.imageBase64, mimeType: withImage.mimeType }
-            : { pageNumber, text: p.text };
-        }
-        return { pageNumber, imageBase64: p.imageBase64, mimeType: p.mimeType, hint: p.hint };
-      }),
+      pages: toIngestPages(checked.pages, startPageNumber),
     });
-
     return NextResponse.json({ documentId, status: body.finalize === false ? "processing" : "ready" });
   } catch (err) {
     return NextResponse.json(
@@ -170,6 +139,7 @@ export async function POST(request: Request) {
         error: userMessage(err, "library POST ingest", "Upload failed. Please try again."),
         // Lets the browser retry this batch into the same book, or delete it.
         documentId: err instanceof IngestError ? err.documentId : body.documentId,
+        retryable: err instanceof IngestError ? err.retryable : true,
       },
       { status: 500 }
     );

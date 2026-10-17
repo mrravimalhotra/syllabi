@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { downscaleImageFile, formatBytes, imageFingerprint } from "@/lib/downscale-image";
 import { EditableName } from "@/components/EditableName";
 import { BookIcon, CheckIcon, TrashIcon, UploadIcon, XIcon } from "@/components/icons";
@@ -30,19 +30,25 @@ const SOURCE_TYPE_OPTIONS: { value: SourceType; label: string }[] = [
 ];
 
 const MAX_PAGES = 60;
-// Page images per request. Small, so the progress bar moves every half minute
-// or so, and each request stays well inside the server's 300-second limit even
-// when the AI's rate limit makes it wait.
-const MAX_IMAGES_PER_BATCH = 4;
+// Pages the AI has to read go one per request, so each request is short, the
+// progress bar moves page by page, and one difficult page can't sink others.
+// Pages that already have text (Word, digital PDFs) need no AI and go together.
+const MAX_TEXT_PAGES_PER_BATCH = 10;
+// Requests at once. Two keep the AI free tier's per-minute limit happy while
+// halving the wait.
+const PARALLEL_REQUESTS = 2;
 
 // Base64 characters per request. Keeps each request under Vercel's ~4.5 MB
-// body limit (JSON overhead included); larger books go up in several batches.
+// body limit (JSON overhead included).
 const MAX_BATCH_BASE64_CHARS = 3 * 1024 * 1024;
 
-// A part that fails on the server is retried this many times in all, waiting
-// longer each time (the AI service's busy spells pass within seconds).
+// A page that fails on the server is tried this many times in all, waiting
+// longer each time (the AI service's busy spells pass within seconds), unless
+// the server says trying again can't help (e.g. the daily allowance is used up).
 const UPLOAD_ATTEMPTS = 3;
 const RETRY_WAIT_MS = 8000;
+// A book still "reading" this long after it was started, and not by this tab, didn't finish.
+const STALE_UPLOAD_MS = 15 * 60 * 1000;
 
 interface PendingPage {
   id: string;
@@ -58,6 +64,11 @@ interface PendingPage {
   sourceType: SourceType;
   /** Original file name, shown so pages from a multi-page PDF are still traceable to their source. */
   origin: string;
+  /** Set once an upload starts: the book this page goes into, and its page number there. Kept if it fails, so trying again adds it to the same book. */
+  bookId?: string;
+  pageNumber?: number;
+  /** Why the last try failed, shown on the page. */
+  failure?: string;
 }
 
 interface DocumentRowView {
@@ -70,12 +81,12 @@ interface DocumentRowView {
   grade: string | null;
 }
 
-/** Splits pages into contiguous runs of the same source type, preserving scan order. */
+/** Splits pages into contiguous runs of the same source type (and book, for pages left over from an earlier try), preserving scan order. */
 function groupByContiguousSourceType(pageList: PendingPage[]): PendingPage[][] {
   const groups: PendingPage[][] = [];
   for (const page of pageList) {
     const last = groups[groups.length - 1];
-    if (last && last[0].sourceType === page.sourceType) {
+    if (last && last[0].sourceType === page.sourceType && last[0].bookId === page.bookId) {
       last.push(page);
     } else {
       groups.push([page]);
@@ -85,21 +96,26 @@ function groupByContiguousSourceType(pageList: PendingPage[]): PendingPage[][] {
 }
 
 /**
- * Splits pages into batches that each stay under a base64-size budget (so one
- * request never gets too large to send reliably) and under a number of page
- * images (so the AI reading in one request finishes in time).
+ * Splits a book's pages into requests: each page the AI has to read on its
+ * own; pages that already have text together, while their page numbers run
+ * on and the request stays under a size budget.
  */
-function chunkBySize(pageList: PendingPage[], maxChars: number): PendingPage[][] {
+function toRequests(pageList: PendingPage[]): PendingPage[][] {
   const batches: PendingPage[][] = [];
   let current: PendingPage[] = [];
   let currentChars = 0;
-  // Only pages the AI has to read count towards the per-request limit.
   const needsReading = (p: PendingPage) => p.text === undefined && p.pdfText === undefined;
-  const imagesIn = (batch: PendingPage[]) => batch.filter(needsReading).length;
   for (const page of pageList) {
     const size = page.text?.length ?? page.imageBase64.length + (page.pdfText?.length ?? 0);
-    const tooManyImages = needsReading(page) && imagesIn(current) >= MAX_IMAGES_PER_BATCH;
-    if (current.length > 0 && (currentChars + size > maxChars || tooManyImages)) {
+    const last = current[current.length - 1];
+    const fits =
+      last &&
+      !needsReading(page) &&
+      !needsReading(last) &&
+      current.length < MAX_TEXT_PAGES_PER_BATCH &&
+      currentChars + size <= MAX_BATCH_BASE64_CHARS &&
+      page.pageNumber === last.pageNumber! + 1;
+    if (!fits && current.length > 0) {
       batches.push(current);
       current = [];
       currentChars = 0;
@@ -110,6 +126,13 @@ function chunkBySize(pageList: PendingPage[], maxChars: number): PendingPage[][]
   if (current.length > 0) batches.push(current);
   return batches;
 }
+
+/** The page as the server expects it. */
+function uploadShape({ imageBase64, mimeType, text, pdfText, hint }: PendingPage) {
+  return text !== undefined ? { text } : pdfText !== undefined ? { text: pdfText, imageBase64, mimeType } : { imageBase64, mimeType, hint };
+}
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export default function LibraryPage() {
   const [documents, setDocuments] = useState<DocumentRowView[]>([]);
@@ -125,8 +148,16 @@ export default function LibraryPage() {
   const [processingFiles, setProcessingFiles] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
-  // Pages sent so far in the current upload, for the progress bar.
+  // Pages saved so far in the current upload, out of how many, for the progress bar.
   const [pagesSent, setPagesSent] = useState(0);
+  const [uploadTotal, setUploadTotal] = useState(0);
+  // Books being uploaded by this tab right now (never shown as unfinished).
+  const [activeBooks, setActiveBooks] = useState<string[]>([]);
+  const [deleting, setDeleting] = useState<string[]>([]);
+  const [bookErrors, setBookErrors] = useState<Record<string, string>>({});
+  const stopRef = useRef<AbortController | null>(null);
+  // When the book list was last loaded, to tell an upload still running from one that stopped.
+  const [listedAt, setListedAt] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [shrinkNote, setShrinkNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -139,6 +170,7 @@ export default function LibraryPage() {
       const docs = await docsRes.json();
       if (!docsRes.ok) throw new Error(docs.error);
       setDocuments(docs.documents);
+      setListedAt(Date.now());
       setLoadFailed(false);
     } catch {
       setLoadFailed(true);
@@ -275,13 +307,43 @@ export default function LibraryPage() {
     setDocuments((prev) => prev.map((d) => (d.id === id ? { ...d, title: data.document.title } : d)));
   }
 
+  /** Deletes a book (stopping its upload first, if this tab is uploading it). Returns whether it worked. */
+  async function removeBook(id: string): Promise<boolean> {
+    if (activeBooks.includes(id)) stopRef.current?.abort();
+    setDeleting((d) => [...d, id]);
+    setBookErrors((e) => Object.fromEntries(Object.entries(e).filter(([k]) => k !== id)));
+    try {
+      const res = await fetch(`/api/library/${id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      // Already gone counts as deleted.
+      if (!res.ok && res.status !== 404) {
+        setBookErrors((e) => ({ ...e, [id]: data.error ?? "Couldn't delete this book. Please try again." }));
+        return false;
+      }
+      setDocuments((docs) => docs.filter((d) => d.id !== id));
+      // Pages waiting to go into this book will start a new one instead.
+      setPages((prev) => prev.map((p) => (p.bookId === id ? { ...p, bookId: undefined, pageNumber: undefined } : p)));
+      return true;
+    } catch {
+      setBookErrors((e) => ({ ...e, [id]: "Couldn't reach Syllabi. Check your connection and try again." }));
+      return false;
+    } finally {
+      setDeleting((d) => d.filter((x) => x !== id));
+    }
+  }
+
   async function deleteBook(doc: DocumentRowView) {
     if (!window.confirm(`Delete "${doc.title}"? Its pages and search index are removed for good.`)) return;
-    setError(null);
-    const res = await fetch(`/api/library/${doc.id}`, { method: "DELETE" });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) setError(data.error ?? "Delete failed");
-    await load();
+    await removeBook(doc.id);
+  }
+
+  const unfinished = (d: DocumentRowView) =>
+    !activeBooks.includes(d.id) && (d.status === "failed" || (d.status === "processing" && listedAt - Date.parse(d.created_at) > STALE_UPLOAD_MS));
+
+  async function removeUnfinished() {
+    const list = documents.filter(unfinished);
+    if (!window.confirm(`Delete ${list.length} unfinished upload${list.length === 1 ? "" : "s"}? Pages already read in them are removed too.`)) return;
+    for (const d of list) await removeBook(d.id);
   }
 
   async function submit(e: React.FormEvent) {
@@ -297,113 +359,137 @@ export default function LibraryPage() {
       return;
     }
 
+    const controller = new AbortController();
+    stopRef.current = controller;
     setSubmitting(true);
     setUploadProgress(null);
     setPagesSent(0);
+    setUploadTotal(pages.length);
+    setPages((prev) => prev.map((p) => ({ ...p, failure: undefined })));
+
+    const typeLabel = (t: SourceType) => SOURCE_TYPE_OPTIONS.find((o) => o.value === t)?.label ?? t;
+    const failures = new Map<string, string>(); // page id → reason
+    const saved = new Set<string>();
+    const books: { id: string }[] = [];
+    let stopReason: string | null = null; // a failure that every later page would hit too
+    let fatal: string | null = null;
+    let sent = 0;
+
     try {
-      // Split into contiguous same-type runs (mixed content → separate documents),
-      // then split each run further by cumulative payload size — a single request
-      // carrying a whole 20-30 page batch as base64 can get silently truncated
-      // well under any size we'd choose to warn about, so every batch stays under
-      // a conservative cap and batches for one document upload sequentially,
-      // threading the same documentId through so they land in one document.
-      const groups = groupByContiguousSourceType(pages);
-      const documentIds: string[] = [];
-      const typeLabel = (t: SourceType) => SOURCE_TYPE_OPTIONS.find((o) => o.value === t)?.label ?? t;
+      for (let group of groupByContiguousSourceType(pages)) {
+        if (controller.signal.aborted || stopReason) break;
 
-      // Pages of groups that finished, so a later failure doesn't re-upload them.
-      const savedPageIds = new Set<string>();
-      let currentDocumentId: string | undefined;
+        // A new book is created first, so a retried page can never start a second copy of it.
+        if (!group[0].bookId) {
+          setUploadProgress(`Starting "${title.trim()}"`);
+          const res = await fetch("/api/library", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            signal: controller.signal,
+            body: JSON.stringify({ title: title.trim(), subject: subject.trim(), grade: grade.trim(), rightsConfirmed, sourceType: group[0].sourceType }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data.documentId) throw new Error(data.error ?? "Couldn't start the upload. Please try again.");
+          const newId: string = data.documentId;
+          group = group.map((p, i) => ({ ...p, bookId: newId, pageNumber: i + 1 }));
+          const numbered = new Map(group.map((p) => [p.id, p.pageNumber]));
+          setPages((prev) => prev.map((p) => (numbered.has(p.id) ? { ...p, bookId: newId, pageNumber: numbered.get(p.id) } : p)));
+          void load();
+        }
+        const book = { id: group[0].bookId! };
+        books.push(book);
+        setActiveBooks((a) => [...a, book.id]);
 
-      try {
-        for (const group of groups) {
-          const batches = chunkBySize(group, MAX_BATCH_BASE64_CHARS);
-          currentDocumentId = undefined;
-          let pageOffset = 1;
-
-          for (let i = 0; i < batches.length; i++) {
-            const label = `Reading ${typeLabel(group[0].sourceType).toLowerCase()} pages${batches.length > 1 ? ` (part ${i + 1} of ${batches.length})` : ""}`;
-            // The AI service is often briefly busy on the free tier: retry a
-            // failed part into the same book (pages already saved are replaced,
-            // not duplicated) before giving up.
+        const queue = toRequests(group);
+        const label = typeLabel(group[0].sourceType).toLowerCase();
+        const worker = async () => {
+          for (let batch = queue.shift(); batch; batch = queue.shift()) {
+            if (controller.signal.aborted || stopReason) return;
+            const first = batch[0].pageNumber!;
+            const name = batch.length === 1 ? `page ${first}` : `pages ${first}–${first + batch.length - 1}`;
             for (let attempt = 1; ; attempt++) {
-              setUploadProgress(attempt === 1 ? label : `${label}, retrying (${attempt} of ${UPLOAD_ATTEMPTS})`);
               let res: Response;
-              let data: { error?: string; documentId?: string } = {};
+              let data: { error?: string; retryable?: boolean } = {};
               try {
-                res = await fetch("/api/library", {
+                res = await fetch(`/api/library/${book.id}/pages`, {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    title: title.trim(),
-                    subject: subject.trim(),
-                    grade: grade.trim(),
-                    rightsConfirmed,
-                    sourceType: group[0].sourceType,
-                    pages: batches[i].map(({ imageBase64, mimeType, text, pdfText, hint }) =>
-                      text !== undefined
-                        ? { text }
-                        : pdfText !== undefined
-                          ? { text: pdfText, imageBase64, mimeType }
-                          : { imageBase64, mimeType, hint }
-                    ),
-                    documentId: currentDocumentId,
-                    startPageNumber: pageOffset,
-                    finalize: i === batches.length - 1,
-                  }),
+                  signal: controller.signal,
+                  body: JSON.stringify({ pages: batch.map(uploadShape), startPageNumber: first }),
                 });
-                data = await res.json().catch(() => ({}));
+                data = await res.json().catch(() => ({ error: res.status === 504 ? "The server took too long." : undefined }));
               } catch {
-                // Connection dropped: treat like a server error and retry.
+                if (controller.signal.aborted) return;
                 res = new Response(null, { status: 503 });
-                data = { error: "The connection dropped during the upload." };
+                data = { error: "The connection dropped." };
               }
-              if (data.documentId) currentDocumentId = data.documentId;
-              if (res.ok) break;
-              // Retry only server-side failures; a rejected upload (4xx) won't change.
-              if (res.status < 500 || attempt >= UPLOAD_ATTEMPTS) throw new Error(data.error ?? "Upload failed");
-              await new Promise((resolve) => setTimeout(resolve, RETRY_WAIT_MS * attempt));
+              if (res.ok) {
+                batch.forEach((p) => saved.add(p.id));
+                sent += batch.length;
+                setPagesSent(sent);
+                setPages((prev) => prev.filter((p) => !saved.has(p.id)));
+                break;
+              }
+              const reason = data.error ?? "Upload failed.";
+              const retry = res.status >= 500 && data.retryable !== false && attempt < UPLOAD_ATTEMPTS;
+              if (!retry) {
+                batch.forEach((p) => failures.set(p.id, reason));
+                if (res.status === 404 || /daily allowance|quota exceeded/i.test(reason)) stopReason = reason;
+                break;
+              }
+              setUploadProgress(`${reason} Trying ${name} again (${attempt + 1} of ${UPLOAD_ATTEMPTS})`);
+              await wait(RETRY_WAIT_MS * attempt);
+              if (controller.signal.aborted) return;
             }
-            pageOffset += batches[i].length;
-            setPagesSent((n) => n + batches[i].length);
+            if (!stopReason) setUploadProgress(`Reading ${label} pages`);
           }
+        };
+        setUploadProgress(`Reading ${label} pages`);
+        await Promise.all(Array.from({ length: PARALLEL_REQUESTS }, worker));
 
-          documentIds.push(currentDocumentId!);
-          group.forEach((p) => savedPageIds.add(p.id));
-        }
-      } catch (err) {
-        // Remove the half-read book so it doesn't linger as "failed"; the pages
-        // stay below so pressing Upload again simply starts it over.
-        if (currentDocumentId) {
-          await fetch(`/api/library/${currentDocumentId}`, { method: "DELETE" }).catch(() => {});
-        }
-        if (savedPageIds.size > 0) setPages((prev) => prev.filter((p) => !savedPageIds.has(p.id)));
-        const message = err instanceof Error ? err.message : "Upload failed.";
-        setError(
-          `${message} ${savedPageIds.size > 0 ? `The first ${savedPageIds.size} page(s) were saved. ` : ""}` +
-            "The remaining pages are still below: press Upload to try them again."
-        );
-        await load();
-        return;
+        // Finish the book with the pages read so far (now or in an earlier try); one with none is removed.
+        const res = await fetch(`/api/library/${book.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ready: true }),
+        });
+        if (res.status === 400) await removeBook(book.id);
       }
-
-      setSuccess(
-        `Uploaded and indexed "${title}" (${pages.length} page${pages.length > 1 ? "s" : ""}` +
-          (documentIds.length > 1 ? `, split into ${documentIds.length} documents by type` : "") +
-          `).`
-      );
-      setTitle("");
-      setPages([]);
-      await load();
+    } catch (err) {
+      if (!controller.signal.aborted) fatal = err instanceof Error ? err.message : "Upload failed.";
     } finally {
+      setPages((prev) => prev.map((p) => (failures.has(p.id) ? { ...p, failure: failures.get(p.id) } : p)));
+      setActiveBooks([]);
       setSubmitting(false);
       setUploadProgress(null);
+      stopRef.current = null;
+      await load();
     }
+
+    const left = pages.length - saved.size;
+    if (left === 0) {
+      setSuccess(`Uploaded and read "${title.trim()}" (${saved.size} page${saved.size === 1 ? "" : "s"}${books.length > 1 ? `, as ${books.length} books by type` : ""}).`);
+      setTitle("");
+      return;
+    }
+    const reasons = [...new Set(failures.values())];
+    setError(
+      [
+        controller.signal.aborted ? "Upload stopped." : fatal,
+        saved.size > 0 ? `${saved.size} page${saved.size === 1 ? " was" : "s were"} read and saved.` : null,
+        reasons.length ? `${failures.size} page${failures.size === 1 ? "" : "s"} couldn't be read: ${reasons.join(" ")}` : null,
+        `The ${left} remaining page${left === 1 ? " is" : "s are"} still below. Press Upload to try again${saved.size > 0 ? "; they'll be added to the same book" : ""}.`,
+      ]
+        .filter(Boolean)
+        .join(" ")
+    );
   }
 
   if (loading) return <PageSkeleton rows={2} />;
 
-  const progressPct = pages.length > 0 ? Math.round((pagesSent / pages.length) * 100) : 0;
+  const progressPct = uploadTotal > 0 ? Math.round((pagesSent / uploadTotal) * 100) : 0;
+  const resuming = pages.some((p) => p.bookId);
+  const unfinishedCount = documents.filter(unfinished).length;
 
   return (
     <div className="space-y-8">
@@ -582,10 +668,10 @@ export default function LibraryPage() {
 
         {submitting && (
           <div className="space-y-1.5" role="status" aria-live="polite">
-            <div className="flex justify-between text-xs text-slate-600">
+            <div className="flex justify-between gap-3 text-xs text-slate-600">
               <span>{uploadProgress ?? "Uploading"}... keep this page open</span>
-              <span className="tabular-nums">
-                {pagesSent}/{pages.length}
+              <span className="shrink-0 tabular-nums">
+                {pagesSent} of {uploadTotal} read
               </span>
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-slate-100">
@@ -597,20 +683,34 @@ export default function LibraryPage() {
           </div>
         )}
 
-        <button disabled={submitting || processingFiles || pages.length === 0} className={cx(button.primary, "w-full sm:w-auto")}>
-          {submitting ? <Spinner /> : <UploadIcon className="h-4.5 w-4.5" />}
-          {submitting
-            ? "Reading pages..."
-            : pages.length
-              ? `Upload & read ${pages.length} page${pages.length === 1 ? "" : "s"}`
-              : "Upload & read"}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button disabled={submitting || processingFiles || pages.length === 0} className={cx(button.primary, "w-full sm:w-auto")}>
+            {submitting ? <Spinner /> : <UploadIcon className="h-4.5 w-4.5" />}
+            {submitting
+              ? "Reading pages..."
+              : pages.length
+                ? `${resuming ? "Try again: read" : "Upload & read"} ${pages.length} page${pages.length === 1 ? "" : "s"}`
+                : "Upload & read"}
+          </button>
+          {submitting && (
+            <button type="button" onClick={() => stopRef.current?.abort()} className={cx(button.secondary, "w-full sm:w-auto")}>
+              Stop (keep the pages read so far)
+            </button>
+          )}
+        </div>
       </form>
 
       <section className="space-y-3">
-        <div className="flex items-baseline justify-between">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-base font-semibold text-slate-900">Your books</h2>
-          {documents.length > 0 && <span className="text-xs text-slate-400">{documents.length} in total</span>}
+          <div className="flex items-baseline gap-3">
+            {unfinishedCount > 0 && (
+              <button type="button" onClick={removeUnfinished} className={cx(link, "text-xs text-red-600")}>
+                Delete {unfinishedCount} unfinished upload{unfinishedCount === 1 ? "" : "s"}
+              </button>
+            )}
+            {documents.length > 0 && <span className="text-xs text-slate-400">{documents.length} in total</span>}
+          </div>
         </div>
         {loadFailed ? (
           <Alert tone="error">Couldn&apos;t load your books. Check your connection and reload the page.</Alert>
@@ -638,15 +738,17 @@ export default function LibraryPage() {
                       .filter(Boolean)
                       .join(" · ")}
                   </p>
-                  <StatusBadge status={d.status} />
+                  <StatusBadge status={d.status} unfinished={unfinished(d)} />
+                  {bookErrors[d.id] && <p className="text-xs text-red-600">{bookErrors[d.id]}</p>}
                 </div>
                 <button
                   onClick={() => deleteBook(d)}
+                  disabled={deleting.includes(d.id)}
                   className={button.iconDanger}
                   aria-label={`Delete "${d.title}"`}
                   title="Delete"
                 >
-                  <TrashIcon className="h-4.5 w-4.5" />
+                  {deleting.includes(d.id) ? <Spinner className="h-4.5 w-4.5" /> : <TrashIcon className="h-4.5 w-4.5" />}
                 </button>
               </li>
             ))}
@@ -657,9 +759,9 @@ export default function LibraryPage() {
   );
 }
 
-function StatusBadge({ status }: { status: DocumentRowView["status"] }) {
+function StatusBadge({ status, unfinished }: { status: DocumentRowView["status"]; unfinished: boolean }) {
   if (status === "ready") return <Badge tone="success">Ready</Badge>;
-  if (status === "failed") return <Badge tone="danger">Upload failed: delete and try again</Badge>;
+  if (unfinished) return <Badge tone="danger">Upload didn&apos;t finish: delete it and upload again</Badge>;
   return (
     <Badge tone="warning">
       <Spinner className="h-3 w-3" /> Reading pages
@@ -682,7 +784,7 @@ const PageCard = memo(function PageCard({
   onTypeChange: (id: string, sourceType: SourceType) => void;
 }) {
   return (
-    <li className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+    <li className={cx("overflow-hidden rounded-xl border bg-white", page.failure ? "border-red-300 ring-2 ring-red-100" : "border-slate-200")}>
       <div className="relative">
         {page.text !== undefined ? (
           <p className="h-28 overflow-hidden bg-slate-50 p-2 text-[9px] leading-tight whitespace-pre-line text-slate-600">
@@ -698,7 +800,7 @@ const PageCard = memo(function PageCard({
           />
         )}
         <span className="absolute bottom-1.5 left-1.5 rounded-md bg-slate-900/70 px-1.5 py-0.5 text-[10px] font-medium text-white">
-          {index + 1}
+          {page.pageNumber ? `p. ${page.pageNumber}` : index + 1}
         </span>
         {page.pdfText !== undefined && (
           <span
@@ -719,13 +821,14 @@ const PageCard = memo(function PageCard({
         </button>
       </div>
       <div className="space-y-1 p-2">
+        {page.failure && <p className="text-[11px] leading-snug text-red-600">{page.failure}</p>}
         <p className="truncate text-[11px] text-slate-500" title={page.origin}>
           {page.origin}
         </p>
         <select
           value={page.sourceType}
           onChange={(e) => onTypeChange(page.id, e.target.value as SourceType)}
-          disabled={disabled}
+          disabled={disabled || page.bookId !== undefined}
           aria-label={`Type of page ${index + 1}`}
           className="block w-full rounded-md border border-slate-200 bg-white px-1.5 py-1 text-xs"
         >

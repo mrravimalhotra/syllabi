@@ -1,3 +1,5 @@
+import { DAILY_LIMIT } from "@/lib/errors";
+
 /**
  * Retries a call when it fails for a reason that usually clears up by itself:
  * a transport error (connection dropped, DNS hiccup, timeout) or the provider
@@ -30,6 +32,8 @@ export async function withNetworkRetry<T>(fn: () => Promise<T>): Promise<T> {
       return await fn();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      // The free tier's daily allowance is used up: waiting seconds won't help.
+      if (DAILY_LIMIT.test(message)) throw err;
       const rateLimitWait = rateLimitWaitMs(message);
       if (rateLimitWait !== null) {
         if (attempt >= RATE_LIMIT_ATTEMPTS - 1) throw err;

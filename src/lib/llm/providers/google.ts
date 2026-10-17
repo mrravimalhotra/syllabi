@@ -2,7 +2,7 @@ import { GoogleGenerativeAI, type Part } from "@google/generative-ai";
 import type { CompletionRequest, CompletionResult, EmbeddingResult, LlmProviderAdapter } from "@/lib/llm/types";
 import { assertHeaderSafe } from "@/lib/llm/assert-header-safe";
 import { withNetworkRetry, fetchOrThrowTransient } from "@/lib/llm/retry";
-import { UserError } from "@/lib/errors";
+import { BlockedReplyError } from "@/lib/errors";
 
 // Long worksheets and 80-mark papers with answer keys need room; Flash models
 // allow far more than this.
@@ -76,9 +76,15 @@ export const googleAdapter: LlmProviderAdapter = {
     try {
       text = response.text();
     } catch (err) {
-      console.error("[google] no text in response", candidate?.finishReason, response.promptFeedback, err);
-      throw new UserError(
-        "The AI didn't answer this one (its safety filter or an empty reply). Try rephrasing the question or attaching a clearer photo."
+      const reason = String(candidate?.finishReason ?? response.promptFeedback?.blockReason ?? "EMPTY");
+      console.error("[google] no text in response", reason, response.promptFeedback, err);
+      const partial = (candidate?.content?.parts ?? []).map((p) => ("text" in p && typeof p.text === "string" ? p.text : "")).join("");
+      throw new BlockedReplyError(
+        reason === "RECITATION"
+          ? "The AI declined to copy this text word for word (it looks like published text)."
+          : "The AI didn't answer this one (its safety filter or an empty reply). Try rephrasing the question or attaching a clearer photo.",
+        reason,
+        partial
       );
     }
     const truncated = String(candidate?.finishReason) === "MAX_TOKENS";
