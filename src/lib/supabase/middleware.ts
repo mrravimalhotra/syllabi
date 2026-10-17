@@ -2,7 +2,8 @@ import { createServerClient } from "@supabase/ssr";
 import { signupsOpen } from "@/lib/access";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/signup", "/auth/callback", "/pending"];
+// The manifest is fetched without a session, so it must stay public.
+const PUBLIC_PATHS = ["/login", "/signup", "/auth/callback", "/pending", "/manifest.webmanifest"];
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });

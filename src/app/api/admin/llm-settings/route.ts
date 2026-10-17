@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { invalidateLlmSettingsCache } from "@/lib/llm/config";
 import type { Provider, TaskType } from "@/types/database";
+import { userMessage } from "@/lib/errors";
 
 export async function GET() {
   try {
@@ -13,7 +14,7 @@ export async function GET() {
 
   const admin = createAdminClient();
   const { data, error } = await admin.from("llm_settings").select("*").order("task_type");
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ error: userMessage(error, "admin/llm-settings") }, { status: 500 });
   return NextResponse.json({ settings: data });
 }
 
@@ -44,7 +45,7 @@ export async function PATCH(request: Request) {
     .select()
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ error: userMessage(error, "admin/llm-settings") }, { status: 500 });
 
   // The routing cache would otherwise serve the old provider/model for up to
   // CACHE_TTL_MS after this change; invalidate so the switch takes effect immediately.

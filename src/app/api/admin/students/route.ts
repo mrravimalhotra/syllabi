@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { userMessage } from "@/lib/errors";
 
 export async function GET() {
   try {
@@ -14,7 +15,7 @@ export async function GET() {
     .from("students")
     .select("*")
     .order("created_at", { ascending: false });
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ error: userMessage(error, "admin/students") }, { status: 500 });
 
   // Attach current-month usage for each student in one batch.
   const usageByStudent = new Map<string, number>();
@@ -56,6 +57,6 @@ export async function PATCH(request: Request) {
   const admin = createAdminClient();
   const { data, error } = await admin.from("students").update(updates).eq("id", id).select().single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ error: userMessage(error, "admin/students") }, { status: 500 });
   return NextResponse.json({ student: data });
 }

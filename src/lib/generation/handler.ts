@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { QuotaExceededError } from "@/lib/quota";
 import type { CompletionImage } from "@/lib/llm/types";
 import type { GenerationTaskType } from "@/types/database";
+import { userMessage } from "@/lib/errors";
 
 const MAX_PHOTOS = 3;
 // Base64 characters per request across all photos — keeps the body well under
@@ -117,7 +118,11 @@ export function createGenerationRoute(taskType: GenerationTaskType) {
           { status: 429 }
         );
       }
-      const message = err instanceof Error ? err.message : "Generation failed";
+      const message = userMessage(
+        err,
+        `generate ${taskType}`,
+        "Couldn't generate an answer right now. Please try again in a minute."
+      );
       return NextResponse.json({ error: message }, { status: 500 });
     }
   };

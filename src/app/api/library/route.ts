@@ -4,11 +4,15 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { ingestDocument } from "@/lib/ingestion/ingest";
 import { checkQuota } from "@/lib/quota";
 import type { DocumentRow } from "@/types/database";
+import { userMessage } from "@/lib/errors";
 
 export const maxDuration = 300; // vision extraction + embedding per page can take a while
 
 const SOURCE_TYPES = new Set<DocumentRow["source_type"]>(["textbook", "exercise", "past_paper", "notes"]);
 const MAX_PAGES_PER_REQUEST = 30;
+const PAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+// One page image, base64. The browser downscales pages to ~1800 px JPEGs, far below this.
+const MAX_PAGE_BASE64_CHARS = 3 * 1024 * 1024;
 
 /** Lists the caller's own books. */
 export async function GET() {
@@ -22,7 +26,7 @@ export async function GET() {
     .eq("owner_id", user.id)
     .order("created_at", { ascending: false });
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ error: userMessage(error, "library GET") }, { status: 500 });
   return NextResponse.json({ documents: data });
 }
 
@@ -54,8 +58,11 @@ export async function POST(request: Request) {
     // A parse failure here almost always means the payload was too large or the
     // connection was cut mid-upload — surface that instead of a misleading
     // "missing fields" message that hides the real cause.
-    const message = err instanceof Error ? err.message : "unknown error";
-    return NextResponse.json({ error: `Could not read the upload — it may be too large. (${message})` }, { status: 400 });
+    console.error("[library POST parse]", err);
+    return NextResponse.json(
+      { error: "Couldn't read the upload — it may be too large or the connection dropped. Try fewer pages at once." },
+      { status: 400 }
+    );
   }
 
   if (!body?.title?.trim() || !SOURCE_TYPES.has(body.sourceType) || !body.pages?.length) {
@@ -69,6 +76,20 @@ export async function POST(request: Request) {
   }
   if (body.pages.length > MAX_PAGES_PER_REQUEST) {
     return NextResponse.json({ error: `Upload at most ${MAX_PAGES_PER_REQUEST} pages per request` }, { status: 400 });
+  }
+  // Pages arrive as images (PDFs are turned into page images in the browser).
+  const badPage = body.pages.findIndex(
+    (p) =>
+      typeof p?.imageBase64 !== "string" ||
+      p.imageBase64.length === 0 ||
+      p.imageBase64.length > MAX_PAGE_BASE64_CHARS ||
+      !PAGE_MIME_TYPES.has(p.mimeType)
+  );
+  if (badPage !== -1) {
+    return NextResponse.json(
+      { error: `Page ${badPage + 1} isn't a JPEG, PNG or WebP image, or is too large.` },
+      { status: 400 }
+    );
   }
 
   // Reading and indexing pages costs tokens, so it counts against the quota.
@@ -107,7 +128,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ documentId, status: body.finalize === false ? "processing" : "ready" });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Upload failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { error: userMessage(err, "library POST ingest", "Upload failed. Please try again.") },
+      { status: 500 }
+    );
   }
 }

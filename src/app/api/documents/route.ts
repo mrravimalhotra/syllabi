@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentStudent } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { userMessage } from "@/lib/errors";
 
 export async function GET() {
   const student = await getCurrentStudent();
@@ -13,6 +14,6 @@ export async function GET() {
     .eq("student_id", student.id)
     .order("created_at", { ascending: false });
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ error: userMessage(error, "documents GET") }, { status: 500 });
   return NextResponse.json({ documents: data });
 }

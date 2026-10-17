@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { pdfToPageImages } from "@/lib/pdf-to-images";
 import { downscaleImageFile } from "@/lib/downscale-image";
 
 type SourceType = "textbook" | "exercise" | "past_paper" | "notes";
@@ -73,6 +72,7 @@ function chunkBySize(pageList: PendingPage[], maxChars: number): PendingPage[][]
 export default function LibraryPage() {
   const [documents, setDocuments] = useState<DocumentRowView[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   const [title, setTitle] = useState("");
   const [subject, setSubject] = useState("");
@@ -88,9 +88,15 @@ export default function LibraryPage() {
 
   async function load() {
     setLoading(true);
-    const docsRes = await fetch("/api/library");
-    const docs = await docsRes.json();
-    if (docsRes.ok) setDocuments(docs.documents);
+    try {
+      const docsRes = await fetch("/api/library");
+      const docs = await docsRes.json();
+      if (!docsRes.ok) throw new Error(docs.error);
+      setDocuments(docs.documents);
+      setLoadFailed(false);
+    } catch {
+      setLoadFailed(true);
+    }
     setLoading(false);
   }
 
@@ -107,6 +113,8 @@ export default function LibraryPage() {
       const newPages: PendingPage[] = [];
       for (const file of Array.from(fileList)) {
         if (file.type === "application/pdf") {
+          // pdf.js is large; load it only when a PDF is actually picked.
+          const { pdfToPageImages } = await import("@/lib/pdf-to-images");
           const rasterized = await pdfToPageImages(file);
           rasterized.forEach((p, i) =>
             newPages.push({
@@ -253,8 +261,8 @@ export default function LibraryPage() {
       </div>
 
       <form onSubmit={submit} className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
-        {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-        {success && <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</p>}
+        {error && <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+        {success && <p role="status" className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</p>}
 
         <div>
           <label className="text-xs font-medium text-slate-500">Title</label>
@@ -384,7 +392,7 @@ export default function LibraryPage() {
         <div className="flex items-center gap-3">
           <button
             disabled={submitting || processingFiles}
-            className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            className="min-h-11 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 sm:min-h-0"
           >
             {submitting ? "Uploading & indexing..." : "Upload & index"}
           </button>
@@ -425,13 +433,20 @@ export default function LibraryPage() {
                   </span>
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <button onClick={() => deleteBook(d)} className="text-xs font-medium text-red-600 hover:underline">
+                  <button onClick={() => deleteBook(d)} className="min-h-11 px-2 text-xs font-medium text-red-600 hover:underline sm:min-h-0">
                     Delete
                   </button>
                 </td>
               </tr>
             ))}
-            {documents.length === 0 && (
+            {loadFailed && (
+              <tr>
+                <td colSpan={5} role="alert" className="px-4 py-6 text-center text-red-700">
+                  Couldn&apos;t load your books. Check your connection and reload the page.
+                </td>
+              </tr>
+            )}
+            {documents.length === 0 && !loadFailed && (
               <tr>
                 <td colSpan={5} className="px-4 py-6 text-center text-slate-400">
                   No books yet. Upload your first one above.

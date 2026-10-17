@@ -55,7 +55,7 @@ export default function LlmSettingsPage() {
           Route each task to a provider + model. Changes apply immediately — no redeploy needed.
         </p>
       </div>
-      {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {error && <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
         <table className="w-full text-left text-sm">

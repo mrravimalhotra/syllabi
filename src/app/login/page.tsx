@@ -20,7 +20,7 @@ export default async function LoginPage({
           <p className="rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-700">{message}</p>
         )}
         {error && (
-          <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+          <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
         )}
 
         <form action={signIn} className="space-y-4">

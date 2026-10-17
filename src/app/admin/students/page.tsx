@@ -46,7 +46,7 @@ export default function StudentsPage() {
     <div className="space-y-4">
       <h1 className="text-lg font-semibold text-slate-900">Accounts</h1>
       <p className="text-sm text-slate-500">Parents and tutors. Each manages their own private books under My books.</p>
-      {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {error && <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
         <table className="w-full min-w-[640px] text-left text-sm">

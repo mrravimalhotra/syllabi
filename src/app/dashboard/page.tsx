@@ -63,6 +63,8 @@ export default function DashboardPage() {
   // The user's own books; answers search only the ones ticked (all by default).
   const [books, setBooks] = useState<Book[]>([]);
   const [selectedBookIds, setSelectedBookIds] = useState<string[] | null>(null);
+  const [booksLoaded, setBooksLoaded] = useState(false);
+  const [booksError, setBooksError] = useState(false);
 
   async function loadMe() {
     const res = await fetch("/api/me");
@@ -71,9 +73,15 @@ export default function DashboardPage() {
   }
 
   async function loadBooks() {
-    const res = await fetch("/api/library");
-    const data = await res.json();
-    if (res.ok) setBooks((data.documents as Book[]).filter((b) => b.status === "ready"));
+    try {
+      const res = await fetch("/api/library");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setBooks((data.documents as Book[]).filter((b) => b.status === "ready"));
+      setBooksLoaded(true);
+    } catch {
+      setBooksError(true);
+    }
   }
 
   useEffect(() => {
@@ -144,7 +152,13 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {me && books.length === 0 && (
+      {booksError && (
+        <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 print:hidden">
+          Couldn&apos;t load your books, so answers won&apos;t use them. Check your connection and reload the page.
+        </p>
+      )}
+
+      {booksLoaded && books.length === 0 && (
         <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-700 print:hidden">
           Add your child&apos;s or student&apos;s books in{" "}
           <Link href="/dashboard/library" className="font-medium underline">
@@ -159,7 +173,7 @@ export default function DashboardPage() {
           <button
             key={t.value}
             onClick={() => setTab(t.value)}
-            className={`rounded-md px-2 py-2 text-sm font-medium transition sm:flex-1 sm:px-3 ${
+            className={`min-h-11 rounded-md px-2 py-2 text-sm font-medium transition sm:min-h-0 sm:flex-1 sm:px-3 ${
               tab === t.value ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-900"
             }`}
           >
@@ -212,7 +226,7 @@ export default function DashboardPage() {
             </div>
           ))}
           {photos.length < MAX_PHOTOS && (
-            <label className="cursor-pointer rounded-md border border-dashed border-slate-300 px-3 py-2 text-xs font-medium text-slate-600 hover:border-slate-500">
+            <label className="inline-flex min-h-11 cursor-pointer items-center rounded-md border border-dashed border-slate-300 px-3 py-2 text-xs font-medium text-slate-600 hover:border-slate-500 sm:min-h-0">
               + Add photo
               <input
                 type="file"
@@ -231,13 +245,13 @@ export default function DashboardPage() {
         <button
           type="submit"
           disabled={loading || noBookSelected}
-          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          className="min-h-11 w-full rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 sm:min-h-0 sm:w-auto"
         >
           {loading ? "Generating..." : "Generate"}
         </button>
       </form>
 
-      {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 print:hidden">{error}</p>}
+      {error && <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 print:hidden">{error}</p>}
 
       {result && (
         <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 sm:p-5 print:border-0 print:p-0 print:shadow-none">
@@ -247,7 +261,7 @@ export default function DashboardPage() {
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                className="inline-flex min-h-11 items-center rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 sm:min-h-0"
               >
                 Print
               </button>
@@ -255,7 +269,7 @@ export default function DashboardPage() {
                 href={result.downloadUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white"
+                className="inline-flex min-h-11 items-center rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white sm:min-h-0"
               >
                 Download PDF
               </a>
