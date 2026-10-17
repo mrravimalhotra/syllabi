@@ -39,7 +39,7 @@ Create an API key at aistudio.google.com. The default models are Flash tier, whi
 | `R2_BUCKET_NAME` | `syllabi` (default if unset) |
 | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` | optional fallbacks |
 
-3. Server region is pinned to Seoul (`icn1`, next to the Supabase database) by `vercel.json`; change it there if the database moves.
+3. Server region is pinned to Mumbai (`bom1`, next to the Supabase database in South Asia (Mumbai)) by `vercel.json`; change it there if the database moves.
 4. Deploy. Then put the Vercel domain into Supabase's Auth URL settings (step 1.3) if you hadn't yet.
 
 ## 5. First admin
