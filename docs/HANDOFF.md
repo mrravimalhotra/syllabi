@@ -1,6 +1,6 @@
 # Syllabi — Full Handoff for the Cloud Session
 
-> **Status update (2026-10-17):** steps 1–3 of section 12 are done: `docs/DEPLOYMENT.md` added, lint/build pass cleanly, and `supabase/migrations/0004_tighten_rls.sql` fixes RLS issues 1–2 in section 10 (plus a related hole: students could insert `generated_documents` rows pointing at any storage path). Development branch: `claude/awesome-euler-jg6t9u`.
+> **Status update (2026-10-17):** steps 1–3 of section 12 are done: `docs/DEPLOYMENT.md` added, lint/build pass cleanly, and `supabase/migrations/20261017000004_tighten_rls.sql` fixes RLS issues 1–2 in section 10 (plus a related hole: students could insert `generated_documents` rows pointing at any storage path). Development branch: `claude/awesome-euler-jg6t9u`.
 
 Read this first. It covers what we are building and why, everything built so far, the exact technical design, deployment status, and known issues found by reading the code. Also read `AGENTS.md` (Next.js version warning: check `node_modules/next/dist/docs/` before writing code).
 
@@ -96,7 +96,7 @@ Browser: PDF → pdfjs rasterizes each page to JPEG (scale 1.5, q0.82); images �
 
 ## 6. Data model (supabase/migrations)
 
-Run in order: `0001_init.sql`, `0002_chunk_images.sql`, `0003_flash_tier_defaults.sql`. Requires extensions `vector` and `pgcrypto` (0001 creates them).
+Run in order: `20261017000001_init.sql`, `20261017000002_chunk_images.sql`, `20261017000003_flash_tier_defaults.sql`. Requires extensions `vector` and `pgcrypto` (0001 creates them).
 
 | Table | Key columns |
 |---|---|
@@ -206,7 +206,7 @@ Deployment risks:
 
 1. Commit `docs/DEPLOYMENT.md` (condensed from sections 8 and 9) and this file as `docs/HANDOFF.md`.
 2. Run `npm ci`, `npm run lint`, `npm run build`; fix failures.
-3. Fix the two RLS security issues (section 10, items 1 and 2) with a new migration `0004_tighten_rls.sql`.
+3. Fix the two RLS security issues (section 10, items 1 and 2) with a new migration `20261017000004_tighten_rls.sql`.
 4. Guide the owner through Supabase, R2 and Vercel setup (section 9) and debug the first build.
 5. Address the Vercel body-size risk (item 6) before the first large upload.
 6. Then close FRD gaps: explicit research option (item 3), student subject picker (item 4), full usage accounting (item 5).

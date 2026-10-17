@@ -7,9 +7,9 @@ Stack: Vercel (Next.js app) + Supabase (Postgres + pgvector + Auth) + Cloudflare
 ## 1. Supabase
 
 1. Create a project at supabase.com (or confirm the existing one).
-2. In **SQL Editor**, run each migration in `supabase/migrations/`, in order:
-   `0001_init.sql`, `0002_chunk_images.sql`, `0003_flash_tier_defaults.sql`, `0004_tighten_rls.sql`.
-   (0001 enables the `vector` and `pgcrypto` extensions.)
+2. Apply the database migrations in `supabase/migrations/` (one of):
+   - **GitHub integration (preferred):** Project Settings → Integrations → GitHub → connect `mrravimalhotra/syllabi`, working directory `.`, production branch `main`, **Deploy to production** on. Every push to `main` then applies any new migrations automatically.
+   - **By hand:** in **SQL Editor**, run each file in filename order (the first one enables the `vector` and `pgcrypto` extensions). Don't mix the two methods on the same database: the integration tracks what it has applied and would re-run hand-applied files.
 3. **Authentication → URL Configuration:** set Site URL to your Vercel domain, and add `https://<your-domain>/auth/callback` to Redirect URLs.
 4. Decide whether email confirmation is on (Authentication → Providers → Email). Both work; the callback route handles confirmation links.
 5. **Project Settings → API Keys:** note the project URL, the publishable key (`sb_publishable_...`) and the secret key (`sb_secret_...`).

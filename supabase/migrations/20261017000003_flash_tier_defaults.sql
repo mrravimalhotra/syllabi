@@ -1,4 +1,4 @@
--- Updates default model routing for accounts that already ran 0001_init.sql
+-- Updates default model routing for accounts that already ran 20261017000001_init.sql
 -- with its original seed values. Two fixes, both idempotent:
 --
 -- 1. text-embedding-004 has been retired by Google; gemini-embedding-001 is
