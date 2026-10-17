@@ -18,3 +18,16 @@ export const TASK_LABELS: Record<string, string> = {
   ad_hoc: "Ask anything",
   study_pack: "Study pack",
 };
+
+// A sample paper's answer key starts at a "## Answer Key" heading.
+const ANSWER_KEY_START = /^#{1,3}\s*\**answer key\b/im;
+
+export function hasAnswerKey(text: string): boolean {
+  return ANSWER_KEY_START.test(text);
+}
+
+/** The paper without its answer key, for the child to attempt. */
+export function withoutAnswerKey(text: string): string {
+  const match = ANSWER_KEY_START.exec(text);
+  return match ? text.slice(0, match.index).trimEnd() : text;
+}

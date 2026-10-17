@@ -3,6 +3,7 @@ import { recordTokenUsage } from "@/lib/llm/usage";
 import { retrieveContext, formatContext, loadSourceImages } from "@/lib/rag/retrieve";
 import { checkQuota, QuotaExceededError } from "@/lib/quota";
 import { systemInstructionsFor } from "@/lib/generation/prompts";
+import { levelLine } from "@/lib/generation/level";
 import type { CompletionImage } from "@/lib/llm/types";
 import type { GenerationTaskType, MatchedChunk, Student } from "@/types/database";
 
@@ -66,7 +67,7 @@ export async function runGeneration({
 
   const result = await generateCompletion({
     taskType,
-    systemInstructions: systemInstructionsFor(taskType),
+    systemInstructions: systemInstructionsFor(taskType, levelLine(student)),
     prompt: `${prompt}${photoNote}`,
     context: formatContext(retrieval.chunks),
     images: [...photos, ...sourcePageImages],

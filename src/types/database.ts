@@ -41,6 +41,9 @@ export interface Student {
   /** "student" = a regular (non-admin) adult account — a parent or tutor. */
   role: "student" | "admin";
   account_type: "parent" | "tutor" | null;
+  /** The child's class and school board, from the Account page (used in prompts). */
+  class_level: string | null;
+  board: string | null;
   adult_confirmed_at: string | null;
   school_id: string | null;
   grade_id: string | null;

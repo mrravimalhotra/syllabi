@@ -4,6 +4,7 @@ import { findAnswer } from "@/lib/generation/answers";
 import { renderGenerationPdf } from "@/lib/pdf/render";
 import { loadSourceImages } from "@/lib/rag/retrieve";
 import { getSignedUrl } from "@/lib/storage";
+import { withoutAnswerKey } from "@/lib/format";
 import type { MatchedChunk } from "@/types/database";
 
 // Rendering a long answer with embedded page images can take a few seconds.
@@ -14,7 +15,7 @@ export const maxDuration = 60;
  * nobody downloads). Older answers that were stored as PDFs are redirected to
  * their stored copy.
  */
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentStudent();
   if (!user || !user.active) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -26,6 +27,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     return NextResponse.redirect(await getSignedUrl(answer.storage_path));
   }
 
+  // ?part=questions: a sample paper without its answer key, for the child to attempt.
+  const questionsOnly = new URL(request.url).searchParams.get("part") === "questions";
+
   try {
     const sources = (answer.sources ?? []) as unknown as MatchedChunk[];
     const { byPath } = await loadSourceImages(sources);
@@ -33,12 +37,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       taskType: answer.task_type,
       title: answer.title,
       studentName: user.full_name ?? user.email,
-      content: answer.content,
-      sources,
+      content: questionsOnly ? withoutAnswerKey(answer.content) : answer.content,
+      sources: questionsOnly ? [] : sources,
       sourceImages: byPath,
       usedSearchGrounding: answer.used_search_grounding,
     });
-    const fileName = answer.title.replace(/[^\w\- ]+/g, "").trim().slice(0, 60) || "Syllabi answer";
+    const fileName = (questionsOnly ? `${answer.title} (questions)` : answer.title).replace(/[^\w\- ]+/g, "").trim().slice(0, 60) || "Syllabi answer";
     return new NextResponse(new Uint8Array(pdf), {
       headers: {
         "Content-Type": "application/pdf",

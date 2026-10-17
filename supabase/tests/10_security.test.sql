@@ -44,6 +44,8 @@ begin
   perform pg_temp.check('unknown answer kinds are still refused', 'service_role', null,
     format('insert into generated_documents (student_id, task_type, title, content) values (%L, %L, %L, %L)',
            '00000000-0000-0000-0000-0000000000b1', 'essay', 'X', 'x'), 'error');
+  perform pg_temp.check('class and board can be saved', 'service_role', null,
+    format('update students set class_level = %L, board = %L where id = %L', 'Class 6', 'CBSE', '00000000-0000-0000-0000-0000000000b1'), '1');
   perform pg_temp.check('study packs have a model setting', 'service_role', null,
     format('select 1 from llm_settings where task_type = %L', 'study_pack'), '1');
 end $$;

@@ -62,7 +62,44 @@ const REQUEST_KINDS = `Recognise what the user needs:
 - If a question depends on a figure, diagram or picture that is not in the material,
   say which figure is needed instead of guessing.`;
 
-export function systemInstructionsFor(taskType: GenerationTaskType): string {
+// Answer layout and economy, from the earlier Exam Prep app's solution prompt:
+// built to earn full marks with the fewest words, in the textbook's language.
+const ANSWER_STYLE = `Answer layout, for questions to be answered (an exercise, worksheet or answer key):
+- Every question and every sub-part starts on its own line, in bold with its number, e.g.
+  **Q1 (a). Photosynthesis occurs in the ______ of a plant cell.** The answer starts on the
+  next line with **Ans:** followed by plain text.
+- Fill in the blanks: the missing word or phrase in bold. True or false: **True** or
+  **False**, then a one-line reason (the corrected statement when false). Multiple choice:
+  the option letter and its text.
+- Earn full marks with the fewest words: lead with the textbook's key terms and phrasing,
+  no filler ("The answer to this question is..."), and don't copy the whole question back.
+- Analytical questions ("analyse how...", "what factors..."): a one-line opening, a bold
+  label for each part asked about (e.g. **Individual efforts:** ...), then "Key factors:"
+  with 2 or 3 short bullets.
+- "Distinguish between" or "compare": a short table, one precise point per cell.
+- Bullets only for several reasons, features or steps, always after a short lead-in
+  ("Key reasons:"); a single idea stays as one or two sentences.
+- Optional: after a tricky or easily confused answer, one line "**Tip:** ..." as a memory
+  hook. Leave it out otherwise.
+- Opinion, "find out" or internet-research questions: answer with simple, age-appropriate
+  general knowledge and say it is not from the book.
+- Scanned pages may have OCR slips: read through obvious garbling using context, without
+  comment.`;
+
+// For sample papers: copy the school's own paper layout when one is attached.
+const SCHOOL_PAPER_STYLE = `If a school's sample or past paper is attached or in the reference material, copy its
+layout: the header exactly (school name, exam name, class, maximum marks, time), its
+general instructions word for word, its section names, numbering style (Q.1 or 1.) and
+how marks are shown. Leave one blank line between questions. The chapters or topics to
+cover come from the request.`;
+
+/** System instructions for a generation task, with the child's class and board when known. */
+export function systemInstructionsFor(taskType: GenerationTaskType, level = ""): string {
+  const base = baseInstructions(taskType);
+  return level ? `${base}\n\n${level}` : base;
+}
+
+function baseInstructions(taskType: GenerationTaskType): string {
   switch (taskType) {
     case "solution":
       return `${RAG_POLICY}
@@ -70,6 +107,8 @@ export function systemInstructionsFor(taskType: GenerationTaskType): string {
 ${EXAM_CONVENTIONS}
 
 ${REQUEST_KINDS}
+
+${ANSWER_STYLE}
 
 Produce a clear solution to the student's question. For maths and science, number each
 step, show the reasoning (not just the final answer), and state the final answer
@@ -94,6 +133,8 @@ questions in the school's style). Keep it skimmable.`;
 
 ${EXAM_CONVENTIONS}
 
+${SCHOOL_PAPER_STYLE}
+
 Produce a sample exam paper on the requested topic or chapters, styled after the past
 papers and worksheets in the reference material. Use the total marks the user asks for
 (default 80). Unless the school's own papers show another pattern, use four sections:
@@ -104,8 +145,11 @@ questions (5 marks, 100-150 words, sub-parts with their own marks). Give each se
 heading, total marks and word limit; number questions continuously; show marks on every
 question; tag each question with its topic and type (Easy, Application, Competency or
 HOTS); include a mix of knowledge, competency-based and HOTS questions. Check that the
-marks add up to the total. Then add a separate "Answer Key" section with model answers
-sized to each question's marks (for multiple choice, give the option letter and text).`;
+marks add up to the total. Do not put answers in the paper itself. Then add the answer
+key under a heading exactly "## Answer Key" (it is printed on its own page, so the paper
+can be printed without it), with a model answer for every question, sized to its marks.
+
+${ANSWER_STYLE}`;
 
     case "ad_hoc":
     case "study_pack":

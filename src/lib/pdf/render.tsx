@@ -84,6 +84,8 @@ const styles = StyleSheet.create({
   },
 });
 
+const ANSWER_KEY_HEADING = /^answer key\b/i;
+
 /** Renders one line of text with **bold** spans; other inline markdown (`code`, *italic*) is shown as plain text. */
 function InlineText({ text }: { text: string }) {
   const clean = tidyMath(text)
@@ -172,9 +174,11 @@ function ContentBody({ text }: { text: string }) {
     if (heading) {
       const level = heading[1].length;
       const style = level === 1 ? styles.h1 : level === 2 ? styles.h2 : styles.h3;
+      const headingText = tidyMath(heading[2].replace(/\*\*/g, ""));
       blocks.push(
-        <Text key={i} style={style} minPresenceAhead={40}>
-          {tidyMath(heading[2].replace(/\*\*/g, ""))}
+        // A sample paper's answer key starts on a new page, so the paper prints on its own.
+        <Text key={i} style={style} minPresenceAhead={40} break={ANSWER_KEY_HEADING.test(headingText)}>
+          {headingText}
         </Text>
       );
       continue;

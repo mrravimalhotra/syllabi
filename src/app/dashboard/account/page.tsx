@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { EditableName } from "@/components/EditableName";
+import { CheckIcon } from "@/components/icons";
+import { BOARDS, CLASS_LEVELS } from "@/lib/generation/level";
 import { Alert, Field, Meter, PageHeader, PageSkeleton, Spinner, button, card, cx, input } from "@/components/ui";
 import type { Student } from "@/types/database";
 
@@ -41,6 +43,29 @@ export default function AccountPage() {
     setMe((prev) => (prev ? { ...prev, student: { ...prev.student, full_name: data.fullName } } : prev));
   }
 
+  // Class and board shape every answer ("write for a Class 6 CBSE student").
+  async function saveLevel(change: { classLevel?: string; board?: string }) {
+    const res = await fetch("/api/me", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(change),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error ?? "Couldn't save that");
+    setMe((prev) =>
+      prev
+        ? {
+            ...prev,
+            student: {
+              ...prev.student,
+              ...(change.classLevel !== undefined ? { class_level: change.classLevel || null } : {}),
+              ...(change.board !== undefined ? { board: change.board || null } : {}),
+            },
+          }
+        : prev
+    );
+  }
+
   async function deleteAccount() {
     setDeleting(true);
     setError(null);
@@ -66,7 +91,10 @@ export default function AccountPage() {
   const { student, quota } = me;
   return (
     <div className="space-y-6">
-      <PageHeader title="Account" description="Your details, usage and password." />
+      <PageHeader
+        title="Account"
+        description="Your details, your child's class and board (answers are written for that level), usage and password."
+      />
 
       <section className={cx(card, "divide-y divide-slate-100")}>
         <Row label="Name">
@@ -80,6 +108,17 @@ export default function AccountPage() {
             <span className="text-slate-900 capitalize">{student.account_type}</span>
           </Row>
         )}
+        <Row label="Child's class">
+          <LevelSelect
+            label="Child's class"
+            value={student.class_level ?? ""}
+            options={CLASS_LEVELS}
+            onSave={(v) => saveLevel({ classLevel: v })}
+          />
+        </Row>
+        <Row label="School board">
+          <LevelSelect label="School board" value={student.board ?? ""} options={BOARDS} onSave={(v) => saveLevel({ board: v })} />
+        </Row>
         <Row label="This month">
           <div className="w-full max-w-xs space-y-1.5">
             <Meter value={quota.used} max={quota.quota} label="Monthly usage" />
@@ -135,6 +174,54 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
     <div className="flex flex-col gap-1.5 px-5 py-4 text-sm sm:flex-row sm:items-center sm:gap-6 sm:px-6">
       <p className="w-36 shrink-0 text-xs font-medium tracking-wide text-slate-500 uppercase">{label}</p>
       <div className="flex min-w-0 flex-1 items-center">{children}</div>
+    </div>
+  );
+}
+
+/** A select that saves as soon as it changes, with a small "Saved" confirmation. */
+function LevelSelect({
+  label,
+  value,
+  options,
+  onSave,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onSave: (value: string) => Promise<void>;
+}) {
+  const [state, setState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <select
+        aria-label={label}
+        value={value}
+        disabled={state === "saving"}
+        onChange={async (e) => {
+          setState("saving");
+          try {
+            await onSave(e.target.value);
+            setState("saved");
+          } catch {
+            setState("error");
+          }
+        }}
+        className={cx(input, "w-auto min-w-40")}
+      >
+        <option value="">Not set</option>
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+      </select>
+      {state === "saving" && <Spinner />}
+      {state === "saved" && (
+        <span className="inline-flex items-center gap-1 text-xs text-emerald-700">
+          <CheckIcon className="h-3.5 w-3.5" /> Saved
+        </span>
+      )}
+      {state === "error" && <span className="text-xs text-red-600">Couldn&apos;t save. Try again.</span>}
     </div>
   );
 }

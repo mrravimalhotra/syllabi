@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Markdown } from "@/components/Markdown";
 import { CheckIcon, CopyIcon, DownloadIcon, PrinterIcon } from "@/components/icons";
 import { button, card, cx } from "@/components/ui";
+import { hasAnswerKey } from "@/lib/format";
 
 export interface AnswerSource {
   id: string;
@@ -42,6 +43,11 @@ export function AnswerView({ answer, actions, meta }: { answer: Answer; actions?
           <button type="button" onClick={() => window.print()} className={button.small}>
             <PrinterIcon className="h-4 w-4" /> Print
           </button>
+          {answer.pdfUrl && hasAnswerKey(answer.text) && (
+            <a href={`${answer.pdfUrl}?part=questions`} target="_blank" rel="noreferrer" className={button.small}>
+              <DownloadIcon className="h-4 w-4" /> Questions only
+            </a>
+          )}
           {answer.pdfUrl && (
             <a href={answer.pdfUrl} target="_blank" rel="noreferrer" className={button.smallPrimary}>
               <DownloadIcon className="h-4 w-4" /> PDF

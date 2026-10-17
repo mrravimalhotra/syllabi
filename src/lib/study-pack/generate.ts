@@ -7,6 +7,7 @@ import type { CompletionImage } from "@/lib/llm/types";
 import type { Student } from "@/types/database";
 import { QUESTIONS_SCHEMA, QUESTIONS_SYSTEM, WALKTHROUGH_SCHEMA, WALKTHROUGH_SYSTEM } from "@/lib/study-pack/prompts";
 import { evidenceFound } from "@/lib/study-pack/verify";
+import { levelLine } from "@/lib/generation/level";
 import type { PackQuestion, StudyPack, VocabularyItem, WalkthroughPart } from "@/lib/study-pack/types";
 
 // About 40 dense textbook pages; longer books should be split into chapters.
@@ -204,8 +205,10 @@ export async function generateStudyPack(input: {
   }
 
   const focus = input.focus?.trim().slice(0, MAX_FOCUS_CHARS);
+  const level = levelLine(input.student);
   const prompt =
     `Chapter text:\n"""\n${chapter.text}\n"""` +
+    (level ? `\n\n${level}` : "") +
     (focus ? `\n\nThe parent or tutor adds: ${focus}` : "") +
     "\n\nReturn the JSON object now.";
 

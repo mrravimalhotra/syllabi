@@ -2,11 +2,23 @@ import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { tidyMath } from "@/lib/tidy-math";
 
+/** A sample paper's answer key prints on a new page, so the paper can be handed over alone. */
+function answerKeyBreak(children: React.ReactNode): string {
+  const text = Array.isArray(children) ? children.join("") : String(children ?? "");
+  return /^\s*answer key\b/i.test(text) ? "print:break-before-page" : "";
+}
+
 // Styled mappings for the Markdown the prompts ask for. Tables and code blocks
 // scroll sideways on narrow screens instead of stretching the page.
 const COMPONENTS: Components = {
-  h1: ({ children }) => <h2 className="mt-6 mb-3 text-lg font-semibold tracking-tight text-slate-900 first:mt-0">{children}</h2>,
-  h2: ({ children }) => <h3 className="mt-6 mb-2 text-base font-semibold text-slate-900 first:mt-0">{children}</h3>,
+  h1: ({ children }) => (
+    <h2 className={`mt-6 mb-3 text-lg font-semibold tracking-tight text-slate-900 first:mt-0 ${answerKeyBreak(children)}`}>
+      {children}
+    </h2>
+  ),
+  h2: ({ children }) => (
+    <h3 className={`mt-6 mb-2 text-base font-semibold text-slate-900 first:mt-0 ${answerKeyBreak(children)}`}>{children}</h3>
+  ),
   h3: ({ children }) => <h4 className="mt-4 mb-1.5 font-semibold text-slate-900">{children}</h4>,
   p: ({ children }) => <p className="mb-3">{children}</p>,
   ul: ({ children }) => <ul className="mb-3 ml-5 list-disc space-y-1.5 marker:text-slate-400">{children}</ul>,

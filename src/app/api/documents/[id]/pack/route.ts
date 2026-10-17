@@ -10,6 +10,7 @@ import { cleanText } from "@/lib/validate";
 import { loadBook } from "@/lib/study-pack/generate";
 import { packToMarkdown } from "@/lib/study-pack/markdown";
 import { REFINE_SYSTEM } from "@/lib/study-pack/prompts";
+import { levelLine } from "@/lib/generation/level";
 import type { PackQuestion, PackSection, StudyPack } from "@/lib/study-pack/types";
 import type { Student } from "@/types/database";
 
@@ -61,6 +62,7 @@ export async function POST(request: Request, { params }: Params) {
       systemInstructions: REFINE_SYSTEM,
       prompt: [
         chapter ? `Chapter text:\n"""\n${chapter}\n"""\n` : "",
+        levelLine(user),
         `Question: ${question.question}`,
         question.marks ? `Marks: ${question.marks}` : "",
         question.evidence ? `Evidence from the chapter: "${question.evidence}"` : "",
