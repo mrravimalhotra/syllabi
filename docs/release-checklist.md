@@ -5,6 +5,7 @@ Adapted from the Next.js + Supabase best-practices checklist for Syllabi. Run pa
 ## 1. Before pushing to `main` (developer)
 
 - [ ] `npx tsc --noEmit`, `npm run lint`, `npm run build` all clean; no new warnings.
+- [ ] `npm run scenarios` (when `test-material/` has the sample files) — every file processed; see `docs/test-scenarios.md`.
 - [ ] `npm run test:db` — every check PASS (builds a fresh Postgres from all migrations and attacks it as anon, a user and the server).
 - [ ] New table → RLS on, policies written, and a check added to `supabase/tests/`. New function → `search_path` set, EXECUTE granted only where needed (anon gets nothing).
 - [ ] Rules that matter are enforced in the database (RLS, constraint, trigger), not only in an API route.
@@ -16,6 +17,8 @@ Adapted from the Next.js + Supabase best-practices checklist for Syllabi. Run pa
 - [ ] Stage files by name (no `git add -A` surprises); one migration per change.
 
 ## 2. Live checks after release (owner, on the real site)
+
+Also run the ★ scenarios in `docs/test-scenarios.md` with real sample files.
 
 Tick each one and note anything odd. Use your phone for the starred (★) checks.
 

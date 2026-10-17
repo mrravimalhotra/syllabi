@@ -56,6 +56,10 @@ Input for BMAD planning (PRD, epics, stories). Written 2026-10-17 from a read of
 | A19 | Upload Word (.docx) worksheets | ✅ | 2026-10-17: text read in the browser, indexed directly |
 | A20 | Answers and papers follow Indian school exam conventions | ✅ | 2026-10-17: question types, marks-to-length, A–D section pattern, total marks choice (20/40/80/100) |
 | A21 | Code in answers (HTML, Python, etc.) | ✅ | 2026-10-17: code blocks styled and scrollable on screen, monospace with indentation in the PDF (Noto Sans Mono); page reading copies code exactly and labels side boxes and figures |
+| A22 | Attach PDF/Word files to a question (not only photos) | ✅ | 2026-10-17: up to 12 images within the size budget; Word text sent with the question |
+| A23 | Worksheets: one search per question | ✅ | 2026-10-17: questions split (Q.1, 1., "1.What", two-level sections, unnumbered sections, "* Question:" bullets), embedded in one batch, results interleaved |
+| A24 | Check my child's answers | ✅ | 2026-10-17: handwriting labelled at reading time and never trusted as fact; ✓/✗ per answer with reason and score |
+| A25 | Project briefs | ✅ | 2026-10-17: follows ticked options and limits; scaffolding, not a finished piece, when original work is required |
 
 ### B. School / teacher / parent
 | # | Standard | Status | Note |
@@ -84,7 +88,7 @@ Input for BMAD planning (PRD, epics, stories). Written 2026-10-17 from a read of
 |---|---|---|---|
 | D1 | Current Google SDK (`@google/genai`) | ❌ | `@google/generative-ai` is Google's superseded SDK |
 | D2 | Background jobs for ingestion (queue + retries), not a 300 s request | ❌ | Sequential per-chunk embedding can time out; partial chunks remain on failure; re-upload duplicates |
-| D3 | Batch embeddings | ❌ | One API call per chunk |
+| D3 | Batch embeddings | ✅ | 2026-10-17: `batchEmbedContents`, one request per page when indexing and per worksheet when searching |
 | D4 | Input validation on every API route | ⚠️ | 2026-10-17: uploads (type, size, count), photos and admin edits validated server-side; zod not yet adopted |
 | D5 | Rate limiting per user | ❌ | Quota is checked before the call, so concurrent requests overshoot |
 | D6 | Full usage accounting (embeddings, OCR) | ❌ | Only completions are counted |
