@@ -5,6 +5,7 @@
 // continuing into decimal places.
 
 import type { Cell, Rule, Step, VLine, WorkedExample } from "@/lib/worked/types";
+import { phrases, savedLanguage, type Narration } from "@/lib/worked/say";
 
 const MAX_DIVIDEND_DIGITS = 12;
 const MAX_DIVISOR_DIGITS = 6;
@@ -26,7 +27,8 @@ function shift(number: string, places: number): string {
   return rest ? `${newInt}.${rest}` : newInt;
 }
 
-export function longDivision(dividendText: string, divisorText: string, decimals: boolean): WorkedExample | null {
+export function longDivision(dividendText: string, divisorText: string, decimals: boolean, language?: Narration): WorkedExample | null {
+  const t = phrases(language);
   const dividendIn = cleanNumber(dividendText);
   const divisorIn = cleanNumber(divisorText);
   if (!dividendIn || !divisorIn) return null;
@@ -80,18 +82,18 @@ export function longDivision(dividendText: string, divisorText: string, decimals
   if (divisorPlaces > 0) {
     const factor = 10 ** divisorPlaces;
     steps.push({
-      say: `The divisor ${divisorIn} is a decimal. Multiply both numbers by ${factor} so the divisor becomes a whole number: ${original} is the same as ${dividendStr} ÷ ${divisorStr}.`,
+      say: t.decimalDivisor(divisorIn, factor, original, dividendStr, divisorStr),
     });
   }
   steps.push({
-    say: `Let's divide ${dividendStr} by ${divisorStr}. Write ${dividendStr} inside the division bracket and ${divisorStr} outside it.`,
+    say: t.divisionSetup(dividendStr, divisorStr),
     cells: [...divisorCells, ...dividendCells.filter((c) => c.tone !== "muted")],
     rules: [{ row: 0, fromCol: L, toCol: lastCol }],
     vlines: [{ col: L, fromRow: 1, toRow: 1 }],
   });
   if (addedZeros > 0) {
     steps.push({
-      say: `We will keep dividing after the decimal point, so we write zeros after ${dividendIn.includes(".") ? "the last digit" : "a decimal point"}. Adding zeros after the decimal point does not change the number.`,
+      say: t.addZeros(dividendIn.includes(".")),
       cells: dividendCells.filter((c) => c.tone === "muted" || c.text === "."),
     });
   }
@@ -109,7 +111,7 @@ export function longDivision(dividendText: string, divisorText: string, decimals
 
     if (!started && work < divisor && !isLastIntegerDigit && i < digits.length - 1) {
       steps.push({
-        say: `${work} is smaller than ${divisor}, so ${divisor} does not go into it. Take the next digit too.`,
+        say: t.tooSmall(work, divisor),
         focus: range(firstGroupStart, i).map((k) => ({ row: 1, col: colOf(k) })),
       });
       continue;
@@ -118,7 +120,7 @@ export function longDivision(dividendText: string, divisorText: string, decimals
     // Crossing the decimal point: the quotient gets its point here.
     if (showPoint && i === pointAt && !quotientDigits.some((q) => q.col === pointCol)) {
       steps.push({
-        say: "We have reached the decimal point, so put a decimal point in the quotient, right above it.",
+        say: t.pointInQuotient,
         cells: [{ row: 0, col: pointCol, text: ".", tone: "quotient" }],
       });
     }
@@ -133,7 +135,7 @@ export function longDivision(dividendText: string, divisorText: string, decimals
     if (q === 0) {
       started = true;
       steps.push({
-        say: `${divisor} does not go into ${work}, so write 0 in the quotient.`,
+        say: t.zeroInQuotient(divisor, work),
         cells: [{ row: 0, col: colOf(i), text: "0", tone: "quotient" }],
         focus: focusWork,
       });
@@ -143,17 +145,17 @@ export function longDivision(dividendText: string, divisorText: string, decimals
       const productCells = numberCells(product, row, colOf(i), colOf);
       const productFrom = Math.min(...productCells.map((c) => c.col));
       steps.push({
-        say: `How many times does ${divisor} go into ${work}? ${q} time${q === 1 ? "" : "s"}, because ${q} × ${divisor} = ${product}${q < 9 ? ` and ${q + 1} × ${divisor} = ${(q + 1) * divisor} is too big` : ""}. Write ${q} in the quotient.`,
+        say: t.howMany(divisor, work, q, product, q < 9 ? (q + 1) * divisor : null),
         cells: [{ row: 0, col: colOf(i), text: String(q), tone: "quotient" }],
         focus: focusWork,
       });
       quotientDigits.push({ col: colOf(i), digit: q });
       steps.push({
-        say: `Multiply: ${q} × ${divisor} = ${product}. Write ${product} under ${work}.`,
+        say: t.multiplyDown(q, divisor, product, work),
         cells: productCells.map((c) => ({ ...c, tone: "product" as const })),
       });
       steps.push({
-        say: `Subtract: ${work} − ${product} = ${remainder}.`,
+        say: t.subtractDown(work, product, remainder),
         rules: [{ row, fromCol: productFrom, toCol: colOf(i) }],
         cells: numberCells(remainder, row + 1, colOf(i), colOf).map((c) => ({ ...c, tone: "remainder" as const })),
       });
@@ -169,11 +171,11 @@ export function longDivision(dividendText: string, divisorText: string, decimals
       steps.push(
         workRow === 1
           ? {
-              say: `Now include the next ${isZeroAdded ? "zero" : "digit"}, ${next}: we have ${work * 10 + next}.`,
+              say: t.includeNext(isZeroAdded, next, work * 10 + next),
               focus: [{ row: 1, col: colOf(i + 1) }],
             }
           : {
-              say: `Bring down the next ${isZeroAdded ? "zero" : "digit"}, ${next}. Now we have ${work * 10 + next}.`,
+              say: t.bringDown(isZeroAdded, next, work * 10 + next),
               cells: [{ row: workRow, col: colOf(i + 1), text: String(next), tone: "carry" }],
               focus: [{ row: 1, col: colOf(i + 1) }],
             }
@@ -188,30 +190,22 @@ export function longDivision(dividendText: string, divisorText: string, decimals
   let answer: string;
   if (exact) {
     answer = `${original} = ${quotientText}`;
-    steps.push({
-      say: `The remainder is 0, so the division is exact. ${original} = ${quotientText}.`,
-    });
+    steps.push({ say: t.exact(original, quotientText) });
   } else if (hasDecimals) {
-    answer = `${original} ≈ ${quotientText} (to ${digits.length - pointAt} decimal places)`;
-    steps.push({
-      say: `The division keeps going, so we stop at ${digits.length - pointAt} decimal places: ${original} is about ${quotientText}.`,
-    });
+    answer = t.approxAnswer(original, quotientText, digits.length - pointAt);
+    steps.push({ say: t.stopDecimals(digits.length - pointAt, original, quotientText) });
   } else {
-    answer = `${original}: quotient ${quotientText}, remainder ${remainderFinal}`;
-    steps.push({
-      say: `There are no more digits to bring down. The quotient is ${quotientText} and the remainder is ${remainderFinal}.`,
-    });
+    answer = t.remainderAnswer(original, quotientText, remainderFinal);
+    steps.push({ say: t.remainderEnd(quotientText, remainderFinal) });
   }
   if (!hasDecimals) {
-    steps.push({
-      say: `Check: quotient × divisor + remainder = ${quotientText} × ${divisor} + ${remainderFinal} = ${Number(quotientText) * divisor + remainderFinal}, which is the dividend. Correct!`,
-    });
+    steps.push({ say: t.divisionCheck(quotientText, divisor, remainderFinal, Number(quotientText) * divisor + remainderFinal) });
   }
 
   const allCells = steps.flatMap((s) => s.cells ?? []);
   return {
-    problem: { kind: "division", dividend: dividendIn, divisor: divisorIn, decimals },
-    title: `Long division: ${original}`,
+    problem: { kind: "division", dividend: dividendIn, divisor: divisorIn, decimals, ...savedLanguage(language) },
+    title: t.divisionTitle(original),
     rows: Math.max(...allCells.map((c) => c.row)) + 1,
     cols: lastCol + 1,
     colWidths: Array.from({ length: lastCol + 1 }, (_, c) => (showPoint && c === pointCol ? 0.5 : 1)),

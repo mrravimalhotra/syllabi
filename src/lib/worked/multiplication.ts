@@ -5,12 +5,13 @@
 
 import type { Cell, Step, WorkedExample } from "@/lib/worked/types";
 import { cleanNumber } from "@/lib/worked/division";
+import { phrases, savedLanguage, type Narration } from "@/lib/worked/say";
 
 const MAX_TOP_DIGITS = 8;
 const MAX_BOTTOM_DIGITS = 4;
-const PLACES = ["ones", "tens", "hundreds", "thousands"];
 
-export function longMultiplication(aIn: string, bIn: string): WorkedExample | null {
+export function longMultiplication(aIn: string, bIn: string, language?: Narration): WorkedExample | null {
+  const t = phrases(language);
   const a0 = cleanNumber(aIn);
   const b0 = cleanNumber(bIn);
   if (!a0 || !b0) return null;
@@ -34,12 +35,10 @@ export function longMultiplication(aIn: string, bIn: string): WorkedExample | nu
   const steps: Step[] = [];
   const decimals = decimalsA + decimalsB;
   if (decimals > 0) {
-    steps.push({
-      say: `Multiply as if there were no decimal points: ${top} × ${bottom}. At the end we will put back ${decimals} decimal place${decimals === 1 ? "" : "s"}, because the two numbers have ${decimals} decimal place${decimals === 1 ? "" : "s"} together.`,
-    });
+    steps.push({ say: t.multiplyIgnoringPoints(top, bottom, decimals) });
   }
   steps.push({
-    say: `Write ${top} on top and ${bottom} under it, lining up the ones.`,
+    say: t.multiplicationSetup(top, bottom),
     cells: [...cellsOf(top, 0, "given"), ...cellsOf(bottom, 1, "given"), { row: 1, col: 0, text: "×", tone: "given" }],
     rules: [{ row: 1, fromCol: 0, toCol: width - 1 }],
   });
@@ -48,10 +47,10 @@ export function longMultiplication(aIn: string, bIn: string): WorkedExample | nu
   const bottomDigits = bottom.split("").reverse().map(Number);
   bottomDigits.forEach((digit, k) => {
     const row = 2 + k;
-    const place = PLACES[k] ?? `place ${k + 1}`;
+    const place = t.integerPlaces[k];
     if (k > 0) {
       steps.push({
-        say: `Now multiply by the ${place} digit, ${digit}. Because it is ${place}, first write ${k === 1 ? "a 0" : `${k} zeros`} on the right as a placeholder.`,
+        say: t.placeholder(place, digit, k),
         cells: Array.from({ length: k }, (_, z) => ({ row, col: colFromRight(z), text: "0", tone: "muted" as const })),
         focus: [{ row: 1, col: colFromRight(k) }],
       });
@@ -59,16 +58,14 @@ export function longMultiplication(aIn: string, bIn: string): WorkedExample | nu
     let carry = 0;
     const topDigits = top.split("").reverse().map(Number);
     const written: Cell[] = [];
-    topDigits.forEach((t, i) => {
-      const value = t * digit + carry;
+    topDigits.forEach((d, i) => {
+      const value = d * digit + carry;
       const write = i === topDigits.length - 1 ? String(value) : String(value % 10);
       const newCarry = i === topDigits.length - 1 ? 0 : Math.floor(value / 10);
       const cells = cellsOf(write, row, "product", i + k);
       written.push(...cells);
       steps.push({
-        say:
-          `${digit} × ${t}${carry ? ` + ${carry} carried` : ""} = ${value}.` +
-          (i === topDigits.length - 1 ? ` Write ${value}.` : newCarry ? ` Write ${value % 10} and carry ${newCarry}.` : ` Write ${value}.`),
+        say: t.multiplyDigit(digit, d, carry, value, i === topDigits.length - 1, newCarry),
         cells,
         focus: [
           { row: 0, col: colFromRight(i) },
@@ -84,7 +81,7 @@ export function longMultiplication(aIn: string, bIn: string): WorkedExample | nu
   const lastPartialRow = 1 + bottomDigits.length;
   if (bottomDigits.length > 1) {
     steps.push({
-      say: `Add the partial products: ${partials.map(String).join(" + ")} = ${product}.`,
+      say: t.addPartials(partials.map(String), String(product)),
       cells: [{ row: lastPartialRow, col: 0, text: "+", tone: "given" }, ...cellsOf(String(product), lastPartialRow + 1, "result")],
       rules: [{ row: lastPartialRow, fromCol: 0, toCol: width - 1 }],
     });
@@ -94,15 +91,15 @@ export function longMultiplication(aIn: string, bIn: string): WorkedExample | nu
   const digits = String(product).padStart(decimals + 1, "0");
   const result = decimals ? `${digits.slice(0, -decimals)}.${digits.slice(-decimals)}`.replace(/\.?0+$/, "") || "0" : digits;
   if (decimals > 0) {
-    steps.push({ say: `Count ${decimals} place${decimals === 1 ? "" : "s"} from the right and put the decimal point: ${product} becomes ${result}.` });
+    steps.push({ say: t.placePoint(decimals, String(product), result) });
   }
   const sentence = `${a0} × ${b0} = ${result}`;
-  steps.push({ say: `So ${sentence}.` });
+  steps.push({ say: t.so(sentence) });
 
   const allCells = steps.flatMap((s) => s.cells ?? []);
   return {
-    problem: { kind: "multiplication", a: a0, b: b0 },
-    title: `Long multiplication: ${a0} × ${b0}`,
+    problem: { kind: "multiplication", a: a0, b: b0, ...savedLanguage(language) },
+    title: t.multiplicationTitle(`${a0} × ${b0}`),
     rows: Math.max(...allCells.map((c) => c.row)) + 1,
     cols: width,
     steps,

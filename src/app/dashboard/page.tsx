@@ -283,7 +283,7 @@ export default function DashboardPage() {
     // A question that is only a calculation ("Divide 5255 by 5", "LCM of 12,
     // 18 and 30") is answered by code: exact, instant, and no AI used.
     if ((tab === "solution" || tab === "ad_hoc") && photos.length === 0 && attachedDocs.length === 0) {
-      const problem = pureProblem(prompt);
+      const problem = pureProblem(prompt, language);
       const example = problem ? solve(problem) : null;
       if (problem && example) {
         setError(null);
@@ -390,7 +390,7 @@ export default function DashboardPage() {
   const workedInQuestion = useMemo(() => {
     if (!result || !lastBody) return [];
     const text = [lastBody.prompt, lastBody.attachedText].filter((t) => typeof t === "string").join("\n");
-    return findProblems(text)
+    return findProblems(text, typeof lastBody.language === "string" ? lastBody.language : undefined)
       .slice(0, 6)
       .map((f) => solve(f.problem))
       .filter((e): e is WorkedExample => e !== null);

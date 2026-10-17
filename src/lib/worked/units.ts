@@ -5,20 +5,17 @@
 
 import type { Cell, Step, WorkedExample } from "@/lib/worked/types";
 import { cleanNumber } from "@/lib/worked/division";
+import { phrases, savedLanguage, type Narration } from "@/lib/worked/say";
 
 const MAX_DIGITS = 10;
 const MAX_COLUMNS = 14;
 
 const PREFIXES = ["k", "h", "da", "", "d", "c", "m"];
-const FAMILIES: Record<string, { base: string; name: string }> = {
-  m: { base: "m", name: "length" },
-  g: { base: "g", name: "mass" },
-  l: { base: "l", name: "capacity" },
-};
+const FAMILIES = ["m", "g", "l"];
 
 /** "km" → { family: "m", index: 0 }; null for anything not on the chart. */
 function place(unit: string): { family: string; index: number } | null {
-  for (const family of Object.keys(FAMILIES)) {
+  for (const family of FAMILIES) {
     const index = PREFIXES.findIndex((p) => p + family === unit);
     if (index >= 0) return { family, index };
   }
@@ -28,7 +25,8 @@ function place(unit: string): { family: string; index: number } | null {
 const label = (index: number, family: string) => (index >= 0 && index < PREFIXES.length ? PREFIXES[index] + family : "");
 const POWERS = ["1", "10", "100", "1000", "10000", "100000", "1000000"];
 
-export function convertUnits(valueIn: string, from: string, to: string): WorkedExample | null {
+export function convertUnits(valueIn: string, from: string, to: string, language?: Narration): WorkedExample | null {
+  const t = phrases(language);
   const value = cleanNumber(valueIn);
   const a = place(from);
   const b = place(to);
@@ -68,7 +66,6 @@ export function convertUnits(valueIn: string, from: string, to: string): WorkedE
   const result = resultFrac ? `${resultInt}.${resultFrac}` : resultInt;
 
   const steps: Step[] = [];
-  const family = FAMILIES[a.family].name;
   const labels: Cell[] = [];
   for (let at = lo; at <= hi; at++) {
     const text = label(at, a.family);
@@ -76,7 +73,7 @@ export function convertUnits(valueIn: string, from: string, to: string): WorkedE
   }
   const width = hi - lo + 1;
   steps.push({
-    say: `Draw the place-value chart for ${family}: ${PREFIXES.map((p) => p + a.family).join(", ")}. Each unit is 10 times the one on its right.`,
+    say: t.chart(t.families[a.family], PREFIXES.map((p) => p + a.family).join(", ")),
     cells: labels,
     rules: [{ row: 0, fromCol: 0, toCol: width - 1 }],
     vlines: Array.from({ length: width - 1 }, (_, i) => ({ col: i + 1, fromRow: 0, toRow: 1 })),
@@ -84,22 +81,20 @@ export function convertUnits(valueIn: string, from: string, to: string): WorkedE
 
   const onesDigit = digits.find((x) => x.at === a.index)!.d;
   steps.push({
-    say: `Write ${value} with its ones digit, ${onesDigit}, under ${from}${fracPart ? `, and the digits after the decimal point in the columns to its right` : ""}.`,
+    say: t.writeOnChart(value, onesDigit, from, fracPart.length > 0),
     cells: written.map((x) => ({ row: 1, col: col(x.at), text: x.d, tone: "given" as const })),
     focus: [{ row: 1, col: col(a.index) }],
   });
   if (zeros.length) {
     steps.push({
-      say: `Fill the empty places up to ${to} with zeros.`,
+      say: t.fillZeros(to),
       cells: zeros.map((at) => ({ row: 1, col: col(at), text: "0", tone: "muted" as const })),
     });
   }
   const places = Math.abs(b.index - a.index);
   const bigger = b.index > a.index;
   steps.push({
-    say:
-      `Now read the number with the ones digit under ${to}: ${result} ${to}. ` +
-      `${to} is ${places} place${places === 1 ? "" : "s"} to the ${bigger ? "right" : "left"} of ${from}, which is the same as ${bigger ? "multiplying" : "dividing"} by ${POWERS[places]}.`,
+    say: t.readChart(to, result, from, places, bigger, POWERS[places]),
     cells: [
       { row: 1, col: col(b.index), text: filled.get(b.index)!, tone: "result" },
       { row: 2, col: 0, text: `= ${result} ${to}`, tone: "result" },
@@ -107,11 +102,11 @@ export function convertUnits(valueIn: string, from: string, to: string): WorkedE
     focus: [{ row: 0, col: col(b.index) }],
   });
   const answer = `${value} ${from} = ${result} ${to}`;
-  steps.push({ say: `So ${answer}.` });
+  steps.push({ say: t.so(answer) });
 
   return {
-    problem: { kind: "convert", value, from, to },
-    title: `Converting ${from} to ${to}: ${value} ${from}`,
+    problem: { kind: "convert", value, from, to, ...savedLanguage(language) },
+    title: t.convertTitle(from, to, value),
     rows: 3,
     cols: width,
     colWidths: Array.from({ length: width }, () => 2),

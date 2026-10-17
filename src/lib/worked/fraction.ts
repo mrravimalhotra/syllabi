@@ -4,6 +4,7 @@
 // numbers.
 
 import type { Cell, Rule, Step, WorkedExample } from "@/lib/worked/types";
+import { phrases, savedLanguage, type Narration, type Phrases } from "@/lib/worked/say";
 
 const MAX_VALUE = 100_000;
 
@@ -48,19 +49,19 @@ function written(n: number, d: number): string {
  * Steps that take n/d (already on the board as the line starting at `top`) to
  * its simplest form, writing new lines below. Returns the final [n, d].
  */
-function simplifySteps(n: number, d: number, top: number, steps: Step[]): [number, number] {
+function simplifySteps(n: number, d: number, top: number, steps: Step[], t: Phrases): [number, number] {
   const h = gcd(Math.abs(n), d);
   if (n === 0) {
-    steps.push({ say: `The top is 0, so the fraction is 0.`, cells: [sign("=", top, COL.eq2), { ...sign("0", top, COL.whole), tone: "result" }] });
+    steps.push({ say: t.zeroTop, cells: [sign("=", top, COL.eq2), { ...sign("0", top, COL.whole), tone: "result" }] });
     return [0, 1];
   }
   if (h === 1) {
-    steps.push({ say: `${Math.abs(n)} and ${d} have no common factor except 1, so ${num(n)}/${d} is already in its simplest form.` });
+    steps.push({ say: t.alreadySimplest(Math.abs(n), d, `${num(n)}/${d}`) });
   } else {
     const next = top + 3;
     const f = fraction(n / h, d / h, next, COL.a, "result");
     steps.push({
-      say: `The HCF of ${Math.abs(n)} and ${d} is ${h}, the biggest number that divides both. Divide the top and the bottom by ${h}: ${Math.abs(n)} ÷ ${h} = ${Math.abs(n) / h} and ${d} ÷ ${h} = ${d / h}.`,
+      say: t.divideByHcf(Math.abs(n), d, h),
       cells: [...note(`÷${h}`, top, COL.noteA), sign("=", next, COL.eq), ...f.cells],
       rules: f.rules,
       focus: [
@@ -73,13 +74,13 @@ function simplifySteps(n: number, d: number, top: number, steps: Step[]): [numbe
     top = next;
   }
   if (d === 1) {
-    steps.push({ say: `The bottom is 1, so the answer is the whole number ${num(n)}.`, cells: [sign("=", top, COL.eq2), { ...sign(num(n), top, COL.whole), tone: "result" }] });
+    steps.push({ say: t.wholeResult(num(n)), cells: [sign("=", top, COL.eq2), { ...sign(num(n), top, COL.whole), tone: "result" }] });
   } else if (Math.abs(n) > d) {
     const whole = Math.floor(Math.abs(n) / d);
     const rest = Math.abs(n) % d;
     const f = fraction(rest, d, top, COL.mixed, "result");
     steps.push({
-      say: `The top is bigger than the bottom, so write it as a mixed number: ${Math.abs(n)} ÷ ${d} = ${whole} remainder ${rest}, so ${num(n)}/${d} = ${n < 0 ? "minus " : ""}${whole} and ${rest}/${d}.`,
+      say: t.mixedNumber(Math.abs(n), d, whole, rest, `${num(n)}/${d}`, n < 0),
       cells: [sign("=", top, COL.eq2), { ...sign(`${n < 0 ? "−" : ""}${whole}`, top, COL.whole), tone: "result" }, ...f.cells],
       rules: f.rules,
     });
@@ -88,7 +89,8 @@ function simplifySteps(n: number, d: number, top: number, steps: Step[]): [numbe
 }
 
 /** Simplifies one fraction, or adds/subtracts two. Each fraction is [numerator, denominator]. */
-export function fractionExample(op: FractionOp, fractions: [number, number][]): WorkedExample | null {
+export function fractionExample(op: FractionOp, fractions: [number, number][], language?: Narration): WorkedExample | null {
+  const t = phrases(language);
   const count = op === "simplify" ? 1 : 2;
   if (fractions.length !== count) return null;
   if (fractions.some(([n, d]) => !Number.isInteger(n) || !Number.isInteger(d) || n < 0 || d < 1 || n > MAX_VALUE || d > MAX_VALUE)) return null;
@@ -100,12 +102,12 @@ export function fractionExample(op: FractionOp, fractions: [number, number][]): 
   const first = fraction(a, b, 0, COL.a, "given");
   let result: [number, number];
   if (op === "simplify") {
-    steps.push({ say: `Write the fraction ${a}/${b}.`, cells: first.cells, rules: first.rules });
-    result = simplifySteps(a, b, 0, steps);
+    steps.push({ say: t.writeFraction(`${a}/${b}`), cells: first.cells, rules: first.rules });
+    result = simplifySteps(a, b, 0, steps, t);
   } else {
     const second = fraction(c, d, 0, COL.b, "given");
     steps.push({
-      say: `Write ${question}.`,
+      say: t.writeQuestion(question),
       cells: [...first.cells, sign(symbol, 0, COL.op), ...second.cells],
       rules: [...first.rules, ...second.rules],
     });
@@ -115,7 +117,7 @@ export function fractionExample(op: FractionOp, fractions: [number, number][]): 
       const L = lcm(b, d);
       const [k1, k2] = [L / b, L / d];
       steps.push({
-        say: `The denominators ${b} and ${d} are different, so make them the same. The LCM of ${b} and ${d} is ${L}.`,
+        say: t.differentDenominators(b, d, L),
         focus: [
           { row: 1, col: COL.a },
           { row: 1, col: COL.b },
@@ -125,9 +127,9 @@ export function fractionExample(op: FractionOp, fractions: [number, number][]): 
       [x, y, bottom] = [a * k1, c * k2, L];
       const fa = fraction(x, L, top, COL.a, "product");
       const fb = fraction(y, L, top, COL.b, "product");
-      const changes = [k1 > 1 ? `multiply the top and bottom of ${a}/${b} by ${k1}` : "", k2 > 1 ? `multiply the top and bottom of ${c}/${d} by ${k2}` : ""].filter(Boolean);
+      const changes = [k1 > 1 ? t.multiplyTopAndBottom(`${a}/${b}`, k1) : "", k2 > 1 ? t.multiplyTopAndBottom(`${c}/${d}`, k2) : ""].filter(Boolean);
       steps.push({
-        say: `To get ${L} at the bottom, ${changes.join(", and ")}. This gives ${x}/${L} ${symbol} ${y}/${L}.`,
+        say: t.makeSame(L, changes, `${x}/${L} ${symbol} ${y}/${L}`),
         cells: [
           ...(k1 > 1 ? note(`×${k1}`, 0, COL.noteA) : []),
           ...(k2 > 1 ? note(`×${k2}`, 0, COL.noteB) : []),
@@ -143,25 +145,23 @@ export function fractionExample(op: FractionOp, fractions: [number, number][]): 
     const next = top + 3;
     const f = fraction(n, bottom, next, COL.a, "result");
     steps.push({
-      say:
-        `${b === d ? "The denominators are the same, so " : "Now "}${op === "add" ? "add" : "subtract"} the numerators and keep the denominator ${bottom}: ${x} ${symbol} ${y} = ${num(n)}.` +
-        (n < 0 ? ` The answer is negative because ${c}/${d} is bigger than ${a}/${b}.` : ""),
+      say: t.combineNumerators(b === d, op === "add", bottom, `${x} ${symbol} ${y} = ${num(n)}`) + (n < 0 ? t.negativeBecause(`${c}/${d}`, `${a}/${b}`) : ""),
       cells: [sign("=", next, COL.eq), ...f.cells],
       rules: f.rules,
     });
-    result = simplifySteps(n, bottom, next, steps);
+    result = simplifySteps(n, bottom, next, steps, t);
   }
 
   const answer = `${question} = ${written(...result)}`;
-  steps.push({ say: `So ${answer}.` });
+  steps.push({ say: t.so(answer) });
 
   const cells = steps.flatMap((s) => s.cells ?? []);
   const cols = Math.max(...cells.map((x) => x.col)) + 1;
   // Each column as wide as its longest text.
   const colWidths = Array.from({ length: cols }, (_, col) => Math.max(1, ...cells.filter((x) => x.col === col).map((x) => x.text.length)));
   return {
-    problem: { kind: "fraction", op, fractions },
-    title: op === "simplify" ? `Simplify the fraction ${a}/${b}` : `${op === "add" ? "Adding" : "Subtracting"} fractions: ${question}`,
+    problem: { kind: "fraction", op, fractions, ...savedLanguage(language) },
+    title: op === "simplify" ? t.simplifyTitle(`${a}/${b}`) : op === "add" ? t.addFractionsTitle(question) : t.subtractFractionsTitle(question),
     rows: Math.max(...cells.map((x) => x.row)) + 1,
     cols,
     colWidths,

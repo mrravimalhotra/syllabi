@@ -4,22 +4,20 @@
 
 import type { Cell, Step, WorkedExample } from "@/lib/worked/types";
 import { cleanNumber } from "@/lib/worked/division";
+import { phrases, savedLanguage, type Narration, type Phrases } from "@/lib/worked/say";
 
 const MAX_DIGITS = 12;
 const MAX_NUMBERS = 4;
 
-const INTEGER_PLACES = ["ones", "tens", "hundreds", "thousands", "ten thousands", "lakhs", "ten lakhs", "crores", "ten crores", "hundred crores", "thousand crores", "ten thousand crores"];
-const DECIMAL_PLACES = ["tenths", "hundredths", "thousandths", "ten-thousandths"];
-
 /** Numbers lined up on the decimal point: each as a digit array of equal length. */
-function align(numbers: string[]) {
+function align(numbers: string[], t: Phrases) {
   const ints = numbers.map((n) => n.split(".")[0] || "0");
   const fracs = numbers.map((n) => n.split(".")[1] ?? "");
   const intLen = Math.max(...ints.map((s) => s.length));
   const fracLen = Math.max(...fracs.map((s) => s.length));
   const padded = numbers.map((_, i) => ints[i].padStart(intLen, " ") + fracs[i].padEnd(fracLen, "0"));
   // The place name of digit position p (0 = leftmost).
-  const placeName = (p: number) => (p < intLen ? INTEGER_PLACES[intLen - 1 - p] ?? "next" : DECIMAL_PLACES[p - intLen] ?? "next decimal");
+  const placeName = (p: number) => (p < intLen ? t.integerPlaces[intLen - 1 - p] : t.decimalPlaces[p - intLen]) ?? t.nextPlace;
   return { padded, intLen, fracLen, placeName, written: fracs.map((f) => f.length) };
 }
 
@@ -51,11 +49,12 @@ function numberCells(digits: string, row: number, colOf: (p: number) => number, 
   return cells;
 }
 
-export function columnAddition(numbersIn: string[]): WorkedExample | null {
+export function columnAddition(numbersIn: string[], language?: Narration): WorkedExample | null {
+  const t = phrases(language);
   const numbers = numbersIn.map(cleanNumber);
   if (numbers.length < 2 || numbers.length > MAX_NUMBERS || numbers.some((n) => !n)) return null;
   const nums = numbers as string[];
-  const { padded, intLen, fracLen, placeName, written } = align(nums);
+  const { padded, intLen, fracLen, placeName, written } = align(nums, t);
   if (intLen + fracLen > MAX_DIGITS) return null;
 
   // One spare column on the left for a final carry.
@@ -69,9 +68,7 @@ export function columnAddition(numbersIn: string[]): WorkedExample | null {
   nums.forEach((_, i) => setup.push(...numberCells(padded[i], i + 1, colOf, pointCol, intLen, written[i], "given")));
   setup.push({ row: lastNumberRow, col: 0, text: "+", tone: "given" });
   steps.push({
-    say:
-      `Write the numbers one under another, lining up the ${fracLen ? "decimal points" : "ones"}.` +
-      (written.some((w) => w < fracLen) ? " Fill the empty decimal places with zeros so every number has the same number of decimal places." : ""),
+    say: t.addSetup(fracLen > 0, written.some((w) => w < fracLen)),
     cells: setup,
     rules: [{ row: lastNumberRow, fromCol: 0, toCol: width - 1 }],
   });
@@ -84,13 +81,11 @@ export function columnAddition(numbersIn: string[]): WorkedExample | null {
     const sum = column.reduce((a, b) => a + b, 0) + carry;
     const digit = sum % 10;
     const newCarry = Math.floor(sum / 10);
-    const parts = [...column.map(String), ...(carry ? [`${carry} (carried)`] : [])].join(" + ");
+    const parts = [...column.map(String), ...(carry ? [t.carried(carry)] : [])].join(" + ");
     const place = placeName(p);
-    const next = p > 0 ? placeName(p - 1) : "next place";
+    const next = p > 0 ? placeName(p - 1) : t.nextPlace;
     steps.push({
-      say:
-        `Add the ${place}: ${parts} = ${sum}.` +
-        (newCarry ? ` Write ${digit} and carry ${newCarry} to the ${next}.` : ` Write ${digit}.`),
+      say: t.addColumn(place, parts, sum, digit, newCarry, next),
       cells: [
         { row: resultRow, col: colOf(p), text: String(digit), tone: "result" },
         ...(newCarry ? [{ row: carryRow, col: colOf(p - 1 >= 0 ? p - 1 : -1), text: String(newCarry), tone: "carry" as const }] : []),
@@ -98,14 +93,14 @@ export function columnAddition(numbersIn: string[]): WorkedExample | null {
       focus: nums.map((_, i) => ({ row: i + 1, col: colOf(p) })).filter((_, i) => padded[i][p] !== " "),
     });
     if (p === intLen && fracLen > 0) {
-      steps.push({ say: "Put the decimal point in the answer, under the other decimal points.", cells: [{ row: resultRow, col: pointCol!, text: ".", tone: "result" }] });
+      steps.push({ say: t.pointInAnswer, cells: [{ row: resultRow, col: pointCol!, text: ".", tone: "result" }] });
     }
     resultDigits.unshift(String(digit));
     carry = newCarry;
   }
   if (carry) {
     steps.push({
-      say: `There are no more columns, so write the carried ${carry} in front.`,
+      say: t.finalCarry(carry),
       cells: [{ row: resultRow, col: colOf(-1), text: String(carry), tone: "result" }],
     });
     resultDigits.unshift(String(carry));
@@ -113,11 +108,11 @@ export function columnAddition(numbersIn: string[]): WorkedExample | null {
   const intDigits = resultDigits.slice(0, resultDigits.length - fracLen).join("").replace(/^0+(?=\d)/, "");
   const result = fracLen ? `${intDigits}.${resultDigits.slice(resultDigits.length - fracLen).join("")}` : intDigits;
   const sentence = `${nums.join(" + ")} = ${result}`;
-  steps.push({ say: `So ${sentence}.` });
+  steps.push({ say: t.so(sentence) });
 
   return {
-    problem: { kind: "column", op: "add", numbers: nums },
-    title: `Column addition: ${nums.join(" + ")}`,
+    problem: { kind: "column", op: "add", numbers: nums, ...savedLanguage(language) },
+    title: t.additionTitle(nums.join(" + ")),
     rows: resultRow + 1,
     cols: width,
     colWidths: Array.from({ length: width }, (_, c) => (c === pointCol ? 0.5 : 1)),
@@ -126,14 +121,15 @@ export function columnAddition(numbersIn: string[]): WorkedExample | null {
   };
 }
 
-export function columnSubtraction(aIn: string, bIn: string): WorkedExample | null {
+export function columnSubtraction(aIn: string, bIn: string, language?: Narration): WorkedExample | null {
+  const t = phrases(language);
   const a0 = cleanNumber(aIn);
   const b0 = cleanNumber(bIn);
   if (!a0 || !b0) return null;
   // Smaller minus larger: work out larger minus smaller and make it negative.
   const negative = Number(a0) < Number(b0);
   const [a, b] = negative ? [b0, a0] : [a0, b0];
-  const { padded, intLen, fracLen, placeName, written } = align([a, b]);
+  const { padded, intLen, fracLen, placeName, written } = align([a, b], t);
   if (intLen + fracLen > MAX_DIGITS) return null;
   const { colOf, pointCol, width } = layout(intLen, fracLen, 0);
   const steps: Step[] = [];
@@ -142,12 +138,10 @@ export function columnSubtraction(aIn: string, bIn: string): WorkedExample | nul
   const resultRow = 3;
 
   if (negative) {
-    steps.push({ say: `${a0} is smaller than ${b0}, so the answer will be negative. Work out ${b0} − ${a0}, then put a minus sign in front.` });
+    steps.push({ say: t.negativeIntro(a0, b0) });
   }
   steps.push({
-    say:
-      `Write ${a} on top and ${b} under it, lining up the ${fracLen ? "decimal points" : "ones"}.` +
-      (written.some((w) => w < fracLen) ? " Fill the empty decimal places with zeros." : ""),
+    say: t.subtractSetup(a, b, fracLen > 0, written.some((w) => w < fracLen)),
     cells: [
       ...numberCells(padded[0], 1, colOf, pointCol, intLen, written[0], "given"),
       ...numberCells(padded[1], 2, colOf, pointCol, intLen, written[1], "given"),
@@ -176,22 +170,19 @@ export function columnSubtraction(aIn: string, bIn: string): WorkedExample | nul
       top[p] += 10;
       changed.push({ row: 1, col: colOf(p), text: String(padded[0][p]), tone: "muted" }, { row: 0, col: colOf(p), text: String(top[p]), tone: "carry" });
       steps.push({
-        say:
-          `In the ${place}, ${before} is smaller than ${down}, so borrow from the ${placeName(q)}.` +
-          (q < p - 1 ? ` The ${placeName(p - 1)} is 0, so we borrow across it: the zeros on the way become 9.` : "") +
-          ` The ${placeName(q)} digit becomes ${top[q]} and the ${place} becomes ${top[p]}.`,
+        say: t.borrow(place, before, down, placeName(q), q < p - 1 ? placeName(p - 1) : null, top[q], top[p]),
         cells: changed,
         focus: [{ row: 1, col: colOf(p) }],
       });
     }
     const digit = top[p] - down;
     steps.push({
-      say: `Subtract the ${place}: ${top[p]} − ${down} = ${digit}. Write ${digit}.`,
+      say: t.subtractColumn(place, top[p], down, digit),
       cells: [{ row: resultRow, col: colOf(p), text: String(digit), tone: "result" }],
       focus: [{ row: 1, col: colOf(p) }, ...(bottom[p] >= 0 ? [{ row: 2, col: colOf(p) }] : [])],
     });
     if (p === intLen && fracLen > 0) {
-      steps.push({ say: "Put the decimal point in the answer, under the other decimal points.", cells: [{ row: resultRow, col: pointCol!, text: ".", tone: "result" }] });
+      steps.push({ say: t.pointInAnswer, cells: [{ row: resultRow, col: pointCol!, text: ".", tone: "result" }] });
     }
     resultDigits.unshift(digit);
   }
@@ -199,12 +190,12 @@ export function columnSubtraction(aIn: string, bIn: string): WorkedExample | nul
   const magnitude = fracLen ? `${intDigits}.${resultDigits.slice(intLen).join("")}` : intDigits;
   const result = negative && Number(magnitude) !== 0 ? `−${magnitude}` : magnitude;
   steps.push({
-    say: `So ${a0} − ${b0} = ${result}. Check by adding: ${magnitude} + ${b} = ${a}.`,
+    say: t.subtractEnd(`${a0} − ${b0}`, result, magnitude, b, a),
     cells: negative && Number(magnitude) !== 0 ? [{ row: resultRow, col: 0, text: "−", tone: "result" }] : [],
   });
   return {
-    problem: { kind: "column", op: "subtract", numbers: [a0, b0] },
-    title: `Column subtraction: ${a0} − ${b0}`,
+    problem: { kind: "column", op: "subtract", numbers: [a0, b0], ...savedLanguage(language) },
+    title: t.subtractionTitle(`${a0} − ${b0}`),
     rows: resultRow + 1,
     cols: width,
     colWidths: Array.from({ length: width }, (_, c) => (c === pointCol ? 0.5 : 1)),

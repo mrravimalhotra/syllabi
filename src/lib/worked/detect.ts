@@ -10,6 +10,7 @@ import { longMultiplication } from "@/lib/worked/multiplication";
 import { fractionExample } from "@/lib/worked/fraction";
 import { convertUnits, UNIT_WORDS, unitSymbol } from "@/lib/worked/units";
 import type { WorkedExample, WorkedProblem } from "@/lib/worked/types";
+import { narrationFor, savedLanguage } from "@/lib/worked/say";
 
 const DEVANAGARI_DIGITS = "०१२३४५६७८९";
 const asciiDigits = (text: string) => text.replace(/[०-९]/g, (d) => String(DEVANAGARI_DIGITS.indexOf(d)));
@@ -93,13 +94,19 @@ export interface FoundProblem {
   match: string;
 }
 
-/** Every calculation in the text that a worked example can show, in order, without repeats. */
-export function findProblems(textIn: string): FoundProblem[] {
+/**
+ * Every calculation in the text that a worked example can show, in order,
+ * without repeats, narrated in the answer language (`setting`, as on the
+ * Generate page: "auto" follows the question's own language).
+ */
+export function findProblems(textIn: string, setting?: string): FoundProblem[] {
+  const language = savedLanguage(narrationFor(setting, textIn));
   // "5 l = ? ml": the "?" is a blank to fill, not the end of a question.
   const text = asciiDigits(textIn).replace(/=\s*\?/g, "= _");
   const found: FoundProblem[] = [];
   const seen = new Set<string>();
-  const add = (problem: WorkedProblem, match: string) => {
+  const add = (bare: WorkedProblem, match: string) => {
+    const problem = { ...bare, ...language };
     const key = JSON.stringify(problem);
     if (!seen.has(key) && solve(problem)) {
       seen.add(key);
@@ -206,8 +213,8 @@ const FILLER = new Set(
  * The one calculation a question asks for, when that is all it asks: then a
  * worked example is the whole answer and no AI is needed.
  */
-export function pureProblem(question: string): WorkedProblem | null {
-  const found = findProblems(question);
+export function pureProblem(question: string, setting?: string): WorkedProblem | null {
+  const found = findProblems(question, setting);
   if (found.length !== 1) return null;
   const leftover = asciiDigits(question)
     .toLowerCase()
@@ -223,30 +230,38 @@ export function pureProblem(question: string): WorkedProblem | null {
 
 /** Works out a problem; null if it's out of range (too many digits, dividing by zero...). */
 export function solve(problem: WorkedProblem): WorkedExample | null {
+  const language = problem.language;
   switch (problem.kind) {
     case "division":
-      return longDivision(problem.dividend, problem.divisor, problem.decimals);
+      return longDivision(problem.dividend, problem.divisor, problem.decimals, language);
     case "lcm-hcf":
-      return lcmHcf(problem.numbers, problem.want);
+      return lcmHcf(problem.numbers, problem.want, language);
     case "column":
       return problem.op === "add"
-        ? columnAddition(problem.numbers)
-        : columnSubtraction(problem.numbers[0], problem.numbers[1]);
+        ? columnAddition(problem.numbers, language)
+        : columnSubtraction(problem.numbers[0], problem.numbers[1], language);
     case "multiplication":
-      return longMultiplication(problem.a, problem.b);
+      return longMultiplication(problem.a, problem.b, language);
     case "fraction":
-      return fractionExample(problem.op, problem.fractions);
+      return fractionExample(problem.op, problem.fractions, language);
     case "convert":
-      return convertUnits(problem.value, problem.from, problem.to);
+      return convertUnits(problem.value, problem.from, problem.to, language);
   }
 }
 
+const MARKDOWN_WORDS = {
+  en: ["Answer", "Steps", "Worked out step by step by Syllabi's calculator (no AI)."],
+  hi: ["उत्तर", "चरण", "Syllabi के कैलकुलेटर द्वारा चरण-दर-चरण हल (AI के बिना)।"],
+  mr: ["उत्तर", "पायऱ्या", "Syllabi च्या कॅल्क्युलेटरने टप्प्याटप्प्याने सोडवले (AI शिवाय)."],
+};
+
 /** A worked example as Markdown, for saving, Copy and the PDF. */
 export function workedToMarkdown(example: WorkedExample): string {
+  const [answer, steps, footer] = MARKDOWN_WORDS[example.problem.language ?? "en"];
   return [
-    `**Answer:** ${example.answer}`,
-    "## Steps",
+    `**${answer}:** ${example.answer}`,
+    `## ${steps}`,
     example.steps.map((s, i) => `${i + 1}. ${s.say}`).join("\n"),
-    "*Worked out step by step by Syllabi's calculator (no AI).*",
+    `*${footer}*`,
   ].join("\n\n");
 }

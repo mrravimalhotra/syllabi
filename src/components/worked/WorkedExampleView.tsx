@@ -5,6 +5,7 @@ import { ChevronLeftIcon, ChevronRightIcon, PrinterIcon, SpeakerIcon, StopIcon }
 import { Badge, button, card, cx } from "@/components/ui";
 import { speakOnce } from "@/components/study-pack/useSpeech";
 import type { Cell, Tone, WorkedExample } from "@/lib/worked/types";
+import { spoken } from "@/lib/worked/say";
 
 // Chalkboard colours: one per kind of number, as teachers use coloured chalk.
 const TONE: Record<Tone, string> = {
@@ -23,16 +24,8 @@ const TONE: Record<Tone, string> = {
  * teacher's words, played automatically (read aloud) or stepped through by
  * hand. Printing gives the finished board and every step written out.
  */
-export function WorkedExampleView({
-  example,
-  actions,
-  language = "en",
-}: {
-  example: WorkedExample;
-  actions?: React.ReactNode;
-  /** Language of the narration, for the read-aloud voice. */
-  language?: string;
-}) {
+export function WorkedExampleView({ example, actions }: { example: WorkedExample; actions?: React.ReactNode }) {
+  const language = example.problem.language ?? "en";
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [voice, setVoice] = useState(true);
@@ -48,7 +41,7 @@ export function WorkedExampleView({
       else setIndex((i) => i + 1);
     };
     if (voice) {
-      cancelRef.current = speakOnce(step.say, language, 0.95, () => setTimeout(advance, 350));
+      cancelRef.current = speakOnce(spoken(step.say, language), language, 0.95, () => setTimeout(advance, 350));
     } else {
       const timer = setTimeout(advance, Math.max(1800, step.say.length * 55));
       cancelRef.current = () => clearTimeout(timer);

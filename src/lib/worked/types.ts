@@ -42,14 +42,15 @@ export interface Step {
   focus?: { row: number; col: number }[];
 }
 
-/** A problem a worked example can solve, as saved with an answer. */
-export type WorkedProblem =
+/** A problem a worked example can solve, as saved with an answer (with the narration language, when not English). */
+export type WorkedProblem = (
   | { kind: "division"; dividend: string; divisor: string; decimals: boolean }
   | { kind: "lcm-hcf"; numbers: number[]; want: "lcm" | "hcf" | "both" }
   | { kind: "column"; op: "add" | "subtract"; numbers: string[] }
   | { kind: "multiplication"; a: string; b: string }
   | { kind: "fraction"; op: "simplify" | "add" | "subtract"; fractions: [number, number][] }
-  | { kind: "convert"; value: string; from: string; to: string };
+  | { kind: "convert"; value: string; from: string; to: string }
+) & { language?: "hi" | "mr" };
 
 export interface WorkedExample {
   problem: WorkedProblem;

@@ -4,9 +4,16 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { userMessage } from "@/lib/errors";
 import { solve, workedToMarkdown } from "@/lib/worked/detect";
 import type { WorkedProblem } from "@/lib/worked/types";
+import { savedLanguage, isNarration } from "@/lib/worked/say";
 
 /** Reads a problem from the request; null unless it is exactly one of the supported shapes. */
 function parseProblem(raw: unknown): WorkedProblem | null {
+  const problem = parseShape(raw);
+  const language = (raw as { language?: unknown } | null)?.language;
+  return problem && { ...problem, ...savedLanguage(isNarration(language) ? language : undefined) };
+}
+
+function parseShape(raw: unknown): WorkedProblem | null {
   const p = raw as Partial<Record<string, unknown>> | null;
   if (p?.kind === "division" && typeof p.dividend === "string" && typeof p.divisor === "string") {
     return { kind: "division", dividend: p.dividend, divisor: p.divisor, decimals: p.decimals === true };

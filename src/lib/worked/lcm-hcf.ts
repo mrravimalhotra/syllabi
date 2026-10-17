@@ -3,6 +3,7 @@
 // primes that divide at least one number, carrying the others down.
 
 import type { Cell, Step, VLine, Rule, WorkedExample } from "@/lib/worked/types";
+import { phrases, savedLanguage, type Narration, type Phrases } from "@/lib/worked/say";
 
 const MAX_NUMBERS = 6;
 const MAX_VALUE = 1_000_000;
@@ -37,7 +38,7 @@ interface Ladder {
 }
 
 /** One ladder starting at `top`; columns: 0 = prime, 1.. = the numbers. */
-function ladder(numbers: number[], all: boolean, top: number, what: "HCF" | "LCM"): Ladder {
+function ladder(numbers: number[], all: boolean, top: number, what: "HCF" | "LCM", t: Phrases): Ladder {
   const steps: Step[] = [];
   const primes: number[] = [];
   const rules: Rule[] = [];
@@ -48,12 +49,9 @@ function ladder(numbers: number[], all: boolean, top: number, what: "HCF" | "LCM
   const n = numbers.length;
 
   steps.push({
-    say:
-      what === "HCF"
-        ? `For the HCF, write the numbers in a row and divide by prime numbers that divide every one of them.`
-        : `For the LCM, write the numbers in a row and divide by prime numbers that divide at least one of them. A number that can't be divided is carried down as it is.`,
+    say: what === "HCF" ? t.hcfIntro : t.lcmIntro,
     cells: [
-      { row: top, col: 0, text: what === "HCF" ? "HCF:" : "LCM:", tone: "result" },
+      { row: top, col: 0, text: `${t[what]}:`, tone: "result" },
       ...current.map((v, i) => ({ row, col: i + 1, text: String(v), tone: "given" as const })),
     ],
   });
@@ -66,10 +64,7 @@ function ladder(numbers: number[], all: boolean, top: number, what: "HCF" | "LCM
     const carried = current.filter((v) => v % p !== 0);
     primes.push(p);
     steps.push({
-      say:
-        `${p} divides ${list(divided)}.` +
-        (carried.length ? ` ${list(carried)} ${carried.length === 1 ? "is" : "are"} not divisible by ${p}, so carry ${carried.length === 1 ? "it" : "them"} down.` : "") +
-        ` Write the results in the next row.`,
+      say: t.ladderStep(p, divided, carried),
       cells: [
         { row, col: 0, text: String(p), tone: "divisor" },
         ...next.map((v, i) => ({
@@ -89,12 +84,12 @@ function ladder(numbers: number[], all: boolean, top: number, what: "HCF" | "LCM
 
   if (what === "HCF" && current.some((v) => v !== 1)) {
     steps.push({
-      say: `No prime number divides all of ${list(current)}, so we stop here.`,
+      say: t.hcfStop(current),
       focus: current.map((_, i) => ({ row, col: i + 1 })),
     });
   }
   if (what === "LCM") {
-    steps.push({ say: "Every number has become 1, so we stop.", focus: current.map((_, i) => ({ row, col: i + 1 })) });
+    steps.push({ say: t.lcmStop, focus: current.map((_, i) => ({ row, col: i + 1 })) });
   }
 
   const cells = steps.flatMap((s) => s.cells ?? []);
@@ -105,12 +100,8 @@ function ladder(numbers: number[], all: boolean, top: number, what: "HCF" | "LCM
   return { cells, rules, vlines, steps, primes, rows: row - top + 1 };
 }
 
-function list(values: number[]): string {
-  if (values.length <= 1) return String(values[0] ?? "");
-  return `${values.slice(0, -1).join(", ")} and ${values[values.length - 1]}`;
-}
-
-export function lcmHcf(numbersIn: number[], want: "lcm" | "hcf" | "both"): WorkedExample | null {
+export function lcmHcf(numbersIn: number[], want: "lcm" | "hcf" | "both", language?: Narration): WorkedExample | null {
+  const t = phrases(language);
   const numbers = numbersIn.filter((n) => Number.isInteger(n));
   if (numbers.length < 2 || numbers.length > MAX_NUMBERS) return null;
   if (numbers.some((n) => n < 1 || n > MAX_VALUE)) return null;
@@ -122,37 +113,33 @@ export function lcmHcf(numbersIn: number[], want: "lcm" | "hcf" | "both"): Worke
   const lcmValue = numbers.reduce((a, b) => (a / gcd(a, b)) * b);
 
   if (want !== "lcm") {
-    const h = ladder(numbers, true, top, "HCF");
+    const h = ladder(numbers, true, top, "HCF", t);
     steps.push(...h.steps);
     const sayValue =
-      h.primes.length === 0
-        ? `No prime number divides all of them, so the HCF is 1.`
-        : `Multiply the prime numbers on the left: ${h.primes.join(" × ")} = ${hcfValue}. So the HCF is ${hcfValue}.`;
-    steps.push({ say: sayValue, cells: [{ row: top + h.rows, col: 0, text: `HCF = ${hcfValue}`, tone: "result" }] });
-    answers.push(`HCF of ${list(numbers)} = ${hcfValue}`);
+      h.primes.length === 0 ? t.hcfNone : t.hcfValue(h.primes, hcfValue);
+    steps.push({ say: sayValue, cells: [{ row: top + h.rows, col: 0, text: `${t.HCF} = ${hcfValue}`, tone: "result" }] });
+    answers.push(`${t.ofNumbers(t.HCF, numbers)} = ${hcfValue}`);
     top += h.rows + 2;
   }
   if (want !== "hcf") {
-    const l = ladder(numbers, false, top, "LCM");
+    const l = ladder(numbers, false, top, "LCM", t);
     steps.push(...l.steps);
     steps.push({
-      say: `Multiply all the prime numbers on the left: ${l.primes.join(" × ")} = ${lcmValue}. So the LCM is ${lcmValue}.`,
-      cells: [{ row: top + l.rows, col: 0, text: `LCM = ${lcmValue}`, tone: "result" }],
+      say: t.lcmValue(l.primes, lcmValue),
+      cells: [{ row: top + l.rows, col: 0, text: `${t.LCM} = ${lcmValue}`, tone: "result" }],
     });
-    answers.push(`LCM of ${list(numbers)} = ${lcmValue}`);
+    answers.push(`${t.ofNumbers(t.LCM, numbers)} = ${lcmValue}`);
     top += l.rows + 1;
   }
   if (want === "both" && numbers.length === 2) {
-    steps.push({
-      say: `Check: for two numbers, HCF × LCM equals their product. ${hcfValue} × ${lcmValue} = ${hcfValue * lcmValue}, and ${numbers[0]} × ${numbers[1]} = ${numbers[0] * numbers[1]}. Correct!`,
-    });
+    steps.push({ say: t.hcfLcmCheck(hcfValue, lcmValue, numbers[0], numbers[1]) });
   }
 
   const allCells = steps.flatMap((s) => s.cells ?? []);
   const widest = Math.max(...allCells.filter((c) => c.col > 0).map((c) => c.text.length), 2);
-  const title = want === "both" ? `HCF and LCM of ${list(numbers)}` : `${want.toUpperCase()} of ${list(numbers)}`;
+  const title = want === "both" ? t.hcfAndLcmOf(numbers) : t.ofNumbers(want === "hcf" ? t.HCF : t.LCM, numbers);
   return {
-    problem: { kind: "lcm-hcf", numbers, want },
+    problem: { kind: "lcm-hcf", numbers, want, ...savedLanguage(language) },
     title,
     rows: Math.max(...allCells.map((c) => c.row)) + 1,
     cols: numbers.length + 1,
