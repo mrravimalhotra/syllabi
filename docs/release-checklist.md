@@ -42,3 +42,6 @@ Tick each one and note anything odd. Use your phone for the starred (★) checks
 | T-19 ★ | Phone in dark mode: type in any field | Text clearly visible |
 | T-20 | Admin → LLM Settings: change a model and generate again | Works with the new model |
 | T-21 | Browser DevTools console on each page | No Content-Security-Policy reports (then CSP can be enforced) |
+| T-22 | My books: upload a Word (.docx) worksheet | Indexed as text pages; quota barely moves (no page reading) |
+| T-23 | Sample paper, Total marks 80, for a chapter you uploaded | Sections A–D with marks and word limits, tagged questions, marks add up to 80, answer key |
+| T-24 | Step-by-step solution: "Answer all questions in this worksheet" with a worksheet photo or upload | Every question answered in order, each sized to its marks |
