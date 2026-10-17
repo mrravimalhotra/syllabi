@@ -9,14 +9,16 @@ import type { CompletionImage } from "@/lib/llm/types";
 import type { GenerationTaskType } from "@/types/database";
 import { userMessage } from "@/lib/errors";
 
-const MAX_PHOTOS = 3;
+const MAX_PHOTOS = 12;
+// Text of attached Word files, sent with the question.
+const MAX_ATTACHED_TEXT_CHARS = 20_000;
 // Base64 characters per request across all photos — keeps the body well under
 // Vercel's ~4.5 MB request limit. The browser downscales photos before sending.
 const MAX_PHOTO_BASE64_CHARS = 3_000_000;
 const PHOTO_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 const DEFAULT_PHOTO_PROMPT: Record<GenerationTaskType, string> = {
-  solution: "Solve the question(s) in the attached photo step by step.",
+  solution: "Solve the question(s) in the attached photo or file step by step.",
   notes: "Make revision notes on the topic shown in the attached photo.",
   sample_paper: "Make a sample paper on the topic shown in the attached photo.",
   ad_hoc: "Explain what is shown in the attached photo.",
@@ -56,10 +58,15 @@ export function createGenerationRoute(taskType: GenerationTaskType) {
     if (typeof photos === "string") {
       return NextResponse.json({ error: photos }, { status: 400 });
     }
-    if (!typedPrompt && photos.length === 0) {
-      return NextResponse.json({ error: "Type a question or attach a photo" }, { status: 400 });
+    const attachedText =
+      typeof body?.attachedText === "string" ? body.attachedText.trim().slice(0, MAX_ATTACHED_TEXT_CHARS) : "";
+    if (!typedPrompt && photos.length === 0 && !attachedText) {
+      return NextResponse.json({ error: "Type a question or attach a photo or file" }, { status: 400 });
     }
-    const prompt = typedPrompt || DEFAULT_PHOTO_PROMPT[taskType];
+    const ask = typedPrompt || DEFAULT_PHOTO_PROMPT[taskType];
+    // The attached file's text (e.g. a worksheet's questions) travels with the
+    // request, so each question in it is also searched for separately.
+    const prompt = attachedText ? `${ask}\n\n---\n${attachedText}` : ask;
 
     // Optional: which of the user's own books to search. Retrieval is always
     // limited to the caller's library, so ids of other users' books match nothing.
@@ -70,8 +77,14 @@ export function createGenerationRoute(taskType: GenerationTaskType) {
     try {
       const result = await runGeneration({ student, taskType, prompt, documentIds, photos });
 
-      const oneLine = prompt.replace(/\s+/g, " ");
-      const title = !typedPrompt ? "Photo question" : oneLine.length > 80 ? `${oneLine.slice(0, 77)}...` : oneLine;
+      const oneLine = typedPrompt.replace(/\s+/g, " ");
+      const title = !typedPrompt
+        ? attachedText
+          ? "Attached worksheet"
+          : "Photo question"
+        : oneLine.length > 80
+          ? `${oneLine.slice(0, 77)}...`
+          : oneLine;
       const pdfBuffer = await renderGenerationPdf({
         taskType,
         title,

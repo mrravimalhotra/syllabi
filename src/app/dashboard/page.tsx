@@ -6,7 +6,11 @@ import { downscaleImageFile, type DownscaledImage } from "@/lib/downscale-image"
 import { Markdown } from "@/components/Markdown";
 import type { GenerationTaskType, Student } from "@/types/database";
 
-const MAX_PHOTOS = 3;
+// Attachments to a question: up to this many images (photos, PDF pages, Word
+// pictures) within the request size budget, plus the text of Word files.
+const MAX_PHOTOS = 12;
+const MAX_ATTACHMENT_BASE64_CHARS = 3_000_000;
+const MAX_ATTACHED_TEXT_CHARS = 20_000;
 
 interface MeResponse {
   student: Student;
@@ -61,6 +65,8 @@ export default function DashboardPage() {
   // Photos attached to the question (e.g. a homework page), downscaled in the
   // browser so they fit the request size limit.
   const [photos, setPhotos] = useState<DownscaledImage[]>([]);
+  // Word files attached to the question: their text goes with the question.
+  const [attachedDocs, setAttachedDocs] = useState<{ name: string; text: string }[]>([]);
 
   // The user's own books; answers search only the ones ticked (all by default).
   const [books, setBooks] = useState<Book[]>([]);
@@ -101,23 +107,52 @@ export default function DashboardPage() {
     });
   }
 
-  async function addPhotos(files: FileList | null) {
+  async function addAttachments(files: FileList | null) {
     if (!files) return;
     setError(null);
+    const images: DownscaledImage[] = [];
+    const docs: { name: string; text: string }[] = [];
+    const notes: string[] = [];
     try {
-      const room = MAX_PHOTOS - photos.length;
-      const picked = Array.from(files).slice(0, room);
-      const scaled = await Promise.all(picked.map(downscaleImageFile));
-      setPhotos((prev) => [...prev, ...scaled].slice(0, MAX_PHOTOS));
-      if (files.length > room) setError(`You can attach up to ${MAX_PHOTOS} photos.`);
+      for (const file of Array.from(files)) {
+        const name = file.name.toLowerCase();
+        if (name.endsWith(".docx")) {
+          const { readDocx } = await import("@/lib/docx-to-text");
+          const content = await readDocx(file);
+          docs.push({ name: file.name, text: content.textPages.join("\n\n") });
+          images.push(...content.pictures);
+          if (content.skippedPictures.length) notes.push(`${file.name}: some pictures can't be read; save it as PDF if they matter.`);
+        } else if (file.type === "application/pdf") {
+          const { pdfToPageImages } = await import("@/lib/pdf-to-images");
+          images.push(...(await pdfToPageImages(file, MAX_PHOTOS)));
+        } else {
+          images.push(await downscaleImageFile(file));
+        }
+      }
     } catch {
-      setError("Couldn't read that photo. Try a JPEG or PNG.");
+      setError("Couldn't read one of those files. Use photos (JPEG, PNG), PDF or Word (.docx).");
+      return;
     }
+
+    // Keep within the image count and the request size budget.
+    const kept: DownscaledImage[] = [...photos];
+    let size = kept.reduce((sum, p) => sum + p.imageBase64.length, 0);
+    let dropped = 0;
+    for (const image of images) {
+      if (kept.length < MAX_PHOTOS && size + image.imageBase64.length <= MAX_ATTACHMENT_BASE64_CHARS) {
+        kept.push(image);
+        size += image.imageBase64.length;
+      } else dropped++;
+    }
+    if (dropped) notes.push(`${dropped} page(s) or picture(s) left out: up to ${MAX_PHOTOS} images per question.`);
+    setPhotos(kept);
+    setAttachedDocs((prev) => [...prev, ...docs]);
+    if (notes.length) setError(notes.join(" "));
   }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!prompt.trim() && photos.length === 0) return;
+    if (!prompt.trim() && photos.length === 0 && attachedDocs.length === 0) return;
     setLoading(true);
     setError(null);
     setResult(null);
@@ -130,12 +165,17 @@ export default function DashboardPage() {
           prompt: tab === "sample_paper" ? `${prompt.trim()}\n\nTotal marks: ${totalMarks}`.trim() : prompt.trim(),
           documentIds: activeBookIds,
           photos: photos.map((p) => ({ data: p.imageBase64, mimeType: p.mimeType })),
+          attachedText: attachedDocs
+            .map((d) => `Attached file "${d.name}":\n${d.text}`)
+            .join("\n\n")
+            .slice(0, MAX_ATTACHED_TEXT_CHARS),
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Generation failed");
       setResult(data);
       setPhotos([]);
+      setAttachedDocs([]);
       await loadMe();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Generation failed");
@@ -243,22 +283,35 @@ export default function DashboardPage() {
               </button>
             </div>
           ))}
+          {attachedDocs.map((d, i) => (
+            <span key={d.name + i} className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-600">
+              {d.name}
+              <button
+                type="button"
+                onClick={() => setAttachedDocs((prev) => prev.filter((_, j) => j !== i))}
+                className="px-1 text-slate-500"
+                aria-label={`Remove ${d.name}`}
+              >
+                ×
+              </button>
+            </span>
+          ))}
           {photos.length < MAX_PHOTOS && (
             <label className="inline-flex min-h-11 cursor-pointer items-center rounded-md border border-dashed border-slate-300 px-3 py-2 text-xs font-medium text-slate-600 hover:border-slate-500 sm:min-h-0">
-              + Add photo
+              + Add photo or file
               <input
                 type="file"
-                accept="image/jpeg,image/png,image/webp"
+                accept="image/jpeg,image/png,image/webp,application/pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 multiple
                 className="hidden"
                 onChange={(e) => {
-                  addPhotos(e.target.files);
+                  addAttachments(e.target.files);
                   e.target.value = "";
                 }}
               />
             </label>
           )}
-          <span className="text-xs text-slate-400">Optional: a photo of the question or page (up to {MAX_PHOTOS}).</span>
+          <span className="text-xs text-slate-400">Optional: photos, a PDF or a Word file of the question, worksheet or project brief.</span>
         </div>
         <button
           type="submit"

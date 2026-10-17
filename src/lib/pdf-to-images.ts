@@ -15,6 +15,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 // payloads on multi-page, full-color scanned textbooks).
 const RENDER_SCALE = 1.5;
 const JPEG_QUALITY = 0.82;
+const MAX_DIMENSION = 1800; // px, longest side; same cap as photos (downscale-image.ts)
 
 export interface RasterizedPage {
   imageBase64: string;
@@ -26,14 +27,18 @@ export interface RasterizedPage {
  * upload can feed the same per-page pipeline as directly-selected page images
  * — the server and ingestion code never need to know a PDF was involved.
  */
-export async function pdfToPageImages(file: File): Promise<RasterizedPage[]> {
+export async function pdfToPageImages(file: File, maxPages = Infinity): Promise<RasterizedPage[]> {
   const buffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
   const pages: RasterizedPage[] = [];
 
-  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
+  for (let pageNumber = 1; pageNumber <= Math.min(pdf.numPages, maxPages); pageNumber++) {
     const page = await pdf.getPage(pageNumber);
-    const viewport = page.getViewport({ scale: RENDER_SCALE });
+    // Large-format or high-resolution PDFs would otherwise render huge page
+    // images; cap the longest side like photos (enough for AI reading).
+    const natural = page.getViewport({ scale: 1 });
+    const scale = Math.min(RENDER_SCALE, MAX_DIMENSION / Math.max(natural.width, natural.height));
+    const viewport = page.getViewport({ scale });
 
     const canvas = document.createElement("canvas");
     canvas.width = viewport.width;

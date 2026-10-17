@@ -25,6 +25,8 @@ interface PendingPage {
   mimeType: string;
   /** Text pages, read in the browser from Word files. */
   text?: string;
+  /** For pictures from Word files: where the picture was, for the page reader. */
+  hint?: string;
   sourceType: SourceType;
   /** Original file name, shown so pages from a multi-page PDF are still traceable to their source. */
   origin: string;
@@ -117,9 +119,26 @@ export default function LibraryPage() {
       const newPages: PendingPage[] = [];
       for (const file of Array.from(fileList)) {
         if (file.name.toLowerCase().endsWith(".docx")) {
-          // Word files: read the text right here; no page images needed.
-          const { docxToTextPages } = await import("@/lib/docx-to-text");
-          const textPages = await docxToTextPages(file);
+          // Word files: read the text right here (no page reading needed), and
+          // keep each picture as an image page with a note of where it was.
+          const { readDocx } = await import("@/lib/docx-to-text");
+          const { textPages, pictures, skippedPictures } = await readDocx(file);
+          if (skippedPictures.length > 0) {
+            setError(
+              `${file.name}: ${skippedPictures.length} picture(s) are in a format that can't be read. ` +
+                "If they matter, save the file as PDF in Word and upload the PDF instead."
+            );
+          }
+          pictures.forEach((picture, i) =>
+            newPages.push({
+              id: `${file.name}-pic-${i}-${Date.now()}`,
+              imageBase64: picture.imageBase64,
+              mimeType: picture.mimeType,
+              hint: picture.hint,
+              sourceType: defaultSourceType,
+              origin: `${file.name} (picture ${i + 1})`,
+            })
+          );
           textPages.forEach((text, i) =>
             newPages.push({
               id: `${file.name}-${i}-${Date.now()}`,
@@ -234,8 +253,8 @@ export default function LibraryPage() {
               grade: grade.trim(),
               rightsConfirmed,
               sourceType: group[0].sourceType,
-              pages: batches[i].map(({ imageBase64, mimeType, text }) =>
-                text !== undefined ? { text } : { imageBase64, mimeType }
+              pages: batches[i].map(({ imageBase64, mimeType, text, hint }) =>
+                text !== undefined ? { text } : { imageBase64, mimeType, hint }
               ),
               documentId,
               startPageNumber: pageOffset,
@@ -344,8 +363,8 @@ export default function LibraryPage() {
               className="block w-full cursor-pointer text-sm text-slate-600 file:mr-4 file:cursor-pointer file:rounded-md file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-slate-700"
             />
             <p className="mt-2 text-xs text-slate-400">
-              Photos (JPG, PNG), PDF or Word (.docx) — up to {MAX_PAGES} pages total. Word files are read as text
-              (pictures inside them are skipped).
+              Photos (JPG, PNG), PDF or Word (.docx) — up to {MAX_PAGES} pages total. Word files are read as text,
+              and their pictures are read too.
             </p>
             {processingFiles && <p className="mt-2 text-xs text-slate-500">Processing pages...</p>}
           </div>
