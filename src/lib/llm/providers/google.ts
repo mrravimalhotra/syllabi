@@ -63,17 +63,42 @@ async function completeWith(req: CompletionRequest & { model: string }): Promise
   // Google Search is a bonus, not a requirement: a key without search quota
   // (the free tier often has none) gets "429 quota exceeded" for searched
   // calls only. Then answer without search rather than fail the request.
+  // With onText set, the answer is streamed: each piece is passed on as it
+  // arrives, and the complete response is returned at the end as usual.
+  let emitted = false;
+  const generate = async (model: ReturnType<typeof modelWith>) => {
+    if (!req.onText) return model.generateContent(request);
+    if (emitted) {
+      req.onRestart?.();
+      emitted = false;
+    }
+    const streamed = await model.generateContentStream(request);
+    for await (const chunk of streamed.stream) {
+      let piece = "";
+      try {
+        piece = chunk.text();
+      } catch {
+        // A blocked or empty piece has no text; the final response explains why.
+      }
+      if (piece) {
+        emitted = true;
+        req.onText(piece);
+      }
+    }
+    return { response: await streamed.response };
+  };
+
   let searchSkipped = false;
   let result;
   if (req.allowSearchGrounding) {
     try {
-      result = await modelWith(true).generateContent(request);
+      result = await generate(modelWith(true));
     } catch (err) {
       console.warn("[google] search-grounded call failed; answering without search:", err instanceof Error ? err.message : err);
       searchSkipped = true;
     }
   }
-  result ??= await withNetworkRetry(() => modelWith(false).generateContent(request));
+  result ??= await withNetworkRetry(() => generate(modelWith(false)));
 
   const response = result.response;
   const usage = response.usageMetadata;
@@ -129,6 +154,7 @@ export const googleAdapter: LlmProviderAdapter = {
       const message = err instanceof Error ? err.message : String(err);
       const other = standInFor(req.model);
       if (!other || err instanceof BlockedReplyError || !(DAILY_LIMIT.test(message) || OUT_OF_CAPACITY.test(message))) throw err;
+      req.onRestart?.();
       console.warn(`[google] ${req.model} can't answer now (${DAILY_LIMIT.test(message) ? "daily allowance used up" : "busy"}); using ${other}`);
       try {
         return await completeWith({ ...req, model: other });

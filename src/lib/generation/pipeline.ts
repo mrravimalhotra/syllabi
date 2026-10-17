@@ -25,6 +25,10 @@ export interface GenerationInput {
   photos?: CompletionImage[];
   /** Language to answer in; "auto" follows the book and question. */
   language?: AnswerLanguage;
+  /** Receives the first draft of the answer piece by piece, so a screen can show it as it is written. */
+  onText?: (delta: string) => void;
+  /** The draft so far is discarded (the answer starts again). */
+  onRestart?: () => void;
 }
 
 export interface GenerationOutput {
@@ -73,6 +77,8 @@ export async function runGeneration({
   documentIds,
   photos = [],
   language = "auto",
+  onText,
+  onRestart,
 }: GenerationInput): Promise<GenerationOutput> {
   // The allowance check runs alongside the (cheap) photo reading and search
   // below instead of before them, and still stops the request before the
@@ -119,7 +125,7 @@ export async function runGeneration({
     allowSearchGrounding: retrieval.coverageLow,
     temperature: TEMPERATURE[taskType],
   };
-  let result = await generateCompletion(request);
+  let result = await generateCompletion({ ...request, onText, onRestart });
   await recordTokenUsage({
     studentId: student.id,
     taskType,

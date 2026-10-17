@@ -36,6 +36,14 @@ export interface CompletionRequest {
    * so callers must still parse defensively.
    */
   jsonSchema?: Record<string, unknown>;
+  /**
+   * Called with each piece of the answer as it is written, so a screen can show
+   * it growing. Only providers that can stream use it; the final result is
+   * always complete, so ignoring this is safe.
+   */
+  onText?: (delta: string) => void;
+  /** Called when text already sent through onText is discarded (a stand-in service starts the answer again). */
+  onRestart?: () => void;
 }
 
 export interface CompletionResult {

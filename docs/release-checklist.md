@@ -92,3 +92,5 @@ Tick each one and note anything odd. Use your phone for the starred (★) checks
 | T-65 | Re-read a book's failed pages ("Try again") when your monthly allowance is used up | Clear 429 message about the allowance, not a spinner |
 | T-66 | Admin → Health | All lines green; "Background page reading" shows the timer and the page counts |
 | T-67 ★ | Open the same answer's PDF twice, then rename the answer and open it again | Second open is much faster; after a rename the new title appears; every page of the app still loads when signed in and shows the sign-in page when signed out |
+| T-68 ★ | Ask a question (Solve or Ask tab) on the live app | Words appear within a few seconds and grow; when finished the draft is replaced by the checked answer with its checks; stopping mid-way shows the "You stopped waiting" note |
+| T-69 | Admin → Health, scroll to "Recent problems" after breaking something (e.g. open a bad link) | Lists the problem with time and place; "Nothing logged" when clean |

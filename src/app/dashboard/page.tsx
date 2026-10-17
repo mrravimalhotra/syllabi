@@ -1,136 +1,42 @@
 "use client";
 
 import Link from "next/link";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { downscaleImageFile, imageFingerprint, type DownscaledImage } from "@/lib/downscale-image";
-import { AnswerView, type Answer } from "@/components/AnswerView";
+import { AnswerView } from "@/components/AnswerView";
 import { StudyPackView } from "@/components/study-pack/StudyPackView";
 import { WorkedExampleView } from "@/components/worked/WorkedExampleView";
 import { findProblems, pureProblem, solve } from "@/lib/worked/detect";
 import type { WorkedExample } from "@/lib/worked/types";
-import type { StudyPack } from "@/lib/study-pack/types";
 import { LANGUAGE_NAMES, type AnswerLanguage } from "@/lib/generation/language";
 import { fileReadError } from "@/lib/file-errors";
+import { readAnswerStream } from "@/lib/answer-stream";
+import {
+  ACCEPTED_FILES,
+  MAX_ATTACHED_TEXT_CHARS,
+  MAX_ATTACHMENT_BASE64_CHARS,
+  MAX_PHOTOS,
+  PACK_WAIT_STEPS,
+  ROUTE_BY_TASK,
+  TABS,
+  WAIT_STEPS,
+  type Book,
+  type GenerationResult,
+  type MeResponse,
+} from "@/app/dashboard/_ask/constants";
+import { GeneratingCard, Thumb } from "@/app/dashboard/_ask/Parts";
 import { OFFLINE_MESSAGE, failedRequestMessage } from "@/lib/http-errors";
 import { formatDate } from "@/lib/format";
 import {
   ArrowRightIcon,
   BookIcon,
-  ChatIcon,
-  CheckIcon,
-  ClipboardIcon,
   DocumentIcon,
-  LayersIcon,
-  ListCheckIcon,
-  NotesIcon,
   PaperclipIcon,
   SparklesIcon,
   XIcon,
 } from "@/components/icons";
-import { Alert, Meter, Skeleton, Spinner, button, card, cx, input, link } from "@/components/ui";
-import type { GenerationTaskType, Student } from "@/types/database";
-
-// Attachments to a question: up to this many images (photos, PDF pages, Word
-// pictures) within the request size budget, plus the text of Word files.
-const MAX_PHOTOS = 12;
-const MAX_ATTACHMENT_BASE64_CHARS = 3_000_000;
-const MAX_ATTACHED_TEXT_CHARS = 20_000;
-const ACCEPTED_FILES =
-  "image/jpeg,image/png,image/webp,application/pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-
-interface MeResponse {
-  student: Student;
-  quota: { used: number; quota: number; remaining: number; overQuota: boolean };
-}
-
-interface Book {
-  id: string;
-  title: string;
-  subject: string | null;
-  grade: string | null;
-  status: "processing" | "ready" | "failed";
-}
-
-type GenerationResult = Answer & {
-  id: string | null;
-  pack?: StudyPack;
-  /** Set when the saved answer to the same question was returned (no AI used). */
-  reusedFrom?: string;
-};
-
-const TABS: {
-  value: GenerationTaskType;
-  label: string;
-  description: string;
-  icon: typeof ListCheckIcon;
-  placeholder: string;
-  examples: string[];
-}[] = [
-  {
-    value: "solution",
-    label: "Solve",
-    description: "Step by step",
-    icon: ListCheckIcon,
-    placeholder: "Type or paste the question, or attach a photo or PDF of the worksheet",
-    examples: ["Solve all the questions in the attached exercise", "Explain how to find the LCM of 12, 18 and 30"],
-  },
-  {
-    value: "notes",
-    label: "Notes",
-    description: "Revision notes",
-    icon: NotesIcon,
-    placeholder: "Which chapter or topic should the notes cover?",
-    examples: ["Revision notes for the chapter on Motion", "Key terms and definitions from the Internet chapter"],
-  },
-  {
-    value: "sample_paper",
-    label: "Sample paper",
-    description: "Practice tests",
-    icon: ClipboardIcon,
-    placeholder: "Which chapters or topics should the paper cover?",
-    examples: ["Half-yearly paper on chapters 1 to 4", "A short class test on fractions"],
-  },
-  {
-    value: "ad_hoc",
-    label: "Ask",
-    description: "Any question",
-    icon: ChatIcon,
-    placeholder: "Ask any study question",
-    examples: ["Ideas for a Class 6 science project on plants", "How should we plan revision for next week's test?"],
-  },
-  {
-    value: "study_pack",
-    label: "Study pack",
-    description: "A whole chapter",
-    icon: LayersIcon,
-    placeholder: "Optional: what to focus on, for example “keep the language simple” or “extra practice on dates”",
-    examples: [],
-  },
-];
-
-const ROUTE_BY_TASK: Record<GenerationTaskType, string> = {
-  solution: "/api/generate/solution",
-  notes: "/api/generate/notes",
-  sample_paper: "/api/generate/sample-paper",
-  ad_hoc: "/api/generate/ad-hoc",
-  study_pack: "/api/generate/study-pack",
-};
-
-// What the person sees while waiting; the steps move on with time, since the
-// server answers in one go.
-const PACK_WAIT_STEPS = [
-  { after: 0, text: "Reading the chapter" },
-  { after: 6, text: "Writing the walkthrough, answers and practice test" },
-  { after: 50, text: "Checking every quote against the book" },
-  { after: 90, text: "Still working: a long chapter can take two or three minutes" },
-];
-
-const WAIT_STEPS = [
-  { after: 0, text: "Reading your question and attachments" },
-  { after: 4, text: "Finding the right pages in your books" },
-  { after: 10, text: "Writing the answer" },
-  { after: 45, text: "Still writing: a whole worksheet or paper can take a minute or two" },
-];
+import { Alert, Meter, Spinner, button, cx, input, link } from "@/components/ui";
+import type { GenerationTaskType } from "@/types/database";
 
 export default function DashboardPage() {
   const [me, setMe] = useState<MeResponse | null>(null);
@@ -167,6 +73,10 @@ export default function DashboardPage() {
 
   const abortRef = useRef<AbortController | null>(null);
   const busyRef = useRef(false);
+  // The answer as written so far (streamed), shown while it is still being made.
+  const [draft, setDraft] = useState("");
+  const draftRef = useRef("");
+  const draftFrame = useRef<number | null>(null);
   const lastRequestRef = useRef<{ route: string; body: Record<string, unknown>; task: GenerationTaskType } | null>(null);
   const resultRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -352,18 +262,41 @@ export default function DashboardPage() {
     setWorked(null);
     setOpenWorked(null);
     lastRequestRef.current = { route, body, task };
+    draftRef.current = "";
+    setDraft("");
     const controller = new AbortController();
     abortRef.current = controller;
 
     try {
+      // Answers (not study packs) are streamed, so the first words show within seconds.
+      const streaming = task !== "study_pack";
       const res = await fetch(route, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         signal: controller.signal,
-        body: JSON.stringify(body),
+        body: JSON.stringify(streaming ? { ...body, stream: true } : body),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? failedRequestMessage(res.status, "make your answer"));
+      let data;
+      if (res.ok && res.body && (res.headers.get("content-type") ?? "").includes("application/x-ndjson")) {
+        data = await readAnswerStream<GenerationResult>(res.body, {
+          onText: (delta) => {
+            draftRef.current += delta;
+            if (draftFrame.current === null) {
+              draftFrame.current = requestAnimationFrame(() => {
+                draftFrame.current = null;
+                setDraft(draftRef.current);
+              });
+            }
+          },
+          onReset: () => {
+            draftRef.current = "";
+            setDraft("");
+          },
+        });
+      } else {
+        data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error ?? failedRequestMessage(res.status, "make your answer"));
+      }
       setLoading(false);
       setResult(data);
       setPhotos([]);
@@ -385,6 +318,10 @@ export default function DashboardPage() {
     } finally {
       abortRef.current = null;
       busyRef.current = false;
+      if (draftFrame.current !== null) cancelAnimationFrame(draftFrame.current);
+      draftFrame.current = null;
+      draftRef.current = "";
+      setDraft("");
       setLoading(false);
     }
   }
@@ -786,7 +723,7 @@ export default function DashboardPage() {
       )}
 
       {loading && (
-        <GeneratingCard steps={tab === "study_pack" ? PACK_WAIT_STEPS : WAIT_STEPS} onStop={() => abortRef.current?.abort()} />
+        <GeneratingCard steps={tab === "study_pack" ? PACK_WAIT_STEPS : WAIT_STEPS} draft={draft} onStop={() => abortRef.current?.abort()} />
       )}
 
       {worked && (
@@ -861,61 +798,3 @@ export default function DashboardPage() {
 }
 
 /** One attachment preview. Memoised so typing doesn't rebuild large image strings. */
-const Thumb = memo(function Thumb({ image, alt }: { image: DownscaledImage; alt: string }) {
-  return (
-    // eslint-disable-next-line @next/next/no-img-element -- local data URL preview
-    <img
-      src={`data:${image.mimeType};base64,${image.imageBase64}`}
-      alt={alt}
-      decoding="async"
-      className="h-16 w-auto max-w-28 rounded-lg border border-slate-200 object-cover"
-    />
-  );
-});
-
-/** Shown while an answer is being written: progress steps and a placeholder answer. */
-function GeneratingCard({ steps, onStop }: { steps: { after: number; text: string }[]; onStop: () => void }) {
-  const [seconds, setSeconds] = useState(0);
-  useEffect(() => {
-    const timer = setInterval(() => setSeconds((s) => s + 1), 1000);
-    return () => clearInterval(timer);
-  }, []);
-  const step = steps.filter((s) => seconds >= s.after).length - 1;
-
-  return (
-    <div className={cx(card, "animate-fade-in space-y-5 p-5 sm:p-6 print:hidden")} role="status" aria-live="polite">
-      <div className="flex items-start justify-between gap-3">
-        <ol className="space-y-2.5">
-          {steps.slice(0, 3).map((s, i) => {
-            const done = i < step;
-            const current = i === Math.min(step, 2);
-            return (
-              <li key={s.text} className={cx("flex items-center gap-2.5 text-sm", done || current ? "text-slate-900" : "text-slate-400")}>
-                <span
-                  className={cx(
-                    "flex h-5 w-5 items-center justify-center rounded-full",
-                    done ? "bg-brand-600 text-white" : current ? "text-brand-600" : "bg-slate-100"
-                  )}
-                >
-                  {done ? <CheckIcon className="h-3.5 w-3.5" /> : current ? <Spinner className="h-4 w-4" /> : null}
-                </span>
-                {s.text}
-              </li>
-            );
-          })}
-        </ol>
-        <button type="button" onClick={onStop} className={button.small}>
-          Stop
-        </button>
-      </div>
-      {step === 3 && <p className="text-xs text-slate-500">{steps[3].text}. Keep this page open.</p>}
-      <div className="space-y-2.5">
-        <Skeleton className="h-5 w-2/3" />
-        <Skeleton className="h-3.5 w-full" />
-        <Skeleton className="h-3.5 w-11/12" />
-        <Skeleton className="h-3.5 w-4/5" />
-      </div>
-      <p className="text-xs tabular-nums text-slate-400">{seconds}s</p>
-    </div>
-  );
-}

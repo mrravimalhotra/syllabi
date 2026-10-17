@@ -13,6 +13,8 @@ import { systemInstructionsFor } from "@/lib/generation/prompts";
 import { answerKey, findReusable } from "@/lib/generation/reuse";
 import type { GeneratedDocumentRow } from "@/types/database";
 
+const GENERATE_FAILED = "Couldn't make your answer. Wait a minute and try again. If it keeps happening, tell the person who runs Syllabi.";
+
 const DEFAULT_PHOTO_PROMPT: Record<GenerationTaskType, string> = {
   solution: "Solve the question(s) in the attached photo or file step by step.",
   notes: "Make revision notes on the topic shown in the attached photo or file.",
@@ -57,7 +59,10 @@ export function createGenerationRoute(taskType: GenerationTaskType) {
     // A body that can't be read is almost always one that was too big or cut off.
     const body = await request.json().catch(() => null);
     if (body === null) {
-      return apiError(400, "Your question couldn't be read. It may be too large (try fewer or smaller attachments) or the connection dropped. Try again.");
+      return apiError(
+        400,
+        "Your question couldn't be read. It may be too large (try fewer or smaller attachments) or the connection dropped. Try again."
+      );
     }
     const typedPrompt = typeof body?.prompt === "string" ? body.prompt.trim().slice(0, MAX_PROMPT_CHARS) : "";
 
@@ -100,56 +105,87 @@ export function createGenerationRoute(taskType: GenerationTaskType) {
         if (saved) return NextResponse.json(await savedAnswerResponse(saved));
       }
 
-      const result = await runGeneration({ student, taskType, prompt, documentIds, photos, language });
-      const title = titleFor(typedPrompt, Boolean(attachedText));
+      // Everything after the cache check: make the answer, save it, describe it.
+      const produce = async (onText?: (delta: string) => void, onRestart?: () => void) => {
+        const result = await runGeneration({ student, taskType, prompt, documentIds, photos, language, onText, onRestart });
+        const title = titleFor(typedPrompt, Boolean(attachedText));
 
-      // Save the answer itself (not a PDF): it can be reopened, printed, and
-      // turned into a PDF on demand, and a PDF problem can never lose it.
-      const savedSources: SavedSource[] = result.sources.map((s) => ({
-        id: s.id,
-        document_id: s.document_id,
-        section_label: s.section_label,
-        page_number: s.page_number,
-        source_type: s.source_type,
-        image_path: s.image_path,
-        similarity: s.similarity,
-      }));
-      const admin = createAdminClient();
-      const { data: doc, error } = await admin
-        .from("generated_documents")
-        .insert({
-          student_id: student.id,
-          task_type: taskType,
+        // Save the answer itself (not a PDF): it can be reopened, printed, and
+        // turned into a PDF on demand, and a PDF problem can never lose it.
+        const savedSources: SavedSource[] = result.sources.map((s) => ({
+          id: s.id,
+          document_id: s.document_id,
+          section_label: s.section_label,
+          page_number: s.page_number,
+          source_type: s.source_type,
+          image_path: s.image_path,
+          similarity: s.similarity,
+        }));
+        const admin = createAdminClient();
+        const { data: doc, error } = await admin
+          .from("generated_documents")
+          .insert({
+            student_id: student.id,
+            task_type: taskType,
+            title,
+            content: result.text,
+            sources: savedSources,
+            used_search_grounding: result.usedSearchGrounding,
+            search_suggestions_html: result.searchSuggestionsHtml ?? null,
+            cache_key: cacheKey,
+            checks: result.checks,
+          })
+          .select("id")
+          .single();
+        // The answer is still shown even if saving it failed.
+        if (error) console.error("[generate] saving answer", error);
+
+        // Give the on-screen result the same source images the PDF embeds, so a
+        // diagram/map is visible before the PDF is even opened.
+        const sources = await withImageUrls(savedSources);
+
+        return {
+          id: doc?.id ?? null,
           title,
-          content: result.text,
-          sources: savedSources,
-          used_search_grounding: result.usedSearchGrounding,
-          search_suggestions_html: result.searchSuggestionsHtml ?? null,
-          cache_key: cacheKey,
+          text: result.text,
+          sources,
+          usedSearchGrounding: result.usedSearchGrounding,
+          searchSuggestionsHtml: result.searchSuggestionsHtml ?? null,
           checks: result.checks,
-        })
-        .select("id")
-        .single();
-      // The answer is still shown even if saving it failed.
-      if (error) console.error("[generate] saving answer", error);
+          // Made on demand from the saved answer (null if saving failed).
+          pdfUrl: doc ? `/api/documents/${doc.id}/pdf` : null,
+        };
+      };
 
-      // Give the on-screen result the same source images the PDF embeds, so a
-      // diagram/map is visible before the PDF is even opened.
-      const sources = await withImageUrls(savedSources);
+      // Streaming: the first draft is sent piece by piece as it is written (one
+      // JSON object per line), then a final "done" line with the checked answer.
+      // Errors after this point arrive as an "error" line.
+      if (body?.stream === true) {
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream<Uint8Array>({
+          async start(controller) {
+            const send = (line: Record<string, unknown>) => controller.enqueue(encoder.encode(`${JSON.stringify(line)}\n`));
+            try {
+              const payload = await produce(
+                (delta) => send({ type: "text", delta }),
+                () => send({ type: "reset" })
+              );
+              send({ type: "done", answer: payload });
+            } catch (err) {
+              const failure = errorResponse(err, `generate ${taskType}`, GENERATE_FAILED);
+              send({ type: "error", status: failure.status, ...(await failure.json()) });
+            }
+            controller.close();
+          },
+        });
+        return new Response(stream, {
+          headers: { "Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-store", "X-Accel-Buffering": "no" },
+        });
+      }
 
-      return NextResponse.json({
-        id: doc?.id ?? null,
-        title,
-        text: result.text,
-        sources,
-        usedSearchGrounding: result.usedSearchGrounding,
-        searchSuggestionsHtml: result.searchSuggestionsHtml ?? null,
-        checks: result.checks,
-        // Made on demand from the saved answer (null if saving failed).
-        pdfUrl: doc ? `/api/documents/${doc.id}/pdf` : null,
-      });
+      return NextResponse.json(await produce());
     } catch (err) {
-      return errorResponse(err, `generate ${taskType}`, "Couldn't make your answer. Wait a minute and try again. If it keeps happening, tell the person who runs Syllabi.");
+      return errorResponse(err, `generate ${taskType}`, GENERATE_FAILED);
     }
   };
 }

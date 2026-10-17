@@ -53,7 +53,8 @@ export async function generateCompletion(req: CompletionRequest): Promise<Comple
     for (const backup of BACKUPS) {
       if (backup.provider === provider || !hasKey(backup.provider) || (req.images?.length && !backup.readsImages)) continue;
       try {
-        const result = await ADAPTERS[backup.provider].generateCompletion({ ...req, model: backup.model() });
+        req.onRestart?.();
+        const result = await ADAPTERS[backup.provider].generateCompletion({ ...req, model: backup.model(), onText: undefined });
         console.warn(`[llm] ${provider} couldn't answer ${req.taskType}; ${backup.provider} (${result.model}) did`);
         return result;
       } catch (backupErr) {

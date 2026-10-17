@@ -127,6 +127,39 @@ await test("Ask: offline shows the connection message", async (page, ctx) => {
   await page.getByText(/Check your internet connection|reach Syllabi/i).first().waitFor({ timeout: 10000 });
 });
 
+const ndjson = (lines) => ({ status: 200, contentType: "application/x-ndjson; charset=utf-8", body: lines.map((l) => JSON.stringify(l)).join("\n") + "\n" });
+
+await test("Ask: a streamed answer ends with the checked answer", async (page, ctx) => {
+  await baseRoutes(ctx);
+  await ctx.route("**/api/generate/**", (r) =>
+    r.fulfill(ndjson([{ type: "text", delta: "Plants make " }, { type: "text", delta: "food." }, { type: "done", answer: { ...answer, text: "Plants make food from sunlight (checked)." } }]))
+  );
+  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.locator("textarea").fill("Explain photosynthesis");
+  await page.getByRole("button", { name: /^Generate$/ }).click();
+  await page.getByText("Plants make food from sunlight (checked).").first().waitFor({ timeout: 10000 });
+});
+
+await test("Ask: an error inside a streamed answer is shown", async (page, ctx) => {
+  await baseRoutes(ctx);
+  await ctx.route("**/api/generate/**", (r) =>
+    r.fulfill(ndjson([{ type: "text", delta: "Partial " }, { type: "error", status: 503, error: "The AI service is busy right now. Wait a minute and try again." }]))
+  );
+  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.locator("textarea").fill("Explain photosynthesis");
+  await page.getByRole("button", { name: /^Generate$/ }).click();
+  await page.getByText(/busy right now/).first().waitFor({ timeout: 10000 });
+});
+
+await test("Ask: a stream that stops early says what to do", async (page, ctx) => {
+  await baseRoutes(ctx);
+  await ctx.route("**/api/generate/**", (r) => r.fulfill(ndjson([{ type: "text", delta: "Partial " }])));
+  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.locator("textarea").fill("Explain photosynthesis");
+  await page.getByRole("button", { name: /^Generate$/ }).click();
+  await page.getByText(/connection dropped before the answer finished/).first().waitFor({ timeout: 10000 });
+});
+
 await test("My Books: lists books with reading progress", async (page, ctx) => {
   await baseRoutes(ctx);
   await page.goto(`${BASE}/dashboard/library`, { waitUntil: "networkidle" });
