@@ -134,6 +134,20 @@ function uploadShape({ imageBase64, mimeType, text, pdfText, hint }: PendingPage
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Keeps the phone's screen on while pages upload: a locked screen pauses the
+ * page and the upload with it. Returns a release function; does nothing where
+ * the browser can't (older phones), which is harmless.
+ */
+async function keepScreenOn(): Promise<() => void> {
+  try {
+    const lock = await navigator.wakeLock?.request("screen");
+    return () => void lock?.release().catch(() => {});
+  } catch {
+    return () => {};
+  }
+}
+
 export default function LibraryPage() {
   const [documents, setDocuments] = useState<DocumentRowView[]>([]);
   const [loading, setLoading] = useState(true);
@@ -361,6 +375,7 @@ export default function LibraryPage() {
 
     const controller = new AbortController();
     stopRef.current = controller;
+    const releaseScreen = await keepScreenOn();
     setSubmitting(true);
     setUploadProgress(null);
     setPagesSent(0);
@@ -459,6 +474,7 @@ export default function LibraryPage() {
       if (!controller.signal.aborted) fatal = err instanceof Error ? err.message : "Upload failed.";
     } finally {
       setPages((prev) => prev.map((p) => (failures.has(p.id) ? { ...p, failure: failures.get(p.id) } : p)));
+      releaseScreen();
       setActiveBooks([]);
       setSubmitting(false);
       setUploadProgress(null);
@@ -669,7 +685,7 @@ export default function LibraryPage() {
         {submitting && (
           <div className="space-y-1.5" role="status" aria-live="polite">
             <div className="flex justify-between gap-3 text-xs text-slate-600">
-              <span>{uploadProgress ?? "Uploading"}... keep this page open</span>
+              <span>{uploadProgress ?? "Uploading"}... keep this page open (the screen stays on)</span>
               <span className="shrink-0 tabular-nums">
                 {pagesSent} of {uploadTotal} read
               </span>
