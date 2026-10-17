@@ -27,6 +27,8 @@ export interface GenerationOutput {
   /** Source image_path → loaded image, so the PDF renderer can attach the right figure to the right citation. */
   sourceImages: Map<string, CompletionImage>;
   usedSearchGrounding: boolean;
+  /** Google's Search Suggestions HTML when the answer used web search (must be shown with it). */
+  searchSuggestionsHtml?: string;
 }
 
 /**
@@ -86,6 +88,7 @@ export async function runGeneration({
     sources: retrieval.chunks,
     sourceImages,
     usedSearchGrounding: Boolean(result.usedSearchGrounding),
+    searchSuggestionsHtml: result.searchSuggestionsHtml,
   };
 }
 

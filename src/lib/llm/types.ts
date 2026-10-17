@@ -26,6 +26,8 @@ export interface CompletionRequest {
   /** Overrides the admin-configured model for this call, when set. */
   model?: string;
   temperature?: number;
+  /** Longest answer allowed, in tokens. */
+  maxOutputTokens?: number;
 }
 
 export interface CompletionResult {
@@ -35,6 +37,10 @@ export interface CompletionResult {
   usage: NormalizedUsage;
   /** True if the model actually invoked search grounding for this response. */
   usedSearchGrounding?: boolean;
+  /** Google's rendered Search Suggestions (HTML) for a grounded answer; its terms require showing them. */
+  searchSuggestionsHtml?: string;
+  /** True when the answer stopped at the output length limit. */
+  truncated?: boolean;
 }
 
 export interface EmbeddingResult {

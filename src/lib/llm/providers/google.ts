@@ -1,13 +1,23 @@
 import { GoogleGenerativeAI, type Part } from "@google/generative-ai";
 import type { CompletionRequest, CompletionResult, EmbeddingResult, LlmProviderAdapter } from "@/lib/llm/types";
 import { assertHeaderSafe } from "@/lib/llm/assert-header-safe";
-import { withNetworkRetry } from "@/lib/llm/retry";
+import { withNetworkRetry, fetchOrThrowTransient } from "@/lib/llm/retry";
+import { UserError } from "@/lib/errors";
 
-function client() {
+// Long worksheets and 80-mark papers with answer keys need room; Flash models
+// allow far more than this.
+const DEFAULT_MAX_OUTPUT_TOKENS = 32_768;
+
+/** The Gemini API key, checked to be usable in an HTTP header. */
+function googleApiKey(): string {
   const apiKey = process.env.GOOGLE_API_KEY;
   if (!apiKey) throw new Error("GOOGLE_API_KEY is not configured");
   assertHeaderSafe("GOOGLE_API_KEY", apiKey);
-  return new GoogleGenerativeAI(apiKey);
+  return apiKey;
+}
+
+function client() {
+  return new GoogleGenerativeAI(googleApiKey());
 }
 
 export const googleAdapter: LlmProviderAdapter = {
@@ -32,18 +42,41 @@ export const googleAdapter: LlmProviderAdapter = {
     const result = await withNetworkRetry(() =>
       model.generateContent({
         contents: [{ role: "user", parts }],
-        generationConfig: { temperature: req.temperature ?? 0.4 },
+        generationConfig: {
+          temperature: req.temperature ?? 0.4,
+          maxOutputTokens: req.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+        },
       })
     );
 
     const response = result.response;
     const usage = response.usageMetadata;
-    const groundingUsed = Boolean(
-      response.candidates?.[0]?.groundingMetadata?.webSearchQueries?.length
-    );
+    const candidate = response.candidates?.[0];
+    const grounding = candidate?.groundingMetadata as
+      | { webSearchQueries?: string[]; searchEntryPoint?: { renderedContent?: string } }
+      | undefined;
+    const groundingUsed = Boolean(grounding?.webSearchQueries?.length);
+
+    // A blocked prompt or answer has no text; response.text() would throw a
+    // technical error, so say plainly what happened instead.
+    let text: string;
+    try {
+      text = response.text();
+    } catch (err) {
+      console.error("[google] no text in response", candidate?.finishReason, response.promptFeedback, err);
+      throw new UserError(
+        "The AI didn't answer this one (its safety filter or an empty reply). Try rephrasing the question or attaching a clearer photo."
+      );
+    }
+    const truncated = String(candidate?.finishReason) === "MAX_TOKENS";
+    if (truncated) {
+      text += "\n\n---\n*This answer reached the length limit and stops here. Ask for the remaining questions separately.*";
+    }
 
     return {
-      text: response.text(),
+      text,
+      truncated,
+      searchSuggestionsHtml: groundingUsed ? grounding?.searchEntryPoint?.renderedContent : undefined,
       provider: "google",
       model: req.model,
       usage: {
@@ -56,17 +89,16 @@ export const googleAdapter: LlmProviderAdapter = {
   },
 
   async embed(text: string, model: string): Promise<EmbeddingResult> {
-    const apiKey = process.env.GOOGLE_API_KEY;
-    if (!apiKey) throw new Error("GOOGLE_API_KEY is not configured");
+    const apiKey = googleApiKey();
 
     // Called directly against the REST API rather than through the SDK: the
     // installed @google/generative-ai SDK's embedContent() type doesn't expose
     // outputDimensionality, but gemini-embedding-001 defaults to 3072 dimensions
     // otherwise — this pins it to 768, matching chunks.embedding's vector(768).
     const response = await withNetworkRetry(() =>
-      fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:embedContent?key=${apiKey}`, {
+      fetchOrThrowTransient(`https://generativelanguage.googleapis.com/v1beta/models/${model}:embedContent`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
         body: JSON.stringify({
           content: { parts: [{ text }] },
           outputDimensionality: 768,
@@ -102,16 +134,15 @@ const EMBED_BATCH_SIZE = 100;
  * of a multi-question worksheet separately.
  */
 export async function googleEmbedMany(texts: string[], model: string): Promise<EmbeddingResult[]> {
-  const apiKey = process.env.GOOGLE_API_KEY;
-  if (!apiKey) throw new Error("GOOGLE_API_KEY is not configured");
+  const apiKey = googleApiKey();
 
   const results: EmbeddingResult[] = [];
   for (let start = 0; start < texts.length; start += EMBED_BATCH_SIZE) {
     const batch = texts.slice(start, start + EMBED_BATCH_SIZE);
     const response = await withNetworkRetry(() =>
-      fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:batchEmbedContents?key=${apiKey}`, {
+      fetchOrThrowTransient(`https://generativelanguage.googleapis.com/v1beta/models/${model}:batchEmbedContents`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
         body: JSON.stringify({
           requests: batch.map((text) => ({
             model: `models/${model}`,
