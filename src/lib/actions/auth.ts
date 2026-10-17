@@ -8,6 +8,11 @@ import { canSignUp } from "@/lib/access";
 import { safeNext } from "@/lib/auth-messages";
 
 const MIN_PASSWORD_LENGTH = 8;
+// Longer passwords are silently cut off by the sign-in service (bcrypt stops at 72 bytes), so refuse them instead.
+const MAX_PASSWORD_BYTES = 72;
+const MAX_EMAIL_LENGTH = 254;
+
+const tooLong = (password: string) => new TextEncoder().encode(password).length > MAX_PASSWORD_BYTES;
 
 function normaliseEmail(value: FormDataEntryValue | null): string {
   return String(value ?? "").trim().toLowerCase();
@@ -37,6 +42,7 @@ export async function signUp(formData: FormData) {
   const accountType = String(formData.get("account_type") ?? "");
   const adultConfirmed = formData.get("adult_confirmed") === "yes";
 
+  if (email.length > MAX_EMAIL_LENGTH || tooLong(password)) redirect("/signup?error=too-long");
   if (!canSignUp(email)) redirect("/signup?error=private");
   if (password !== confirmPassword) redirect("/signup?error=mismatch");
   if (password.length < MIN_PASSWORD_LENGTH) redirect("/signup?error=weak");
@@ -81,16 +87,20 @@ export async function signUp(formData: FormData) {
 
 export async function signOut() {
   const supabase = await createClient();
-  await supabase.auth.signOut();
+  const { error } = await supabase.auth.signOut();
+  if (error) console.error("[signOut]", error.message);
   redirect("/login");
 }
 
 /** Sends a password-reset link. Always shows the same message, so it never reveals whether an email has an account. */
 export async function requestPasswordReset(formData: FormData) {
   const email = normaliseEmail(formData.get("email"));
-  if (email) {
+  if (email && email.length <= MAX_EMAIL_LENGTH) {
+    // A fixed address (NEXT_PUBLIC_SITE_URL) is safest; otherwise the address this request came to.
     const h = await headers();
-    const origin = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("x-forwarded-host") ?? h.get("host")}`;
+    const origin =
+      process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/$/, "") ||
+      `${h.get("x-forwarded-proto") ?? "https"}://${h.get("x-forwarded-host") ?? h.get("host")}`;
     const supabase = await createClient();
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${origin}/auth/callback?next=/reset-password`,
@@ -106,6 +116,7 @@ export async function updatePassword(formData: FormData) {
   const confirmPassword = String(formData.get("confirm_password") ?? "");
   if (password !== confirmPassword) redirect("/reset-password?error=mismatch");
   if (password.length < MIN_PASSWORD_LENGTH) redirect("/reset-password?error=weak");
+  if (tooLong(password)) redirect("/reset-password?error=too-long");
 
   const supabase = await createClient();
   const {

@@ -17,6 +17,9 @@ import { getSignedUrl as presign } from "@aws-sdk/s3-request-presigner";
 
 const BUCKET = process.env.R2_BUCKET_NAME ?? "syllabi";
 const SIGNED_URL_TTL_SECONDS = 60 * 60; // 1 hour
+// A stalled storage call must fail in seconds, not hang until the server function is cut off.
+const REQUEST_TIMEOUT_MS = 30_000;
+const timeout = () => ({ abortSignal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
 
 function client() {
   const accountId = process.env.R2_ACCOUNT_ID;
@@ -41,7 +44,7 @@ export async function getSignedUrl(path: string): Promise<string> {
 
 /** Uploads a raw source page (ingestion) and returns its storage path (object key). */
 export async function uploadSourceFile(path: string, buffer: Buffer, contentType: string): Promise<string> {
-  await client().send(new PutObjectCommand({ Bucket: BUCKET, Key: path, Body: buffer, ContentType: contentType }));
+  await client().send(new PutObjectCommand({ Bucket: BUCKET, Key: path, Body: buffer, ContentType: contentType }), timeout());
   return path;
 }
 
@@ -50,7 +53,7 @@ export async function uploadSourceFile(path: string, buffer: Buffer, contentType
  * to the LLM as multimodal input (diagrams/maps carry meaning text can't capture).
  */
 export async function downloadFile(path: string): Promise<{ data: Buffer; contentType: string }> {
-  const response = await client().send(new GetObjectCommand({ Bucket: BUCKET, Key: path }));
+  const response = await client().send(new GetObjectCommand({ Bucket: BUCKET, Key: path }), timeout());
   if (!response.Body) throw new Error(`Download failed: empty object body for ${path}`);
   const bytes = await response.Body.transformToByteArray();
   return { data: Buffer.from(bytes), contentType: response.ContentType || "application/octet-stream" };
@@ -62,13 +65,17 @@ export async function deletePrefix(prefix: string): Promise<void> {
   let continuationToken: string | undefined;
   do {
     const listed = await r2.send(
-      new ListObjectsV2Command({ Bucket: BUCKET, Prefix: prefix, ContinuationToken: continuationToken })
+      new ListObjectsV2Command({ Bucket: BUCKET, Prefix: prefix, ContinuationToken: continuationToken }),
+      timeout()
     );
     const keys = (listed.Contents ?? []).map((o) => o.Key).filter((k): k is string => Boolean(k));
     if (keys.length > 0) {
-      await r2.send(
-        new DeleteObjectsCommand({ Bucket: BUCKET, Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true } })
+      const deleted = await r2.send(
+        new DeleteObjectsCommand({ Bucket: BUCKET, Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true } }),
+        timeout()
       );
+      // The call succeeds even when some files couldn't be removed; report those.
+      if (deleted.Errors?.length) throw new Error(`${deleted.Errors.length} stored file(s) couldn't be deleted (first: ${deleted.Errors[0].Key}: ${deleted.Errors[0].Message})`);
     }
     continuationToken = listed.IsTruncated ? listed.NextContinuationToken : undefined;
   } while (continuationToken);

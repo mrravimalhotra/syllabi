@@ -5,13 +5,12 @@
 
 import type { Cell, Rule, Step, WorkedExample } from "@/lib/worked/types";
 import { phrases, savedLanguage, type Narration, type Phrases } from "@/lib/worked/say";
+import { gcd, lcm } from "@/lib/math";
 
 const MAX_VALUE = 100_000;
 
 export type FractionOp = "simplify" | "add" | "subtract";
 
-const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
-const lcm = (a: number, b: number) => (a / gcd(a, b)) * b;
 
 /** "−7" for negatives, as written on the board. */
 const num = (n: number) => (n < 0 ? `−${-n}` : String(n));

@@ -25,12 +25,14 @@ export const SIGNUP_ERRORS: Record<string, string> = {
   adult: "Tick the box to confirm you are 18 or older. Syllabi is for adults only.",
   weak: "Use a password of at least 8 characters.",
   exists: "An account with this email already exists. Go to Sign in, or use “Forgot password?” if you don't remember the password.",
+  "too-long": "That email or password is too long. Use an email under 255 characters and a password of 8 to 72 characters.",
   unknown: "We couldn't create your account just now. Wait a few minutes and try again.",
 };
 
 export const RESET_ERRORS: Record<string, string> = {
   mismatch: "The two passwords don't match. Type the same password in both boxes.",
   weak: "Use a password of at least 8 characters.",
+  "too-long": "Use a password of 8 to 72 characters.",
   "no-session": "That reset link has expired or was already used. Request a new one from “Forgot password?”.",
   unknown: "We couldn't change your password just now. Wait a moment and try again.",
 };

@@ -4,6 +4,7 @@
 
 import type { Cell, Step, VLine, Rule, WorkedExample } from "@/lib/worked/types";
 import { phrases, savedLanguage, type Narration, type Phrases } from "@/lib/worked/say";
+import { gcd } from "@/lib/math";
 
 const MAX_NUMBERS = 6;
 const MAX_VALUE = 1_000_000;
@@ -22,10 +23,6 @@ function isPrime(n: number): boolean {
   if (n < 2) return false;
   for (let d = 2; d * d <= n; d++) if (n % d === 0) return false;
   return true;
-}
-
-function gcd(a: number, b: number): number {
-  return b === 0 ? a : gcd(b, a % b);
 }
 
 interface Ladder {

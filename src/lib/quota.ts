@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { UserError } from "@/lib/errors";
 
 export interface QuotaStatus {
   used: number;
@@ -17,7 +18,7 @@ export async function checkQuota(studentId: string): Promise<QuotaStatus> {
   ]);
 
   if (usedError) throw new Error(`Failed to read usage: ${usedError.message}`);
-  if (studentError || !student) throw new Error("Student not found");
+  if (studentError || !student) throw new Error(`Account not found: ${studentError?.message ?? "no row"}`);
 
   const used = (usedData as number) ?? 0;
   const quota = student.token_quota;
@@ -25,11 +26,14 @@ export async function checkQuota(studentId: string): Promise<QuotaStatus> {
   return { used, quota, remaining: Math.max(quota - used, 0), overQuota: used >= quota };
 }
 
-/** Thrown by API routes to produce a friendly 429 response when a student is over quota. */
-export class QuotaExceededError extends Error {
+/** Thrown when an account has used all of its monthly allowance; becomes a 429 with this message. */
+export class QuotaExceededError extends UserError {
   status: QuotaStatus;
   constructor(status: QuotaStatus) {
-    super("Monthly token quota exceeded");
+    super(
+      "You've used all of this month's allowance, so new answers are paused. It resets on the 1st. " +
+        "To get more now, ask the person who runs Syllabi for you to raise your limit."
+    );
     this.status = status;
   }
 }

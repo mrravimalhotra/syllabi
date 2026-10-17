@@ -252,7 +252,7 @@ export function solve(problem: WorkedProblem): WorkedExample | null {
 }
 
 const MARKDOWN_WORDS = {
-  en: ["Answer", "Steps", "Worked out step by step by Syllabi's calculator (no AI)."],
+  en: ["Answer", "Steps", "Worked out step by step by Syllabi's calculator, not AI."],
   hi: ["उत्तर", "चरण", "Syllabi के कैलकुलेटर द्वारा चरण-दर-चरण हल (AI के बिना)।"],
   mr: ["उत्तर", "पायऱ्या", "Syllabi च्या कॅल्क्युलेटरने टप्प्याटप्प्याने सोडवले (AI शिवाय)."],
 };

@@ -31,12 +31,13 @@ a browser).
 src/
   app/
     (public)      login, signup, pending-approval
-    dashboard/     student UI — generate content, view/download past documents
-    admin/         admin UI — students, taxonomy, knowledge base uploads, LLM routing
+        admin/         admin UI — accounts, health check, AI routing
+    dashboard/     (per account) Ask, Generate, My Documents, My Books, Practice, Account
     api/
       generate/    solution | notes | sample-paper | ad-hoc  (shared pipeline, §lib/generation)
-      admin/       students, taxonomy, documents (ingestion), llm-settings
-      documents/   student's own generated-document listing + signed download
+      admin/       students (accounts), llm-settings, health
+      documents/   saved answers: list, open, rename, delete, PDF
+      library/     private books: create, upload pages, retry, rename, delete
       me/          current student profile + quota
   lib/
     llm/           generateCompletion() + embed() — the provider abstraction layer
@@ -99,38 +100,23 @@ update students set role = 'admin', active = true where email = 'you@example.com
 After that, use `/admin/students` to grant/revoke access and set quotas for
 everyone else — no more SQL needed.
 
-### 6. Populate the knowledge base
+### 6. Add a book
 
-In `/admin/taxonomy`, add at least one school, grade, and subject. Then in
-`/admin/documents`, upload scanned/photographed pages (JPG/PNG) or a PDF —
-PDFs are rasterized into per-page images client-side (`src/lib/pdf-to-images.ts`,
-via `pdfjs-dist`) before upload, so the server only ever handles page images.
-If a batch mixes content types (e.g. a chapter followed by its exercises),
-set the type per page in the thumbnail grid — pages are grouped by contiguous
-type and ingested as separate documents automatically. Each page is
-transcribed via the LLM's native vision input (`ocr_extraction` task type,
-Gemini Flash by default), chunked, embedded, and indexed into `pgvector`.
-Students only retrieve chunks matching their own school/grade/subject.
-
-Every page's original image is also uploaded to R2 (`chunks.image_path`,
-via `src/lib/storage.ts`) and linked to its chunks — not just the OCR'd text.
-This matters for anatomy diagrams, maps, and other figures where the text
-transcription alone loses the actual content: when a chunk with an image is
-retrieved, `runGeneration()` (`src/lib/generation/pipeline.ts`) passes that
-image into the LLM call too (so the model can reference it directly, e.g. for
-labeling questions), embeds it in the exported PDF, and shows it inline in the
-student's on-screen result. No admin tagging is required — every uploaded page
-is treated this way automatically, which is why file storage volume scales
-with pages uploaded, not just text volume — the reason R2 (10GB free, no
-egress fees) is the storage layer rather than Supabase's smaller free tier.
+Everyone, including the admin, adds their own books under **My Books**: give the
+book a title, tick the rights box, then add photos, a PDF or a Word file.
+PDFs are split into per-page images in the browser (`src/lib/pdf-to-images.ts`,
+via `pdfjs-dist`), so the server only handles page images and text. Pages are
+saved and queued in seconds and read by the AI in the background
+(`src/lib/ingestion/jobs.ts`), so an upload finishes even if the app is closed.
+Books are private: only the account that added a book can search it.
 
 ## Deploying
 
 Push to GitHub and import the repo into Vercel. Set the same environment
-variables there. The ingestion route (`/api/admin/documents`) sets
-`maxDuration = 300` for multi-page vision extraction — this requires a Vercel
-plan that allows >60s serverless functions (Pro or higher) if you upload large
-documents; small uploads work fine on Hobby's default limit.
+variables there. The page routes set `maxDuration = 300`; Vercel's Hobby plan allows that with
+Fluid compute turned on (the default for new projects). Apply every file in
+`supabase/migrations/` in order (they are applied automatically when you push
+to `main` with the Supabase integration).
 
 ## Notes on the LLM abstraction layer
 
@@ -147,8 +133,8 @@ task type is a database write, not a code change or redeploy.
 
 `src/lib/storage.ts` is the only file that knows about R2 — it wraps the
 S3-compatible AWS SDK (`@aws-sdk/client-s3`, `@aws-sdk/s3-request-presigner`)
-behind four functions (`uploadPdf`, `uploadSourceFile`, `downloadFile`,
-`getSignedUrl`) that the rest of the app calls without knowing which vendor is
+behind a few functions (`uploadSourceFile`, `downloadFile`, `getSignedUrl`,
+`deletePrefix`) that the rest of the app calls without knowing which vendor is
 behind them. Supabase still handles Auth and the Postgres/pgvector database —
 only file storage moved, since that's the piece whose volume scales with
 pages uploaded rather than with student count.

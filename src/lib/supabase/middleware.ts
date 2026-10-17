@@ -61,11 +61,22 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (user && !isPublic) {
-    const { data: student } = await supabase
+    const { data: student, error: studentError } = await supabase
       .from("students")
       .select("role, active")
       .eq("id", user.id)
       .single();
+
+    // A database failure is not the same as "no access": say it's temporary,
+    // instead of sending approved people to the "awaiting approval" page.
+    if (studentError && studentError.code !== "PGRST116") {
+      console.error("[middleware] couldn't read the account row", studentError);
+      if (isApi) return apiError(503, "Syllabi can't reach its database right now. Wait a minute and try again.");
+      return new NextResponse(
+        "Syllabi can't reach its database right now. Wait a minute, then reload this page. Your books and answers are safe.",
+        { status: 503, headers: { "content-type": "text/plain; charset=utf-8", "retry-after": "30" } }
+      );
+    }
 
     // Revoked/unapproved accounts are blocked here, before any protected route
     // runs. During private testing only admins get in, even if approved.

@@ -134,7 +134,19 @@ begin
     format('select student_monthly_usage(%L)', p2), 'error');
   perform pg_temp.check('user cannot call match_owner_chunks', 'authenticated', p1,
     format('select * from match_owner_chunks(%s, %L)', vec, p2), 'error');
-  perform pg_temp.check('pending user cannot read schools', 'authenticated', pending, 'select * from schools', '0');
+  perform pg_temp.check('the retired schools table is gone', 'service_role', null, 'select * from schools', 'error');
+  perform pg_temp.check('the retired subjects table is gone', 'service_role', null, 'select * from subjects', 'error');
+  perform pg_temp.check('users cannot replace page chunks', 'authenticated', p1,
+    format('select replace_page_chunks(%L, %L, %L, 1, null, %L::jsonb)', '00000000-0000-0000-0000-0000000000d3', p1, 'textbook', '[]'), 'error');
+  perform pg_temp.check('users cannot read page job counts', 'authenticated', p1, format('select * from page_job_counts(%L)', p1), 'error');
+  perform pg_temp.check('a page is saved atomically', 'service_role', null,
+    format('select replace_page_chunks(%L, %L, %L, 7, null, %L::jsonb)', '00000000-0000-0000-0000-0000000000d3', p1, 'textbook',
+      jsonb_build_array(jsonb_build_object('section_label', 'A', 'chunk_index', 0, 'content', 'hello', 'embedding', (select jsonb_agg(0.1) from generate_series(1, 768))))::text), 'ok');
+  perform pg_temp.check('saving a page again replaces it, not adds', 'service_role', null,
+    format('select replace_page_chunks(%L, %L, %L, 7, null, %L::jsonb); select 1 from chunks where document_id = %L and page_number = 7',
+      '00000000-0000-0000-0000-0000000000d3', p1, 'textbook',
+      jsonb_build_array(jsonb_build_object('section_label', 'B', 'chunk_index', 0, 'content', 'again', 'embedding', (select jsonb_agg(0.2) from generate_series(1, 768))))::text,
+      '00000000-0000-0000-0000-0000000000d3'), '1');
 
   -- Server (service role): search is limited to the owner's own books.
   perform pg_temp.check('search returns only the owner''s chunks', 'service_role', null,

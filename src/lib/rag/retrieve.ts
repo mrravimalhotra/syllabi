@@ -104,7 +104,7 @@ export async function loadSourceImages(
 
 /** Formats retrieved chunks into a single context block for the completion prompt. */
 export function formatContext(chunks: MatchedChunk[]): string {
-  if (chunks.length === 0) return "(No matching material found in the knowledge base.)";
+  if (chunks.length === 0) return "(No matching material found in the books.)";
 
   return chunks
     .map((c, i) => {

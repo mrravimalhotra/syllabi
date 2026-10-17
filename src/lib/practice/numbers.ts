@@ -59,5 +59,4 @@ export function fraction(top: number, bottom: number, mixed = false): PracticeNu
   return { ...base, text: `${top}/${bottom}`, fraction: { top, bottom } };
 }
 
-export const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
-export const lcm = (a: number, b: number) => (a / gcd(a, b)) * b;
+export { gcd, lcm } from "@/lib/math";

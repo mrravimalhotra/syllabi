@@ -34,7 +34,7 @@ what works.
 
 | # | Item | Severity | Notes |
 |---|---|---|---|
-| 3.1 | Vector index | Medium | `chunks` uses an IVFFlat index created on an empty table (`lists = 100`), which gives poor recall until rebuilt. Switch to HNSW in a new migration, or `REINDEX` once books are loaded. |
+| 3.1 | Vector index | Medium | `chunks` has no vector index (migration 6 dropped the IVFFlat one), so search scans each owner's rows. That is fine for a few books; add an HNSW index in a new migration once libraries are large. |
 | 3.2 | Usage accounting misses question searches | Low | Page reading, indexing and answers are counted in `token_usage`, but the embedding made for each question search (`src/lib/rag/`) is not. |
 | 3.3 | `job_runner.app_url` follows the last https upload | Low | An upload from a Vercel preview deployment would point the timer at the preview URL until the next production upload. Pin it to the production domain if previews get used. |
 | 3.4 | Leftover code paths | Low | `POST /api/library` with pages (old single-request upload) and `PATCH /api/library/[id]` `{ ready: true }` are kept for older open tabs; remove after a while. |

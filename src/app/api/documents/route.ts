@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
-import { getCurrentStudent } from "@/lib/auth";
+import { authenticate } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { userMessage } from "@/lib/errors";
 
 export async function GET() {
-  const student = await getCurrentStudent();
-  if (!student || !student.active) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await authenticate();
+  if ("response" in auth) return auth.response;
+  const student = auth.account;
 
   const admin = createAdminClient();
   const { data, error } = await admin

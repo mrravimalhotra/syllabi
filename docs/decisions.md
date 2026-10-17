@@ -59,3 +59,4 @@ What was decided, when, and why, so the same question isn't asked twice. Newest 
 | Private evaluation set built from real worksheets and answer keys (C2) | Must be stored outside the public repo |
 | Dark mode | Light-only for now (a forced dark mode once made typed text invisible); add once the token colours are tested on real phones |
 | Study pack "test mode" (answers hidden until a timer ends) and multi-chapter packs | Wait for feedback from live testing |
+| Quality pass: one API error contract (`src/lib/api.ts`), atomic page saving (`replace_page_chunks`, migration 17), legacy school/grade/subject code and tables removed | Every route now answers with the same status codes and a plain sentence; a database outage says so instead of "sign in again"; re-reading a page can no longer lose its earlier text; leftovers from the earlier school-wide app are gone |

@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
-import { getCurrentStudent } from "@/lib/auth";
+import { apiError, authenticate, errorResponse } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { findAnswer } from "@/lib/generation/answers";
 import { generateCompletion } from "@/lib/llm";
 import { recordTokenUsage } from "@/lib/llm/usage";
-import { checkQuota } from "@/lib/quota";
-import { userMessage } from "@/lib/errors";
+import { QuotaExceededError, checkQuota } from "@/lib/quota";
 import { cleanText } from "@/lib/validate";
 import { loadBook } from "@/lib/study-pack/generate";
 import { packToMarkdown } from "@/lib/study-pack/markdown";
@@ -24,24 +23,36 @@ const SECTIONS = new Set<PackSection>(["textbookQuestions", "practiceQuestions"]
 
 /** The saved pack and the question the request points at, or an error response. */
 async function target(request: Request, params: Params["params"]) {
-  const user = await getCurrentStudent();
-  if (!user || !user.active) return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+  const auth = await authenticate();
+  if ("response" in auth) return { error: auth.response };
+  const user = auth.account;
   const saved = await findAnswer((await params).id, user);
-  if (!saved?.pack) return { error: NextResponse.json({ error: "Not found" }, { status: 404 }) };
+  if (!saved?.pack) return { error: apiError(404, "This study pack was deleted or doesn't exist. Go back to My Documents.") };
 
   const body = await request.json().catch(() => null);
+  if (body === null) return { error: apiError(400, "Your change couldn't be read. Try again.") };
   const section = body?.section as PackSection;
   const index = body?.index;
   const question: PackQuestion | undefined =
-    SECTIONS.has(section) && Number.isInteger(index) ? saved.pack[section][index] : undefined;
-  if (!question) return { error: NextResponse.json({ error: "Question not found" }, { status: 400 }) };
+    SECTIONS.has(section) && Number.isInteger(index) && index >= 0 ? saved.pack[section][index] : undefined;
+  if (!question) return { error: apiError(404, "That question is no longer in this study pack. Reload the page.") };
   return { user, saved, pack: saved.pack, section, index: index as number, question, body };
 }
 
-async function save(id: string, pack: StudyPack) {
+/**
+ * Saves one changed question. The pack is read again just before writing and
+ * only this question is replaced, so two quick changes to different questions
+ * don't undo each other.
+ */
+async function save(id: string, section: PackSection, index: number, question: PackQuestion): Promise<StudyPack> {
   const admin = createAdminClient();
-  const { error } = await admin.from("generated_documents").update({ pack, content: packToMarkdown(pack) }).eq("id", id);
+  const { data, error: readError } = await admin.from("generated_documents").select("pack").eq("id", id).single();
+  if (readError || !data?.pack) throw readError ?? new Error("Study pack not found");
+  const fresh = data.pack as StudyPack;
+  fresh[section][index] = question;
+  const { error } = await admin.from("generated_documents").update({ pack: fresh, content: packToMarkdown(fresh) }).eq("id", id);
   if (error) throw error;
+  return fresh;
 }
 
 /** Rewrites one answer as the parent or tutor asks ("simpler", "for 5 marks"...), and saves it. */
@@ -51,13 +62,11 @@ export async function POST(request: Request, { params }: Params) {
   const { user, saved, pack, section, index, question, body } = t;
 
   const ask = cleanText(body?.request, 500);
-  if (!ask) return NextResponse.json({ error: "Say how the answer should change" }, { status: 400 });
+  if (!ask) return apiError(400, "Say how the answer should change, for example “make it simpler”.");
 
   try {
     const quota = await checkQuota(user.id);
-    if (quota.overQuota) {
-      return NextResponse.json({ error: "Monthly token quota exceeded. Contact an admin to raise your limit." }, { status: 429 });
-    }
+    if (quota.overQuota) throw new QuotaExceededError(quota);
     const chapter = await chapterFor(pack, user);
     const result = await generateCompletion({
       taskType: "study_pack",
@@ -94,14 +103,10 @@ export async function POST(request: Request, { params }: Params) {
       originalAnswer: question.originalAnswer ?? question.answer,
       autoKey: autoKeyFor(question.question, question.type, question.options, answer),
     };
-    pack[section][index] = updated;
-    await save(saved.id, pack);
+    await save(saved.id, section, index, updated);
     return NextResponse.json({ question: updated });
   } catch (err) {
-    return NextResponse.json(
-      { error: userMessage(err, "study-pack refine", "Couldn't change the answer right now. Please try again.") },
-      { status: 500 }
-    );
+    return errorResponse(err, "study-pack refine", "Couldn't change this answer. Wait a moment and try again.");
   }
 }
 
@@ -109,10 +114,10 @@ export async function POST(request: Request, { params }: Params) {
 export async function PATCH(request: Request, { params }: Params) {
   const t = await target(request, params);
   if ("error" in t) return t.error;
-  const { saved, pack, section, index, question, body } = t;
+  const { saved, section, index, question, body } = t;
 
   const answer = cleanText(body?.answer, 6000);
-  if (!answer) return NextResponse.json({ error: "An answer is required" }, { status: 400 });
+  if (!answer) return apiError(400, "The answer can't be empty.");
   const updated: PackQuestion = {
     ...question,
     answer,
@@ -120,12 +125,11 @@ export async function PATCH(request: Request, { params }: Params) {
     autoKey: autoKeyFor(question.question, question.type, question.options, answer),
   };
   if (updated.originalAnswer === answer) delete updated.originalAnswer;
-  pack[section][index] = updated;
   try {
-    await save(saved.id, pack);
+    await save(saved.id, section, index, updated);
     return NextResponse.json({ question: updated });
   } catch (err) {
-    return NextResponse.json({ error: userMessage(err, "study-pack set answer") }, { status: 500 });
+    return errorResponse(err, "study-pack set answer", "Couldn't save this answer. Try again in a moment.");
   }
 }
 
@@ -134,7 +138,9 @@ async function chapterFor(pack: StudyPack, user: Student): Promise<string | null
   if (!pack.sourceDocumentId) return null;
   try {
     return (await loadBook(pack.sourceDocumentId, user.id)).text;
-  } catch {
+  } catch (err) {
+    // The answer can still be rewritten without the chapter; say so in the log.
+    console.error("[study-pack refine] chapter text unavailable", err);
     return null;
   }
 }

@@ -16,32 +16,15 @@ export type TaskType =
   | "notes"
   | "sample_paper"
   | "ad_hoc"
-  | "coverage_check"
   | "study_pack";
 
 export type GenerationTaskType = "solution" | "notes" | "sample_paper" | "ad_hoc" | "study_pack";
 
+/** The kinds of material a book page can be. */
+export const SOURCE_TYPES = ["textbook", "exercise", "past_paper", "notes"] as const;
+export type SourceType = (typeof SOURCE_TYPES)[number];
+
 export type Provider = "google" | "anthropic" | "openai" | "groq" | "openrouter" | "mistral";
-
-export interface School {
-  id: string;
-  name: string;
-  created_at: string;
-}
-
-export interface Grade {
-  id: string;
-  school_id: string;
-  name: string;
-  created_at: string;
-}
-
-export interface Subject {
-  id: string;
-  school_id: string;
-  name: string;
-  created_at: string;
-}
 
 export interface Student {
   id: string;
@@ -56,9 +39,6 @@ export interface Student {
   /** Default answer language (en, hi, mr, fr); null follows the book and question. */
   answer_language: "en" | "hi" | "mr" | "fr" | null;
   adult_confirmed_at: string | null;
-  school_id: string | null;
-  grade_id: string | null;
-  subject_ids: string[];
   active: boolean;
   token_quota: number;
   created_at: string;
@@ -82,31 +62,8 @@ export interface DocumentRow {
   subject: string | null;
   grade: string | null;
   rights_confirmed_at: string | null;
-  /** Retired shared-library taxonomy; no longer written. */
-  school_id: string | null;
-  grade_id: string | null;
-  subject_id: string | null;
-  source_type: "textbook" | "exercise" | "past_paper" | "notes";
-  storage_path: string | null;
+  source_type: SourceType;
   status: "processing" | "ready" | "failed";
-  uploaded_by: string | null;
-  created_at: string;
-}
-
-export interface ChunkRow {
-  id: string;
-  document_id: string;
-  owner_id: string | null;
-  school_id: string | null;
-  grade_id: string | null;
-  subject_id: string | null;
-  source_type: string;
-  page_number: number | null;
-  section_label: string | null;
-  content: string;
-  embedding: number[] | null;
-  /** Storage path of the scanned page this chunk was extracted from (diagrams/maps/figures live here, not in `content`). */
-  image_path: string | null;
   created_at: string;
 }
 
@@ -119,18 +76,6 @@ export interface MatchedChunk {
   source_type: string;
   image_path: string | null;
   similarity: number;
-}
-
-export interface TokenUsageRow {
-  id: string;
-  student_id: string;
-  task_type: TaskType;
-  provider: Provider;
-  model: string;
-  input_tokens: number;
-  output_tokens: number;
-  total_tokens: number;
-  created_at: string;
 }
 
 /** A source passage an answer used, as saved with the answer. */

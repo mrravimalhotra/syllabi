@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { NextResponse, after } from "next/server";
 import { jobToken, readQueuedPages } from "@/lib/ingestion/jobs";
 
@@ -14,8 +14,10 @@ export const maxDuration = 300;
 export async function POST(request: Request) {
   const given = request.headers.get("x-job-token") ?? "";
   const token = await jobToken();
-  const ok = Boolean(token) && given.length === token!.length && timingSafeEqual(Buffer.from(given), Buffer.from(token!));
-  if (!ok) return NextResponse.json({ error: "Not allowed" }, { status: 403 });
+  if (!token) return NextResponse.json({ error: "The background reader's token couldn't be loaded." }, { status: 503 });
+  // Compare fixed-length hashes, so tokens of different lengths can't throw or leak their length.
+  const digest = (value: string) => createHash("sha256").update(value).digest();
+  if (!timingSafeEqual(digest(given), digest(token))) return NextResponse.json({ error: "Not allowed." }, { status: 403 });
 
   const origin = new URL(request.url).origin;
   after(() => readQueuedPages(origin));

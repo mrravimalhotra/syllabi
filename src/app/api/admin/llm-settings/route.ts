@@ -1,20 +1,16 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { apiError, authenticateAdmin, errorResponse } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { invalidateLlmSettingsCache } from "@/lib/llm/config";
 import type { Provider, TaskType } from "@/types/database";
-import { userMessage } from "@/lib/errors";
 
 export async function GET() {
-  try {
-    await requireAdmin();
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await authenticateAdmin();
+  if ("response" in auth) return auth.response;
 
   const admin = createAdminClient();
   const { data, error } = await admin.from("llm_settings").select("*").order("task_type");
-  if (error) return NextResponse.json({ error: userMessage(error, "admin/llm-settings") }, { status: 500 });
+  if (error) return errorResponse(error, "admin/llm-settings GET", "Couldn't load the AI settings. Reload the page to try again.");
   return NextResponse.json({ settings: data });
 }
 
@@ -25,7 +21,6 @@ const TASK_TYPES = new Set<TaskType>([
   "notes",
   "sample_paper",
   "ad_hoc",
-  "coverage_check",
   "study_pack",
 ]);
 const PROVIDERS = new Set<Provider>(["google", "anthropic", "openai", "groq", "openrouter", "mistral"]);
@@ -37,21 +32,18 @@ interface PatchBody {
 }
 
 export async function PATCH(request: Request) {
-  let admin;
-  try {
-    admin = await requireAdmin();
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await authenticateAdmin();
+  if ("response" in auth) return auth.response;
+  const admin = auth.account;
 
   const body = (await request.json().catch(() => null)) as PatchBody | null;
   const model = typeof body?.model === "string" ? body.model.trim() : "";
   if (!body || !TASK_TYPES.has(body.taskType) || !PROVIDERS.has(body.provider) || !/^[\w.:\-/]{1,100}$/.test(model)) {
-    return NextResponse.json({ error: "Choose a task, a provider and a valid model name" }, { status: 400 });
+    return apiError(400, "Choose a task, a provider and a model name (letters, numbers and . : - _ / only, up to 100 characters).");
   }
   // Embeddings must stay on Google: the search index is built from Google's 768-dimension vectors.
   if (body.taskType === "embedding" && body.provider !== "google") {
-    return NextResponse.json({ error: "Embeddings must use Google (the search index depends on it)" }, { status: 400 });
+    return apiError(400, "Book search must stay on Google, because your books' search index is built from Google's embeddings.");
   }
 
   const supabaseAdmin = createAdminClient();
@@ -60,9 +52,10 @@ export async function PATCH(request: Request) {
     .update({ provider: body.provider, model, updated_by: admin.id, updated_at: new Date().toISOString() })
     .eq("task_type", body.taskType)
     .select()
-    .single();
+    .maybeSingle();
 
-  if (error) return NextResponse.json({ error: userMessage(error, "admin/llm-settings") }, { status: 500 });
+  if (error) return errorResponse(error, "admin/llm-settings PATCH", "Couldn't save the AI setting. Try again in a moment.");
+  if (!data) return apiError(404, "That task isn't in the settings table. Nothing was changed.");
 
   // The routing cache would otherwise serve the old provider/model for up to
   // CACHE_TTL_MS after this change; invalidate so the switch takes effect immediately.

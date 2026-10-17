@@ -86,3 +86,8 @@ Tick each one and note anything odd. Use your phone for the starred (★) checks
 | T-30 | Create a throwaway second admin, then delete that account from its Account page | Account and its books are gone; deleting your only admin account is refused |
 | T-25 ★ | Upload phone photos of a Computer chapter with code (e.g. HTML), then ask "Write the basic structure of an HTML document" | Answer has a code block that keeps its indentation; on the phone only the code box scrolls; the PDF shows the code in a typewriter-style font |
 | T-24 | Step-by-step solution: "Answer all questions in this worksheet" with a worksheet photo or upload | Every question answered in order, each sized to its marks |
+| T-62 ★ | Upload a file with an unsupported type (e.g. a .txt renamed .pdf) and a very large photo | A message names the file and says what is accepted (photos, PDF or Word), never a raw error |
+| T-63 | Admin → Accounts: try to turn off or demote your own account | Refused with "You can't turn off or demote your own account" |
+| T-64 | My Books: delete a book, then reload | Book is gone at once; a storage hiccup never leaves a listed book without pages |
+| T-65 | Re-read a book's failed pages ("Try again") when your monthly allowance is used up | Clear 429 message about the allowance, not a spinner |
+| T-66 | Admin → Health | All lines green; "Background page reading" shows the timer and the page counts |

@@ -234,7 +234,7 @@ function ContentBody({ text }: { text: string }) {
 export interface RenderPdfInput {
   taskType: GenerationTaskType;
   title: string;
-  studentName: string;
+  preparedBy: string;
   content: string;
   sources: MatchedChunk[];
   /** Source image_path → loaded image, so diagrams/maps a source cites get embedded, not just referenced by name. */
@@ -253,7 +253,7 @@ export async function renderGenerationPdf(input: RenderPdfInput): Promise<Buffer
       <Page size="A4" style={styles.page}>
         <Text style={styles.title}>{input.title}</Text>
         <Text style={styles.subtitle}>
-          {input.label ?? taskLabel(input.taskType)} · Prepared by {input.studentName} · Syllabi
+          {input.label ?? taskLabel(input.taskType)} · Prepared by {input.preparedBy} · Syllabi
         </Text>
 
         <ContentBody text={input.content} />

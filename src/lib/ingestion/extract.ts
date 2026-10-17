@@ -46,7 +46,7 @@ edges. Transcribe only the main page.
 
 /**
  * Extracts clean text from one scanned/photographed page using the LLM's native
- * vision input — no dedicated OCR vendor needed (Requirement: no OCR bill).
+ * vision input — no dedicated OCR vendor needed.
  * When the configured model has used up its free daily allowance, or declines
  * the page (published text it won't copy word for word), a second model reads
  * it; if that declines too, partial text is kept when there is enough of it.

@@ -20,7 +20,7 @@ export interface GenerationInput {
    * Photos the user attached to this request (e.g. a homework page). They go
    * straight to the model alongside the question — the same way Claude and
    * Gemini chat apps read uploaded photos — and their transcribed text is also
-   * used to search the knowledge base.
+   * used to search the books.
    */
   photos?: CompletionImage[];
   /** Language to answer in; "auto" follows the book and question. */
@@ -104,7 +104,7 @@ export async function runGeneration({
     context: formatContext(retrieval.chunks),
     images: [...photos, ...sourcePageImages],
     // Search grounding is opt-in per the RAG-first policy: only fires when
-    // coverage from the knowledge base is weak.
+    // coverage from the books is weak.
     allowSearchGrounding: retrieval.coverageLow,
     temperature: TEMPERATURE[taskType],
   };

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCurrentStudent } from "@/lib/auth";
+import { apiError, authenticate } from "@/lib/api";
 import { findAnswer } from "@/lib/generation/answers";
 import { renderGenerationPdf } from "@/lib/pdf/render";
 import { loadSourceImages } from "@/lib/rag/retrieve";
@@ -16,15 +16,21 @@ export const maxDuration = 60;
  * their stored copy.
  */
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const user = await getCurrentStudent();
-  if (!user || !user.active) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await authenticate();
+  if ("response" in auth) return auth.response;
+  const user = auth.account;
 
   const answer = await findAnswer((await params).id, user);
-  if (!answer) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!answer) return apiError(404, "That answer no longer exists. Open My Documents to find it.");
 
   if (answer.content === null) {
-    if (!answer.storage_path) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    return NextResponse.redirect(await getSignedUrl(answer.storage_path));
+    if (!answer.storage_path) return apiError(404, "This older answer has no saved file. Ask the question again.");
+    try {
+      return NextResponse.redirect(await getSignedUrl(answer.storage_path));
+    } catch (err) {
+      console.error("[documents pdf] stored copy", err);
+      return apiError(500, "Couldn't open the saved PDF. Please try again.");
+    }
   }
 
   // ?part=questions: a sample paper without its answer key, for the child to attempt.
@@ -36,7 +42,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const pdf = await renderGenerationPdf({
       taskType: answer.task_type,
       title: answer.title,
-      studentName: user.full_name ?? user.email,
+      preparedBy: user.full_name ?? user.email,
       content: questionsOnly ? withoutAnswerKey(answer.content) : answer.content,
       sources: questionsOnly ? [] : sources,
       sourceImages: byPath,
@@ -54,6 +60,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     });
   } catch (err) {
     console.error("[documents pdf]", err);
-    return NextResponse.json({ error: "Couldn't make the PDF. Please try again." }, { status: 500 });
+    return apiError(500, "Couldn't make the PDF. Please try again in a moment.");
   }
 }

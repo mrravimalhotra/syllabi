@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { getCurrentStudent } from "@/lib/auth";
+import { apiError, authenticate, errorResponse } from "@/lib/api";
+import { parsePhotos } from "@/lib/generation/attachments";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { QuotaExceededError } from "@/lib/quota";
-import { userMessage } from "@/lib/errors";
 import { isUuid } from "@/lib/validate";
 import { isAnswerLanguage } from "@/lib/generation/language";
 import { levelLine } from "@/lib/generation/level";
@@ -11,47 +10,32 @@ import { answerKey, findReusable } from "@/lib/generation/reuse";
 import { QUESTIONS_SYSTEM, WALKTHROUGH_SYSTEM } from "@/lib/study-pack/prompts";
 import { generateStudyPack } from "@/lib/study-pack/generate";
 import { packToMarkdown } from "@/lib/study-pack/markdown";
-import type { CompletionImage } from "@/lib/llm/types";
 
 // Two long AI calls (run together) for a whole chapter.
 export const maxDuration = 300;
 
-const MAX_PHOTOS = 12;
-const MAX_PHOTO_BASE64_CHARS = 3_000_000;
-const PHOTO_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
-
 /** Makes and saves a study pack for one chapter: a book from My books, or attached pages. */
 export async function POST(request: Request) {
-  const student = await getCurrentStudent();
-  if (!student || !student.active) {
-    return NextResponse.json({ error: "Your session has ended. Please sign in again." }, { status: 401 });
-  }
+  const auth = await authenticate();
+  if ("response" in auth) return auth.response;
+  const student = auth.account;
 
   const body = await request.json().catch(() => null);
+  if (body === null) {
+    return apiError(400, "Your request couldn't be read. It may be too large (try fewer or smaller attachments) or the connection dropped. Try again.");
+  }
+  if (body.documentId !== undefined && body.documentId !== null && body.documentId !== "" && !isUuid(body.documentId)) {
+    return apiError(400, "That book wasn't recognised. Reload the page and choose it again.");
+  }
   const documentId = typeof body?.documentId === "string" && isUuid(body.documentId) ? body.documentId : undefined;
-  const focus = typeof body?.focus === "string" ? body.focus : undefined;
+  // Capped before it is used to find a saved copy, so what is remembered is what was sent to the AI.
+  const focus = typeof body?.focus === "string" ? body.focus.trim().slice(0, 1_000) : undefined;
   const language = isAnswerLanguage(body?.language) ? body.language : (student.answer_language ?? "auto");
 
-  const photos: CompletionImage[] = [];
-  if (Array.isArray(body?.photos)) {
-    if (body.photos.length > MAX_PHOTOS) {
-      return NextResponse.json({ error: `Attach at most ${MAX_PHOTOS} pages, or add the chapter to My books.` }, { status: 400 });
-    }
-    let chars = 0;
-    for (const p of body.photos) {
-      if (typeof p?.data !== "string" || !PHOTO_MIME_TYPES.has(p?.mimeType)) {
-        return NextResponse.json({ error: "Each page must be a JPEG, PNG or WebP image" }, { status: 400 });
-      }
-      chars += p.data.length;
-      const text = typeof p.text === "string" && p.text.trim() ? p.text.slice(0, 20_000) : undefined;
-      photos.push({ data: p.data, mimeType: p.mimeType, ...(text ? { text } : {}) });
-    }
-    if (chars > MAX_PHOTO_BASE64_CHARS) {
-      return NextResponse.json({ error: "Those pages are too large together. Add the chapter to My books instead." }, { status: 400 });
-    }
-  }
+  const photos = parsePhotos(body?.photos);
+  if (typeof photos === "string") return apiError(400, photos);
   if (!documentId && photos.length === 0) {
-    return NextResponse.json({ error: "Choose a book from My books, or attach the chapter's pages." }, { status: 400 });
+    return apiError(400, "Choose a book under “Search these books”, or attach photos or a PDF of the chapter, then press Generate.");
   }
 
   try {
@@ -109,15 +93,6 @@ export async function POST(request: Request) {
       pdfUrl: doc ? `/api/documents/${doc.id}/pdf` : null,
     });
   } catch (err) {
-    if (err instanceof QuotaExceededError) {
-      return NextResponse.json(
-        { error: "Monthly token quota exceeded. Contact an admin to raise your limit.", quota: err.status },
-        { status: 429 }
-      );
-    }
-    return NextResponse.json(
-      { error: userMessage(err, "generate study_pack", "Couldn't make the study pack right now. Please try again in a minute.") },
-      { status: 500 }
-    );
+    return errorResponse(err, "generate study_pack", "Couldn't make the study pack. Wait a minute and try again. If it keeps happening, tell the person who runs Syllabi.");
   }
 }

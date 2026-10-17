@@ -1,93 +1,80 @@
 import { NextResponse } from "next/server";
-import { getCurrentStudent } from "@/lib/auth";
+import { apiError, authenticate, errorResponse } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { IngestError, ingestDocument } from "@/lib/ingestion/ingest";
 import { pageProgress } from "@/lib/ingestion/jobs";
-import { checkQuota } from "@/lib/quota";
-import type { DocumentRow } from "@/types/database";
-import { userMessage } from "@/lib/errors";
-import { cleanText, isUuid } from "@/lib/validate";
-import { checkPages, isPageNumber, toIngestPages, type UploadPage } from "@/lib/ingestion/upload-pages";
+import { QuotaExceededError, checkQuota } from "@/lib/quota";
+import { SOURCE_TYPES, type SourceType } from "@/types/database";
+import { cleanText } from "@/lib/validate";
 
-export const maxDuration = 300; // vision extraction + embedding per page can take a while
+// Most books one account can hold: far more than a family needs, but stops a
+// loop or a mistake from filling the database with empty books.
+const MAX_BOOKS = 300;
 
-const SOURCE_TYPES = new Set<DocumentRow["source_type"]>(["textbook", "exercise", "past_paper", "notes"]);
-
-/** Lists the caller's own books. */
+/** Lists the caller's own books, with how far each has been read. */
 export async function GET() {
-  const user = await getCurrentStudent();
-  if (!user || !user.active) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await authenticate();
+  if ("response" in auth) return auth.response;
+  const user = auth.account;
 
-  const admin = createAdminClient();
-  const { data, error } = await admin
+  const { data, error } = await createAdminClient()
     .from("documents")
     .select("id, title, subject, grade, source_type, status, created_at")
     .eq("owner_id", user.id)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(MAX_BOOKS);
+  if (error) return errorResponse(error, "library GET", "Couldn't load your books. Reload the page to try again.");
 
-  if (error) return NextResponse.json({ error: userMessage(error, "library GET") }, { status: 500 });
-  // How far background reading has got, for books uploaded page by page.
-  const progress = await pageProgress(user.id);
-  return NextResponse.json({ documents: data.map((d) => ({ ...d, pages: progress[d.id] ?? null })) });
-}
-
-interface UploadBody {
-  title: string;
-  subject?: string;
-  grade?: string;
-  sourceType: DocumentRow["source_type"];
-  /** The uploader confirms they own this copy and will use it only for their own child's/students' study. */
-  rightsConfirmed: boolean;
-  /**
-   * Without pages, this only creates the book (status "processing") and
-   * returns its id; the browser then adds pages to it with
-   * POST /api/library/[id]/pages and marks it ready with PATCH. Creating it
-   * first means a retried page can never start a second copy of the book.
-   */
-  pages?: UploadPage[];
-  /** Older single-request uploads: append this batch to a book already started. */
-  documentId?: string;
-  startPageNumber?: number;
-  finalize?: boolean;
-}
-
-/** Creates one of the caller's books, or (older clients) uploads a batch of its pages and reads them. */
-export async function POST(request: Request) {
-  const user = await getCurrentStudent();
-  if (!user || !user.active) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  let body: UploadBody | null;
   try {
-    body = (await request.json()) as UploadBody;
+    const progress = await pageProgress(user.id);
+    return NextResponse.json({ documents: data.map((d) => ({ ...d, pages: progress[d.id] ?? null })) });
   } catch (err) {
-    // A parse failure here almost always means the payload was too large or the
-    // connection was cut mid-upload — surface that instead of a misleading
-    // "missing fields" message that hides the real cause.
-    console.error("[library POST parse]", err);
-    return NextResponse.json(
-      { error: "Couldn't read the upload — it may be too large or the connection dropped. Try fewer pages at once." },
-      { status: 400 }
-    );
+    return errorResponse(err, "library GET progress", "Couldn't load your books. Reload the page to try again.");
   }
+}
 
-  const title = cleanText(body?.title, 200);
-  if (!title || !body || !SOURCE_TYPES.has(body.sourceType)) {
-    return NextResponse.json({ error: "A title and a type are required" }, { status: 400 });
+interface CreateBody {
+  title?: unknown;
+  subject?: unknown;
+  grade?: unknown;
+  sourceType?: unknown;
+  /** The uploader confirms they own this copy and will use it only for their own child's or students' study. */
+  rightsConfirmed?: unknown;
+}
+
+/**
+ * Creates one of the caller's books and returns its id. The browser then sends
+ * its pages to POST /api/library/[id]/pages, which are read in the background.
+ * Creating the book first means a retried page can never start a second copy.
+ */
+export async function POST(request: Request) {
+  const auth = await authenticate();
+  if ("response" in auth) return auth.response;
+  const user = auth.account;
+
+  const body = (await request.json().catch(() => null)) as CreateBody | null;
+  if (body === null) return apiError(400, "The book details couldn't be read. Check your connection and try again.");
+
+  const title = cleanText(body.title, 200);
+  if (!title) return apiError(400, "Type a title for the book, then try again.");
+  if (typeof body.sourceType !== "string" || !SOURCE_TYPES.includes(body.sourceType as SourceType)) {
+    return apiError(400, "Choose what kind of material this is (Textbook, Exercise, Past paper or Notes).");
   }
   if (body.rightsConfirmed !== true) {
-    return NextResponse.json(
-      { error: "Confirm that you own this copy and will use it only for your own child's or students' study" },
-      { status: 400 }
-    );
-  }
-  // Reading and indexing pages costs tokens, so it counts against the quota.
-  const quota = await checkQuota(user.id);
-  if (quota.overQuota) {
-    return NextResponse.json({ error: "Monthly token quota exceeded. Contact an admin to raise your limit." }, { status: 429 });
+    return apiError(400, "Tick the box that says you own this copy and will use it only for your own child's or students' study.");
   }
 
-  const admin = createAdminClient();
-  if (body.pages === undefined) {
+  try {
+    // Reading pages costs tokens, so a book can't be started once the allowance is used up.
+    const quota = await checkQuota(user.id);
+    if (quota.overQuota) return errorResponse(new QuotaExceededError(quota), "library POST quota");
+
+    const admin = createAdminClient();
+    const { count, error: countError } = await admin.from("documents").select("id", { count: "exact", head: true }).eq("owner_id", user.id);
+    if (countError) throw countError;
+    if ((count ?? 0) >= MAX_BOOKS) {
+      return apiError(400, `You have ${MAX_BOOKS} books, which is the most one account can hold. Delete books you no longer need, then try again.`);
+    }
+
     const { data, error } = await admin
       .from("documents")
       .insert({
@@ -97,54 +84,13 @@ export async function POST(request: Request) {
         grade: cleanText(body.grade, 50),
         rights_confirmed_at: new Date().toISOString(),
         source_type: body.sourceType,
-        storage_path: null,
-        uploaded_by: user.id,
         status: "processing",
       })
       .select("id")
       .single();
-    if (error || !data) return NextResponse.json({ error: userMessage(error, "library POST create", "Couldn't start the upload. Please try again.") }, { status: 500 });
+    if (error || !data) throw error ?? new Error("The book row was not returned");
     return NextResponse.json({ documentId: data.id });
-  }
-
-  const checked = checkPages(body.pages);
-  if ("error" in checked) return NextResponse.json({ error: checked.error }, { status: 400 });
-  const startPageNumber = body.startPageNumber ?? 1;
-  if (!isPageNumber(startPageNumber)) return NextResponse.json({ error: "Invalid page number" }, { status: 400 });
-  if (body.documentId !== undefined) {
-    if (!isUuid(body.documentId)) return NextResponse.json({ error: "Book not found" }, { status: 404 });
-    const { data: existing } = await admin
-      .from("documents")
-      .select("id")
-      .eq("id", body.documentId)
-      .eq("owner_id", user.id)
-      // "failed" too: the browser retries a batch that failed part-way.
-      .in("status", ["processing", "failed"])
-      .maybeSingle();
-    if (!existing) return NextResponse.json({ error: "Book not found" }, { status: 404 });
-  }
-
-  try {
-    const documentId = await ingestDocument({
-      title,
-      ownerId: user.id,
-      subject: cleanText(body.subject, 100),
-      grade: cleanText(body.grade, 50),
-      sourceType: body.sourceType,
-      documentId: body.documentId,
-      finalize: body.finalize,
-      pages: toIngestPages(checked.pages, startPageNumber),
-    });
-    return NextResponse.json({ documentId, status: body.finalize === false ? "processing" : "ready" });
   } catch (err) {
-    return NextResponse.json(
-      {
-        error: userMessage(err, "library POST ingest", "Upload failed. Please try again."),
-        // Lets the browser retry this batch into the same book, or delete it.
-        documentId: err instanceof IngestError ? err.documentId : body.documentId,
-        retryable: err instanceof IngestError ? err.retryable : true,
-      },
-      { status: 500 }
-    );
+    return errorResponse(err, "library POST", "Couldn't start the upload. Try again in a moment.");
   }
 }

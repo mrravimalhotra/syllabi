@@ -18,7 +18,7 @@ import {
   type OrderSettings,
 } from "@/lib/practice/order";
 import { groupDigits, type NumberKind } from "@/lib/practice/numbers";
-import { newSeed } from "@/lib/practice/random";
+import { newSeed, shuffled } from "@/lib/practice/random";
 import { usePdfOpener } from "@/components/PdfButton";
 
 const KINDS: NumberKind[] = ["whole", "decimal", "fraction"];
@@ -270,7 +270,7 @@ export default function PracticePage() {
           onExit={() => setRun(null)}
           onNewQuiz={start}
           onRetry={(questions) =>
-            setRun({ quiz: questions.map((q) => ({ ...q, numbers: [...q.numbers].sort(() => Math.random() - 0.5) })), seed: null, key: newSeed() })
+            setRun({ quiz: questions.map((q) => ({ ...q, numbers: shuffled(q.numbers) })), seed: null, key: newSeed() })
           }
         />
       )}

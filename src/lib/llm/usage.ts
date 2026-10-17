@@ -11,7 +11,7 @@ export async function recordTokenUsage(params: {
   usage: NormalizedUsage;
 }) {
   const admin = createAdminClient();
-  await admin.from("token_usage").insert({
+  const { error } = await admin.from("token_usage").insert({
     student_id: params.studentId,
     task_type: params.taskType,
     provider: params.provider,
@@ -20,4 +20,6 @@ export async function recordTokenUsage(params: {
     output_tokens: params.usage.outputTokens,
     total_tokens: params.usage.totalTokens,
   });
+  // The answer is already made; a missing usage row only affects the monthly count, so log it and carry on.
+  if (error) console.error("[usage] couldn't record token use", error);
 }

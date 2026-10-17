@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCurrentStudent } from "@/lib/auth";
+import { apiError, authenticate } from "@/lib/api";
 import { renderGenerationPdf } from "@/lib/pdf/render";
 import { withoutAnswerKey } from "@/lib/format";
 import { KIND_LABELS, makeQuiz, normaliseSettings, settingsProblem, worksheetMarkdown } from "@/lib/practice/order";
@@ -10,8 +10,9 @@ import { KIND_LABELS, makeQuiz, normaliseSettings, settingsProblem, worksheetMar
  * no AI is used. ?answers=0 leaves out the answer key.
  */
 export async function GET(request: Request) {
-  const student = await getCurrentStudent();
-  if (!student || !student.active) return NextResponse.json({ error: "Your session has ended. Please sign in again." }, { status: 401 });
+  const auth = await authenticate();
+  if ("response" in auth) return auth.response;
+  const student = auth.account;
 
   const params = new URL(request.url).searchParams;
   let raw: unknown = null;
@@ -21,9 +22,11 @@ export async function GET(request: Request) {
     // Falls through to the defaults below.
   }
   const settings = normaliseSettings(raw);
-  const seed = Number(params.get("seed"));
+  const seedText = params.get("seed") ?? "";
+  const seed = /^\d{1,10}$/.test(seedText) ? Number(seedText) : NaN;
+  if (!Number.isSafeInteger(seed)) return apiError(400, "This worksheet link is incomplete. Go back to Practice and press Print again.");
   const problem = settingsProblem(settings);
-  if (problem || !Number.isInteger(seed)) return NextResponse.json({ error: problem ?? "Missing quiz number." }, { status: 400 });
+  if (problem) return apiError(400, problem);
 
   const markdown = worksheetMarkdown(settings, makeQuiz(settings, seed));
   const withAnswers = params.get("answers") !== "0";
@@ -32,7 +35,7 @@ export async function GET(request: Request) {
     const pdf = await renderGenerationPdf({
       taskType: "sample_paper",
       title,
-      studentName: student.full_name ?? student.email,
+      preparedBy: student.full_name ?? student.email,
       content: withAnswers ? markdown : withoutAnswerKey(markdown),
       sources: [],
       sourceImages: new Map(),
@@ -48,6 +51,6 @@ export async function GET(request: Request) {
     });
   } catch (err) {
     console.error("[practice worksheet]", err);
-    return NextResponse.json({ error: "Couldn't make the worksheet. Please try again." }, { status: 500 });
+    return apiError(500, "Couldn't make the worksheet. Please try again in a moment.");
   }
 }

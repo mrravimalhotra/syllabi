@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { authenticateAdmin } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { BACKUPS, embed, generateCompletion } from "@/lib/llm";
 import { OPENAI_COMPATIBLE, hasKey, openAiCompatibleAdapter } from "@/lib/llm/providers/openai";
@@ -60,12 +60,9 @@ async function run(name: string, fn: () => Promise<string>): Promise<Check> {
  * key or setting after a deploy, since free-plan logs only last an hour.
  */
 export async function POST() {
-  let admin;
-  try {
-    admin = await requireAdmin();
-  } catch {
-    return NextResponse.json({ error: "Admins only." }, { status: 403 });
-  }
+  const auth = await authenticateAdmin();
+  if ("response" in auth) return auth.response;
+  const admin = auth.account;
 
   const checks: Check[] = [];
 
@@ -164,13 +161,19 @@ export async function POST() {
   checks.push(
     await run("Background page reading", async () => {
       const db = createAdminClient();
-      const [{ data: runner }, { data: timer }, { data: jobs }] = await Promise.all([
+      const countOf = async (status: string) => {
+        const { count, error } = await db.from("page_jobs").select("id", { count: "exact", head: true }).eq("status", status);
+        if (error) throw error;
+        return count ?? 0;
+      };
+      const [{ data: runner }, { data: timer }, pending, working, failed] = await Promise.all([
         db.from("job_runner").select("app_url").eq("id", 1).maybeSingle(),
         db.rpc("background_timer_ready"),
-        db.from("page_jobs").select("status"),
+        countOf("pending"),
+        countOf("working"),
+        countOf("failed"),
       ]);
-      const count = (status: string) => (jobs ?? []).filter((j) => j.status === status).length;
-      const queue = `${count("pending")} waiting, ${count("working")} being read, ${count("failed")} couldn't be read`;
+      const queue = `${pending} waiting, ${working} being read, ${failed} couldn't be read`;
       if (!timer) {
         throw new Error(
           `The once-a-minute timer isn't set up (Supabase extensions pg_cron and pg_net), so reading only continues while uploads arrive. Pages: ${queue}.`

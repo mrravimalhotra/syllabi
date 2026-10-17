@@ -13,7 +13,6 @@ const FALLBACK: Record<TaskType, { provider: Provider; model: string }> = {
   notes: { provider: "google", model: "gemini-flash-latest" },
   sample_paper: { provider: "google", model: "gemini-flash-latest" },
   ad_hoc: { provider: "google", model: "gemini-flash-latest" },
-  coverage_check: { provider: "google", model: "gemini-flash-lite-latest" },
   study_pack: { provider: "google", model: "gemini-flash-latest" },
 };
 

@@ -15,7 +15,6 @@ const TASK_TYPE_LABELS: Record<string, string> = {
   notes: "Revision notes",
   sample_paper: "Sample papers",
   ad_hoc: "Ask (quick answers)",
-  coverage_check: "Checking book coverage",
   study_pack: "Chapter study packs",
 };
 const labelFor = (taskType: string) =>

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCurrentStudent } from "@/lib/auth";
+import { authenticate } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { findAnswer } from "@/lib/generation/answers";
 import { withImageUrls } from "@/lib/generation/sources";
@@ -11,8 +11,9 @@ type Params = { params: Promise<{ id: string }> };
 
 /** One saved answer, with fresh links to its source page images. */
 export async function GET(_request: Request, { params }: Params) {
-  const user = await getCurrentStudent();
-  if (!user || !user.active) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await authenticate();
+  if ("response" in auth) return auth.response;
+  const user = auth.account;
 
   const answer = await findAnswer((await params).id, user);
   if (!answer) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -37,8 +38,9 @@ export async function GET(_request: Request, { params }: Params) {
 
 /** Renames a saved answer. */
 export async function PATCH(request: Request, { params }: Params) {
-  const user = await getCurrentStudent();
-  if (!user || !user.active) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await authenticate();
+  if ("response" in auth) return auth.response;
+  const user = auth.account;
 
   const answer = await findAnswer((await params).id, user);
   if (!answer) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -54,8 +56,9 @@ export async function PATCH(request: Request, { params }: Params) {
 
 /** Deletes a saved answer (and its stored PDF, for older answers). */
 export async function DELETE(_request: Request, { params }: Params) {
-  const user = await getCurrentStudent();
-  if (!user || !user.active) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await authenticate();
+  if ("response" in auth) return auth.response;
+  const user = auth.account;
 
   const answer = await findAnswer((await params).id, user);
   if (!answer) return NextResponse.json({ error: "Not found" }, { status: 404 });

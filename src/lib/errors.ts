@@ -30,6 +30,22 @@ function isRaisedByOurDatabase(err: unknown): err is { message: string } {
   );
 }
 
+/** The text of anything that was thrown: an Error, a plain object with a message (database and provider errors often are), or a string. */
+export function errorText(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === "string") return err;
+  if (typeof err === "object" && err !== null) {
+    const { message, error, details } = err as { message?: unknown; error?: unknown; details?: unknown };
+    for (const part of [message, error, details]) if (typeof part === "string" && part) return part;
+    try {
+      return JSON.stringify(err).slice(0, 500);
+    } catch {
+      return "";
+    }
+  }
+  return "";
+}
+
 /**
  * Turns any error into a message that is safe to show. UserError messages and
  * deliberate database messages pass through; anything else (raw database,
@@ -41,12 +57,12 @@ export function userMessage(err: unknown, context: string, fallback = GENERIC): 
   if (isRaisedByOurDatabase(err)) return err.message;
   console.error(`[${context}]`, err);
   // The AI provider's limits, said plainly rather than "something went wrong".
-  const message = err instanceof Error ? err.message : String(err);
+  const message = errorText(err);
   if (DAILY_LIMIT.test(message)) {
-    return "The AI's free daily allowance is used up for today. It resets around 12:30 to 1:30 pm India time; an admin can enable billing on the Gemini key for more.";
+    return "The AI service's free daily limit is used up for today. It resets around 12:30 to 1:30 pm India time. The person who runs Syllabi can turn on billing for more.";
   }
   if (/\b(429|503)\b|RESOURCE_EXHAUSTED|overloaded|UNAVAILABLE/i.test(message)) {
-    return "The AI service is busy right now. Please try again in a minute.";
+    return "The AI service is busy right now. Wait a minute and try again.";
   }
   return fallback;
 }
