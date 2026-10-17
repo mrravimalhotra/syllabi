@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { apiError, authenticate, errorResponse } from "@/lib/api";
+import { forgetStudent } from "@/lib/supabase/identity";
 import { checkQuota } from "@/lib/quota";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -58,6 +59,7 @@ export async function PATCH(request: Request) {
 
   const admin = createAdminClient();
   const { error } = await admin.from("students").update(updates).eq("id", student.id);
+  forgetStudent(student.id);
   if (error) return errorResponse(error, "me PATCH", "Couldn't save your change. Try again in a moment.");
   return NextResponse.json({ ok: true, fullName: updates.full_name ?? student.full_name });
 }
@@ -94,6 +96,7 @@ export async function DELETE(request: Request) {
   // Finally the sign-in itself.
   const { error: authError } = await admin.auth.admin.deleteUser(student.id);
   if (authError) console.error("[me DELETE] auth user", authError);
+  forgetStudent(student.id);
   await (await createClient()).auth.signOut().catch((err) => console.error("[me DELETE] sign out", err));
 
   return NextResponse.json({ ok: true });

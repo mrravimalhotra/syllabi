@@ -1,5 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { signupsOpen } from "@/lib/access";
+import { cachedStudent, identify, rememberStudent } from "@/lib/supabase/identity";
+import type { Student } from "@/types/database";
 import { NextResponse, type NextRequest } from "next/server";
 
 // The manifest is fetched without a session, so it must stay public. The
@@ -52,8 +54,7 @@ export async function updateSession(request: NextRequest) {
   // sign-in service when the project uses signing keys), and refreshes it when it
   // is about to expire. Whether the account may still use Syllabi is checked
   // against its database row below and in each API route.
-  const { data: claimsData } = await supabase.auth.getClaims();
-  const userId = typeof claimsData?.claims?.sub === "string" ? claimsData.claims.sub : null;
+  const userId = await identify(supabase);
 
   const { pathname } = request.nextUrl;
   const isPublic = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
@@ -70,11 +71,16 @@ export async function updateSession(request: NextRequest) {
   // API routes check the account row themselves (authenticate in lib/api.ts),
   // so only pages need the lookup here: it saves a database round trip per request.
   if (userId && !isPublic && !isApi) {
-    const { data: student, error: studentError } = await supabase
-      .from("students")
-      .select("role, active")
-      .eq("id", userId)
-      .single();
+    let student: Pick<Student, "role" | "active"> | null = cachedStudent(userId);
+    let studentError: { code?: string } | null = null;
+    if (!student) {
+      const result = await supabase.from("students").select("*").eq("id", userId).single();
+      studentError = result.error;
+      if (result.data) {
+        student = result.data as Student;
+        rememberStudent(result.data as Student);
+      }
+    }
 
     // A database failure is not the same as "no access": say it's temporary,
     // instead of sending approved people to the "awaiting approval" page.

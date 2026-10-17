@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
+import { cachedStudent, identify, rememberStudent } from "@/lib/supabase/identity";
 import { UserError } from "@/lib/errors";
 import type { Student } from "@/types/database";
 
@@ -28,14 +29,17 @@ const NO_ROWS = "PGRST116";
  */
 export const getCurrentStudent = cache(async (): Promise<Student | null> => {
   const supabase = await createClient();
-  // The token is verified on this server where possible (see updateSession).
-  const { data: claimsData } = await supabase.auth.getClaims();
-  const userId = typeof claimsData?.claims?.sub === "string" ? claimsData.claims.sub : null;
+  const userId = await identify(supabase);
   if (!userId) return null;
+  const known = cachedStudent(userId);
+  if (known) return known;
 
   for (let attempt = 1; ; attempt++) {
     const { data, error } = await supabase.from("students").select("*").eq("id", userId).single();
-    if (!error) return data as Student;
+    if (!error) {
+      rememberStudent(data as Student);
+      return data as Student;
+    }
     if (error.code === NO_ROWS) return null;
     if (attempt >= 2) {
       console.error("[auth] couldn't read the account row", error);

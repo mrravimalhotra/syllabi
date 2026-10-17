@@ -10,6 +10,7 @@ import { findProblems, pureProblem, solve } from "@/lib/worked/detect";
 import type { WorkedExample } from "@/lib/worked/types";
 import { LANGUAGE_NAMES, type AnswerLanguage } from "@/lib/generation/language";
 import { fileReadError } from "@/lib/file-errors";
+import { keep, peek } from "@/lib/client-cache";
 import { readAnswerStream } from "@/lib/answer-stream";
 import {
   ACCEPTED_FILES,
@@ -39,7 +40,7 @@ import { Alert, Meter, Spinner, button, cx, input, link } from "@/components/ui"
 import type { GenerationTaskType } from "@/types/database";
 
 export default function DashboardPage() {
-  const [me, setMe] = useState<MeResponse | null>(null);
+  const [me, setMe] = useState<MeResponse | null>(() => peek<MeResponse>("me") ?? null);
   const [tab, setTab] = useState<GenerationTaskType>("solution");
   const [prompt, setPrompt] = useState("");
   // Sample papers: total marks to aim for (Indian school papers are often 80).
@@ -61,9 +62,9 @@ export default function DashboardPage() {
   const [dragging, setDragging] = useState(false);
 
   // The user's own books; answers search only the ones ticked (all by default).
-  const [books, setBooks] = useState<Book[]>([]);
+  const [books, setBooks] = useState<Book[]>(() => peek<Book[]>("books") ?? []);
   const [selectedBookIds, setSelectedBookIds] = useState<string[] | null>(null);
-  const [booksLoaded, setBooksLoaded] = useState(false);
+  const [booksLoaded, setBooksLoaded] = useState(() => peek("books") !== undefined);
   const [booksError, setBooksError] = useState(false);
   const [showBooks, setShowBooks] = useState(false);
   // Language for this question; until changed, the Account page's default.
@@ -86,7 +87,7 @@ export default function DashboardPage() {
   async function loadMe() {
     const res = await fetch("/api/me");
     const data = await res.json().catch(() => null);
-    if (res.ok && data) setMe(data);
+    if (res.ok && data) setMe(keep("me", data));
   }
 
   async function loadBooks() {
@@ -94,7 +95,7 @@ export default function DashboardPage() {
       const res = await fetch("/api/library?progress=0");
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      setBooks((data.documents as Book[]).filter((b) => b.status === "ready"));
+      setBooks(keep("books", (data.documents as Book[]).filter((b) => b.status === "ready")));
       setBooksLoaded(true);
     } catch {
       setBooksError(true);

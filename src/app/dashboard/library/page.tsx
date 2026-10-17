@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { downscaleImageFile, formatBytes, imageFingerprint } from "@/lib/downscale-image";
+import { keep, peek } from "@/lib/client-cache";
 import { fileReadError } from "@/lib/file-errors";
 import { sourceTypeLabel } from "@/lib/format";
 import {
@@ -40,8 +41,9 @@ import {
 } from "@/components/ui";
 
 export default function LibraryPage() {
-  const [documents, setDocuments] = useState<DocumentRowView[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [documents, setDocuments] = useState<DocumentRowView[]>(() => peek<DocumentRowView[]>("library") ?? []);
+  // With the last list on hand there is nothing to wait for: it shows now and refreshes behind.
+  const [loading, setLoading] = useState(() => peek("library") === undefined);
   const [loadFailed, setLoadFailed] = useState(false);
 
   const [title, setTitle] = useState("");
@@ -74,6 +76,7 @@ export default function LibraryPage() {
       const docsRes = await fetch("/api/library");
       const docs = await docsRes.json();
       if (!docsRes.ok) throw new Error(docs.error);
+      keep("library", docs.documents);
       setDocuments(docs.documents);
       setListedAt(Date.now());
       setLoadFailed(false);
@@ -230,7 +233,7 @@ export default function LibraryPage() {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error ?? "Rename failed");
-    setDocuments((prev) => prev.map((d) => (d.id === id ? { ...d, title: data.document.title } : d)));
+    setDocuments((prev) => keep("library", prev.map((d) => (d.id === id ? { ...d, title: data.document.title } : d))));
   }
 
   /** Deletes a book (stopping its upload first, if this tab is uploading it). Returns whether it worked. */
@@ -246,7 +249,7 @@ export default function LibraryPage() {
         setBookErrors((e) => ({ ...e, [id]: data.error ?? "Couldn't delete this book. Try again in a moment." }));
         return false;
       }
-      setDocuments((docs) => docs.filter((d) => d.id !== id));
+      setDocuments((docs) => keep("library", docs.filter((d) => d.id !== id)));
       // Pages waiting to go into this book will start a new one instead.
       setPages((prev) => prev.map((p) => (p.bookId === id ? { ...p, bookId: undefined, pageNumber: undefined } : p)));
       return true;

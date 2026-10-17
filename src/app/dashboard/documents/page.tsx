@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { keep, peek } from "@/lib/client-cache";
 import { ChatIcon, ClipboardIcon, DownloadIcon, LayersIcon, ListCheckIcon, NotesIcon, SearchIcon, SparklesIcon, TrashIcon } from "@/components/icons";
 import { OFFLINE_MESSAGE, failedRequestMessage } from "@/lib/http-errors";
 import { PdfButton } from "@/components/PdfButton";
@@ -20,8 +21,8 @@ const TASK_ICONS: Record<string, typeof ListCheckIcon> = {
 };
 
 export default function MyDocumentsPage() {
-  const [documents, setDocuments] = useState<Row[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [documents, setDocuments] = useState<Row[]>(() => peek<Row[]>("documents") ?? []);
+  const [loading, setLoading] = useState(() => peek("documents") === undefined);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [type, setType] = useState<string>("all");
@@ -31,6 +32,7 @@ export default function MyDocumentsPage() {
       .then(async (r) => {
         const data = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(data.error ?? failedRequestMessage(r.status, "load your documents"));
+        keep("documents", data.documents ?? []);
         setDocuments(data.documents ?? []);
       })
       .catch((err) => setError(err instanceof TypeError ? OFFLINE_MESSAGE : err instanceof Error ? err.message : "Couldn't load your documents. Reload the page to try again."))
@@ -53,7 +55,7 @@ export default function MyDocumentsPage() {
       setError("Couldn't delete that answer. Please try again.");
       return;
     }
-    setDocuments((prev) => prev.filter((d) => d.id !== doc.id));
+    setDocuments((prev) => keep("documents", prev.filter((d) => d.id !== doc.id)));
   }
 
   return (

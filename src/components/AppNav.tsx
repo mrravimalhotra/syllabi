@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSyncExternalStore } from "react";
 import { signOut } from "@/lib/actions/auth";
+import { forgetAll } from "@/lib/client-cache";
 import { BookIcon, DocumentIcon, LogoutIcon, ShieldIcon, SparklesIcon, TargetIcon, UserIcon, WifiOffIcon } from "@/components/icons";
 import { Logo, button, cx } from "@/components/ui";
 
@@ -94,7 +95,7 @@ export function AppNav({ name, isAdmin }: { name: string; isAdmin: boolean }) {
             <span className="hidden max-w-48 truncate px-2 text-sm text-slate-500 lg:inline" title={name}>
               {name}
             </span>
-            <form action={signOut}>
+            <form action={signOut} onSubmit={forgetAll}>
               <button className={button.icon} aria-label="Sign out" title="Sign out">
                 <LogoutIcon className="h-4.5 w-4.5" />
               </button>

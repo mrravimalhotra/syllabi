@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { forgetStudent } from "@/lib/supabase/identity";
 import { apiError, authenticateAdmin, errorResponse } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isUuid } from "@/lib/validate";
@@ -65,6 +66,7 @@ export async function PATCH(request: Request) {
   const admin = createAdminClient();
   const { data, error } = await admin.from("students").update(updates).eq("id", id).select().maybeSingle();
 
+  forgetStudent(id);
   if (error) return errorResponse(error, "admin/students PATCH", "Couldn't save the change. Try again in a moment.");
   if (!data) return apiError(404, "That account no longer exists. Reload the page.");
   return NextResponse.json({ student: data });
