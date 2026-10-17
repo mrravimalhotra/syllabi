@@ -9,8 +9,9 @@
 import { NextResponse } from "next/server";
 import { DatabaseUnavailableError, NotAdminError, getCurrentStudent, requireAdmin } from "@/lib/auth";
 import { signupsOpen } from "@/lib/access";
-import { BlockedReplyError, DAILY_LIMIT, userMessage } from "@/lib/errors";
+import { BlockedReplyError, DAILY_LIMIT, errorText, userMessage } from "@/lib/errors";
 import { QuotaExceededError } from "@/lib/quota";
+import { logError } from "@/lib/error-log";
 import type { Student } from "@/types/database";
 
 export function apiError(status: number, message: string, extra: Record<string, unknown> = {}): NextResponse {
@@ -38,6 +39,10 @@ function statusFor(err: unknown): number {
  */
 export function errorResponse(err: unknown, context: string, fallback?: string, more: Record<string, unknown> = {}): NextResponse {
   const status = statusFor(err);
+  // Our own failures (not the person's mistakes or the AI's limits) go in the admin's error log.
+  if (status === 500 || (status === 503 && !(err instanceof DatabaseUnavailableError) && !/\b(429|503)\b|overloaded|UNAVAILABLE|RESOURCE_EXHAUSTED/i.test(errorText(err)))) {
+    void logError({ source: "server", context, error: err });
+  }
   const extra = { ...(err instanceof QuotaExceededError ? { quota: err.status } : {}), ...more };
   return apiError(status, userMessage(err, context, fallback), extra);
 }

@@ -167,6 +167,14 @@ begin
     'select * from monthly_usage_all()', 'error');
   perform pg_temp.check_answer_row();
   perform pg_temp.check_page_jobs();
+  perform pg_temp.check('user cannot read the error log', 'authenticated', p1, 'select * from error_log', 'error');
+  perform pg_temp.check('user cannot write the error log', 'authenticated', p1,
+    'insert into error_log (source, context, message) values (''browser'', ''x'', ''x'')', 'error');
+  perform pg_temp.check('anon cannot read the error log', 'anon', null, 'select * from error_log', 'error');
+  perform pg_temp.check('server can write the error log', 'service_role', null,
+    'insert into error_log (source, context, message) values (''server'', ''test'', ''boom'')', '1');
+  perform pg_temp.check('server can purge the error log', 'service_role', null, 'select purge_error_log()', '1');
+  perform pg_temp.check('user cannot purge the error log', 'authenticated', p1, 'select purge_error_log()', 'error');
 
   -- At least one active admin always remains.
   perform pg_temp.check('cannot demote the last admin', 'service_role', null,

@@ -3,11 +3,13 @@
 import { useEffect } from "react";
 import { AlertIcon } from "@/components/icons";
 import { button, card, cx } from "@/components/ui";
+import { reportCrash } from "@/lib/report-crash";
 
 /** Shown if a page in the app crashes, instead of a blank screen. */
 export default function DashboardError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
     console.error(error);
+    reportCrash("dashboard page", error);
   }, [error]);
 
   return (

@@ -5,6 +5,7 @@ import { embedMany } from "@/lib/llm";
 import { recordTokenUsage } from "@/lib/llm/usage";
 import { uploadSourceFile } from "@/lib/storage";
 import type { SourceType } from "@/types/database";
+import { logError } from "@/lib/error-log";
 import { BlockedReplyError, DAILY_LIMIT, UserError, errorText } from "@/lib/errors";
 
 const MIME_EXTENSIONS: Record<string, string> = {
@@ -71,6 +72,7 @@ export interface PageContext {
 /** Where a failure happened, logged in full and reported as the page and step. */
 function failAt(label: string, pageNumber: number, err: unknown): never {
   console.error(`[ingest] page ${pageNumber} (${label})`, err);
+  if (!hopeless(err)) void logError({ source: "server", context: `ingest page ${pageNumber} (${label})`, error: err });
   throw new IngestError(`Page ${pageNumber}: ${label} failed${failureReason(err)}.`, !hopeless(err), DAILY_LIMIT.test(errorText(err)));
 }
 

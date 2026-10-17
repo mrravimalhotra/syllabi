@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AlertIcon, CheckIcon } from "@/components/icons";
 import { Alert, PageHeader, Spinner, button, card, cx } from "@/components/ui";
 
@@ -10,6 +10,67 @@ interface Check {
   skipped?: boolean;
   detail: string;
   ms: number;
+}
+
+interface LoggedError {
+  id: string;
+  created_at: string;
+  source: "server" | "browser";
+  context: string;
+  message: string;
+  path: string | null;
+}
+
+/** The latest problems the app logged on its own, newest first. */
+function RecentProblems() {
+  const [rows, setRows] = useState<LoggedError[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/errors");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Couldn't load the error log.");
+      setRows(data.errors);
+    } catch (err) {
+      setError(err instanceof TypeError ? "Couldn't reach Syllabi. Check your internet connection." : err instanceof Error ? err.message : "Couldn't load the error log.");
+    }
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch-on-mount is intentional here
+    void load();
+  }, [load]);
+
+  return (
+    <section className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-base font-semibold text-slate-900">Recent problems</h2>
+        <button type="button" onClick={() => void load()} className={button.secondary}>
+          Refresh
+        </button>
+      </div>
+      {error && <Alert tone="error">{error}</Alert>}
+      {rows && rows.length === 0 && <p className="text-sm text-slate-500">Nothing logged in the last 30 days.</p>}
+      {rows && rows.length > 0 && (
+        <ul className={cx(card, "divide-y divide-slate-100")}>
+          {rows.map((r) => (
+            <li key={r.id} className="px-5 py-3">
+              <p className="flex flex-wrap items-baseline justify-between gap-2 text-sm font-medium text-slate-900">
+                {r.context}
+                <span className="text-xs font-normal text-slate-400">
+                  {r.source === "browser" ? "Screen crash" : "Server"} · {new Date(r.created_at).toLocaleString("en-IN")}
+                </span>
+              </p>
+              <p className="mt-1 font-mono text-xs break-words text-red-700">{r.message}</p>
+              {r.path && <p className="mt-1 text-xs text-slate-400">{r.path}</p>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
 }
 
 /** Runs the server's self-test and shows each service's result, with the real error when one fails. */
@@ -83,6 +144,7 @@ export default function HealthPage() {
           ))}
         </ul>
       )}
+      <RecentProblems />
     </div>
   );
 }

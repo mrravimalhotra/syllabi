@@ -1,8 +1,14 @@
 "use client";
 
+import { useEffect } from "react";
 import { Alert, button, cx } from "@/components/ui";
+import { reportCrash } from "@/lib/report-crash";
 
 export default function AdminError({ error, reset }: { error: Error; reset: () => void }) {
+  useEffect(() => {
+    reportCrash("admin page", error);
+  }, [error]);
+
   return (
     <Alert tone="error">
       <p className="font-medium">This admin page couldn&apos;t load.</p>
