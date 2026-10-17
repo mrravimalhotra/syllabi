@@ -1,5 +1,7 @@
 # Syllabi — Full Handoff for the Cloud Session
 
+> **Study packs (2026-10-17):** the StoryLearner prototype is now a fifth Generate tab, "Study pack". Design and the reasons for every change from the prototype: `docs/study-pack.md`. Code: `src/lib/study-pack/`, `src/components/study-pack/`, `src/app/api/generate/study-pack/`, `src/app/api/documents/[id]/pack/` (refine and undo). Migration 9 adds the `study_pack` kind, `generated_documents.pack` and `chunks.chunk_index`.
+
 > **Live (2026-10-17):** https://syllabi-study.vercel.app (Vercel project `syllabi`, Mumbai), Supabase `syllabi` (Mumbai), R2 bucket `syllabi`, Gemini key set. Private testing: `OPEN_SIGNUPS=false`, owner signed up and made admin. The old R2 bucket `studysprint` holds orphaned files from the deleted project and can be removed. Next: live tests in `docs/release-checklist.md`.
 
 > **Status update (2026-10-17):** steps 1–3 of section 12 are done: `docs/DEPLOYMENT.md` added, lint/build pass cleanly, and `supabase/migrations/20261017000004_tighten_rls.sql` fixes RLS issues 1–2 in section 10 (plus a related hole: students could insert `generated_documents` rows pointing at any storage path). Development branch: `claude/awesome-euler-jg6t9u`.
