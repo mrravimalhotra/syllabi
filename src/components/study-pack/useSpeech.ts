@@ -77,3 +77,34 @@ export function useSpeech(language = "en") {
 }
 
 export type Speech = ReturnType<typeof useSpeech>;
+
+/**
+ * Speaks one piece of text and calls onEnd when it finishes (or at once if
+ * speech isn't available). Returns a function that stops it without calling onEnd.
+ */
+export function speakOnce(text: string, language: string, rate: number, onEnd: () => void): () => void {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+    onEnd();
+    return () => {};
+  }
+  let cancelled = false;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  const voice = pickVoice(text, language);
+  if (voice) {
+    utterance.voice = voice;
+    utterance.lang = voice.lang;
+  } else {
+    utterance.lang = SPEECH_LANG[language] ?? "en-IN";
+  }
+  utterance.rate = rate;
+  utterance.onend = () => {
+    if (!cancelled) onEnd();
+  };
+  utterance.onerror = utterance.onend;
+  window.speechSynthesis.speak(utterance);
+  return () => {
+    cancelled = true;
+    window.speechSynthesis.cancel();
+  };
+}

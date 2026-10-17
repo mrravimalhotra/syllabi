@@ -1,4 +1,5 @@
 import type { StudyPack } from "@/lib/study-pack/types";
+import type { WorkedProblem } from "@/lib/worked/types";
 
 /** One check Syllabi's own code made on an answer (no AI involved). */
 export interface AnswerCheck {
@@ -160,5 +161,7 @@ export interface GeneratedDocumentRow {
   cache_key: string | null;
   /** What Syllabi's own code checked about this answer. */
   checks: AnswerCheck[];
+  /** Worked examples only: the problem; its steps are recomputed when opened. */
+  worked: WorkedProblem | null;
   created_at: string;
 }

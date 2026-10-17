@@ -60,6 +60,8 @@ Tick each one and note anything odd. Use your phone for the starred (★) checks
 | T-37 | Ask the same question twice; then press "Make a new answer" | Second time: "You asked this before" appears instantly, no tokens used; "Make a new answer" generates afresh |
 | T-38 ★ | Solve a maths worksheet; make an 80-mark sample paper | Under the answer: "N calculations checked by an exact calculator: all correct" (or problems listed); the paper shows "Marks add up to 80" and "Answer key covers all N questions" |
 | T-39 | Study pack practice test with MCQ and true/false questions | Tapping an option marks it at once (green/amber, "Correct!"), Next moves on, and the score counts it |
+| T-40 ★ | Solve: type "Divide 6008 by 4", then "Find the HCF and LCM of 12, 18 and 30" | A chalkboard worked example appears instantly ("Exact: worked out by code, no AI"); Play reads each step aloud and moves on; Show all, Print and My Documents work; no tokens used |
+| T-41 | Solve a worksheet that includes "Divide 125 by 5" among other questions | The AI answer has "See it worked out: Long division: 125 ÷ 5" under it, which opens the chalkboard |
 | T-30 | Create a throwaway second admin, then delete that account from its Account page | Account and its books are gone; deleting your only admin account is refused |
 | T-25 ★ | Upload phone photos of a Computer chapter with code (e.g. HTML), then ask "Write the basic structure of an HTML document" | Answer has a code block that keeps its indentation; on the phone only the code box scrolls; the PDF shows the code in a typewriter-style font |
 | T-24 | Step-by-step solution: "Answer all questions in this worksheet" with a worksheet photo or upload | Every question answered in order, each sized to its marks |

@@ -1,0 +1,53 @@
+import { NextResponse } from "next/server";
+import { getCurrentStudent } from "@/lib/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { userMessage } from "@/lib/errors";
+import { solve, workedToMarkdown } from "@/lib/worked/detect";
+import type { WorkedProblem } from "@/lib/worked/types";
+
+/** Reads a problem from the request; null unless it is exactly one of the supported shapes. */
+function parseProblem(raw: unknown): WorkedProblem | null {
+  const p = raw as Partial<Record<string, unknown>> | null;
+  if (p?.kind === "division" && typeof p.dividend === "string" && typeof p.divisor === "string") {
+    return { kind: "division", dividend: p.dividend, divisor: p.divisor, decimals: p.decimals === true };
+  }
+  if (
+    p?.kind === "lcm-hcf" &&
+    Array.isArray(p.numbers) &&
+    p.numbers.every((n) => Number.isInteger(n)) &&
+    (p.want === "lcm" || p.want === "hcf" || p.want === "both")
+  ) {
+    return { kind: "lcm-hcf", numbers: p.numbers as number[], want: p.want };
+  }
+  return null;
+}
+
+/**
+ * Saves a worked example to My Documents. The server works the problem out
+ * again itself (never trusting steps sent by the browser); no AI, no tokens.
+ */
+export async function POST(request: Request) {
+  const student = await getCurrentStudent();
+  if (!student || !student.active) {
+    return NextResponse.json({ error: "Your session has ended. Please sign in again." }, { status: 401 });
+  }
+  const problem = parseProblem((await request.json().catch(() => null))?.problem);
+  const example = problem ? solve(problem) : null;
+  if (!problem || !example) return NextResponse.json({ error: "That calculation can't be worked out here." }, { status: 400 });
+
+  const { data, error } = await createAdminClient()
+    .from("generated_documents")
+    .insert({
+      student_id: student.id,
+      task_type: "solution",
+      title: example.title,
+      content: workedToMarkdown(example),
+      worked: problem,
+      sources: [],
+      checks: [{ kind: "calculation", ok: true, message: example.answer }],
+    })
+    .select("id")
+    .single();
+  if (error) return NextResponse.json({ error: userMessage(error, "worked POST") }, { status: 500 });
+  return NextResponse.json({ id: data.id, pdfUrl: `/api/documents/${data.id}/pdf` });
+}

@@ -1,10 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { downscaleImageFile, imageFingerprint, type DownscaledImage } from "@/lib/downscale-image";
 import { AnswerView, type Answer } from "@/components/AnswerView";
 import { StudyPackView } from "@/components/study-pack/StudyPackView";
+import { WorkedExampleView } from "@/components/worked/WorkedExampleView";
+import { findProblems, pureProblem, solve } from "@/lib/worked/detect";
+import type { WorkedExample } from "@/lib/worked/types";
 import type { StudyPack } from "@/lib/study-pack/types";
 import { LANGUAGE_NAMES, type AnswerLanguage } from "@/lib/generation/language";
 import { formatDate } from "@/lib/format";
@@ -138,6 +141,10 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [result, setResult] = useState<GenerationResult | null>(null);
+  // A calculation answered by code alone (no AI): its worked example, and its id once saved.
+  const [worked, setWorked] = useState<{ example: WorkedExample; id: string | null } | null>(null);
+  // Calculations found in the last question, offered as "See it worked out" under an AI answer.
+  const [openWorked, setOpenWorked] = useState<number | null>(null);
   // Photos attached to the question (e.g. a homework page), downscaled in the
   // browser so they fit the request size limit.
   const [photos, setPhotos] = useState<DownscaledImage[]>([]);
@@ -272,6 +279,30 @@ export default function DashboardPage() {
     // same moment would both still see the old state.
     if (busyRef.current || readingFiles) return;
     const isPack = tab === "study_pack";
+
+    // A question that is only a calculation ("Divide 5255 by 5", "LCM of 12,
+    // 18 and 30") is answered by code: exact, instant, and no AI used.
+    if ((tab === "solution" || tab === "ad_hoc") && photos.length === 0 && attachedDocs.length === 0) {
+      const problem = pureProblem(prompt);
+      const example = problem ? solve(problem) : null;
+      if (problem && example) {
+        setError(null);
+        setNotice(null);
+        setResult(null);
+        setWorked({ example, id: null });
+        lastRequestRef.current = null;
+        fetch("/api/worked", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ problem }),
+        })
+          .then((r) => r.json())
+          .then((data) => data?.id && setWorked((w) => (w && w.example === example ? { ...w, id: data.id } : w)))
+          .catch(() => {});
+        return;
+      }
+    }
+
     if (isPack && !chosenPackBook && photos.length === 0) {
       setError("Choose the chapter from My books, or attach photos or a PDF of it.");
       return;
@@ -307,6 +338,8 @@ export default function DashboardPage() {
     setError(null);
     setNotice(null);
     setResult(null);
+    setWorked(null);
+    setOpenWorked(null);
     lastRequestRef.current = { route, body, task };
     const controller = new AbortController();
     abortRef.current = controller;
@@ -351,6 +384,17 @@ export default function DashboardPage() {
     setTab(last.task);
     send(last.route, { ...last.body, fresh: true }, last.task);
   }
+
+  // Calculations in the question just answered, each with its worked example.
+  const lastBody = lastRequestRef.current?.body;
+  const workedInQuestion = useMemo(() => {
+    if (!result || !lastBody) return [];
+    const text = [lastBody.prompt, lastBody.attachedText].filter((t) => typeof t === "string").join("\n");
+    return findProblems(text)
+      .slice(0, 6)
+      .map((f) => solve(f.problem))
+      .filter((e): e is WorkedExample => e !== null);
+  }, [result, lastBody]);
 
   const noBookSelected = tab !== "study_pack" && books.length > 0 && activeBookIds.length === 0;
   const overQuota = me?.quota.overQuota ?? false;
@@ -718,6 +762,20 @@ export default function DashboardPage() {
         <GeneratingCard steps={tab === "study_pack" ? PACK_WAIT_STEPS : WAIT_STEPS} onStop={() => abortRef.current?.abort()} />
       )}
 
+      {worked && (
+        <div className="space-y-3">
+          <WorkedExampleView key={worked.example.title} example={worked.example} />
+          {worked.id && (
+            <p className="text-center text-xs text-slate-500 print:hidden">
+              Saved to{" "}
+              <Link href={`/dashboard/documents/${worked.id}`} className={link}>
+                My Documents <ArrowRightIcon className="inline h-3 w-3" />
+              </Link>
+            </p>
+          )}
+        </div>
+      )}
+
       {result && (
         <div ref={resultRef} className="space-y-3">
           {result.reusedFrom && (
@@ -735,6 +793,30 @@ export default function DashboardPage() {
             <StudyPackView pack={result.pack} answerId={result.id} pdfUrl={result.pdfUrl} />
           ) : (
             <AnswerView answer={result} />
+          )}
+          {!result.pack && workedInQuestion.length > 0 && (
+            <div className="space-y-3 print:hidden">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-medium text-slate-700">See it worked out:</span>
+                {workedInQuestion.map((w, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    aria-pressed={openWorked === i}
+                    onClick={() => setOpenWorked(openWorked === i ? null : i)}
+                    className={cx(
+                      "rounded-full border px-3 py-1.5 text-xs font-medium transition",
+                      openWorked === i
+                        ? "border-brand-600 bg-brand-600 text-white"
+                        : "border-brand-200 bg-brand-50 text-brand-800 hover:border-brand-300"
+                    )}
+                  >
+                    {w.title}
+                  </button>
+                ))}
+              </div>
+              {openWorked !== null && workedInQuestion[openWorked] && <WorkedExampleView key={workedInQuestion[openWorked].title} example={workedInQuestion[openWorked]} />}
+            </div>
           )}
           {result.id && (
             <p className="text-center text-xs text-slate-500 print:hidden">

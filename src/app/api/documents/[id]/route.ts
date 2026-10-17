@@ -29,6 +29,7 @@ export async function GET(_request: Request, { params }: Params) {
       searchSuggestionsHtml: answer.search_suggestions_html,
       pack: answer.pack ?? null,
       checks: answer.checks ?? [],
+      worked: answer.worked ?? null,
       pdfUrl: `/api/documents/${answer.id}/pdf`,
     },
   });
