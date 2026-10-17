@@ -5,6 +5,10 @@ What was decided, when, and why, so the same question isn't asked twice. Newest 
 | Date | Decision | Why |
 |---|---|---|
 | 2026-10-17 | Owner's sample school material (Grade 7 Social Science papers, worksheets, an answer key) is used to teach the prompts Indian exam conventions (question types, marks-to-length, section pattern, model-answer style) and as test material. Nothing is "trained": Syllabi answers from uploads at question time. The files and their questions are not committed (the repo is public and they are the school's copyright) | Better-fitting answers and papers without redistributing school material |
+| 2026-10-17 | Full app review (as fellow developer): fixed everything not needing the owner; see `app-review.md` section H | Owner's instruction: fix all that can be fixed without consent |
+| 2026-10-17 | Page reading and "Ask anything" use Gemini Flash instead of Flash-Lite (migration 8 changes only rows still on the old default) | Handwriting and judging answers need the stronger model; each page is read once, so the extra cost is small |
+| 2026-10-17 | Answers are saved as text; PDFs are made on demand and no longer stored | No lost answers, no storage for unread PDFs, enables history |
+| 2026-10-17 | Google Search Suggestions shown with grounded answers and kept with the saved answer | Gemini API terms; kept only for the user's own history |
 | 2026-10-17 | Owner's sample files (exercises, revision sheets, sample papers, textbook chapters, project briefs) are test scenarios: kept in git-ignored `test-material/`, checked by `npm run scenarios`, catalogued in `docs/test-scenarios.md`. They drove: one search per question, file attachments (PDF/Word) on questions, Word pictures, handwriting labelling, check-my-child's-answers, project-brief and maths rules, and capped PDF page size | Real inputs, real gaps; nothing of theirs committed |
 | 2026-10-17 | Assignments that require the student's original work get scaffolding (facts, plan, structure, a labelled example to adapt), not a finished piece to hand in | Respects school rules such as "must be an original composition" |
 | 2026-10-17 | Owner's textbook photos (Computer studies, "Introduction to HTML") used the same way: to improve page reading (headings, side boxes, figures, exact code) and code handling in answers, screen and PDF. Not committed | Phone photos of real chapters with code exposed gaps |
@@ -32,5 +36,8 @@ What was decided, when, and why, so the same question isn't asked twice. Newest 
 | Audit log of admin actions (grant/revoke, role, quota) | Only one admin during testing |
 | Enforce the Content Security Policy (currently report-only) | Switch after a clean test pass |
 | Pricing, first pilot customer, expected number of users | Product questions for the PRD |
+| Per-user rate limiting (beyond the monthly quota) | Single tester now; revisit before opening sign-ups |
+| Data export ("download my data") and a written privacy policy and terms | Needs the owner's wording and a legal check |
+| Migrate from `@google/generative-ai` to `@google/genai` (D1) | Old SDK still works against the same API; switching untested code paths without a live key is riskier than waiting until after the first live test |
 | Make the GitHub repo private | Public repo exposes the code; Vercel Hobby supports private repos. Owner's call |
 | Private evaluation set built from real worksheets and answer keys (C2) | Must be stored outside the public repo |

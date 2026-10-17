@@ -13,6 +13,8 @@ Read this first. It covers what we are building and why, everything built so far
 
 ## 1. What we are building
 
+> **Full review (2026-10-17):** a developer-style review fixed security (open redirect, URL-text messages, key in URL, validation), reliability (unfinished uploads excluded from search, Gemini retries, blocked/truncated answers, 300 s answer routes, 8 images per upload request, JSON API errors) and added answer history with on-demand PDFs, forgot/reset password, account page with delete-account, renaming, and Google Search Suggestions display. Migration `20261017000008_answers_history_and_review_fixes.sql`. Details: `docs/app-review.md` section H.
+>
 > **Private testing (2026-10-17):** until the owner finishes testing, the app is limited to one admin tester. While `OPEN_SIGNUPS` is not `true`, only `ADMIN_EMAIL` can sign up and the access gate (`src/lib/supabase/middleware.ts`, switch in `src/lib/access.ts`) admits only admin accounts. To open to parents and tutors: set `OPEN_SIGNUPS=true` in Vercel and redeploy.
 >
 > **Bring your own book (2026-10-17):** the admin-curated shared library is retired. Each parent/tutor uploads their own child's/student's books under **My books** (`/dashboard/library`, APIs `/api/library`), with an ownership confirmation; books are private to the uploader and searched via `match_owner_chunks` (migration `20261017000006_private_libraries.sql`). Reading/indexing counts against the uploader's quota. The admin now only approves accounts, sets quotas and LLM settings. Schools/grades/subjects tables remain in the DB, unused. Sections 5–7 below still describe the old shared-library design in places.

@@ -12,6 +12,7 @@ Stack: Vercel (Next.js app) + Supabase (Postgres + pgvector + Auth) + Cloudflare
    - **By hand:** in **SQL Editor**, run each file in filename order (the first one enables the `vector` and `pgcrypto` extensions). Don't mix the two methods on the same database: the integration tracks what it has applied and would re-run hand-applied files.
 3. **Authentication → URL Configuration:** set Site URL to your Vercel domain, and add `https://<your-domain>/auth/callback` to Redirect URLs.
 4. Decide whether email confirmation is on (Authentication → Providers → Email). Both work; the callback route handles confirmation links.
+5. Password reset ("Forgot password?") emails come from Supabase's built-in sender, which is rate-limited (a few emails per hour). That is fine for testing; add your own SMTP sender (Authentication → Emails → SMTP Settings) before opening sign-ups. The reset link lands on `/auth/callback`, so the Redirect URL from step 3 is required.
 5. **Project Settings → API Keys:** note the project URL, the publishable key (`sb_publishable_...`) and the secret key (`sb_secret_...`).
 
 ## 2. Cloudflare R2
