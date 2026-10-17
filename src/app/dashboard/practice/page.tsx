@@ -5,6 +5,7 @@ import { PrinterIcon } from "@/components/icons";
 import { Alert, Field, PageHeader, PageSkeleton, Spinner, button, card, cx, input } from "@/components/ui";
 import { NumberView } from "@/components/practice/NumberView";
 import { OrderQuiz } from "@/components/practice/OrderQuiz";
+import { TutorialsCard } from "@/components/practice/TutorialsCard";
 import {
   KIND_LABELS,
   describe,
@@ -82,8 +83,10 @@ export default function PracticePage() {
     <div className="space-y-6 animate-fade-in">
       <PageHeader
         title="Practice"
-        description="Quick quizzes for your child, worked out by the app itself: always correct, and no AI used. Hand over the phone once it starts."
+        description="Quizzes and maths tutorials for your child, worked out by the app itself: always correct, and no AI used."
       />
+
+      <TutorialsCard />
 
       <section className={cx(card, "space-y-5 p-4 sm:p-6")}>
         <div>
