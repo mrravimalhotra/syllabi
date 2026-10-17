@@ -19,6 +19,7 @@ import {
 } from "@/components/icons";
 import { Badge, Spinner, button, card, cx, input } from "@/components/ui";
 import { useSpeech, type Speech } from "@/components/study-pack/useSpeech";
+import { normaliseResponse } from "@/lib/study-pack/auto-key";
 import { packToMarkdown } from "@/lib/study-pack/markdown";
 import type { PackQuestion, PackSection, StudyPack } from "@/lib/study-pack/types";
 
@@ -486,14 +487,14 @@ function AnswerBlock({
   );
 }
 
-function QuestionText({ q, label }: { q: PackQuestion; label: string }) {
+function QuestionText({ q, label, hideOptions }: { q: PackQuestion; label: string; hideOptions?: boolean }) {
   return (
     <div className="min-w-0 space-y-2">
       <p className="text-[15px] leading-6 font-medium text-slate-900">
         <span className="mr-1.5 text-brand-700">{label}</span>
         {q.question}
       </p>
-      {q.options.length > 0 && (
+      {q.options.length > 0 && !hideOptions && (
         <ul className="grid gap-1 text-sm text-slate-700 sm:grid-cols-2">
           {q.options.map((o) => (
             <li key={o} className="rounded-lg bg-slate-50 px-3 py-1.5">
@@ -593,6 +594,8 @@ function PracticeTest({
   const [index, setIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
   const [showHint, setShowHint] = useState(false);
+  // For objective questions marked by code: whether the child's choice was right.
+  const [autoResult, setAutoResult] = useState<boolean | null>(null);
   const [marks, setMarks] = useState<(boolean | null)[]>(() => questions.map(() => null));
   const finished = index >= questions.length;
   const score = marks.filter(Boolean).length;
@@ -603,7 +606,14 @@ function PracticeTest({
     speech.stop();
     setRevealed(false);
     setShowHint(false);
+    setAutoResult(null);
     setIndex((i) => i + 1);
+  }
+
+  /** The child answered an objective question: marked at once by comparing with the key. */
+  function respond(correct: boolean) {
+    setAutoResult(correct);
+    setRevealed(true);
   }
 
   function restart(onlyMissed: boolean) {
@@ -616,6 +626,7 @@ function PracticeTest({
     }
     setRevealed(false);
     setShowHint(false);
+    setAutoResult(null);
   }
 
   if (finished) {
@@ -668,8 +679,11 @@ function PracticeTest({
       <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
         <div className="h-full rounded-full bg-brand-600 transition-[width]" style={{ width: `${(index / questions.length) * 100}%` }} />
       </div>
-      <QuestionText q={q} label={`P${index + 1}.`} />
+      <QuestionText q={q} label={`P${index + 1}.`} hideOptions={q.autoKey?.kind === "option"} />
       <QuestionMeta q={q} />
+      {q.autoKey && (
+        <ObjectiveResponse key={index} q={q} locked={revealed} onRespond={respond} />
+      )}
       {showHint && q.hint && (
         <p className="flex gap-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
           <LightbulbIcon className="mt-0.5 h-4 w-4 shrink-0" /> {q.hint}
@@ -682,13 +696,32 @@ function PracticeTest({
               <LightbulbIcon className="h-4 w-4" /> Hint
             </button>
           )}
-          <button type="button" onClick={() => setRevealed(true)} className={button.primary}>
+          <button type="button" onClick={() => setRevealed(true)} className={q.autoKey ? button.secondary : button.primary}>
             Show the answer
           </button>
         </div>
       ) : (
         <>
+          {autoResult !== null && (
+            <p
+              role="status"
+              className={cx(
+                "flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium",
+                autoResult ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-900"
+              )}
+            >
+              {autoResult ? <CheckIcon className="h-4 w-4" /> : <AlertIcon className="h-4 w-4" />}
+              {autoResult ? "Correct!" : "Not quite. See the answer below."}
+            </p>
+          )}
           <AnswerBlock q={q} section="practiceQuestions" index={index} answerId={answerId} speech={speech} onChange={onChange} />
+          {autoResult !== null ? (
+            <div className="flex justify-end border-t border-slate-100 pt-4">
+              <button type="button" onClick={() => mark(autoResult)} className={button.primary}>
+                Next <ChevronRightIcon className="h-4 w-4" />
+              </button>
+            </div>
+          ) : (
           <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">
             <span className="text-sm text-slate-600">Did they get it?</span>
             <button type="button" onClick={() => mark(true)} className={button.success}>
@@ -698,9 +731,102 @@ function PracticeTest({
               Not yet
             </button>
           </div>
+          )}
         </>
       )}
     </section>
+  );
+}
+
+/**
+ * The child's own answer to an objective question: tap an option, True or
+ * False, or type the missing word. Marked by code against the key.
+ */
+function ObjectiveResponse({
+  q,
+  locked,
+  onRespond,
+}: {
+  q: PackQuestion;
+  locked: boolean;
+  onRespond: (correct: boolean) => void;
+}) {
+  const [chosen, setChosen] = useState<number | boolean | null>(null);
+  const [typed, setTyped] = useState("");
+  const key = q.autoKey!;
+
+  const choiceClass = (selected: boolean, right: boolean) =>
+    cx(
+      "rounded-xl border px-3 py-2.5 text-left text-sm transition disabled:cursor-default",
+      locked && right
+        ? "border-emerald-500 bg-emerald-50 text-emerald-900"
+        : locked && selected
+          ? "border-amber-400 bg-amber-50 text-amber-900"
+          : "border-slate-200 bg-white text-slate-800 hover:border-brand-300 hover:bg-brand-50"
+    );
+
+  if (key.kind === "option") {
+    return (
+      <div className="grid gap-2 sm:grid-cols-2" role="group" aria-label="Choose an answer">
+        {q.options.map((option, i) => (
+          <button
+            key={option}
+            type="button"
+            disabled={locked}
+            onClick={() => {
+              setChosen(i);
+              onRespond(i === key.index);
+            }}
+            className={choiceClass(chosen === i, i === key.index)}
+          >
+            {option}
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  if (key.kind === "truefalse") {
+    return (
+      <div className="flex gap-2" role="group" aria-label="True or false">
+        {[true, false].map((value) => (
+          <button
+            key={String(value)}
+            type="button"
+            disabled={locked}
+            onClick={() => {
+              setChosen(value);
+              onRespond(value === key.value);
+            }}
+            className={cx(choiceClass(chosen === value, value === key.value), "flex-1 text-center font-medium")}
+          >
+            {value ? "True" : "False"}
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <form
+      className="flex gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (typed.trim()) onRespond(key.answers.includes(normaliseResponse(typed)));
+      }}
+    >
+      <input
+        value={typed}
+        onChange={(e) => setTyped(e.target.value)}
+        disabled={locked}
+        placeholder="Type the missing word"
+        aria-label="Your answer"
+        className={cx(input, "min-w-0 flex-1")}
+      />
+      <button type="submit" disabled={locked || !typed.trim()} className={button.primary}>
+        Check
+      </button>
+    </form>
   );
 }
 

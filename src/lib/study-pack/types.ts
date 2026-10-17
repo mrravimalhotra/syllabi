@@ -38,6 +38,8 @@ export interface PackQuestion {
   narration: string;
   /** Practice questions only. */
   difficulty: "easy" | "medium" | "hard" | null;
+  /** For objective questions, the correct response worked out by code, so the child's answer can be marked instantly. */
+  autoKey?: AutoKey;
   skill: string;
 }
 
@@ -63,5 +65,10 @@ export interface StudyPack {
   /** The book in My books it was made from, so refining an answer can re-read the chapter. */
   sourceDocumentId: string | null;
 }
+
+export type AutoKey =
+  | { kind: "option"; index: number }
+  | { kind: "truefalse"; value: boolean }
+  | { kind: "blank"; answers: string[] };
 
 export type PackSection = "textbookQuestions" | "practiceQuestions";

@@ -8,6 +8,7 @@ import type { AnswerLanguage } from "@/lib/generation/language";
 import type { CompletionImage } from "@/lib/llm/types";
 import type { AnswerCheck, GenerationTaskType, MatchedChunk, Student } from "@/types/database";
 import { checkArithmetic } from "@/lib/checks/arithmetic";
+import { checkCoverage, checkSamplePaper } from "@/lib/checks/rules";
 
 export interface GenerationInput {
   student: Student;
@@ -36,6 +37,17 @@ export interface GenerationOutput {
   searchSuggestionsHtml?: string;
   /** What Syllabi's own code checked (calculations), shown with the answer. */
   checks: AnswerCheck[];
+}
+
+/** All code checks that apply to this kind of answer. */
+function answerChecks(taskType: GenerationTaskType, text: string, questionText: string, prompt: string): AnswerCheck[] {
+  const checks = checkArithmetic(text);
+  if (taskType === "sample_paper") {
+    const total = /Total marks:\s*(\d{1,3})/i.exec(prompt);
+    checks.push(...checkSamplePaper(text, total ? Number(total[1]) : null));
+  }
+  if (taskType === "solution" || taskType === "ad_hoc") checks.push(...checkCoverage(questionText, text));
+  return checks;
 }
 
 // Lower for answers that must be exact and repeatable (solutions, answer
@@ -105,17 +117,19 @@ export async function runGeneration({
     usage: result.usage,
   });
 
-  // Every calculation in the answer is recomputed by code. Only when one is
-  // wrong is the AI asked (once) to correct it.
-  let checks = checkArithmetic(result.text);
-  const wrong = checks.filter((c) => !c.ok);
-  if (wrong.length > 0) {
+  // Code checks every answer: calculations are recomputed, a paper's marks
+  // added up and its answer key compared, a worksheet's questions counted.
+  // Only when something is wrong is the AI asked (once) to correct it.
+  const runChecks = (text: string) => answerChecks(taskType, text, searchQuery, prompt);
+  let checks = runChecks(result.text);
+  const problems = checks.filter((c) => !c.ok);
+  if (problems.length > 0) {
     const repaired = await generateCompletion({
       ...request,
       prompt:
-        `${request.prompt}\n\nYour draft answer below has calculation mistakes, found by an exact calculator:\n` +
-        wrong.map((c) => `- ${c.message}`).join("\n") +
-        "\nWrite the complete answer again with these corrected, and anything that follows from them. Keep everything else the same." +
+        `${request.prompt}\n\nYour draft answer below has these problems, found by Syllabi's checks (an exact calculator and a marks counter):\n` +
+        problems.map((c) => `- ${c.message}`).join("\n") +
+        "\nWrite the complete answer again with these fixed, and anything that follows from them. Keep everything else the same." +
         `\n\nDraft answer:\n${result.text}`,
     });
     await recordTokenUsage({
@@ -125,9 +139,9 @@ export async function runGeneration({
       model: repaired.model,
       usage: repaired.usage,
     });
-    const recheck = checkArithmetic(repaired.text);
-    // Keep the repair only if it really has fewer wrong calculations.
-    if (recheck.filter((c) => !c.ok).length < wrong.length) {
+    const recheck = runChecks(repaired.text);
+    // Keep the repair only if it really has fewer problems.
+    if (recheck.filter((c) => !c.ok).length < problems.length) {
       result = { ...repaired, searchSuggestionsHtml: repaired.searchSuggestionsHtml ?? result.searchSuggestionsHtml };
       checks = recheck;
     }

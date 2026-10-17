@@ -7,6 +7,7 @@ import type { CompletionImage } from "@/lib/llm/types";
 import type { Student } from "@/types/database";
 import { QUESTIONS_SCHEMA, QUESTIONS_SYSTEM, WALKTHROUGH_SCHEMA, WALKTHROUGH_SYSTEM } from "@/lib/study-pack/prompts";
 import { evidenceFound } from "@/lib/study-pack/verify";
+import { autoKeyFor } from "@/lib/study-pack/auto-key";
 import { levelLine } from "@/lib/generation/level";
 import { languageLine, type AnswerLanguage } from "@/lib/generation/language";
 import type { PackQuestion, StudyPack, VocabularyItem, WalkthroughPart } from "@/lib/study-pack/types";
@@ -112,13 +113,16 @@ function question(v: unknown, chapterText: string | null, practice: boolean): Pa
   if (!q || !answer) return null;
   const evidence = str(x.evidence, 600);
   const difficulty = x.difficulty === "easy" || x.difficulty === "medium" || x.difficulty === "hard" ? x.difficulty : null;
+  const type = str(x.type, 60);
+  const options = list(x.options, 8).map((o) => str(o, 300)).filter(Boolean);
+  const autoKey = autoKeyFor(q, type, options, answer);
   const marks = typeof x.marks === "number" && x.marks > 0 && x.marks <= 20 ? Math.round(x.marks) : null;
   return {
     number: practice ? "" : str(x.number, 40),
     question: q,
-    type: str(x.type, 60),
+    type,
     marks,
-    options: list(x.options, 8).map((o) => str(o, 300)).filter(Boolean),
+    options,
     hint: str(x.hint, 400),
     evidence,
     evidenceFound: evidence && chapterText ? evidenceFound(evidence, chapterText) : null,
@@ -126,6 +130,7 @@ function question(v: unknown, chapterText: string | null, practice: boolean): Pa
     narration: str(x.narration, 3000),
     difficulty: practice ? (difficulty ?? "medium") : null,
     skill: practice ? str(x.skill, 300) : "",
+    autoKey,
   };
 }
 

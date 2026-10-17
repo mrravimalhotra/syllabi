@@ -10,6 +10,7 @@ import { cleanText } from "@/lib/validate";
 import { loadBook } from "@/lib/study-pack/generate";
 import { packToMarkdown } from "@/lib/study-pack/markdown";
 import { REFINE_SYSTEM } from "@/lib/study-pack/prompts";
+import { autoKeyFor } from "@/lib/study-pack/auto-key";
 import { levelLine } from "@/lib/generation/level";
 import { isAnswerLanguage, languageLine } from "@/lib/generation/language";
 import type { PackQuestion, PackSection, StudyPack } from "@/lib/study-pack/types";
@@ -87,7 +88,12 @@ export async function POST(request: Request, { params }: Params) {
 
     const answer = result.text.trim().slice(0, 6000);
     if (!answer) throw new Error("Empty refined answer");
-    const updated: PackQuestion = { ...question, answer, originalAnswer: question.originalAnswer ?? question.answer };
+    const updated: PackQuestion = {
+      ...question,
+      answer,
+      originalAnswer: question.originalAnswer ?? question.answer,
+      autoKey: autoKeyFor(question.question, question.type, question.options, answer),
+    };
     pack[section][index] = updated;
     await save(saved.id, pack);
     return NextResponse.json({ question: updated });
@@ -107,7 +113,12 @@ export async function PATCH(request: Request, { params }: Params) {
 
   const answer = cleanText(body?.answer, 6000);
   if (!answer) return NextResponse.json({ error: "An answer is required" }, { status: 400 });
-  const updated: PackQuestion = { ...question, answer, originalAnswer: question.originalAnswer ?? question.answer };
+  const updated: PackQuestion = {
+    ...question,
+    answer,
+    originalAnswer: question.originalAnswer ?? question.answer,
+    autoKey: autoKeyFor(question.question, question.type, question.options, answer),
+  };
   if (updated.originalAnswer === answer) delete updated.originalAnswer;
   pack[section][index] = updated;
   try {
