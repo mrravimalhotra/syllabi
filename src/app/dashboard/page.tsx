@@ -7,6 +7,7 @@ import { AnswerView, type Answer } from "@/components/AnswerView";
 import { StudyPackView } from "@/components/study-pack/StudyPackView";
 import type { StudyPack } from "@/lib/study-pack/types";
 import { LANGUAGE_NAMES, type AnswerLanguage } from "@/lib/generation/language";
+import { formatDate } from "@/lib/format";
 import {
   ArrowRightIcon,
   BookIcon,
@@ -45,7 +46,12 @@ interface Book {
   status: "processing" | "ready" | "failed";
 }
 
-type GenerationResult = Answer & { id: string | null; pack?: StudyPack };
+type GenerationResult = Answer & {
+  id: string | null;
+  pack?: StudyPack;
+  /** Set when the saved answer to the same question was returned (no AI used). */
+  reusedFrom?: string;
+};
 
 const TABS: {
   value: GenerationTaskType;
@@ -152,6 +158,7 @@ export default function DashboardPage() {
 
   const abortRef = useRef<AbortController | null>(null);
   const busyRef = useRef(false);
+  const lastRequestRef = useRef<{ route: string; body: Record<string, unknown>; task: GenerationTaskType } | null>(null);
   const resultRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -273,28 +280,14 @@ export default function DashboardPage() {
       setError("Type a question or attach a photo or file first.");
       return;
     }
-    busyRef.current = true;
-    setLoading(true);
-    setError(null);
-    setNotice(null);
-    setResult(null);
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    try {
-      const res = await fetch(ROUTE_BY_TASK[tab], {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
-        body: JSON.stringify(
-          isPack
-            ? {
-                documentId: chosenPackBook || undefined,
-                photos: chosenPackBook ? [] : photos.map((p) => ({ data: p.imageBase64, mimeType: p.mimeType, text: p.text })),
-                focus: prompt.trim(),
-                language,
-              }
-            : {
+    const body = isPack
+      ? {
+          documentId: chosenPackBook || undefined,
+          photos: chosenPackBook ? [] : photos.map((p) => ({ data: p.imageBase64, mimeType: p.mimeType, text: p.text })),
+          focus: prompt.trim(),
+          language,
+        }
+      : {
           prompt: tab === "sample_paper" ? `${prompt.trim()}\n\nTotal marks: ${totalMarks}`.trim() : prompt.trim(),
           documentIds: activeBookIds,
           language,
@@ -303,8 +296,27 @@ export default function DashboardPage() {
             .map((d) => `Attached file "${d.name}":\n${d.text}`)
             .join("\n\n")
             .slice(0, MAX_ATTACHED_TEXT_CHARS),
-              }
-        ),
+        };
+    await send(ROUTE_BY_TASK[tab], body, tab);
+  }
+
+  /** Sends one request; also used by "Make a new answer", which resends the last one with fresh: true. */
+  async function send(route: string, body: Record<string, unknown>, task: GenerationTaskType) {
+    busyRef.current = true;
+    setLoading(true);
+    setError(null);
+    setNotice(null);
+    setResult(null);
+    lastRequestRef.current = { route, body, task };
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    try {
+      const res = await fetch(route, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify(body),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Couldn't generate an answer right now. Please try again.");
@@ -331,6 +343,13 @@ export default function DashboardPage() {
       busyRef.current = false;
       setLoading(false);
     }
+  }
+
+  function makeNewAnswer() {
+    const last = lastRequestRef.current;
+    if (!last || busyRef.current) return;
+    setTab(last.task);
+    send(last.route, { ...last.body, fresh: true }, last.task);
   }
 
   const noBookSelected = tab !== "study_pack" && books.length > 0 && activeBookIds.length === 0;
@@ -701,6 +720,17 @@ export default function DashboardPage() {
 
       {result && (
         <div ref={resultRef} className="space-y-3">
+          {result.reusedFrom && (
+            <Alert tone="info" className="print:hidden">
+              <span>
+                You asked this before ({formatDate(result.reusedFrom)}), so your saved answer is shown instantly. No AI
+                was used.
+              </span>{" "}
+              <button type="button" onClick={makeNewAnswer} className="font-medium underline">
+                Make a new answer
+              </button>
+            </Alert>
+          )}
           {result.pack ? (
             <StudyPackView pack={result.pack} answerId={result.id} pdfUrl={result.pdfUrl} />
           ) : (

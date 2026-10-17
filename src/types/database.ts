@@ -1,5 +1,13 @@
 import type { StudyPack } from "@/lib/study-pack/types";
 
+/** One check Syllabi's own code made on an answer (no AI involved). */
+export interface AnswerCheck {
+  kind: "calculation" | "marks" | "coverage" | "options" | "answer-key";
+  ok: boolean;
+  /** Plain-language result, e.g. "Marks add up to 80" or "12 × 15 = 180". */
+  message: string;
+}
+
 export type TaskType =
   | "ocr_extraction"
   | "embedding"
@@ -148,5 +156,9 @@ export interface GeneratedDocumentRow {
   search_suggestions_html: string | null;
   /** Study packs only: the structured pack (content holds its Markdown, for PDF and copy). */
   pack: StudyPack | null;
+  /** Fingerprint for reusing this answer when the same question comes again. */
+  cache_key: string | null;
+  /** What Syllabi's own code checked about this answer. */
+  checks: AnswerCheck[];
   created_at: string;
 }

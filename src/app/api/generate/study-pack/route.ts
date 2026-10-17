@@ -5,6 +5,10 @@ import { QuotaExceededError } from "@/lib/quota";
 import { userMessage } from "@/lib/errors";
 import { isUuid } from "@/lib/validate";
 import { isAnswerLanguage } from "@/lib/generation/language";
+import { levelLine } from "@/lib/generation/level";
+import { getLlmSetting } from "@/lib/llm/config";
+import { answerKey, findReusable } from "@/lib/generation/reuse";
+import { QUESTIONS_SYSTEM, WALKTHROUGH_SYSTEM } from "@/lib/study-pack/prompts";
 import { generateStudyPack } from "@/lib/study-pack/generate";
 import { packToMarkdown } from "@/lib/study-pack/markdown";
 import type { CompletionImage } from "@/lib/llm/types";
@@ -51,6 +55,34 @@ export async function POST(request: Request) {
   }
 
   try {
+    // The same chapter, focus, language, class and model again reuses the saved pack.
+    const { provider, model } = await getLlmSetting("study_pack");
+    const cacheKey = answerKey({
+      v: 1,
+      kind: "study_pack",
+      documentId: documentId ?? null,
+      photos: documentId ? [] : photos.map((p) => p.data),
+      focus: focus?.trim() ?? "",
+      language,
+      level: levelLine(student),
+      provider,
+      model,
+      instructions: [WALKTHROUGH_SYSTEM, QUESTIONS_SYSTEM],
+    });
+    if (body?.fresh !== true) {
+      const saved = await findReusable(student.id, cacheKey);
+      if (saved?.pack) {
+        return NextResponse.json({
+          id: saved.id,
+          title: saved.title,
+          pack: saved.pack,
+          text: saved.content ?? "",
+          pdfUrl: `/api/documents/${saved.id}/pdf`,
+          reusedFrom: saved.created_at,
+        });
+      }
+    }
+
     const pack = await generateStudyPack({ student, documentId, photos: documentId ? undefined : photos, focus, language });
     const content = packToMarkdown(pack);
     const admin = createAdminClient();
@@ -63,6 +95,7 @@ export async function POST(request: Request) {
         content,
         pack,
         sources: [],
+        cache_key: cacheKey,
       })
       .select("id, title")
       .single();

@@ -9,6 +9,11 @@ import type { GenerationTaskType, SavedSource } from "@/types/database";
 import { userMessage } from "@/lib/errors";
 import { isUuid } from "@/lib/validate";
 import { isAnswerLanguage } from "@/lib/generation/language";
+import { levelLine } from "@/lib/generation/level";
+import { getLlmSetting } from "@/lib/llm/config";
+import { systemInstructionsFor } from "@/lib/generation/prompts";
+import { answerKey, findReusable } from "@/lib/generation/reuse";
+import type { GeneratedDocumentRow } from "@/types/database";
 
 const MAX_PHOTOS = 12;
 // Text of attached Word files, sent with the question.
@@ -45,6 +50,21 @@ function parsePhotos(raw: unknown): CompletionImage[] | string {
   }
   if (totalChars > MAX_PHOTO_BASE64_CHARS) return "Photos are too large — attach fewer or smaller photos";
   return photos;
+}
+
+/** A saved answer, returned as if just generated, marked as reused (no AI call). */
+async function savedAnswerResponse(saved: GeneratedDocumentRow) {
+  return {
+    id: saved.id,
+    title: saved.title,
+    text: saved.content ?? "",
+    sources: await withImageUrls(saved.sources ?? []),
+    usedSearchGrounding: saved.used_search_grounding,
+    searchSuggestionsHtml: saved.search_suggestions_html,
+    pdfUrl: `/api/documents/${saved.id}/pdf`,
+    checks: saved.checks ?? [],
+    reusedFrom: saved.created_at,
+  };
 }
 
 /** A short one-line title for the saved answer. */
@@ -89,6 +109,28 @@ export function createGenerationRoute(taskType: GenerationTaskType) {
 
     try {
       const language = isAnswerLanguage(body?.language) ? body.language : (student.answer_language ?? "auto");
+
+      // The same question again (same attachments, books, language, class,
+      // model and instructions) gets its saved answer back: instant, identical,
+      // and no AI used. "Make a new answer" sends fresh: true.
+      const level = levelLine(student);
+      const { provider, model } = await getLlmSetting(taskType);
+      const cacheKey = answerKey({
+        v: 1,
+        taskType,
+        prompt,
+        photos: photos.map((p) => p.data),
+        documentIds: [...(documentIds ?? [])].sort(),
+        language,
+        provider,
+        model,
+        instructions: systemInstructionsFor(taskType, level, language),
+      });
+      if (body?.fresh !== true) {
+        const saved = await findReusable(student.id, cacheKey);
+        if (saved) return NextResponse.json(await savedAnswerResponse(saved));
+      }
+
       const result = await runGeneration({ student, taskType, prompt, documentIds, photos, language });
       const title = titleFor(typedPrompt, Boolean(attachedText));
 
@@ -114,6 +156,7 @@ export function createGenerationRoute(taskType: GenerationTaskType) {
           sources: savedSources,
           used_search_grounding: result.usedSearchGrounding,
           search_suggestions_html: result.searchSuggestionsHtml ?? null,
+          cache_key: cacheKey,
         })
         .select("id")
         .single();
