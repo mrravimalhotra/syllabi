@@ -33,8 +33,21 @@ export function standInFor(model: string): string | null {
   return model.startsWith("gemini-") ? FLASH_LITE : null;
 }
 
-/** One Gemini call with the given model (search first when allowed, then without). */
-async function completeWith(req: CompletionRequest & { model: string }): Promise<CompletionResult> {
+// A model that just said "busy" or "daily limit used up" is skipped for a
+// while, so people aren't made to wait for it again on every question. Kept
+// per server instance; it only ever moves a request to the stand-in sooner.
+const BUSY_PAUSE_MS = 60_000;
+const DAILY_LIMIT_PAUSE_MS = 30 * 60_000;
+const pausedUntil = new Map<string, number>();
+
+function pauseModel(model: string, message: string) {
+  pausedUntil.set(model, Date.now() + (DAILY_LIMIT.test(message) ? DAILY_LIMIT_PAUSE_MS : BUSY_PAUSE_MS));
+}
+
+const isPaused = (model: string) => (pausedUntil.get(model) ?? 0) > Date.now();
+
+/** One Gemini call with the given model (search first when allowed, then without). With `patient` false, a busy or rate-limited reply fails at once instead of waiting and retrying. */
+async function completeWith(req: CompletionRequest & { model: string }, patient = true): Promise<CompletionResult> {
   const genAI = client();
 
   const modelWith = (search: boolean) =>
@@ -98,7 +111,20 @@ async function completeWith(req: CompletionRequest & { model: string }): Promise
       searchSkipped = true;
     }
   }
-  result ??= await withNetworkRetry(() => generate(modelWith(false)));
+  if (!result) {
+    if (patient) {
+      result = await withNetworkRetry(() => generate(modelWith(false)));
+    } else {
+      try {
+        result = await generate(modelWith(false));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        // Busy or out of allowance: let the caller switch models now. Anything else (a dropped connection) is retried as usual.
+        if (DAILY_LIMIT.test(message) || OUT_OF_CAPACITY.test(message)) throw err;
+        result = await withNetworkRetry(() => generate(modelWith(false)));
+      }
+    }
+  }
 
   const response = result.response;
   const usage = response.usageMetadata;
@@ -148,16 +174,28 @@ async function completeWith(req: CompletionRequest & { model: string }): Promise
 
 export const googleAdapter: LlmProviderAdapter = {
   async generateCompletion(req: CompletionRequest & { model: string }): Promise<CompletionResult> {
+    const other = standInFor(req.model);
+    // Skip a model that was busy a moment ago and go straight to its stand-in.
+    if (other && isPaused(req.model) && !isPaused(other)) {
+      try {
+        return { ...(await completeWith({ ...req, model: other })), standInFor: req.model };
+      } catch (err) {
+        console.warn("[google] stand-in failed while the main model is paused; trying the main model", err instanceof Error ? err.message : err);
+        req.onRestart?.();
+        return completeWith(req);
+      }
+    }
     try {
-      return await completeWith(req);
+      // With a stand-in available, don't wait out a busy reply: switch at once.
+      return await completeWith(req, !other);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      const other = standInFor(req.model);
       if (!other || err instanceof BlockedReplyError || !(DAILY_LIMIT.test(message) || OUT_OF_CAPACITY.test(message))) throw err;
+      pauseModel(req.model, message);
       req.onRestart?.();
       console.warn(`[google] ${req.model} can't answer now (${DAILY_LIMIT.test(message) ? "daily allowance used up" : "busy"}); using ${other}`);
       try {
-        return await completeWith({ ...req, model: other });
+        return { ...(await completeWith({ ...req, model: other })), standInFor: req.model };
       } catch (second) {
         // Report the first model's problem: it names the setting the admin chose.
         console.error("[google] stand-in model failed too", second);

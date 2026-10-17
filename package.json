@@ -10,6 +10,7 @@
     "test:db": "bash scripts/test-db.sh",
     "scenarios": "node scripts/scenarios/run.mjs",
     "test:practice": "node scripts/practice/run.mjs",
+    "test:llm": "node scripts/llm/run.mjs",
     "test:e2e": "node scripts/e2e/run.mjs",
     "backup": "bash scripts/backup/backup.sh"
   },

@@ -171,7 +171,7 @@ export async function runGeneration({
     onRestart,
   });
   timings.writingMs = Date.now() - writingStart;
-  timings.model = `${result.provider} / ${result.model}`;
+  timings.model = `${result.provider} / ${result.model}${result.standInFor ? ` (stand-in: ${result.standInFor} was busy)` : ""}`;
   await recordTokenUsage({
     studentId: student.id,
     taskType,
