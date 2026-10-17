@@ -78,7 +78,7 @@ export function WorkedExampleView({
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
           {actions}
-          <PrintButton pdfUrl={pdfUrl} />
+          <PrintButton pdfUrl={pdfUrl} name={example.title} />
         </div>
       </header>
 

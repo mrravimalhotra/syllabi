@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ChatIcon, ClipboardIcon, DownloadIcon, LayersIcon, ListCheckIcon, NotesIcon, SearchIcon, SparklesIcon, TrashIcon } from "@/components/icons";
+import { PdfButton } from "@/components/PdfButton";
 import { Alert, EmptyState, PageHeader, Skeleton, button, card, cx, input } from "@/components/ui";
 import { TASK_LABELS, formatDate } from "@/lib/format";
 import type { GeneratedDocumentRow } from "@/types/database";
@@ -137,16 +138,9 @@ export default function MyDocumentsPage() {
                   </div>
                   {/* Above the row-wide link, so these stay clickable. */}
                   <div className="relative flex items-center gap-1">
-                    <a
-                      href={`/api/documents/${d.id}/pdf`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className={button.icon}
-                      aria-label={`Download "${d.title}" as PDF`}
-                      title="Download PDF"
-                    >
+                    <PdfButton url={`/api/documents/${d.id}/pdf`} name={d.title} className={button.icon} label={`Download "${d.title}" as PDF`}>
                       <DownloadIcon className="h-4.5 w-4.5" />
-                    </a>
+                    </PdfButton>
                     <button
                       type="button"
                       onClick={() => remove(d)}

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { PrinterIcon } from "@/components/icons";
-import { Alert, Field, PageHeader, PageSkeleton, button, card, cx, input } from "@/components/ui";
+import { Alert, Field, PageHeader, PageSkeleton, Spinner, button, card, cx, input } from "@/components/ui";
 import { NumberView } from "@/components/practice/NumberView";
 import { OrderQuiz } from "@/components/practice/OrderQuiz";
 import {
@@ -18,6 +18,7 @@ import {
 } from "@/lib/practice/order";
 import { groupDigits, type NumberKind } from "@/lib/practice/numbers";
 import { newSeed } from "@/lib/practice/random";
+import { usePdfOpener } from "@/components/PdfButton";
 
 const KINDS: NumberKind[] = ["whole", "decimal", "fraction"];
 const select = cx(input, "pr-8");
@@ -37,6 +38,7 @@ export default function PracticePage() {
   const [sample, setSample] = useState("");
   const [sampleError, setSampleError] = useState<string | null>(null);
   const [run, setRun] = useState<{ quiz: OrderQuestion[]; seed: number | null; key: number } | null>(null);
+  const worksheet = usePdfOpener("Practice worksheet");
 
   useEffect(() => {
     fetch("/api/me")
@@ -74,7 +76,7 @@ export default function PracticePage() {
     const seed = newSeed();
     setRun({ quiz: makeQuiz(settings, seed), seed, key: seed });
   };
-  const printNew = (answers: boolean) => window.open(worksheetUrl(settings, newSeed(), answers), "_blank", "noopener");
+  const printNew = (answers: boolean) => void worksheet.open(worksheetUrl(settings, newSeed(), answers));
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -246,8 +248,9 @@ export default function PracticePage() {
           <button type="button" onClick={start} disabled={Boolean(problem)} className={button.primary}>
             Start the quiz
           </button>
-          <button type="button" onClick={() => printNew(true)} disabled={Boolean(problem)} className={button.secondary}>
-            <PrinterIcon className="h-4 w-4" /> Printable worksheet
+          <button type="button" onClick={() => printNew(true)} disabled={Boolean(problem) || worksheet.state === "preparing"} className={button.secondary}>
+            {worksheet.state === "preparing" ? <Spinner className="h-4 w-4" /> : <PrinterIcon className="h-4 w-4" />}
+            {worksheet.state === "ready" ? "Tap to share the worksheet" : "Printable worksheet"}
           </button>
           <button type="button" onClick={() => printNew(false)} disabled={Boolean(problem)} className={button.ghost}>
             Worksheet without answers
@@ -260,7 +263,7 @@ export default function PracticePage() {
           key={run.key}
           quiz={run.quiz}
           canPrint={run.seed !== null}
-          onPrint={() => run.seed !== null && window.open(worksheetUrl(settings, run.seed), "_blank", "noopener")}
+          onPrint={() => run.seed !== null && void worksheet.open(worksheetUrl(settings, run.seed))}
           onExit={() => setRun(null)}
           onNewQuiz={start}
           onRetry={(questions) =>

@@ -17,6 +17,7 @@ import {
   UndoIcon,
 } from "@/components/icons";
 import { PrintButton } from "@/components/PrintButton";
+import { PdfButton } from "@/components/PdfButton";
 import { Badge, Spinner, button, card, cx, input } from "@/components/ui";
 import { useSpeech, type Speech } from "@/components/study-pack/useSpeech";
 import { normaliseResponse } from "@/lib/study-pack/auto-key";
@@ -99,11 +100,11 @@ export function StudyPackView({
               {copied ? <CheckIcon className="h-4 w-4 text-emerald-600" /> : <CopyIcon className="h-4 w-4" />}
               {copied ? "Copied" : "Copy"}
             </button>
-            <PrintButton pdfUrl={pdfUrl} />
+            <PrintButton pdfUrl={pdfUrl} name={pack.title} />
             {pdfUrl && (
-              <a href={pdfUrl} target="_blank" rel="noreferrer" className={button.smallPrimary}>
+              <PdfButton url={pdfUrl} name={pack.title} className={button.smallPrimary}>
                 <DownloadIcon className="h-4 w-4" /> PDF
-              </a>
+              </PdfButton>
             )}
           </div>
         </div>

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Markdown } from "@/components/Markdown";
 import { AlertIcon, CheckIcon, CopyIcon, DownloadIcon } from "@/components/icons";
 import { PrintButton } from "@/components/PrintButton";
+import { PdfButton } from "@/components/PdfButton";
 import type { AnswerCheck } from "@/types/database";
 import { button, card, cx } from "@/components/ui";
 import { hasAnswerKey } from "@/lib/format";
@@ -44,16 +45,16 @@ export function AnswerView({ answer, actions, meta }: { answer: Answer; actions?
         <div className="flex shrink-0 flex-wrap gap-2 print:hidden">
           {actions}
           <CopyButton text={answer.text} />
-          <PrintButton pdfUrl={answer.pdfUrl} />
+          <PrintButton pdfUrl={answer.pdfUrl} name={answer.title} />
           {answer.pdfUrl && hasAnswerKey(answer.text) && (
-            <a href={`${answer.pdfUrl}?part=questions`} target="_blank" rel="noreferrer" className={button.small}>
+            <PdfButton url={`${answer.pdfUrl}?part=questions`} name={`${answer.title} (questions)`} className={button.small}>
               <DownloadIcon className="h-4 w-4" /> Questions only
-            </a>
+            </PdfButton>
           )}
           {answer.pdfUrl && (
-            <a href={answer.pdfUrl} target="_blank" rel="noreferrer" className={button.smallPrimary}>
+            <PdfButton url={answer.pdfUrl} name={answer.title} className={button.smallPrimary}>
               <DownloadIcon className="h-4 w-4" /> PDF
-            </a>
+            </PdfButton>
           )}
         </div>
       </header>

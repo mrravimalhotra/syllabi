@@ -11,6 +11,7 @@ import { solve } from "@/lib/worked/detect";
 import type { WorkedProblem } from "@/lib/worked/types";
 import type { StudyPack } from "@/lib/study-pack/types";
 import { ChevronLeftIcon, DocumentIcon, TrashIcon } from "@/components/icons";
+import { PdfButton } from "@/components/PdfButton";
 import { Alert, EmptyState, Skeleton, button, card, cx } from "@/components/ui";
 import { TASK_LABELS, formatDate } from "@/lib/format";
 
@@ -127,9 +128,11 @@ export default function AnswerPage() {
           ) : answer.text === null ? (
             <Alert tone="info">
               This older answer was saved as a PDF only.{" "}
-              <a href={answer.pdfUrl ?? "#"} target="_blank" rel="noreferrer" className="font-medium underline">
-                Open the PDF
-              </a>
+              {answer.pdfUrl && (
+                <PdfButton url={answer.pdfUrl} name={answer.title} className="font-medium underline">
+                  Open the PDF
+                </PdfButton>
+              )}
               .
             </Alert>
           ) : (
