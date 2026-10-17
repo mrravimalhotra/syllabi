@@ -4,15 +4,16 @@ Input for BMAD planning (PRD, epics, stories). Written 2026-10-17 from a read of
 
 ## 1. Positioning
 
-- **Customer:** schools, coaching centres and tutors (the payer), serving their students (the users). Not individual students: for one student alone, Google NotebookLM is free and more polished.
+- **Users (decided 2026-10-17):** adults only — **parents and tutors** who prepare study material for their children/students. Students do not get accounts. Payers are tutors, coaching centres and parents (schools optional later).
+- Not individual students: for one learner alone, Google NotebookLM is free and more polished.
 - **Why Syllabi wins for that customer:**
   - Curated once by the admin, not uploaded per student.
-  - Each student is auto-scoped to their school/grade/subject.
+  - Material matched to the student's school, grade and subject.
   - Admin approves and revokes access.
-  - Hard per-student cost cap.
+  - Hard per-account cost cap.
   - Sample papers in the school's own past-paper style.
-  - Visibility for teachers and parents.
-  - Designed for minors (consent and safety).
+  - One parent or tutor can prepare for several students and grades.
+  - Adult-supervised by design: the parent or tutor reviews AI material before the student sees it.
 - **Focus:** Indian boards (CBSE/NCERT, ICSE, state boards), exam prep, mobile-first, English plus Hindi/regional languages.
 - **Main risk:** Google ships a classroom NotebookLM. Mitigations are board-aligned content, past-paper exam prep, teacher/parent visibility, low cost, and getting real schools on early.
 
@@ -102,7 +103,7 @@ Input for BMAD planning (PRD, epics, stories). Written 2026-10-17 from a read of
 |---|---|---|---|
 | E1 | Forgot / reset password | ❌ | No flow exists |
 | E2 | Custom SMTP for auth emails (e.g. Resend free tier) | ❌ | Supabase default sender is heavily rate-limited |
-| E3 | Verifiable parental consent for under-18s (India DPDP Act 2023) | ❌ | Legal review needed |
+| E3 | Verifiable parental consent for under-18s (India DPDP Act 2023) | ⚠️ | Largely avoided: adults-only accounts, no child accounts. Avoid storing children's personal data (names, photos) in prompts or profiles; confirm with legal review |
 | E4 | Privacy policy, terms, data deletion and export on request | ❌ | |
 | E5 | Content rights: school confirms the right to upload each book | ❌ | Checkbox + terms |
 | E6 | No ads, no selling of student data | ✅ | By design |
@@ -111,7 +112,7 @@ Input for BMAD planning (PRD, epics, stories). Written 2026-10-17 from a read of
 ### F. Copyright, licences & provider terms (checked 2026-10-17; not legal advice)
 | # | Item | Status | Note |
 |---|---|---|---|
-| F1 | **AI provider allows apps used by under-18s** | ❌ **BLOCKER** | Gemini API Additional Terms (modified 2026-04-28): "You must be 18 years of age or older to use the APIs" and API clients must not be "directed towards or is likely to be accessed by individuals under the age of 18". Syllabi serves school students, so this applies to completions **and** embeddings. Vertex AI / Google Cloud terms may contain similar language (unverified). Anthropic's usage policy (May 2024 update) allows API use in products for minors if the operator adds safety features (age verification, content moderation) and discloses AI use. Decide the provider before onboarding students; get legal confirmation. |
+| F1 | **AI provider allows apps used by under-18s** | ⚠️ **Mitigated by repositioning, not yet confirmed** | 2026-10-17: Syllabi is now adults-only (parents/tutors), with an 18+ confirmation at signup and AI-generated notices. Residual risk: the terms also cover apps "likely to be accessed" by under-18s; a parent could let a child use their account. Get Google or legal confirmation before launch; keep Claude (allows minors with safeguards) as the fallback. Original finding: | Gemini API Additional Terms (modified 2026-04-28): "You must be 18 years of age or older to use the APIs" and API clients must not be "directed towards or is likely to be accessed by individuals under the age of 18". Syllabi serves school students, so this applies to completions **and** embeddings. Vertex AI / Google Cloud terms may contain similar language (unverified). Anthropic's usage policy (May 2024 update) allows API use in products for minors if the operator adds safety features (age verification, content moderation) and discloses AI use. Decide the provider before onboarding students; get legal confirmation. |
 | F2 | Textbook copyright | ❌ | Ingestion copies whole pages (images + text) into storage. India Copyright Act s.52(1)(i) covers reproduction "in the course of instruction" (Delhi HC, *Rameshwari Photocopy*, 2016–17), but a commercial service storing and serving copies is not clearly covered. NCERT and private-publisher books are copyrighted; NCERT being free to read online is not a licence to copy. Mitigations: written permission/licence per publisher (or the school's own licence), uploader rights declaration (E5), content visible only to that school's enrolled students, show only cited page snippets, takedown process in the terms. |
 | F3 | Past papers | ⚠️ | A school's own papers belong to the school (get its consent). Board sample papers (e.g. CBSE) are published openly but still copyrighted — confirm terms. |
 | F4 | Grounding with Google Search display rules | ❌ | If kept: show the returned Search Suggestions with grounded answers to that user only, don't modify or intersperse them, and don't cache them beyond the allowed exceptions. Today the PDF and history store grounded output without suggestions. |

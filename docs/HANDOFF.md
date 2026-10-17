@@ -13,6 +13,8 @@ Read this first. It covers what we are building and why, everything built so far
 
 ## 1. What we are building
 
+> **Repositioned 2026-10-17:** accounts are for **adults only — parents and tutors** — who use Syllabi to prepare study material for their children/students. Students do not log in. Signup requires an 18+ confirmation and a parent/tutor choice (migration `20261017000005_adult_accounts.sql`); parents/tutors pick any grade of their assigned school and any assigned subject per request. Reason: the Gemini API terms forbid apps "likely to be accessed by individuals under the age of 18" (see `docs/app-review.md`, F1). The `students` table name and `role = 'student'` value were kept; each row is an adult account.
+
 Syllabi is a cloud-native, globally accessible web app that acts as an intelligent study companion for school students. It turns curriculum materials into personalized study resources.
 
 An admin-curated knowledge base (RAG) holds scanned and digital pages of textbooks, exercise books and past sample papers, each tagged by **School, Grade, Subject**. Students use it to:

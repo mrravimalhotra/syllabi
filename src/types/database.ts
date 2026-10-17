@@ -35,7 +35,10 @@ export interface Student {
   id: string;
   full_name: string | null;
   email: string;
+  /** "student" = a regular (non-admin) adult account — a parent or tutor. */
   role: "student" | "admin";
+  account_type: "parent" | "tutor" | null;
+  adult_confirmed_at: string | null;
   school_id: string | null;
   grade_id: string | null;
   subject_ids: string[];

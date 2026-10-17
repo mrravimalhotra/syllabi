@@ -21,8 +21,8 @@ export function createGenerationRoute(taskType: GenerationTaskType) {
       return NextResponse.json({ error: "A prompt/topic is required" }, { status: 400 });
     }
 
-    // Admin-only: query a specific school/grade/subject instead of the caller's
-    // own profile — validated (and rejected for non-admins) inside runGeneration.
+    // Optional school/grade/subject choice — validated against the caller's
+    // permissions inside runGeneration.
     const scopeOverride =
       typeof body?.schoolId === "string" && typeof body?.gradeId === "string" && typeof body?.subjectId === "string"
         ? { schoolId: body.schoolId, gradeId: body.gradeId, subjectId: body.subjectId }

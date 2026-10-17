@@ -4,6 +4,7 @@ import { retrieveContext, formatContext, loadSourceImages } from "@/lib/rag/retr
 import { checkQuota, QuotaExceededError } from "@/lib/quota";
 import { systemInstructionsFor } from "@/lib/generation/prompts";
 import type { CompletionImage } from "@/lib/llm/types";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { GenerationTaskType, MatchedChunk, Student } from "@/types/database";
 
 export interface GenerationScope {
@@ -17,11 +18,10 @@ export interface GenerationInput {
   taskType: GenerationTaskType;
   prompt: string;
   /**
-   * Admin-only: query a specific school/grade/subject instead of the caller's
-   * own profile. An admin manages many schools and shouldn't be pinned to one
-   * taxonomy triple just to test or generate content — a student always stays
-   * scoped to their own assigned school/grade/subject, so this is rejected for
-   * non-admins.
+   * Query a specific school/grade/subject instead of the caller's profile
+   * defaults. Admins may pick any school. A parent or tutor may pick any grade
+   * of their assigned school and any of their assigned subjects (they help
+   * students at several levels); see resolveScope.
    */
   scopeOverride?: GenerationScope;
 }
@@ -49,22 +49,7 @@ export async function runGeneration({
   const quota = await checkQuota(student.id);
   if (quota.overQuota) throw new QuotaExceededError(quota);
 
-  let scope: GenerationScope;
-  if (scopeOverride) {
-    if (student.role !== "admin") {
-      throw new Error("Only admins can generate content for a school/grade/subject other than their own.");
-    }
-    scope = scopeOverride;
-  } else {
-    if (!student.school_id || !student.grade_id) {
-      throw new Error("Your profile is missing a school/grade — ask an admin to complete it.");
-    }
-    const subjectId = student.subject_ids[0];
-    if (!subjectId) {
-      throw new Error("Your profile has no subject enrolled — ask an admin to add one.");
-    }
-    scope = { schoolId: student.school_id, gradeId: student.grade_id, subjectId };
-  }
+  const scope = await resolveScope(student, scopeOverride);
 
   const retrieval = await retrieveContext(prompt, scope);
 
@@ -95,4 +80,40 @@ export async function runGeneration({
     sourceImages,
     usedSearchGrounding: Boolean(result.usedSearchGrounding),
   };
+}
+
+/**
+ * Works out which school/grade/subject to search. Admins can use any scope.
+ * Everyone else is held to their assigned school: the grade must belong to it,
+ * and the subject must be one of their assigned subjects. Without an override
+ * the profile's own grade and first subject are used.
+ */
+async function resolveScope(student: Student, override?: GenerationScope): Promise<GenerationScope> {
+  if (override && student.role === "admin") return override;
+
+  if (!student.school_id) {
+    throw new Error("Your profile has no school yet — ask an admin to complete it.");
+  }
+  if (student.subject_ids.length === 0) {
+    throw new Error("Your profile has no subjects yet — ask an admin to add them.");
+  }
+
+  if (!override) {
+    if (!student.grade_id) throw new Error("Choose a grade before generating.");
+    return { schoolId: student.school_id, gradeId: student.grade_id, subjectId: student.subject_ids[0] };
+  }
+
+  if (override.schoolId !== student.school_id || !student.subject_ids.includes(override.subjectId)) {
+    throw new Error("You can only generate for your own school and assigned subjects.");
+  }
+  const admin = createAdminClient();
+  const { data: grade } = await admin
+    .from("grades")
+    .select("id")
+    .eq("id", override.gradeId)
+    .eq("school_id", student.school_id)
+    .maybeSingle();
+  if (!grade) throw new Error("That grade does not belong to your school.");
+
+  return override;
 }

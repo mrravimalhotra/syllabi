@@ -37,11 +37,23 @@ export function SignUpForm() {
         />
       </div>
 
+      <fieldset>
+        <legend className="block text-sm font-medium text-slate-700">I am a</legend>
+        <div className="mt-1 flex gap-4 text-sm text-slate-700">
+          <label className="flex items-center gap-2">
+            <input type="radio" name="account_type" value="parent" required /> Parent or guardian
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="radio" name="account_type" value="tutor" required /> Tutor or teacher
+          </label>
+        </div>
+      </fieldset>
+
       <PasswordInput
         name="password"
         label="Password"
         autoComplete="new-password"
-        minLength={6}
+        minLength={8}
         required
         value={password}
         onChange={setPassword}
@@ -51,12 +63,20 @@ export function SignUpForm() {
         name="confirm_password"
         label="Confirm password"
         autoComplete="new-password"
-        minLength={6}
+        minLength={8}
         required
         value={confirmPassword}
         onChange={setConfirmPassword}
         error={mismatch ? "Passwords do not match" : undefined}
       />
+
+      <label className="flex items-start gap-2 text-sm text-slate-600">
+        <input type="checkbox" name="adult_confirmed" value="yes" required className="mt-1" />
+        <span>
+          I am 18 or older. I will use Syllabi myself to prepare study material for my child or
+          students, and I will not let anyone under 18 use my account.
+        </span>
+      </label>
 
       <button
         type="submit"

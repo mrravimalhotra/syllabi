@@ -24,9 +24,19 @@ export async function signUp(formData: FormData) {
   const password = String(formData.get("password") ?? "");
   const confirmPassword = String(formData.get("confirm_password") ?? "");
   const fullName = String(formData.get("full_name") ?? "");
+  const accountType = String(formData.get("account_type") ?? "");
+  const adultConfirmed = formData.get("adult_confirmed") === "yes";
 
   if (password !== confirmPassword) {
     redirect(`/signup?error=${encodeURIComponent("Passwords do not match")}`);
+  }
+  if (accountType !== "parent" && accountType !== "tutor") {
+    redirect(`/signup?error=${encodeURIComponent("Choose whether you are a parent or a tutor")}`);
+  }
+  // Syllabi is for adults only (parents and tutors); our AI provider's terms
+  // also require that the app is not used by anyone under 18.
+  if (!adultConfirmed) {
+    redirect(`/signup?error=${encodeURIComponent("You must confirm you are 18 or older to create an account")}`);
   }
 
   const supabase = await createClient();
@@ -37,15 +47,17 @@ export async function signUp(formData: FormData) {
   }
 
   if (data.user) {
-    // Service role is required: RLS lets a student write only their own row,
-    // but the trigger-free flow here creates it before a session cookie exists.
+    // Service role is required: RLS only lets admins write account rows, and
+    // this flow creates the row before a session cookie exists anyway.
     const admin = createAdminClient();
     await admin.from("students").insert({
       id: data.user.id,
       email,
       full_name: fullName || null,
       role: "student",
-      active: false, // an admin must grant access before the student can use the app
+      account_type: accountType,
+      adult_confirmed_at: new Date().toISOString(),
+      active: false, // an admin must grant access before the account can use the app
     });
   }
 

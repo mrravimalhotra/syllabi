@@ -1,8 +1,10 @@
 # Syllabi
 
-A RAG-powered study assistant for schools: step-by-step solutions, revision
+A RAG-powered study assistant for **parents and tutors** (adults only) to
+prepare study material for school students: step-by-step solutions, revision
 notes, sample papers, and ad-hoc Q&A — grounded first in each school's own
-curriculum material, exportable to PDF, with per-student token quotas and a
+curriculum material, exportable to PDF. Students do not get accounts; the
+adult reviews and hands over the material. Per-account token quotas and a
 provider-agnostic LLM layer (defaults to Google Gemini, swappable to
 Anthropic/OpenAI per task type from the admin panel, no redeploy needed).
 

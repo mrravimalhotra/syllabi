@@ -44,9 +44,8 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<GenerationResult | null>(null);
 
-  // Admin-only: an admin manages many schools and isn't pinned to one
-  // school/grade/subject the way a student's own profile is — they pick the
-  // scope to query per generation instead.
+  // Which school/grade/subject to generate for. Admins can pick any school; a
+  // parent or tutor picks a grade and subject within their assigned school.
   const [schools, setSchools] = useState<School[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -61,8 +60,8 @@ export default function DashboardPage() {
     const data = await res.json();
     if (res.ok) setMe(data);
 
-    if (res.ok && data.student.role === "admin") {
-      const taxRes = await fetch("/api/admin/taxonomy");
+    if (res.ok) {
+      const taxRes = await fetch("/api/taxonomy");
       const tax = await taxRes.json();
       if (taxRes.ok) {
         setSchools(tax.schools);
@@ -88,13 +87,15 @@ export default function DashboardPage() {
     setResult(null);
 
     try {
-      const scopeOverride = isAdmin
-        ? { schoolId: scopeSchoolId, gradeId: scopeGradeId, subjectId: scopeSubjectId }
-        : {};
       const res = await fetch(ROUTE_BY_TASK[tab], {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: prompt.trim(), ...scopeOverride }),
+        body: JSON.stringify({
+          prompt: prompt.trim(),
+          schoolId: scopeSchoolId,
+          gradeId: scopeGradeId,
+          subjectId: scopeSubjectId,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Generation failed");
@@ -107,9 +108,8 @@ export default function DashboardPage() {
     }
   }
 
-  const profileIncomplete =
-    me && !isAdmin && (!me.student.school_id || !me.student.grade_id || me.student.subject_ids.length === 0);
-  const scopeIncomplete = isAdmin && (!scopeSchoolId || !scopeGradeId || !scopeSubjectId);
+  const profileIncomplete = me && !isAdmin && (!me.student.school_id || me.student.subject_ids.length === 0);
+  const scopeIncomplete = !scopeSchoolId || !scopeGradeId || !scopeSubjectId;
 
   return (
     <div className="space-y-6">
@@ -119,8 +119,8 @@ export default function DashboardPage() {
 
       {profileIncomplete && (
         <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-700">
-          Your profile is missing a school, grade, or subject. Ask an admin to complete it before
-          generating content.
+          Your account has no school or subjects yet. Ask an admin to complete it before generating
+          content.
         </p>
       )}
 
@@ -139,9 +139,9 @@ export default function DashboardPage() {
       </div>
 
       <form onSubmit={submit} className="space-y-3 rounded-xl border border-slate-200 bg-white p-5">
-        {isAdmin && (
-          <div className="grid gap-3 border-b border-slate-100 pb-3 sm:grid-cols-3">
-            <div>
+        {!profileIncomplete && (
+          <div className={`grid gap-3 border-b border-slate-100 pb-3 ${isAdmin ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+            <div className={isAdmin ? "" : "hidden"}>
               <label className="text-xs font-medium text-slate-500">School</label>
               <select
                 value={scopeSchoolId}
@@ -230,6 +230,9 @@ export default function DashboardPage() {
               The knowledge base didn&apos;t fully cover this — supplemented with a web search.
             </p>
           )}
+          <p className="text-xs text-slate-500">
+            AI-generated. Check it before using it with your child or student.
+          </p>
           <div className="whitespace-pre-wrap text-sm text-slate-700">{result.text}</div>
           {result.sources.length > 0 && (
             <div className="border-t border-slate-100 pt-3">

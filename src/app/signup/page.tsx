@@ -13,6 +13,7 @@ export default async function SignupPage({
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Create your account</h1>
           <p className="mt-1 text-sm text-slate-500">
+            For parents and tutors (18+) preparing study material for their children or students.
             An admin will need to approve your access before you can sign in.
           </p>
         </div>

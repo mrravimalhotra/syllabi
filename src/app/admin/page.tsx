@@ -11,9 +11,9 @@ export default async function AdminOverviewPage() {
     ]);
 
   const cards = [
-    { label: "Active students", value: activeCount ?? 0 },
+    { label: "Active accounts", value: activeCount ?? 0 },
     { label: "Pending approval", value: pendingCount ?? 0 },
-    { label: "Total students", value: studentCount ?? 0 },
+    { label: "Total accounts", value: studentCount ?? 0 },
     { label: "Knowledge base documents", value: documentCount ?? 0 },
   ];
 

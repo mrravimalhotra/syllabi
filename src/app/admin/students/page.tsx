@@ -57,14 +57,15 @@ export default function StudentsPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-lg font-semibold text-slate-900">Students</h1>
+      <h1 className="text-lg font-semibold text-slate-900">Accounts</h1>
+      <p className="text-sm text-slate-500">Parents and tutors. Grade is their default; they can pick any grade of their school when generating.</p>
       {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
         <table className="w-full min-w-[900px] text-left text-sm">
           <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
             <tr>
-              <th className="px-4 py-2 font-medium">Student</th>
+              <th className="px-4 py-2 font-medium">Parent / tutor</th>
               <th className="px-4 py-2 font-medium">Status</th>
               <th className="px-4 py-2 font-medium">Role</th>
               <th className="px-4 py-2 font-medium">School</th>
@@ -80,6 +81,7 @@ export default function StudentsPage() {
                 <td className="px-4 py-3">
                   <p className="font-medium text-slate-900">{s.full_name ?? "—"}</p>
                   <p className="text-xs text-slate-500">{s.email}</p>
+                  {s.account_type && <p className="text-xs capitalize text-slate-400">{s.account_type}</p>}
                 </td>
                 <td className="px-4 py-3">
                   <span
@@ -96,7 +98,7 @@ export default function StudentsPage() {
                     onChange={(e) => patch(s.id, { role: e.target.value as "student" | "admin" })}
                     className="rounded-md border border-slate-300 px-2 py-1 text-xs"
                   >
-                    <option value="student">student</option>
+                    <option value="student">user</option>
                     <option value="admin">admin</option>
                   </select>
                 </td>
