@@ -4,11 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSyncExternalStore } from "react";
 import { signOut } from "@/lib/actions/auth";
-import { BookIcon, DocumentIcon, LogoutIcon, ShieldIcon, SparklesIcon, UserIcon, WifiOffIcon } from "@/components/icons";
+import { BookIcon, DocumentIcon, LogoutIcon, ShieldIcon, SparklesIcon, TargetIcon, UserIcon, WifiOffIcon } from "@/components/icons";
 import { Logo, button, cx } from "@/components/ui";
 
 const NAV = [
   { href: "/dashboard", label: "Generate", icon: SparklesIcon, exact: true },
+  { href: "/dashboard/practice", label: "Practice", icon: TargetIcon },
   { href: "/dashboard/library", label: "My books", icon: BookIcon },
   { href: "/dashboard/documents", label: "My Documents", short: "Documents", icon: DocumentIcon },
   { href: "/dashboard/account", label: "Account", icon: UserIcon },
@@ -106,7 +107,7 @@ export function AppNav({ name, isAdmin }: { name: string; isAdmin: boolean }) {
         aria-label="Main"
         className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur-md md:hidden print:hidden"
       >
-        <ul className="mx-auto grid max-w-md grid-cols-4">
+        <ul className="mx-auto grid max-w-lg grid-cols-5">
           {NAV.map((item) => {
             const active = isActive(pathname, item.href, item.exact);
             const Icon = item.icon;

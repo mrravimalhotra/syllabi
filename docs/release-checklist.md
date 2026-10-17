@@ -6,6 +6,7 @@ Adapted from the Next.js + Supabase best-practices checklist for Syllabi. Run pa
 
 - [ ] `npx tsc --noEmit`, `npm run lint`, `npm run build` all clean; no new warnings.
 - [ ] `npm run scenarios` (when `test-material/` has the sample files) — every file processed; see `docs/test-scenarios.md`.
+- [ ] `npm run test:practice` — every check PASS (thousands of generated practice quizzes verified independently).
 - [ ] `npm run test:db` — every check PASS (builds a fresh Postgres from all migrations and attacks it as anon, a user and the server).
 - [ ] New table → RLS on, policies written, and a check added to `supabase/tests/`. New function → `search_path` set, EXECUTE granted only where needed (anon gets nothing).
 - [ ] Rules that matter are enforced in the database (RLS, constraint, trigger), not only in an API route.
@@ -67,6 +68,9 @@ Tick each one and note anything odd. Use your phone for the starred (★) checks
 | T-44 | Solve: "Add 1/2 + 2/3", then "Simplify 18/24", then "2/5 - 3/4" | Fractions drawn top over bottom: LCM step with ×3/×2 written beside each fraction, numerators added, ÷HCF to simplify; 7/6 also shown as 1 1/6; −7/20 for the negative answer |
 | T-45 | Solve: "Convert 3.45 km to m", then "45 mm in m", then "5 l = ? ml"; also "28 m 68 cm in metres" | A km…mm place-value chart: digits written under the unit, empty places filled with 0, answer read under the new unit (3450 m, 0.045 m, 5000 ml). The mixed "28 m 68 cm" goes to the AI instead |
 | T-46 ★ | Answer in: Auto. Solve "12 और 18 का म.स.प. और ल.स.प. ज्ञात कीजिए", then "945 ला 7 ने भागा"; then set Answer in: हिन्दी and solve "234 × 56" | Steps, title and answer are in Hindi, then Marathi (म.सा.वि./भागाकार/बाकी terms), then Hindi; Play reads them with a Hindi voice, saying "गुणा"/"गुणिले" for × and "किलोमीटर" for km; the saved PDF has उत्तर/चरण headings |
+| T-47 ★ | On a phone: Practice tab → Decimals, type 3.14 as the example → Start. Answer one right and one wrong, then finish | The quiz covers the whole screen (no menus); right answers give confetti and a chime (sound switch top right); a wrong answer shows your order marked green/red, the right order, and "Why" with the numbers lined up and grey zeros added; the results screen offers "Practise the ones I missed" |
+| T-48 | Practice → Fractions, tick "bigger than 1" and "mixed numbers" → Printable worksheet, then Worksheet without answers | The PDF lists each question with a line to write on, never split across pages; the answer key starts on a new page; the second PDF has no answer key |
+| T-49 | Account: set the child's class to Class 3, then open Practice → Whole numbers | 4-digit numbers are already chosen; typing 4,07,500 as the example switches to 6-digit numbers; a spread of 3 shows a warning and Start is disabled |
 | T-30 | Create a throwaway second admin, then delete that account from its Account page | Account and its books are gone; deleting your only admin account is refused |
 | T-25 ★ | Upload phone photos of a Computer chapter with code (e.g. HTML), then ask "Write the basic structure of an HTML document" | Answer has a code block that keeps its indentation; on the phone only the code box scrolls; the PDF shows the code in a typewriter-style font |
 | T-24 | Step-by-step solution: "Answer all questions in this worksheet" with a worksheet photo or upload | Every question answered in order, each sized to its marks |

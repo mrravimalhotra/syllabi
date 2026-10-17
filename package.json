@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test:db": "bash scripts/test-db.sh",
-    "scenarios": "node scripts/scenarios/run.mjs"
+    "scenarios": "node scripts/scenarios/run.mjs",
+    "test:practice": "node scripts/practice/run.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
