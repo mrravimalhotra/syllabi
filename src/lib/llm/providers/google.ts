@@ -24,13 +24,12 @@ export const googleAdapter: LlmProviderAdapter = {
   async generateCompletion(req: CompletionRequest & { model: string }): Promise<CompletionResult> {
     const genAI = client();
 
-    const tools = req.allowSearchGrounding ? [{ googleSearch: {} }] : undefined;
-
-    const model = genAI.getGenerativeModel({
-      model: req.model,
-      systemInstruction: req.systemInstructions,
-      tools: tools as never,
-    });
+    const modelWith = (search: boolean) =>
+      genAI.getGenerativeModel({
+        model: req.model,
+        systemInstruction: req.systemInstructions,
+        tools: (search ? [{ googleSearch: {} }] : undefined) as never,
+      });
 
     const parts: Part[] = [];
     if (req.context) parts.push({ text: `Reference material (RAG context):\n${req.context}` });
@@ -39,15 +38,28 @@ export const googleAdapter: LlmProviderAdapter = {
       parts.push({ inlineData: { data: img.data, mimeType: img.mimeType } });
     }
 
-    const result = await withNetworkRetry(() =>
-      model.generateContent({
-        contents: [{ role: "user", parts }],
-        generationConfig: {
-          temperature: req.temperature ?? 0.4,
-          maxOutputTokens: req.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
-        },
-      })
-    );
+    const request = {
+      contents: [{ role: "user", parts }],
+      generationConfig: {
+        temperature: req.temperature ?? 0.4,
+        maxOutputTokens: req.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+      },
+    };
+
+    // Google Search is a bonus, not a requirement: a key without search quota
+    // (the free tier often has none) gets "429 quota exceeded" for searched
+    // calls only. Then answer without search rather than fail the request.
+    let searchSkipped = false;
+    let result;
+    if (req.allowSearchGrounding) {
+      try {
+        result = await modelWith(true).generateContent(request);
+      } catch (err) {
+        console.warn("[google] search-grounded call failed; answering without search:", err instanceof Error ? err.message : err);
+        searchSkipped = true;
+      }
+    }
+    result ??= await withNetworkRetry(() => modelWith(false).generateContent(request));
 
     const response = result.response;
     const usage = response.usageMetadata;
@@ -85,6 +97,7 @@ export const googleAdapter: LlmProviderAdapter = {
         totalTokens: usage?.totalTokenCount ?? 0,
       },
       usedSearchGrounding: groundingUsed,
+      searchSkipped,
     };
   },
 

@@ -113,6 +113,12 @@ export async function POST() {
         allowSearchGrounding: true,
         maxOutputTokens: 1024,
       });
+      if (result.searchSkipped) {
+        throw new Error(
+          "Google Search isn't available on this Gemini key (Google answered 429: quota exceeded; free keys often have no search quota). " +
+            "Answers still work, just without web search. To turn search on, enable billing for this key's project in Google AI Studio."
+        );
+      }
       return result.usedSearchGrounding
         ? "Search was used and returned results."
         : `Answered without searching ("${result.text.trim().slice(0, 60)}"). That is allowed; search only runs when the model decides it needs it.`;

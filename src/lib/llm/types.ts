@@ -37,6 +37,8 @@ export interface CompletionResult {
   usage: NormalizedUsage;
   /** True if the model actually invoked search grounding for this response. */
   usedSearchGrounding?: boolean;
+  /** True if a search was allowed but failed (e.g. no search quota on the key), so the answer was made without it. */
+  searchSkipped?: boolean;
   /** Google's rendered Search Suggestions (HTML) for a grounded answer; its terms require showing them. */
   searchSuggestionsHtml?: string;
   /** True when the answer stopped at the output length limit. */
