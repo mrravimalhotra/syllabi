@@ -24,6 +24,13 @@ export interface GenerationInput {
    * students at several levels); see resolveScope.
    */
   scopeOverride?: GenerationScope;
+  /**
+   * Photos the user attached to this request (e.g. a homework page). They go
+   * straight to the model alongside the question — the same way Claude and
+   * Gemini chat apps read uploaded photos — and their transcribed text is also
+   * used to search the knowledge base.
+   */
+  photos?: CompletionImage[];
 }
 
 export interface GenerationOutput {
@@ -45,22 +52,36 @@ export async function runGeneration({
   taskType,
   prompt,
   scopeOverride,
+  photos = [],
 }: GenerationInput): Promise<GenerationOutput> {
   const quota = await checkQuota(student.id);
   if (quota.overQuota) throw new QuotaExceededError(quota);
 
   const scope = await resolveScope(student, scopeOverride);
 
-  const retrieval = await retrieveContext(prompt, scope);
+  // The knowledge-base search needs text, so photos are transcribed first and
+  // that text joins the typed prompt as the search query.
+  let searchQuery = prompt;
+  if (photos.length > 0) {
+    const transcription = await transcribePhotos(student.id, photos);
+    searchQuery = `${prompt}\n\n${transcription}`.trim().slice(0, MAX_SEARCH_QUERY_CHARS);
+  }
 
-  const { images, byPath: sourceImages } = await loadSourceImages(retrieval.chunks);
+  const retrieval = await retrieveContext(searchQuery, scope);
+
+  const { images: sourcePageImages, byPath: sourceImages } = await loadSourceImages(retrieval.chunks);
+
+  const photoNote =
+    photos.length > 0
+      ? `\n\n(The first ${photos.length} attached image(s) are photos from the user — the question to work on. Any further images are reference-material pages.)`
+      : "";
 
   const result = await generateCompletion({
     taskType,
     systemInstructions: systemInstructionsFor(taskType),
-    prompt,
+    prompt: `${prompt}${photoNote}`,
     context: formatContext(retrieval.chunks),
-    images,
+    images: [...photos, ...sourcePageImages],
     // Search grounding is opt-in per the RAG-first policy: only fires when
     // coverage from the knowledge base is weak.
     allowSearchGrounding: retrieval.coverageLow,
@@ -80,6 +101,28 @@ export async function runGeneration({
     sourceImages,
     usedSearchGrounding: Boolean(result.usedSearchGrounding),
   };
+}
+
+const MAX_SEARCH_QUERY_CHARS = 2000;
+
+/** Transcribes attached photos into text for the knowledge-base search, counting the call against the quota. */
+async function transcribePhotos(studentId: string, photos: CompletionImage[]): Promise<string> {
+  const result = await generateCompletion({
+    taskType: "ocr_extraction",
+    systemInstructions:
+      "Transcribe the text in these photos of study material faithfully, including question numbers and math in plain notation. No commentary.",
+    prompt: "Transcribe these photos.",
+    images: photos,
+    temperature: 0,
+  });
+  await recordTokenUsage({
+    studentId,
+    taskType: "ocr_extraction",
+    provider: result.provider,
+    model: result.model,
+    usage: result.usage,
+  });
+  return result.text.trim();
 }
 
 /**

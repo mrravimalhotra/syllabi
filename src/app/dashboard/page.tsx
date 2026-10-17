@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { downscaleImageFile, type DownscaledImage } from "@/lib/downscale-image";
 import type { Grade, GenerationTaskType, School, Student, Subject } from "@/types/database";
+
+const MAX_PHOTOS = 3;
 
 interface MeResponse {
   student: Student;
@@ -43,6 +46,9 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<GenerationResult | null>(null);
+  // Photos attached to the question (e.g. a homework page), downscaled in the
+  // browser so they fit the request size limit.
+  const [photos, setPhotos] = useState<DownscaledImage[]>([]);
 
   // Which school/grade/subject to generate for. Admins can pick any school; a
   // parent or tutor picks a grade and subject within their assigned school.
@@ -79,9 +85,23 @@ export default function DashboardPage() {
     loadMe();
   }, []);
 
+  async function addPhotos(files: FileList | null) {
+    if (!files) return;
+    setError(null);
+    try {
+      const room = MAX_PHOTOS - photos.length;
+      const picked = Array.from(files).slice(0, room);
+      const scaled = await Promise.all(picked.map(downscaleImageFile));
+      setPhotos((prev) => [...prev, ...scaled].slice(0, MAX_PHOTOS));
+      if (files.length > room) setError(`You can attach up to ${MAX_PHOTOS} photos.`);
+    } catch {
+      setError("Couldn't read that photo. Try a JPEG or PNG.");
+    }
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!prompt.trim()) return;
+    if (!prompt.trim() && photos.length === 0) return;
     setLoading(true);
     setError(null);
     setResult(null);
@@ -95,11 +115,13 @@ export default function DashboardPage() {
           schoolId: scopeSchoolId,
           gradeId: scopeGradeId,
           subjectId: scopeSubjectId,
+          photos: photos.map((p) => ({ data: p.imageBase64, mimeType: p.mimeType })),
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Generation failed");
       setResult(data);
+      setPhotos([]);
       await loadMe();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Generation failed");
@@ -201,6 +223,42 @@ export default function DashboardPage() {
           rows={4}
           className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
         />
+        <div className="flex flex-wrap items-center gap-3">
+          {photos.map((p, i) => (
+            <div key={i} className="relative">
+              {/* eslint-disable-next-line @next/next/no-img-element -- local data URL preview */}
+              <img
+                src={`data:${p.mimeType};base64,${p.imageBase64}`}
+                alt={`Attached photo ${i + 1}`}
+                className="h-16 w-auto rounded-md border border-slate-200"
+              />
+              <button
+                type="button"
+                onClick={() => setPhotos((prev) => prev.filter((_, j) => j !== i))}
+                className="absolute -right-2 -top-2 rounded-full bg-slate-900 px-1.5 text-xs text-white"
+                aria-label={`Remove photo ${i + 1}`}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+          {photos.length < MAX_PHOTOS && (
+            <label className="cursor-pointer rounded-md border border-dashed border-slate-300 px-3 py-2 text-xs font-medium text-slate-600 hover:border-slate-500">
+              + Add photo
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  addPhotos(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+          )}
+          <span className="text-xs text-slate-400">Optional: a photo of the question or page (up to {MAX_PHOTOS}).</span>
+        </div>
         <button
           type="submit"
           disabled={loading || !!profileIncomplete || scopeIncomplete}

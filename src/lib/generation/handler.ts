@@ -5,7 +5,40 @@ import { renderGenerationPdf } from "@/lib/pdf/render";
 import { uploadPdf, getSignedUrl } from "@/lib/storage";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { QuotaExceededError } from "@/lib/quota";
+import type { CompletionImage } from "@/lib/llm/types";
 import type { GenerationTaskType } from "@/types/database";
+
+const MAX_PHOTOS = 3;
+// Base64 characters per request across all photos — keeps the body well under
+// Vercel's ~4.5 MB request limit. The browser downscales photos before sending.
+const MAX_PHOTO_BASE64_CHARS = 3_000_000;
+const PHOTO_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+const DEFAULT_PHOTO_PROMPT: Record<GenerationTaskType, string> = {
+  solution: "Solve the question(s) in the attached photo step by step.",
+  notes: "Make revision notes on the topic shown in the attached photo.",
+  sample_paper: "Make a sample paper on the topic shown in the attached photo.",
+  ad_hoc: "Explain what is shown in the attached photo.",
+};
+
+/** Validates the optional `photos` field; returns the photos or an error message. */
+function parsePhotos(raw: unknown): CompletionImage[] | string {
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw)) return "photos must be a list";
+  if (raw.length > MAX_PHOTOS) return `Attach at most ${MAX_PHOTOS} photos`;
+
+  let totalChars = 0;
+  const photos: CompletionImage[] = [];
+  for (const p of raw) {
+    if (typeof p?.data !== "string" || typeof p?.mimeType !== "string" || !PHOTO_MIME_TYPES.has(p.mimeType)) {
+      return "Each photo must be a JPEG, PNG or WebP image";
+    }
+    totalChars += p.data.length;
+    photos.push({ data: p.data, mimeType: p.mimeType });
+  }
+  if (totalChars > MAX_PHOTO_BASE64_CHARS) return "Photos are too large — attach fewer or smaller photos";
+  return photos;
+}
 
 /** Builds a POST handler for one of the four generation routes — same pipeline, different task type. */
 export function createGenerationRoute(taskType: GenerationTaskType) {
@@ -16,10 +49,16 @@ export function createGenerationRoute(taskType: GenerationTaskType) {
     }
 
     const body = await request.json().catch(() => null);
-    const prompt = typeof body?.prompt === "string" ? body.prompt.trim() : "";
-    if (!prompt) {
-      return NextResponse.json({ error: "A prompt/topic is required" }, { status: 400 });
+    const typedPrompt = typeof body?.prompt === "string" ? body.prompt.trim() : "";
+
+    const photos = parsePhotos(body?.photos);
+    if (typeof photos === "string") {
+      return NextResponse.json({ error: photos }, { status: 400 });
     }
+    if (!typedPrompt && photos.length === 0) {
+      return NextResponse.json({ error: "Type a question or attach a photo" }, { status: 400 });
+    }
+    const prompt = typedPrompt || DEFAULT_PHOTO_PROMPT[taskType];
 
     // Optional school/grade/subject choice — validated against the caller's
     // permissions inside runGeneration.
@@ -29,9 +68,9 @@ export function createGenerationRoute(taskType: GenerationTaskType) {
         : undefined;
 
     try {
-      const result = await runGeneration({ student, taskType, prompt, scopeOverride });
+      const result = await runGeneration({ student, taskType, prompt, scopeOverride, photos });
 
-      const title = prompt.length > 80 ? `${prompt.slice(0, 77)}...` : prompt;
+      const title = !typedPrompt ? "Photo question" : prompt.length > 80 ? `${prompt.slice(0, 77)}...` : prompt;
       const pdfBuffer = await renderGenerationPdf({
         taskType,
         title,
