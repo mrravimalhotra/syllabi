@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "StudySprint",
+  title: "Syllabi",
   description: "RAG-powered study assistant: step-by-step solutions, revision notes, and sample papers.",
 };
 

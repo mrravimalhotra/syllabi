@@ -1,11 +1,11 @@
-# StudySprint — Full Handoff for the Cloud Session
+# Syllabi — Full Handoff for the Cloud Session
 
 > **Status update (2026-10-17):** steps 1–3 of section 12 are done: `docs/DEPLOYMENT.md` added, lint/build pass cleanly, and `supabase/migrations/0004_tighten_rls.sql` fixes RLS issues 1–2 in section 10 (plus a related hole: students could insert `generated_documents` rows pointing at any storage path). Development branch: `claude/awesome-euler-jg6t9u`.
 
 Read this first. It covers what we are building and why, everything built so far, the exact technical design, deployment status, and known issues found by reading the code. Also read `AGENTS.md` (Next.js version warning: check `node_modules/next/dist/docs/` before writing code).
 
 - Owner: Ravi (GitHub: `mrravimalhotra`)
-- Repo: `mrravimalhotra/studysprint` (public)
+- Repo: `mrravimalhotra/studysprint` (public; product renamed to Syllabi on 2026-10-17 — the repo may be renamed to match)
 - Working branch: `claude/app-generation-markdown-7bcyyt` (currently the repo's only branch)
 - Code size: about 4,150 lines of TS/TSX plus 3 SQL migrations. HEAD at time of writing: `201f90a` "Retry once on transient network failures to the Gemini API" (17 commits).
 
@@ -13,7 +13,7 @@ Read this first. It covers what we are building and why, everything built so far
 
 ## 1. What we are building
 
-StudySprint is a cloud-native, globally accessible web app that acts as an intelligent study companion for school students. It turns curriculum materials into personalized study resources.
+Syllabi is a cloud-native, globally accessible web app that acts as an intelligent study companion for school students. It turns curriculum materials into personalized study resources.
 
 An admin-curated knowledge base (RAG) holds scanned and digital pages of textbooks, exercise books and past sample papers, each tagged by **School, Grade, Subject**. Students use it to:
 
@@ -49,7 +49,7 @@ Not specified by the owner (ask if it matters): target schools/customers, moneti
 3. **File storage decision:** moved from Supabase Storage to **Cloudflare R2** (10 GB free, zero egress fees) because every uploaded page image is kept and re-served whenever a generation cites it.
 4. An earlier Claude Code session built the app (auth, admin panel, ingestion, RAG, 4 generation routes, quota, PDF export, R2 storage). Later commits added PDF upload support, per-page source type, page images in RAG results, R2 migration, an architecture doc (`docs/architecture.html`), and a retry on transient Gemini network failures.
 5. **Supabase key naming:** Supabase now issues `sb_publishable_...` (replaces anon) and `sb_secret_...` (replaces service_role). Legacy keys are being deprecated by end of 2026; new projects do not get legacy keys. The code still uses the old env var names; the new key values work in them.
-6. **Deployment:** not done yet. The owner's Vercel account (Hobby plan) only has an unrelated project (`invento`). StudySprint has not been imported.
+6. **Deployment:** not done yet. The owner's Vercel account (Hobby plan) only has an unrelated project (`invento`). Syllabi has not been imported.
 7. **Billing note:** the owner has a $100 "cloud session credit" that only applies to Claude Code cloud sessions, not to regular chats or Projects. That is why work is moving to this cloud session. Preferred model for routine work: Sonnet (stretches the credit); use Opus only for hard problems.
 
 ---
@@ -153,7 +153,7 @@ Environment variables (`.env.example`):
 | `SUPABASE_SERVICE_ROLE_KEY` | legacy name; put the new `sb_secret_...` value (server only) |
 | `GOOGLE_API_KEY` | required |
 | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` | optional fallbacks |
-| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME` | bucket defaults to `studysprint` |
+| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME` | bucket defaults to `syllabi` |
 
 Optional cleanup: rename the Supabase env vars in code to `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` and `SUPABASE_SECRET_KEY` (used in `lib/supabase/{middleware,client,server,admin}.ts`), keeping Vercel in sync.
 
@@ -169,7 +169,7 @@ First admin bootstrap (no UI for this): sign up through the app, then in the Sup
 Not deployed. Unknown and to verify: whether the Supabase project exists, migrations applied, pgvector enabled, R2 bucket and token created.
 
 1. Supabase: create or confirm project; run the 3 migrations in order; confirm Auth URL settings.
-2. Cloudflare R2: create bucket `studysprint`; create an API token with object read/write; note account ID.
+2. Cloudflare R2: create bucket `syllabi`; create an API token with object read/write; note account ID.
 3. Vercel (Hobby plan, non-commercial use only): Create New → Project → import `mrravimalhotra/studysprint`; add all env vars before the first deploy.
 4. Local sanity check in the session: `npm ci`, `npm run lint`, `npm run build`.
 5. Bootstrap the first admin (SQL above).

@@ -1,4 +1,4 @@
-# Deploying StudySprint
+# Deploying Syllabi
 
 Stack: Vercel (Next.js app) + Supabase (Postgres + pgvector + Auth) + Cloudflare R2 (files) + Google Gemini API. All on free tiers.
 
@@ -16,7 +16,7 @@ Stack: Vercel (Next.js app) + Supabase (Postgres + pgvector + Auth) + Cloudflare
 
 ## 2. Cloudflare R2
 
-1. In the Cloudflare dashboard: **R2 → Create bucket**, name `studysprint`.
+1. In the Cloudflare dashboard: **R2 → Create bucket**, name `syllabi`.
 2. **R2 → Manage API tokens → Create token** with *Object Read & Write* on that bucket.
 3. Note the Account ID, Access Key ID and Secret Access Key.
 
@@ -26,7 +26,7 @@ Create an API key at aistudio.google.com. The default models are Flash tier, whi
 
 ## 4. Vercel
 
-1. **Add New → Project →** import `mrravimalhotra/studysprint`.
+1. **Add New → Project →** import `mrravimalhotra/studysprint` (or the new name, if you renamed the repo). Name the Vercel project `syllabi`.
 2. Before the first deploy, add these environment variables:
 
 | Variable | Value |
@@ -36,7 +36,7 @@ Create an API key at aistudio.google.com. The default models are Flash tier, whi
 | `SUPABASE_SERVICE_ROLE_KEY` | the `sb_secret_...` key (legacy variable name; server only) |
 | `GOOGLE_API_KEY` | Gemini API key |
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | from step 2 |
-| `R2_BUCKET_NAME` | `studysprint` (default if unset) |
+| `R2_BUCKET_NAME` | `syllabi` (default if unset) |
 | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` | optional fallbacks |
 
 3. Deploy. Then put the Vercel domain into Supabase's Auth URL settings (step 1.3) if you hadn't yet.

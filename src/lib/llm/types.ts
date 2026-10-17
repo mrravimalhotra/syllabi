@@ -44,7 +44,7 @@ export interface EmbeddingResult {
   usage: NormalizedUsage;
 }
 
-/** One provider adapter — normalizes a vendor SDK into StudySprint's shape. */
+/** One provider adapter — normalizes a vendor SDK into Syllabi's shape. */
 export interface LlmProviderAdapter {
   generateCompletion(req: CompletionRequest & { model: string }): Promise<CompletionResult>;
   embed(text: string, model: string): Promise<EmbeddingResult>;

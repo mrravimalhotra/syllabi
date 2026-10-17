@@ -1,4 +1,4 @@
-# StudySprint
+# Syllabi
 
 A RAG-powered study assistant for schools: step-by-step solutions, revision
 notes, sample papers, and ad-hoc Q&A — grounded first in each school's own

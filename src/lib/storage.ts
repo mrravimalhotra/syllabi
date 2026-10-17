@@ -9,7 +9,7 @@ import { getSignedUrl as presign } from "@aws-sdk/s3-request-presigner";
 // R2's free tier (10GB) comfortably covers that, and it charges no egress fees for
 // those re-serves, unlike S3-style storage.
 
-const BUCKET = process.env.R2_BUCKET_NAME ?? "studysprint";
+const BUCKET = process.env.R2_BUCKET_NAME ?? "syllabi";
 const SIGNED_URL_TTL_SECONDS = 60 * 60; // 1 hour
 
 function client() {

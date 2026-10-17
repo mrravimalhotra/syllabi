@@ -10,7 +10,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-4">
           <div>
-            <p className="text-sm font-semibold text-slate-900">StudySprint</p>
+            <p className="text-sm font-semibold text-slate-900">Syllabi</p>
             <p className="text-xs text-slate-500">{student?.full_name ?? student?.email}</p>
           </div>
           <div className="flex items-center gap-4">

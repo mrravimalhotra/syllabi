@@ -1,4 +1,4 @@
--- StudySprint initial schema
+-- Syllabi initial schema
 -- Postgres + pgvector serving as both relational store and RAG vector store.
 
 create extension if not exists vector;

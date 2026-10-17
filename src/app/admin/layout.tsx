@@ -18,7 +18,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div>
-            <p className="text-sm font-semibold text-slate-900">StudySprint Admin</p>
+            <p className="text-sm font-semibold text-slate-900">Syllabi Admin</p>
             <p className="text-xs text-slate-500">{admin.email}</p>
           </div>
           <div className="flex items-center gap-4">
