@@ -17,6 +17,16 @@ edges. Transcribe only the main page.
 - Figures, screenshots, diagrams and maps: one line, [Figure <number if shown>: <caption
   or a short description of what it shows>]. Transcribe any text that is part of the
   figure's meaning (labels, code in a screenshot).
+- Handwriting is not the book: never merge it into the printed text. Wrap anything
+  handwritten (filled-in blanks, answers, margin notes, dates, "HW", corrections) as
+  [Handwritten: ...] where it appears, e.g. "Vajji is an example of a ____ [Handwritten:
+  Gana-Sangha]". Handwritten answers may be wrong; copy them exactly as written.
+- Ticks and circles on options: mark the chosen option as [Ticked]. A ticked item in a
+  list of topics or tasks shows the one chosen.
+- Ignore pen underlines, brackets, stars and highlights around printed text; transcribe
+  the printed text once, normally.
+- Maps: list the labelled places, e.g. [Map: Fig. 2.4, the sixteen mahajanapadas:
+  Kuru, Panchala, ...]. Timelines: one line per entry, "date: event".
 - Tables: Markdown tables. Blanks to fill in: keep them as "____".
 - Math in plain Unicode (x², √x, ≤, π), not LaTeX.
 - Skip page furniture: running headers and footers, publisher or book names, and
@@ -27,11 +37,15 @@ edges. Transcribe only the main page.
  * Extracts clean text from one scanned/photographed page using the LLM's native
  * vision input — no dedicated OCR vendor needed (Requirement: no OCR bill).
  */
-export async function extractPageText(imageBase64: string, mimeType: string): Promise<CompletionResult> {
+export async function extractPageText(imageBase64: string, mimeType: string, hint?: string): Promise<CompletionResult> {
   const result = await generateCompletion({
     taskType: "ocr_extraction",
     systemInstructions: EXTRACTION_SYSTEM_PROMPT,
-    prompt: "Transcribe this page.",
+    // Pictures from Word files are not whole pages: say where they came from,
+    // so the transcription starts with that context (e.g. which question).
+    prompt: hint
+      ? `This is a picture from a Word document, not a whole page. ${hint}\nStart your transcription with that context in one line, then transcribe the picture.`
+      : "Transcribe this page.",
     images: [{ data: imageBase64, mimeType }],
     temperature: 0,
   });
