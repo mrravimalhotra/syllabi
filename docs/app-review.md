@@ -108,9 +108,20 @@ Input for BMAD planning (PRD, epics, stories). Written 2026-10-17 from a read of
 | E6 | No ads, no selling of student data | ✅ | By design |
 | E7 | Google sign-in (schools use Google Workspace) | ❌ | Optional |
 
+### F. Copyright, licences & provider terms (checked 2026-10-17; not legal advice)
+| # | Item | Status | Note |
+|---|---|---|---|
+| F1 | **AI provider allows apps used by under-18s** | ❌ **BLOCKER** | Gemini API Additional Terms (modified 2026-04-28): "You must be 18 years of age or older to use the APIs" and API clients must not be "directed towards or is likely to be accessed by individuals under the age of 18". Syllabi serves school students, so this applies to completions **and** embeddings. Vertex AI / Google Cloud terms may contain similar language (unverified). Anthropic's usage policy (May 2024 update) allows API use in products for minors if the operator adds safety features (age verification, content moderation) and discloses AI use. Decide the provider before onboarding students; get legal confirmation. |
+| F2 | Textbook copyright | ❌ | Ingestion copies whole pages (images + text) into storage. India Copyright Act s.52(1)(i) covers reproduction "in the course of instruction" (Delhi HC, *Rameshwari Photocopy*, 2016–17), but a commercial service storing and serving copies is not clearly covered. NCERT and private-publisher books are copyrighted; NCERT being free to read online is not a licence to copy. Mitigations: written permission/licence per publisher (or the school's own licence), uploader rights declaration (E5), content visible only to that school's enrolled students, show only cited page snippets, takedown process in the terms. |
+| F3 | Past papers | ⚠️ | A school's own papers belong to the school (get its consent). Board sample papers (e.g. CBSE) are published openly but still copyrighted — confirm terms. |
+| F4 | Grounding with Google Search display rules | ❌ | If kept: show the returned Search Suggestions with grounded answers to that user only, don't modify or intersperse them, and don't cache them beyond the allowed exceptions. Today the PDF and history store grounded output without suggestions. |
+| F5 | Open-source licences | ✅ | All permissive; notices in `THIRD_PARTY_NOTICES.md` (BMAD MIT notice, pdf.js Apache header). |
+| F6 | Name "Syllabi" | ⚠️ | No conflicting product found in a web search; "syllabi" is a common word, so it is hard to register but low-risk. Search IP India (ipindiaservices.gov.in) and the USPTO before branding spend. |
+| F7 | Competitor references | ✅ | Ideas and features are not copyrightable. Don't copy others' code, UI assets, text or logos; naming competitors in internal docs is fine. |
+
 ## 4. Suggested release slices
 
-1. **Before first real students:** A1, A2, A8, D1, D2+D3, D4, D7, D8 (minimal), D9, D11, E1, E2, E3, E4, E5.
+1. **Before first real students:** F1 (provider terms — blocker), F2, F4, A1, A2, A8, D1, D2+D3, D4, D7, D8 (minimal), D9, D11, E1, E2, E3, E4, E5.
 2. **v1 (worth switching from NotebookLM):** A3, A4, A5, A6, A7, A9, A12, A13, A14, C1, C2, B1, B5, D5, D6, D10.
 3. **v1.x:** A10, A11, A15, A16, B2, B3, B4, B6, C3–C7, D13–D16, E7.
 
