@@ -46,7 +46,7 @@ export function StudyPackView({
   const [pack, setPack] = useState(initialPack);
   const [tab, setTab] = useState<Tab>(pack.walkthrough.length ? "walkthrough" : "textbook");
   const [copied, setCopied] = useState(false);
-  const speech = useSpeech();
+  const speech = useSpeech(pack.language ?? "en");
 
   const tabs: { id: Tab; label: string; count?: number }[] = [
     ...(pack.walkthrough.length

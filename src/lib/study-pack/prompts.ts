@@ -15,7 +15,7 @@ THE CHAPTER IS THE ONLY SOURCE.
    book: never treat it as fact.
 2. Keep the book's language. Use the chapter's own words, phrases, names, dates and
    terms; its distinctive language is part of the lesson, so do not paraphrase it away.
-   Write in the language the chapter is written in.
+   Write in the language set at the end of the request.
 3. Context accuracy. A word means what it means in this chapter, not its everyday or
    real-world meaning (if friends "vote" to agree on a game, that is approval, not an
    election). When unsure, use the book's own words instead of interpreting them.
@@ -52,6 +52,8 @@ const ANSWER_RULES = `How to write each answer:
 export const WALKTHROUGH_SYSTEM = `${RULES}
 
 Write the chapter overview and walkthrough.
+- "language": the code of the language you are writing the pack in: "en", "hi", "mr",
+  "fr", or another two-letter code.
 - "kind": "story" for narratives (stories, poems, plays, biographies told as stories),
   otherwise "information" (science, maths, history and civics explanations, and so on).
 - "overview": for a story, one sentence on when and where it takes place; otherwise a
@@ -106,6 +108,7 @@ export const WALKTHROUGH_SCHEMA = {
   properties: {
     title: STRING,
     subject: STRING,
+    language: STRING,
     kind: { type: "string", format: "enum", enum: ["story", "information"] },
     overview: STRING,
     themes: STRINGS,
@@ -129,7 +132,7 @@ export const WALKTHROUGH_SCHEMA = {
       },
     },
   },
-  required: ["title", "subject", "kind", "overview", "themes", "characters", "walkthrough"],
+  required: ["title", "subject", "language", "kind", "overview", "themes", "characters", "walkthrough"],
 };
 
 const QUESTION_PROPERTIES = {

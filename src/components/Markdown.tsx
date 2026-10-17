@@ -5,7 +5,7 @@ import { tidyMath } from "@/lib/tidy-math";
 /** A sample paper's answer key prints on a new page, so the paper can be handed over alone. */
 function answerKeyBreak(children: React.ReactNode): string {
   const text = Array.isArray(children) ? children.join("") : String(children ?? "");
-  return /^\s*answer key\b/i.test(text) ? "print:break-before-page" : "";
+  return /^\s*(?:answer key\b|उत्तर कुंजी|उत्तरसूची|उत्तर सूची|corrigé)/i.test(text) ? "print:break-before-page" : "";
 }
 
 // Styled mappings for the Markdown the prompts ask for. Tables and code blocks

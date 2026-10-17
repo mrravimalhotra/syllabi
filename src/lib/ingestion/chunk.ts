@@ -4,7 +4,10 @@ export interface TextChunk {
 }
 
 const MAX_CHUNK_CHARS = 1500;
-const HEADING_RE = /^(#{1,3}\s+.+|(?:Chapter|Section|Question|Exercise|Q\.?)\s*\d+.*)$/i;
+// Also Hindi/Marathi (पाठ, अध्याय, प्रश्न, स्वाध्याय, अभ्यास; Devanagari digits) and French
+// (Chapitre, Leçon, Exercice) chapter, lesson and question headings.
+const HEADING_RE =
+  /^(#{1,3}\s+.+|(?:Chapter|Section|Question|Exercise|Q\.?|Chapitre|Leçon|Exercice|पाठ|अध्याय|प्रश्न|स्वाध्याय|अभ्यास)\s*[0-9०-९]+.*)$/i;
 
 /**
  * Splits page text into chunks by section/question/paragraph boundaries, capping

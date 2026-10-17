@@ -6,12 +6,17 @@
 //   bullets:   "* Question: What do you mean by ...?"
 // MCQ options (i., ii., a., b.) and sub-parts (a), b)) stay with their question.
 
-/** "Q1.", "Q.1", "Q 1)", "Question 3:" — a top-level question or a section of questions. */
-const Q_HEADING = /^\s*Q(?:uestion)?\.?\s*\d{1,2}\s*[.):\-]?\s*\S/i;
-/** "1.", "1)", "1.What" — a numbered item. A digit may not follow, so "1.5" isn't one. */
-const NUMBERED = /^\s*\d{1,2}[.)](?!\d)\s*\S/;
-/** "SECTION B", "Section A: Objective questions", "Part 2", "A. Fill in the blanks" — a section heading. */
-const SECTION = /^\s*(?:(?:SECTION|Part)\s+[A-Z0-9]+\b|[A-H]\.\s+[A-Z])/i;
+// Hindi and Marathi papers use Devanagari digits (१, २...), "प्रश्न"/"प्र." for
+// "Question", "।" as a full stop, and "विभाग"/"खंड"/"भाग" for "Section";
+// French papers use "Exercice" and "Partie".
+const DIGIT = "[0-9०-९]";
+
+/** "Q1.", "Q.1", "Q 1)", "Question 3:", "प्रश्न १.", "प्र. 2", "Exercice 4" — a top-level question or a section of questions. */
+const Q_HEADING = new RegExp(`^\\s*(?:Q(?:uestion)?|Exercice|प्रश्न|प्र)\\.?\\s*${DIGIT}{1,2}\\s*[.):\\-।]?\\s*\\S`, "i");
+/** "1.", "1)", "1.What", "१." — a numbered item. A digit may not follow, so "1.5" isn't one. */
+const NUMBERED = new RegExp(`^\\s*${DIGIT}{1,2}[.)।](?!${DIGIT})\\s*\\S`);
+/** "SECTION B", "Section A: Objective questions", "Part 2", "A. Fill in the blanks", "विभाग अ", "Partie B" — a section heading. */
+const SECTION = /^\s*(?:(?:SECTION|Part|Partie)\s+[A-Z0-9]+\b|[A-H]\.\s+[A-Z]|(?:विभाग|खंड|भाग)\s+\S)/i;
 /** "* Question: ...", "- Question: ...", "• Q: ..." — an unnumbered question bullet. */
 const BULLET_QUESTION = /^\s*[*\-•]\s*(?:Question|Q)\s*[:.]/i;
 

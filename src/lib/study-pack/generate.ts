@@ -8,6 +8,7 @@ import type { Student } from "@/types/database";
 import { QUESTIONS_SCHEMA, QUESTIONS_SYSTEM, WALKTHROUGH_SCHEMA, WALKTHROUGH_SYSTEM } from "@/lib/study-pack/prompts";
 import { evidenceFound } from "@/lib/study-pack/verify";
 import { levelLine } from "@/lib/generation/level";
+import { languageLine, type AnswerLanguage } from "@/lib/generation/language";
 import type { PackQuestion, StudyPack, VocabularyItem, WalkthroughPart } from "@/lib/study-pack/types";
 
 // About 40 dense textbook pages; longer books should be split into chapters.
@@ -155,6 +156,7 @@ export function buildPack(
     title: str(walk.title, 200) || "Chapter study pack",
     subject: str(walk.subject, 100),
     kind,
+    language: /^[a-z]{2}$/.test(str(walk.language, 5)) ? str(walk.language, 5) : "en",
     overview: str(walk.overview, 1000),
     themes: list(walk.themes, 6).map((t) => str(t, 200)).filter(Boolean),
     characters:
@@ -188,6 +190,7 @@ export async function generateStudyPack(input: {
   documentId?: string;
   photos?: CompletionImage[];
   focus?: string;
+  language?: AnswerLanguage;
 }): Promise<StudyPack> {
   const quota = await checkQuota(input.student.id);
   if (quota.overQuota) throw new QuotaExceededError(quota);
@@ -209,6 +212,7 @@ export async function generateStudyPack(input: {
   const prompt =
     `Chapter text:\n"""\n${chapter.text}\n"""` +
     (level ? `\n\n${level}` : "") +
+    `\n\n${languageLine(input.language ?? "auto")}` +
     (focus ? `\n\nThe parent or tutor adds: ${focus}` : "") +
     "\n\nReturn the JSON object now.";
 

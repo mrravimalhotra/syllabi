@@ -7,7 +7,8 @@ function normalise(text: string): string {
   return text
     .toLowerCase()
     .normalize("NFKC")
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    // \p{M}: Devanagari vowel signs (matras) are marks, not letters.
+    .replace(/[^\p{L}\p{M}\p{N}]+/gu, " ")
     .trim();
 }
 

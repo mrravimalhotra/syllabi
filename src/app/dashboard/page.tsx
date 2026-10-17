@@ -6,6 +6,7 @@ import { downscaleImageFile, imageFingerprint, type DownscaledImage } from "@/li
 import { AnswerView, type Answer } from "@/components/AnswerView";
 import { StudyPackView } from "@/components/study-pack/StudyPackView";
 import type { StudyPack } from "@/lib/study-pack/types";
+import { LANGUAGE_NAMES, type AnswerLanguage } from "@/lib/generation/language";
 import {
   ArrowRightIcon,
   BookIcon,
@@ -144,6 +145,8 @@ export default function DashboardPage() {
   const [booksLoaded, setBooksLoaded] = useState(false);
   const [booksError, setBooksError] = useState(false);
   const [showBooks, setShowBooks] = useState(false);
+  // Language for this question; until changed, the Account page's default.
+  const [answerLanguage, setAnswerLanguage] = useState<AnswerLanguage | null>(null);
   // Study packs: the chapter (a book from My books); "" means use attached pages.
   const [packBookId, setPackBookId] = useState<string | null>(null);
 
@@ -190,6 +193,7 @@ export default function DashboardPage() {
   }, [result]);
 
   const activeBookIds = selectedBookIds ?? books.map((b) => b.id);
+  const language: AnswerLanguage = answerLanguage ?? me?.student.answer_language ?? "auto";
   // The chapter for a study pack: the one picked, else the newest book.
   const chosenPackBook = packBookId ?? books[0]?.id ?? "";
   const currentTab = TABS.find((t) => t.value === tab)!;
@@ -288,10 +292,12 @@ export default function DashboardPage() {
                 documentId: chosenPackBook || undefined,
                 photos: chosenPackBook ? [] : photos.map((p) => ({ data: p.imageBase64, mimeType: p.mimeType })),
                 focus: prompt.trim(),
+                language,
               }
             : {
           prompt: tab === "sample_paper" ? `${prompt.trim()}\n\nTotal marks: ${totalMarks}`.trim() : prompt.trim(),
           documentIds: activeBookIds,
+          language,
           photos: photos.map((p) => ({ data: p.imageBase64, mimeType: p.mimeType })),
           attachedText: attachedDocs
             .map((d) => `Attached file "${d.name}":\n${d.text}`)
@@ -646,7 +652,23 @@ export default function DashboardPage() {
           )}
 
           <div className="ml-auto flex items-center gap-3">
-            <span className="hidden text-xs text-slate-400 lg:inline">Ctrl + Enter</span>
+            <label className="inline-flex items-center gap-1.5 text-xs text-slate-500">
+              <span className="hidden sm:inline">Answer in</span>
+              <select
+                value={language}
+                onChange={(e) => setAnswerLanguage(e.target.value as AnswerLanguage)}
+                aria-label="Answer in"
+                className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700"
+              >
+                <option value="auto">Same as the book</option>
+                {(["en", "hi", "mr", "fr"] as const).map((l) => (
+                  <option key={l} value={l} lang={l}>
+                    {LANGUAGE_NAMES[l]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <span className="hidden text-xs text-slate-400 xl:inline">Ctrl + Enter</span>
             <button
               type="submit"
               disabled={loading || readingFiles || noBookSelected || overQuota}

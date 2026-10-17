@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { EditableName } from "@/components/EditableName";
 import { CheckIcon } from "@/components/icons";
 import { BOARDS, CLASS_LEVELS } from "@/lib/generation/level";
+import { LANGUAGE_NAMES } from "@/lib/generation/language";
 import { Alert, Field, Meter, PageHeader, PageSkeleton, Spinner, button, card, cx, input } from "@/components/ui";
 import type { Student } from "@/types/database";
 
@@ -44,7 +45,7 @@ export default function AccountPage() {
   }
 
   // Class and board shape every answer ("write for a Class 6 CBSE student").
-  async function saveLevel(change: { classLevel?: string; board?: string }) {
+  async function saveLevel(change: { classLevel?: string; board?: string; answerLanguage?: string }) {
     const res = await fetch("/api/me", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -60,6 +61,9 @@ export default function AccountPage() {
               ...prev.student,
               ...(change.classLevel !== undefined ? { class_level: change.classLevel || null } : {}),
               ...(change.board !== undefined ? { board: change.board || null } : {}),
+              ...(change.answerLanguage !== undefined
+                ? { answer_language: change.answerLanguage === "auto" ? null : (change.answerLanguage as Student["answer_language"]) }
+                : {}),
             },
           }
         : prev
@@ -93,7 +97,7 @@ export default function AccountPage() {
     <div className="space-y-6">
       <PageHeader
         title="Account"
-        description="Your details, your child's class and board (answers are written for that level), usage and password."
+        description="Your details, your child's class, board and answer language, usage and password."
       />
 
       <section className={cx(card, "divide-y divide-slate-100")}>
@@ -112,12 +116,24 @@ export default function AccountPage() {
           <LevelSelect
             label="Child's class"
             value={student.class_level ?? ""}
-            options={CLASS_LEVELS}
+            options={CLASS_LEVELS.map((c) => ({ value: c, label: c }))}
             onSave={(v) => saveLevel({ classLevel: v })}
           />
         </Row>
         <Row label="School board">
-          <LevelSelect label="School board" value={student.board ?? ""} options={BOARDS} onSave={(v) => saveLevel({ board: v })} />
+          <LevelSelect label="School board" value={student.board ?? ""} options={BOARDS.map((b) => ({ value: b, label: b }))} onSave={(v) => saveLevel({ board: v })} />
+        </Row>
+        <Row label="Answer language">
+          <LevelSelect
+            label="Answer language"
+            value={student.answer_language ?? "auto"}
+            emptyLabel={null}
+            options={[
+              { value: "auto", label: "Same as the book" },
+              ...(["en", "hi", "mr", "fr"] as const).map((l) => ({ value: l, label: LANGUAGE_NAMES[l] })),
+            ]}
+            onSave={(v) => saveLevel({ answerLanguage: v })}
+          />
         </Row>
         <Row label="This month">
           <div className="w-full max-w-xs space-y-1.5">
@@ -183,11 +199,14 @@ function LevelSelect({
   label,
   value,
   options,
+  emptyLabel = "Not set",
   onSave,
 }: {
   label: string;
   value: string;
-  options: string[];
+  options: { value: string; label: string }[];
+  /** Label for the empty choice; null offers no empty choice. */
+  emptyLabel?: string | null;
   onSave: (value: string) => Promise<void>;
 }) {
   const [state, setState] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -208,10 +227,10 @@ function LevelSelect({
         }}
         className={cx(input, "w-auto min-w-40")}
       >
-        <option value="">Not set</option>
+        {emptyLabel !== null && <option value="">{emptyLabel}</option>}
         {options.map((o) => (
-          <option key={o} value={o}>
-            {o}
+          <option key={o.value} value={o.value}>
+            {o.label}
           </option>
         ))}
       </select>

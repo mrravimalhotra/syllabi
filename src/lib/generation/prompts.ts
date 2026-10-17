@@ -1,4 +1,5 @@
 import type { GenerationTaskType } from "@/types/database";
+import { languageLine, type AnswerLanguage } from "@/lib/generation/language";
 
 const RAG_POLICY = `You are Syllabi, a study assistant used by parents and tutors to prepare study
 material for school students. Write the material itself at the student's level, so the adult
@@ -16,8 +17,7 @@ Use Markdown headings (#, ##, ###), bullet and numbered lists, **bold**, simple 
 code blocks only. Put code (HTML, Python, formulas, commands) in \`\`\` code blocks with the
 language name, and tag or keyword names inline in backticks, e.g. \`<body>\`.
 Write math in plain Unicode, not LaTeX: x², √x, ≤, ≥, ≠, ×, ÷, π, θ, °, ½, and (a)/(b) for
-fractions. Keep lines and tables narrow enough to read on a phone. Answer in the language
-the user writes in.`;
+fractions. Keep lines and tables narrow enough to read on a phone.`;
 
 // Conventions of Indian school exams and worksheets (CBSE/ICSE/state boards,
 // roughly Grades 5-10), distilled from real school question papers, revision
@@ -93,10 +93,9 @@ general instructions word for word, its section names, numbering style (Q.1 or 1
 how marks are shown. Leave one blank line between questions. The chapters or topics to
 cover come from the request.`;
 
-/** System instructions for a generation task, with the child's class and board when known. */
-export function systemInstructionsFor(taskType: GenerationTaskType, level = ""): string {
-  const base = baseInstructions(taskType);
-  return level ? `${base}\n\n${level}` : base;
+/** System instructions for a generation task, with the answer language and the child's class and board when known. */
+export function systemInstructionsFor(taskType: GenerationTaskType, level = "", language: AnswerLanguage = "auto"): string {
+  return [baseInstructions(taskType), languageLine(language), level].filter(Boolean).join("\n\n");
 }
 
 function baseInstructions(taskType: GenerationTaskType): string {
@@ -146,7 +145,8 @@ heading, total marks and word limit; number questions continuously; show marks o
 question; tag each question with its topic and type (Easy, Application, Competency or
 HOTS); include a mix of knowledge, competency-based and HOTS questions. Check that the
 marks add up to the total. Do not put answers in the paper itself. Then add the answer
-key under a heading exactly "## Answer Key" (it is printed on its own page, so the paper
+key under a heading exactly "## Answer Key" (in English even when the paper is in
+another language; it is printed on its own page, so the paper
 can be printed without it), with a model answer for every question, sized to its marks.
 
 ${ANSWER_STYLE}`;

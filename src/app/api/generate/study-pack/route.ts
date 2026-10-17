@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { QuotaExceededError } from "@/lib/quota";
 import { userMessage } from "@/lib/errors";
 import { isUuid } from "@/lib/validate";
+import { isAnswerLanguage } from "@/lib/generation/language";
 import { generateStudyPack } from "@/lib/study-pack/generate";
 import { packToMarkdown } from "@/lib/study-pack/markdown";
 import type { CompletionImage } from "@/lib/llm/types";
@@ -25,6 +26,7 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const documentId = typeof body?.documentId === "string" && isUuid(body.documentId) ? body.documentId : undefined;
   const focus = typeof body?.focus === "string" ? body.focus : undefined;
+  const language = isAnswerLanguage(body?.language) ? body.language : (student.answer_language ?? "auto");
 
   const photos: CompletionImage[] = [];
   if (Array.isArray(body?.photos)) {
@@ -48,7 +50,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const pack = await generateStudyPack({ student, documentId, photos: documentId ? undefined : photos, focus });
+    const pack = await generateStudyPack({ student, documentId, photos: documentId ? undefined : photos, focus, language });
     const content = packToMarkdown(pack);
     const admin = createAdminClient();
     const { data: doc, error } = await admin

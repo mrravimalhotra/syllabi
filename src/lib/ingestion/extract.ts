@@ -7,6 +7,11 @@ edges. Transcribe only the main page.
 
 - Transcribe faithfully, in reading order. Do not summarize, add commentary or answer
   any questions on the page.
+- Keep the page's own language and script: Hindi and Marathi in Devanagari (with every
+  matra, anusvara and nukta, and Devanagari digits as printed), French with all its
+  accents (é, è, à, ç, ô...), English as is. Never translate or transliterate. A page
+  that mixes languages (e.g. an English textbook with a Hindi poem, or a French lesson
+  with English meanings) keeps each part in its own language.
 - Mark headings with Markdown: "# " for the chapter title, "## " for section headings,
   "### " for sub-headings. Keep question numbers, sub-parts (a, b, c) and marks.
 - Side boxes and call-outs (e.g. "Fact File", "Let's Know More", "Learning Outcomes")

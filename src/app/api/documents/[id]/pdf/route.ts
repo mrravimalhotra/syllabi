@@ -42,11 +42,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       sourceImages: byPath,
       usedSearchGrounding: answer.used_search_grounding,
     });
-    const fileName = (questionsOnly ? `${answer.title} (questions)` : answer.title).replace(/[^\w\- ]+/g, "").trim().slice(0, 60) || "Syllabi answer";
+    // Hindi, Marathi and French titles keep their letters (filename*), with a plain fallback.
+    const name = (questionsOnly ? `${answer.title} (questions)` : answer.title).replace(/[\\/:*?"<>|\r\n]+/g, " ").trim().slice(0, 80);
+    const asciiName = name.replace(/[^\w\- ()]+/g, "").trim() || "Syllabi answer";
     return new NextResponse(new Uint8Array(pdf), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="${fileName}.pdf"`,
+        "Content-Disposition": `inline; filename="${asciiName}.pdf"; filename*=UTF-8''${encodeURIComponent(name || asciiName)}.pdf`,
         "Cache-Control": "private, no-store",
       },
     });

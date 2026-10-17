@@ -20,7 +20,7 @@ export const TASK_LABELS: Record<string, string> = {
 };
 
 // A sample paper's answer key starts at a "## Answer Key" heading.
-const ANSWER_KEY_START = /^#{1,3}\s*\**answer key\b/im;
+const ANSWER_KEY_START = /^#{1,3}\s*\**(?:answer key\b|उत्तर कुंजी|उत्तरसूची|उत्तर सूची|corrigé)/im;
 
 export function hasAnswerKey(text: string): boolean {
   return ANSWER_KEY_START.test(text);

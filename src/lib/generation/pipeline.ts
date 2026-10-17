@@ -4,6 +4,7 @@ import { retrieveContext, formatContext, loadSourceImages } from "@/lib/rag/retr
 import { checkQuota, QuotaExceededError } from "@/lib/quota";
 import { systemInstructionsFor } from "@/lib/generation/prompts";
 import { levelLine } from "@/lib/generation/level";
+import type { AnswerLanguage } from "@/lib/generation/language";
 import type { CompletionImage } from "@/lib/llm/types";
 import type { GenerationTaskType, MatchedChunk, Student } from "@/types/database";
 
@@ -20,6 +21,8 @@ export interface GenerationInput {
    * used to search the knowledge base.
    */
   photos?: CompletionImage[];
+  /** Language to answer in; "auto" follows the book and question. */
+  language?: AnswerLanguage;
 }
 
 export interface GenerationOutput {
@@ -44,6 +47,7 @@ export async function runGeneration({
   prompt,
   documentIds,
   photos = [],
+  language = "auto",
 }: GenerationInput): Promise<GenerationOutput> {
   const quota = await checkQuota(student.id);
   if (quota.overQuota) throw new QuotaExceededError(quota);
@@ -67,7 +71,7 @@ export async function runGeneration({
 
   const result = await generateCompletion({
     taskType,
-    systemInstructions: systemInstructionsFor(taskType, levelLine(student)),
+    systemInstructions: systemInstructionsFor(taskType, levelLine(student), language),
     prompt: `${prompt}${photoNote}`,
     context: formatContext(retrieval.chunks),
     images: [...photos, ...sourcePageImages],

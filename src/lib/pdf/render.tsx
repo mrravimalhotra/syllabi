@@ -84,7 +84,7 @@ const styles = StyleSheet.create({
   },
 });
 
-const ANSWER_KEY_HEADING = /^answer key\b/i;
+const ANSWER_KEY_HEADING = /^(?:answer key\b|उत्तर कुंजी|उत्तरसूची|उत्तर सूची|corrigé)/i;
 
 /** Renders one line of text with **bold** spans; other inline markdown (`code`, *italic*) is shown as plain text. */
 function InlineText({ text }: { text: string }) {

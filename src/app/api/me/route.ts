@@ -7,6 +7,7 @@ import { deletePrefix } from "@/lib/storage";
 import { userMessage } from "@/lib/errors";
 import { cleanText } from "@/lib/validate";
 import { BOARDS, CLASS_LEVELS } from "@/lib/generation/level";
+import { isAnswerLanguage } from "@/lib/generation/language";
 
 export async function GET() {
   const student = await getCurrentStudent();
@@ -40,6 +41,12 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Choose a board from the list" }, { status: 400 });
     }
     updates.board = body.board || null;
+  }
+  if (body && "answerLanguage" in body) {
+    if (body.answerLanguage !== "auto" && !isAnswerLanguage(body.answerLanguage)) {
+      return NextResponse.json({ error: "Choose a language from the list" }, { status: 400 });
+    }
+    updates.answer_language = body.answerLanguage === "auto" ? null : body.answerLanguage;
   }
   if (Object.keys(updates).length === 0) return NextResponse.json({ error: "Nothing to change" }, { status: 400 });
 

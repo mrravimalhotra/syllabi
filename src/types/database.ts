@@ -44,6 +44,8 @@ export interface Student {
   /** The child's class and school board, from the Account page (used in prompts). */
   class_level: string | null;
   board: string | null;
+  /** Default answer language (en, hi, mr, fr); null follows the book and question. */
+  answer_language: "en" | "hi" | "mr" | "fr" | null;
   adult_confirmed_at: string | null;
   school_id: string | null;
   grade_id: string | null;

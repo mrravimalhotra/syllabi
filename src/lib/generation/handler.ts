@@ -8,6 +8,7 @@ import type { CompletionImage } from "@/lib/llm/types";
 import type { GenerationTaskType, SavedSource } from "@/types/database";
 import { userMessage } from "@/lib/errors";
 import { isUuid } from "@/lib/validate";
+import { isAnswerLanguage } from "@/lib/generation/language";
 
 const MAX_PHOTOS = 12;
 // Text of attached Word files, sent with the question.
@@ -86,7 +87,8 @@ export function createGenerationRoute(taskType: GenerationTaskType) {
     const documentIds = Array.isArray(body?.documentIds) ? body.documentIds.filter(isUuid).slice(0, 200) : undefined;
 
     try {
-      const result = await runGeneration({ student, taskType, prompt, documentIds, photos });
+      const language = isAnswerLanguage(body?.language) ? body.language : (student.answer_language ?? "auto");
+      const result = await runGeneration({ student, taskType, prompt, documentIds, photos, language });
       const title = titleFor(typedPrompt, Boolean(attachedText));
 
       // Save the answer itself (not a PDF): it can be reopened, printed, and

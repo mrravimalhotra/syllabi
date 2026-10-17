@@ -46,6 +46,8 @@ export interface StudyPack {
   title: string;
   subject: string;
   kind: "story" | "information";
+  /** Two-letter code of the pack's language (en, hi, mr, fr...), for read-aloud voices. */
+  language: string;
   /** Setting (story) or a two-sentence summary (information). */
   overview: string;
   themes: string[];
