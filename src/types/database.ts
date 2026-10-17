@@ -24,7 +24,7 @@ export type GenerationTaskType = "solution" | "notes" | "sample_paper" | "ad_hoc
 export const SOURCE_TYPES = ["textbook", "exercise", "past_paper", "notes"] as const;
 export type SourceType = (typeof SOURCE_TYPES)[number];
 
-export type Provider = "google" | "anthropic" | "openai" | "groq" | "openrouter" | "mistral";
+export type Provider = "google" | "anthropic" | "openai" | "groq" | "openrouter" | "mistral" | "nvidia";
 
 export interface Student {
   id: string;

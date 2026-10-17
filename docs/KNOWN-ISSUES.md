@@ -12,7 +12,7 @@ what works.
 |---|---|---|---|
 | 1.1 | Once-a-minute background reading timer (pg_cron + pg_net, migration 14) | High | Admin → Health → "Background page reading". The migration skips the timer if Supabase refuses the extensions; then enable `pg_cron` and `pg_net` (Supabase → Database → Extensions) and re-run the timer block. Without it, reading still runs after each upload and hands over to fresh runs, but pages waiting on the AI's daily allowance won't resume by themselves. |
 | 1.2 | Reading pages with `gemini-flash-lite-latest` (migration 15) | Medium | Quality of page reading on scanned textbooks, especially Hindi/Marathi and maths. Switch back per task in Admin → AI settings if worse. |
-| 1.3 | Backup AI services (Groq, OpenRouter, Mistral) | Medium | Only tested with simulated responses. Add one key at a time in Vercel, then Admin → Health. Default model names (`openai/gpt-oss-120b`, `openrouter/free`, `mistral-small-latest`) may change; override with `GROQ_MODEL` etc. |
+| 1.3 | Backup AI services (Groq, NVIDIA, OpenRouter, Mistral) | Medium | Only tested with simulated responses. Add one key at a time in Vercel, then Admin → Health. Default model names (`openai/gpt-oss-120b`, `openrouter/free`, `mistral-small-latest`) may change; override with `GROQ_MODEL` etc. |
 | 1.4 | Print and PDF via the iPhone share sheet (home-screen app) | Medium | T-59 in `docs/release-checklist.md`. iOS sometimes needs a second tap ("Tap to print"). |
 | 1.5 | Maths tutorials card and ordering quiz | Low | T-47 to T-49, T-61. |
 

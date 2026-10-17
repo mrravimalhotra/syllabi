@@ -9,6 +9,7 @@ export const OPENAI_COMPATIBLE = {
   groq: { baseURL: "https://api.groq.com/openai/v1", keyName: "GROQ_API_KEY" },
   openrouter: { baseURL: "https://openrouter.ai/api/v1", keyName: "OPENROUTER_API_KEY" },
   mistral: { baseURL: "https://api.mistral.ai/v1", keyName: "MISTRAL_API_KEY" },
+  nvidia: { baseURL: "https://integrate.api.nvidia.com/v1", keyName: "NVIDIA_API_KEY" },
 } as const;
 
 export type OpenAiCompatible = keyof typeof OPENAI_COMPATIBLE;

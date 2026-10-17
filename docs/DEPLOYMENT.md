@@ -79,6 +79,7 @@ is set in Vercel → Settings → Environment Variables (then redeploy):
 | Groq | `GROQ_API_KEY` | https://console.groq.com/keys | Free tier, very fast; text only |
 | OpenRouter | `OPENROUTER_API_KEY` | https://openrouter.ai/settings/keys | Free router (`openrouter/free`), ~50 free requests a day; reads page images |
 | Mistral | `MISTRAL_API_KEY` | https://console.mistral.ai/api-keys | Free monthly credit; reads page images |
+| NVIDIA | `NVIDIA_API_KEY` (starts `nvapi-`) | https://build.nvidia.com | Free developer credits; text only. Model override: `NVIDIA_MODEL` (default `meta/llama-3.3-70b-instruct`) |
 
 Models can be changed with `GROQ_MODEL`, `OPENROUTER_MODEL`, `MISTRAL_MODEL`.
 Admin → Health tests each one. Any of them can also be chosen for a task in

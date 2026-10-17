@@ -13,16 +13,19 @@ const ADAPTERS: Record<Provider, LlmProviderAdapter> = {
   groq: openAiCompatibleAdapter("groq"),
   openrouter: openAiCompatibleAdapter("openrouter"),
   mistral: openAiCompatibleAdapter("mistral"),
+  nvidia: openAiCompatibleAdapter("nvidia"),
 };
 
 /**
  * Free services that stand in, in this order, when the configured provider
  * can't answer (out of its free allowance, overloaded, or declining the
  * request). Each is used only when its key is set in Vercel; the model can be
- * changed with GROQ_MODEL, OPENROUTER_MODEL or MISTRAL_MODEL.
+ * changed with GROQ_MODEL, NVIDIA_MODEL, OPENROUTER_MODEL or MISTRAL_MODEL.
  */
 export const BACKUPS: { provider: OpenAiCompatible; model: () => string; readsImages: boolean }[] = [
   { provider: "groq", model: () => process.env.GROQ_MODEL || "openai/gpt-oss-120b", readsImages: false },
+  // NVIDIA's free catalogue: a strong open model; reads text only.
+  { provider: "nvidia", model: () => process.env.NVIDIA_MODEL || "meta/llama-3.3-70b-instruct", readsImages: false },
   // OpenRouter's free router picks a free model that can handle the request (images included).
   { provider: "openrouter", model: () => process.env.OPENROUTER_MODEL || "openrouter/free", readsImages: true },
   { provider: "mistral", model: () => process.env.MISTRAL_MODEL || "mistral-small-latest", readsImages: true },
