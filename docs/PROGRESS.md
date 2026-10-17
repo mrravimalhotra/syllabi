@@ -43,6 +43,8 @@ be printed or saved as a PDF.
 4. Practice → Maths tutorials (T-61) and the ordering quiz (T-47 to T-49).
 5. Upload a scanned chapter and close the app while it is read (T-54).
 
+Known problems and pending work are listed in `docs/KNOWN-ISSUES.md`.
+
 ## Ideas not built yet
 
 - Practice history: saved scores and "practise what you got wrong last time" (needs a `practice_sessions` table).

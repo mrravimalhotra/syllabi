@@ -1,6 +1,7 @@
 # Handoff for the next coding session
 
 Read this first, then `docs/PROGRESS.md` (what exists, in plain language),
+`docs/KNOWN-ISSUES.md` (open problems and pending work, by severity),
 `docs/decisions.md` (why things are the way they are, newest at the bottom),
 and `AGENTS.md` (this Next.js version differs from what you know: read
 `node_modules/next/dist/docs/` before writing Next.js code). `docs/HANDOFF.md`

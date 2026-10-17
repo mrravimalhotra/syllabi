@@ -1,0 +1,56 @@
+# Known issues and pending work (as of 2026-10-17)
+
+Severity: **High** = can lose data or stop a core feature; **Medium** = wrong or
+confusing for users, or a risk at real use; **Low** = polish or housekeeping.
+"Unverified" means built and tested locally but not yet confirmed on the live
+site. See `docs/NEXT-SESSION.md` for the code map and `docs/PROGRESS.md` for
+what works.
+
+## 1. Waiting for live confirmation
+
+| # | Item | Severity | What to check |
+|---|---|---|---|
+| 1.1 | Once-a-minute background reading timer (pg_cron + pg_net, migration 14) | High | Admin → Health → "Background page reading". The migration skips the timer if Supabase refuses the extensions; then enable `pg_cron` and `pg_net` (Supabase → Database → Extensions) and re-run the timer block. Without it, reading still runs after each upload and hands over to fresh runs, but pages waiting on the AI's daily allowance won't resume by themselves. |
+| 1.2 | Reading pages with `gemini-flash-lite-latest` (migration 15) | Medium | Quality of page reading on scanned textbooks, especially Hindi/Marathi and maths. Switch back per task in Admin → AI settings if worse. |
+| 1.3 | Backup AI services (Groq, OpenRouter, Mistral) | Medium | Only tested with simulated responses. Add one key at a time in Vercel, then Admin → Health. Default model names (`openai/gpt-oss-120b`, `openrouter/free`, `mistral-small-latest`) may change; override with `GROQ_MODEL` etc. |
+| 1.4 | Print and PDF via the iPhone share sheet (home-screen app) | Medium | T-59 in `docs/release-checklist.md`. iOS sometimes needs a second tap ("Tap to print"). |
+| 1.5 | Maths tutorials card and ordering quiz | Low | T-47 to T-49, T-61. |
+
+## 2. Known limitations (by design for now)
+
+| # | Item | Severity | Notes |
+|---|---|---|---|
+| 2.1 | Free-tier AI may use requests for training | Medium | Applies to Gemini's free tier and most free backups. Children's books and questions are sent to the AI. Enabling Gemini billing (paid tier) avoids this; check before real use beyond testing. |
+| 2.2 | Free daily allowances | Medium | A heavy day of page reading can still use up both Gemini models; answers then go to backups (if keys are set) or show "allowance used up, resets around 12:30–1:30 pm India time". The reset time used for waiting pages is 08:05 UTC (approximate). |
+| 2.3 | Backups don't do everything Gemini does | Low | No web search; study packs (structured JSON) stay on Gemini only; Groq can't read images; the OpenAI-style adapter doesn't pass a max answer length, so very long answers may be cut by the service's default. |
+| 2.4 | Worked examples cover only plain calculations | Low | Not handled: mixed units ("28 m 68 cm"), BODMAS expressions ("12 + 5 × 3"), three or more fractions, "3/4 of 20", numbers written in words. These go to the AI. |
+| 2.5 | Hindi and Marathi narration wording | Low | Written without a native-speaker review (`src/lib/worked/say.ts`); French narration falls back to English. |
+| 2.6 | Practice is English only, nothing is saved | Low | Owner's decision. Quiz scores are not stored; "Practise the ones I missed" can't be printed (it has no seed). |
+| 2.7 | Duplicate check is by title only | Low | Uploading the same pages under a new title makes a second book. |
+| 2.8 | The calculation checker is heuristic | Low | It recomputes lines with `=`; unusual layouts may be skipped or, rarely, flagged wrongly (list bullets were fixed). |
+| 2.9 | Function time limit | Low | Long tasks assume Vercel's 300-second limit (fluid compute). If the project runs on the 60-second limit, page reading hands over more often and long answers may time out. |
+
+## 3. Technical debt and risks
+
+| # | Item | Severity | Notes |
+|---|---|---|---|
+| 3.1 | Vector index | Medium | `chunks` uses an IVFFlat index created on an empty table (`lists = 100`), which gives poor recall until rebuilt. Switch to HNSW in a new migration, or `REINDEX` once books are loaded. |
+| 3.2 | Usage accounting misses question searches | Low | Page reading, indexing and answers are counted in `token_usage`, but the embedding made for each question search (`src/lib/rag/`) is not. |
+| 3.3 | `job_runner.app_url` follows the last https upload | Low | An upload from a Vercel preview deployment would point the timer at the preview URL until the next production upload. Pin it to the production domain if previews get used. |
+| 3.4 | Leftover code paths | Low | `POST /api/library` with pages (old single-request upload) and `PATCH /api/library/[id]` `{ ready: true }` are kept for older open tabs; remove after a while. |
+| 3.5 | No explicit "research this" option | Low | Web search only runs when the books cover a question poorly; there is no way to ask for it (original requirement 1a). |
+| 3.6 | Repository renamed on GitHub | Low | GitHub reports `mrravimalhotra/studysprint` moved to `mrravimalhotra/syllabi`. Update the git remote and check the Vercel and Supabase GitHub integrations point at the new name. |
+
+## 4. Housekeeping for the owner
+
+- The old R2 bucket `studysprint` holds orphan files and can be deleted.
+- The two "History Unit 1 Bhakti Movement" books are the two halves of one upload made before the one-book fix; keep both or delete and upload again.
+- Unfinished uploads from the early failures can be removed with "Delete N unfinished uploads" in My books.
+- Sign-ups are closed (`OPEN_SIGNUPS=false`); before opening them, review quotas per account, the privacy note in 2.1, and the vector index in 3.1.
+
+## 5. Pending features (not started; ask the owner first)
+
+1. Practice history: a `practice_sessions` table, recent scores, and "practise what you got wrong last time".
+2. More practice exercises built on the worked-example engines: compare with < and >, place value, times tables, conversions, simplifying fractions.
+3. Child profiles, if several children share one account (class, board and history per child).
+4. A "Research this" switch on Generate (see 3.5).
