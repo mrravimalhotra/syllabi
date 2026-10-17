@@ -23,6 +23,10 @@ function apiError(status: number, error: string) {
 }
 
 export async function updateSession(request: NextRequest) {
+  // Browser tests (npm run test:e2e) run the pages without a real sign-in. The
+  // switch only works in development mode, never in a production build.
+  if (process.env.UI_PREVIEW === "1" && process.env.NODE_ENV !== "production") return NextResponse.next({ request });
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(

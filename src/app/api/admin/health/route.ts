@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { BACKUPS, embed, generateCompletion } from "@/lib/llm";
 import { OPENAI_COMPATIBLE, hasKey, openAiCompatibleAdapter } from "@/lib/llm/providers/openai";
 import { getLlmSetting } from "@/lib/llm/config";
+import { rememberAppUrl } from "@/lib/ingestion/jobs";
 import { checkQuota } from "@/lib/quota";
 import { retrieveContext } from "@/lib/rag/retrieve";
 import { deletePrefix, downloadFile, uploadSourceFile } from "@/lib/storage";
@@ -26,6 +27,8 @@ const REQUIRED_ENV = [
 interface Check {
   name: string;
   ok: boolean;
+  /** An optional extra that isn't set up: shown in grey and not counted as a failure. */
+  skipped?: boolean;
   detail: string;
   ms: number;
 }
@@ -44,11 +47,15 @@ function safeError(err: unknown): string {
   return text.slice(0, 600);
 }
 
+/** Thrown by a check of an optional extra that simply isn't set up: not a failure. */
+class NotSetUp extends Error {}
+
 async function run(name: string, fn: () => Promise<string>): Promise<Check> {
   const start = Date.now();
   try {
     return { name, ok: true, detail: await fn(), ms: Date.now() - start };
   } catch (err) {
+    if (err instanceof NotSetUp) return { name, ok: true, skipped: true, detail: err.message, ms: Date.now() - start };
     console.error(`[admin/health] ${name}`, err);
     return { name, ok: false, detail: safeError(err), ms: Date.now() - start };
   }
@@ -59,7 +66,7 @@ async function run(name: string, fn: () => Promise<string>): Promise<Check> {
  * real error (keys removed) shown on screen: the quickest way to find a wrong
  * key or setting after a deploy, since free-plan logs only last an hour.
  */
-export async function POST() {
+export async function POST(request: Request) {
   const auth = await authenticateAdmin();
   if ("response" in auth) return auth.response;
   const admin = auth.account;
@@ -112,8 +119,8 @@ export async function POST() {
         maxOutputTokens: 1024,
       });
       if (result.searchSkipped) {
-        throw new Error(
-          "Google Search isn't available on this Gemini key (Google answered 429: quota exceeded; free keys often have no search quota). " +
+        throw new NotSetUp(
+          "Optional. Google Search isn't available on this Gemini key (Google answered 429: quota exceeded; free keys often have no search quota). " +
             "Answers still work, just without web search. To turn search on, enable billing for this key's project in Google AI Studio."
         );
       }
@@ -160,6 +167,8 @@ export async function POST() {
 
   checks.push(
     await run("Background page reading", async () => {
+      // Tell the timer where this app lives, so it doesn't have to wait for the first upload.
+      await rememberAppUrl(new URL(request.url).origin);
       const db = createAdminClient();
       const countOf = async (status: string) => {
         const { count, error } = await db.from("page_jobs").select("id", { count: "exact", head: true }).eq("status", status);
@@ -188,7 +197,7 @@ export async function POST() {
     checks.push(
       await run(`Backup AI: ${backup.provider}`, async () => {
         if (!hasKey(backup.provider)) {
-          throw new Error(`Not set up (optional). Add ${OPENAI_COMPATIBLE[backup.provider].keyName} in Vercel to use it when Gemini runs out.`);
+          throw new NotSetUp(`Not set up (optional). Add ${OPENAI_COMPATIBLE[backup.provider].keyName} in Vercel to use it when Gemini runs out.`);
         }
         const model = backup.model();
         const result = await openAiCompatibleAdapter(backup.provider).generateCompletion({

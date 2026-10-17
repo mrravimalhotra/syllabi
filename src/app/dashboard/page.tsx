@@ -713,7 +713,11 @@ export default function DashboardPage() {
               className={noBookSelected ? button.dangerGhost : button.ghost}
             >
               <BookIcon className="h-4.5 w-4.5" />
-              {activeBookIds.length === books.length ? `All ${books.length} books` : `${activeBookIds.length} of ${books.length} books`}
+              {activeBookIds.length === books.length
+                ? books.length === 1
+                  ? "Your 1 book"
+                  : `All ${books.length} books`
+                : `${activeBookIds.length} of ${books.length} ${books.length === 1 ? "book" : "books"}`}
             </button>
           )}
 

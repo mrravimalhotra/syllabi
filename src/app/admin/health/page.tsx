@@ -7,6 +7,7 @@ import { Alert, PageHeader, Spinner, button, card, cx } from "@/components/ui";
 interface Check {
   name: string;
   ok: boolean;
+  skipped?: boolean;
   detail: string;
   ms: number;
 }
@@ -33,6 +34,7 @@ export default function HealthPage() {
   }
 
   const failed = checks?.filter((c) => !c.ok).length ?? 0;
+  const skipped = checks?.filter((c) => c.skipped).length ?? 0;
 
   return (
     <div className="space-y-6">
@@ -49,7 +51,11 @@ export default function HealthPage() {
       {error && <Alert tone="error">{error}</Alert>}
       {checks && (
         <Alert tone={failed ? "error" : "success"}>
-          {failed ? `${failed} of ${checks.length} checks failed.` : `All ${checks.length} checks passed.`}
+          {failed
+            ? `${failed} of ${checks.length} checks failed.`
+            : skipped
+              ? `Everything required works. ${skipped} optional extra${skipped === 1 ? " isn't" : "s aren't"} set up.`
+              : `All ${checks.length} checks passed.`}
         </Alert>
       )}
       {checks && (
@@ -59,10 +65,10 @@ export default function HealthPage() {
               <span
                 className={cx(
                   "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full",
-                  c.ok ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600"
+                  c.skipped ? "bg-slate-100 text-slate-400" : c.ok ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600"
                 )}
               >
-                {c.ok ? <CheckIcon className="h-4 w-4" /> : <AlertIcon className="h-4 w-4" />}
+                {c.skipped ? <span aria-label="Not set up" className="text-base leading-none">–</span> : c.ok ? <CheckIcon className="h-4 w-4" /> : <AlertIcon className="h-4 w-4" />}
               </span>
               <div className="min-w-0 flex-1">
                 <p className="flex flex-wrap items-baseline justify-between gap-2 text-sm font-medium text-slate-900">

@@ -9,7 +9,9 @@
     "lint": "eslint",
     "test:db": "bash scripts/test-db.sh",
     "scenarios": "node scripts/scenarios/run.mjs",
-    "test:practice": "node scripts/practice/run.mjs"
+    "test:practice": "node scripts/practice/run.mjs",
+    "test:e2e": "node scripts/e2e/run.mjs",
+    "backup": "bash scripts/backup/backup.sh"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
