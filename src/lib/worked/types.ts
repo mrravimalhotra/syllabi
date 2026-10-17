@@ -11,6 +11,10 @@ export interface Cell {
   col: number;
   text: string;
   tone?: Tone;
+  /** Drawn half a row lower: signs and whole numbers between a fraction's top and bottom. */
+  mid?: boolean;
+  /** Written small, like a column heading. */
+  small?: boolean;
 }
 
 /** A horizontal line under a row, from the left edge of fromCol to the right edge of toCol. */
@@ -43,7 +47,9 @@ export type WorkedProblem =
   | { kind: "division"; dividend: string; divisor: string; decimals: boolean }
   | { kind: "lcm-hcf"; numbers: number[]; want: "lcm" | "hcf" | "both" }
   | { kind: "column"; op: "add" | "subtract"; numbers: string[] }
-  | { kind: "multiplication"; a: string; b: string };
+  | { kind: "multiplication"; a: string; b: string }
+  | { kind: "fraction"; op: "simplify" | "add" | "subtract"; fractions: [number, number][] }
+  | { kind: "convert"; value: string; from: string; to: string };
 
 export interface WorkedExample {
   problem: WorkedProblem;

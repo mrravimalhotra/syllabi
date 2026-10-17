@@ -26,6 +26,17 @@ function parseProblem(raw: unknown): WorkedProblem | null {
   if (p?.kind === "multiplication" && isNumberText(p.a) && isNumberText(p.b)) {
     return { kind: "multiplication", a: p.a as string, b: p.b as string };
   }
+  if (
+    p?.kind === "fraction" &&
+    (p.op === "simplify" || p.op === "add" || p.op === "subtract") &&
+    Array.isArray(p.fractions) &&
+    p.fractions.every((f) => Array.isArray(f) && f.length === 2 && f.every((n) => Number.isInteger(n)))
+  ) {
+    return { kind: "fraction", op: p.op, fractions: p.fractions as [number, number][] };
+  }
+  if (p?.kind === "convert" && isNumberText(p.value) && typeof p.from === "string" && typeof p.to === "string") {
+    return { kind: "convert", value: p.value as string, from: p.from, to: p.to };
+  }
   return null;
 }
 

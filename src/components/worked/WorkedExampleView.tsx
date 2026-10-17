@@ -190,23 +190,26 @@ function Board({ example, upTo, print }: { example: WorkedExample; upTo: number;
             style={{ left: leftOf(f.col) + 2, top: f.row * ROW + 2, width: widths[f.col] - 4, height: ROW - 4 }}
           />
         ))}
-        {cells.map((c) => (
-          <div
-            key={`${c.row}-${c.col}`}
-            className={cx(
-              "absolute flex items-center justify-center text-2xl",
-              print ? "text-slate-900" : TONE[c.tone ?? "given"],
-              c.fresh && "animate-fade-in",
-              // Carries and borrows are written small, above the column.
-              c.tone === "carry" && c.text.length <= 3 && "text-base",
-              c.text.length === 2 && c.tone !== "carry" && "text-xl",
-              c.text.length > 3 && "justify-start text-lg whitespace-nowrap"
-            )}
-            style={{ left: leftOf(c.col), top: c.row * ROW, width: c.text.length > 3 ? undefined : widths[c.col], height: ROW }}
-          >
-            {c.text}
-          </div>
-        ))}
+        {cells.map((c) => {
+          // Text wider than its column (a label like "HCF = 6") runs on to the right.
+          const overflows = c.text.length > Math.max(3, example.colWidths?.[c.col] ?? 1);
+          return (
+            <div
+              key={`${c.row}-${c.col}`}
+              className={cx(
+                "absolute flex items-center justify-center text-2xl",
+                print ? "text-slate-900" : TONE[c.tone ?? "given"],
+                c.fresh && "animate-fade-in",
+                // Carries and borrows are written small, above the column.
+                c.tone === "carry" || c.small ? "text-base" : c.text.length === 2 ? "text-xl" : c.text.length > 3 && "text-lg",
+                overflows && "justify-start whitespace-nowrap"
+              )}
+              style={{ left: leftOf(c.col), top: (c.row + (c.mid ? 0.5 : 0)) * ROW, width: overflows ? undefined : widths[c.col], height: ROW }}
+            >
+              {c.text}
+            </div>
+          );
+        })}
         {rules.map((r, i) => (
           <div
             key={`r${i}`}

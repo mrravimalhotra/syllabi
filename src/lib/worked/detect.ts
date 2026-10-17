@@ -7,6 +7,8 @@ import { longDivision, cleanNumber } from "@/lib/worked/division";
 import { lcmHcf } from "@/lib/worked/lcm-hcf";
 import { columnAddition, columnSubtraction } from "@/lib/worked/column";
 import { longMultiplication } from "@/lib/worked/multiplication";
+import { fractionExample } from "@/lib/worked/fraction";
+import { convertUnits, UNIT_WORDS, unitSymbol } from "@/lib/worked/units";
 import type { WorkedExample, WorkedProblem } from "@/lib/worked/types";
 
 const DEVANAGARI_DIGITS = "०१२३४५६७८९";
@@ -46,6 +48,28 @@ const MULTIPLICATION = [
   new RegExp(String.raw`(${N})\s*को\s*(${N})\s*से\s*गुणा`),
   new RegExp(String.raw`(${N})\s*(?:ला|यास)\s*(${N})\s*ने\s*गुण`),
 ];
+// A fraction "3/4" (not part of a date like 12/05/2024 or "x/2").
+const F = String.raw`(?<![\w/.])(\d{1,5})\s*/\s*(\d{1,5})(?![\w/])`;
+const FRACTION_SUM = new RegExp(String.raw`${F}\s*([+\-−–])\s*${F}`);
+const SIMPLIFY = [
+  new RegExp(String.raw`\b(?:simplify|reduce)\s+(?:the\s+fraction\s+)?${F}`, "i"),
+  new RegExp(String.raw`${F}\s+(?:to|in|into)\s+(?:its\s+)?(?:simplest|lowest)\s+(?:form|terms)`, "i"),
+  new RegExp(String.raw`${F}\s*(?:को\s*)?(?:सरलतम|सरल)`),
+  new RegExp(String.raw`${F}\s*(?:चे|ला)?\s*(?:संक्षिप्त|सरळ|अतिसंक्षिप्त)`),
+];
+
+const U = `(${UNIT_WORDS})`;
+// [pattern, index of the value, from unit, to unit]
+const CONVERT: [RegExp, number, number, number][] = [
+  [new RegExp(String.raw`(${N})\s*${U}\s+(?:in|into|to)\s+${U}`, "iu"), 1, 2, 3],
+  [new RegExp(String.raw`(${N})\s*${U}\s*=\s*(?:\?|_+|\.{2,}|…)?\s*${U}`, "iu"), 1, 2, 3],
+  [new RegExp(String.raw`how\s+many\s+${U}\s+(?:are\s+(?:there\s+)?)?in\s+(${N})\s*${U}`, "iu"), 2, 3, 1],
+  [new RegExp(String.raw`(${N})\s*${U}\s*(?:को|का)\s*${U}\s*में`, "u"), 1, 2, 3],
+  [new RegExp(String.raw`(${N})\s*${U}\s*में\s*कितने\s*${U}`, "u"), 1, 2, 3],
+  [new RegExp(String.raw`(${N})\s*${U}\s*(?:चे|ची|चा|ला)\s*${U}\s*(?:मध्ये|त)`, "u"), 1, 2, 3],
+  [new RegExp(String.raw`(${N})\s*${U}\s*म्हणजे\s*किती\s*${U}`, "u"), 1, 2, 3],
+];
+
 const OPERATOR_AFTER = /^\s*[+\-−–×✕x*÷/^]\s*\d/;
 const OPERATOR_BEFORE = /\d\s*[+\-−–×✕x*÷/^]\s*$/;
 
@@ -71,7 +95,8 @@ export interface FoundProblem {
 
 /** Every calculation in the text that a worked example can show, in order, without repeats. */
 export function findProblems(textIn: string): FoundProblem[] {
-  const text = asciiDigits(textIn);
+  // "5 l = ? ml": the "?" is a blank to fill, not the end of a question.
+  const text = asciiDigits(textIn).replace(/=\s*\?/g, "= _");
   const found: FoundProblem[] = [];
   const seen = new Set<string>();
   const add = (problem: WorkedProblem, match: string) => {
@@ -121,6 +146,27 @@ export function findProblems(textIn: string): FoundProblem[] {
       }
     }
 
+    for (const m of line.matchAll(new RegExp(FRACTION_SUM.source, "g"))) {
+      if (partOfLongerExpression(line, m)) continue;
+      const op = m[3] === "+" ? "add" : "subtract";
+      add({ kind: "fraction", op, fractions: [[Number(m[1]), Number(m[2])], [Number(m[4]), Number(m[5])]] }, m[0]);
+    }
+    for (const pattern of SIMPLIFY) {
+      for (const m of line.matchAll(new RegExp(pattern.source, pattern.flags + "g"))) {
+        add({ kind: "fraction", op: "simplify", fractions: [[Number(m[1]), Number(m[2])]] }, m[0]);
+      }
+    }
+    for (const [pattern, v, f, t] of CONVERT) {
+      for (const m of line.matchAll(new RegExp(pattern.source, pattern.flags + "g"))) {
+        const value = cleanNumber(m[v]);
+        const from = unitSymbol(m[f]);
+        const to = unitSymbol(m[t]);
+        // "28 m 68 cm in metres" mixes two units, which this chart method doesn't show.
+        const mixed = new RegExp(String.raw`\d\s*${U}\s*$`, "iu").test(line.slice(0, m.index));
+        if (value && from && to && !mixed) add({ kind: "convert", value, from, to }, m[0]);
+      }
+    }
+
     const wantsLcm = LCM_RE.test(line);
     const wantsHcf = HCF_RE.test(line);
     if (wantsLcm || wantsHcf) {
@@ -147,11 +193,13 @@ const FILLER = new Set(
    divide calculate answer in into upto up to places place decimal decimals a an following numbers number give
    write get its their with lcm hcf gcd lowest least highest greatest common multiple factor divisor prime
    factorisation factorization ladder q ques question add sum subtract difference between from multiply product
-   times plus minus total column vertical x
+   times plus minus total column vertical x simplify reduce simplest lowest form terms fraction fractions its
+   convert express change how many there into chart
    जोड़िए जोड़ो जोड़ें घटाइए घटाओ घटाएँ गुणा में
    बेरीज वजाबाकी गुणाकार मधून वजा यांची
    ज्ञात कीजिए करें करो का की के और तथा से को भाग दीजिए दो निकालिए दशमलव तक स्थान ला यास
-   काढा चा ची चे आणि व ने भागा करा शोधा दशांश पर्यंत`.split(/\s+/)
+   काढा चा ची चे आणि व ने भागा करा शोधा दशांश पर्यंत
+   सरल सरलतम रूप बदलिए बदलो कितने होते हैं संक्षिप्त सरळ अतिसंक्षिप्त मध्ये त म्हणजे किती रूपांतर रूपात लिहा`.split(/\s+/)
 );
 
 /**
@@ -165,6 +213,7 @@ export function pureProblem(question: string): WorkedProblem | null {
     .toLowerCase()
     .replace(new RegExp(LCM_WORDS, "gi"), " ")
     .replace(new RegExp(HCF_WORDS, "gi"), " ")
+    .replace(new RegExp(UNIT_WORDS, "giu"), " ")
     .replace(/[\d.,]+/g, " ")
     .replace(/[^\p{L}\p{M}\s]/gu, " ")
     .split(/\s+/)
@@ -185,6 +234,10 @@ export function solve(problem: WorkedProblem): WorkedExample | null {
         : columnSubtraction(problem.numbers[0], problem.numbers[1]);
     case "multiplication":
       return longMultiplication(problem.a, problem.b);
+    case "fraction":
+      return fractionExample(problem.op, problem.fractions);
+    case "convert":
+      return convertUnits(problem.value, problem.from, problem.to);
   }
 }
 
