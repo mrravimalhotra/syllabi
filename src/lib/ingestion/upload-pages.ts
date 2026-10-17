@@ -11,7 +11,14 @@ const MAX_PAGE_BASE64_CHARS = 3 * 1024 * 1024;
 // One text page from a Word file; the browser splits documents into ~3,000-character pages.
 const MAX_PAGE_TEXT_CHARS = 20_000;
 
-export type UploadPage = { imageBase64: string; mimeType: string; hint?: string } | { text: string; imageBase64?: string; mimeType?: string };
+const SOURCE_TYPES = new Set(["textbook", "exercise", "past_paper", "notes"]);
+export type SourceType = "textbook" | "exercise" | "past_paper" | "notes";
+
+/** A page as the browser sends it; `sourceType` is the page's own kind within its book. */
+export type UploadPage = (
+  | { imageBase64: string; mimeType: string; hint?: string }
+  | { text: string; imageBase64?: string; mimeType?: string }
+) & { sourceType?: SourceType };
 
 function isImage(page: { imageBase64?: unknown; mimeType?: unknown }): boolean {
   return (
@@ -24,8 +31,9 @@ function isImage(page: { imageBase64?: unknown; mimeType?: unknown }): boolean {
 }
 
 function isValidPage(p: unknown): boolean {
-  const page = p as { imageBase64?: unknown; mimeType?: unknown; text?: unknown; hint?: unknown } | null;
+  const page = p as { imageBase64?: unknown; mimeType?: unknown; text?: unknown; hint?: unknown; sourceType?: unknown } | null;
   if (!page) return false;
+  if (page.sourceType !== undefined && !SOURCE_TYPES.has(page.sourceType as string)) return false;
   if (typeof page.text === "string") {
     const textOk = page.text.trim().length > 0 && page.text.length <= MAX_PAGE_TEXT_CHARS;
     // A digital PDF page may carry its image too.

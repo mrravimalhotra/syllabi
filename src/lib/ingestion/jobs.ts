@@ -11,6 +11,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { downloadFile, uploadSourceFile } from "@/lib/storage";
 import { IngestError, ingestPage, type IngestPage } from "@/lib/ingestion/ingest";
 import type { UploadPage } from "@/lib/ingestion/upload-pages";
+import type { DocumentRow } from "@/types/database";
 
 /** Pages read at the same time across the whole app (the AI's free tier allows few requests a minute). */
 const MAX_WORKING = 2;
@@ -32,6 +33,7 @@ interface Job {
   mime_type: string | null;
   page_text: string | null;
   hint: string | null;
+  source_type: DocumentRow["source_type"] | null;
   attempts: number;
 }
 
@@ -54,6 +56,7 @@ export async function queuePages(documentId: string, ownerId: string, pages: Upl
         mime_type: p.mimeType ?? null,
         page_text: "text" in p ? p.text : null,
         hint: "hint" in p ? (p.hint ?? null) : null,
+        source_type: p.sourceType ?? null,
         status: "pending",
         attempts: 0,
         error: null,
@@ -116,7 +119,8 @@ async function readOne(job: Job): Promise<void> {
       const image = await downloadFile(job.image_path!);
       page = { pageNumber: job.page_number, imageBase64: image.data.toString("base64"), mimeType: job.mime_type ?? image.contentType, hint: job.hint ?? undefined };
     }
-    await ingestPage({ documentId: book.id, ownerId: book.owner_id, sourceType: book.source_type }, page, job.image_path ?? undefined);
+    // A page keeps its own kind (e.g. the exercises after a chapter) within its book.
+    await ingestPage({ documentId: book.id, ownerId: book.owner_id, sourceType: job.source_type ?? book.source_type }, page, job.image_path ?? undefined);
     await admin.from("page_jobs").update({ status: "done", error: null, locked_at: null }).eq("id", job.id);
   } catch (err) {
     const message = err instanceof IngestError ? err.message : `Page ${job.page_number}: reading the page failed.`;

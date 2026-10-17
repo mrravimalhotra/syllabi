@@ -77,6 +77,9 @@ Tick each one and note anything odd. Use your phone for the starred (★) checks
 | T-53 | With an old "Upload didn't finish" book in the list, tap its delete icon, then "Delete N unfinished uploads" | The icon shows a spinner, then the book disappears; if deleting fails, the reason shows under that book |
 | T-54 ★ | Upload a 15-page scanned PDF, wait for "All 15 pages … sent", then close the app or lock the phone for 5 minutes | Reopening My books shows the book Ready (or "Reading pages: N of 15" still counting up); the reading carried on with the app closed |
 | T-55 | Admin → Health | "Reading book pages (AI)" names the model and replies; "Background page reading" says the timer runs every minute and shows the queue (waiting / being read / couldn't be read) |
+| T-56 | Upload a chapter whose last page is set to Exercise | One book appears (shown as Textbook); asking for "the exercises" still finds the exercise page |
+| T-57 | Upload again with the title of a book you already have | You're asked before a second copy is made; Cancel uploads nothing |
+| T-58 | When the AI's free daily allowance is used up, ask a question | The answer comes from the other Gemini model; if both are out, the message says the allowance is used up and when it resets, not "try again in a minute" |
 | T-30 | Create a throwaway second admin, then delete that account from its Account page | Account and its books are gone; deleting your only admin account is refused |
 | T-25 ★ | Upload phone photos of a Computer chapter with code (e.g. HTML), then ask "Write the basic structure of an HTML document" | Answer has a code block that keeps its indentation; on the phone only the code box scrolls; the PDF shows the code in a typewriter-style font |
 | T-24 | Step-by-step solution: "Answer all questions in this worksheet" with a worksheet photo or upload | Every question answered in order, each sized to its marks |

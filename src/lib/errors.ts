@@ -40,5 +40,13 @@ export function userMessage(err: unknown, context: string, fallback = GENERIC): 
   if (err instanceof UserError) return err.message;
   if (isRaisedByOurDatabase(err)) return err.message;
   console.error(`[${context}]`, err);
+  // The AI provider's limits, said plainly rather than "something went wrong".
+  const message = err instanceof Error ? err.message : String(err);
+  if (DAILY_LIMIT.test(message)) {
+    return "The AI's free daily allowance is used up for today. It resets around 12:30 to 1:30 pm India time; an admin can enable billing on the Gemini key for more.";
+  }
+  if (/\b(429|503)\b|RESOURCE_EXHAUSTED|overloaded|UNAVAILABLE/i.test(message)) {
+    return "The AI service is busy right now. Please try again in a minute.";
+  }
   return fallback;
 }

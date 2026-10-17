@@ -1,11 +1,8 @@
 import { generateCompletion, type CompletionResult } from "@/lib/llm";
 import { getLlmSetting } from "@/lib/llm/config";
 import { BlockedReplyError, DAILY_LIMIT } from "@/lib/errors";
+import { standInFor } from "@/lib/llm/providers/google";
 
-// A second model to read a page with when the configured one can't: Google's
-// free tier gives each model its own daily allowance, and a different model
-// may not decline a page the first one did.
-const SECOND_MODEL = "gemini-flash-lite-latest";
 // Partial text worth keeping when every model declines to copy the whole page.
 const MIN_PARTIAL_CHARS = 200;
 
@@ -77,13 +74,16 @@ export async function extractPageText(imageBase64: string, mimeType: string, hin
     const blocked = first instanceof BlockedReplyError;
     const dailyLimit = DAILY_LIMIT.test(first instanceof Error ? first.message : String(first));
     const { provider, model } = await getLlmSetting("ocr_extraction");
-    if (!(blocked || dailyLimit) || provider !== "google" || model === SECOND_MODEL) {
+    // The Gemini adapter already switches models when one is out of requests;
+    // here a page one model declined is offered to the other.
+    const second = provider === "google" ? standInFor(model) : null;
+    if (!(blocked || dailyLimit) || !second) {
       if (blocked && first.partialText.trim().length >= MIN_PARTIAL_CHARS) return partialResult(first, model);
       throw first;
     }
-    console.warn(`[extract] ${model} ${dailyLimit ? "is out of free daily requests" : "declined the page"}; reading it with ${SECOND_MODEL}`);
+    console.warn(`[extract] ${model} ${dailyLimit ? "is out of free daily requests" : "declined the page"}; reading it with ${second}`);
     try {
-      return await read(SECOND_MODEL, blocked ? 0.3 : 0);
+      return await read(second, blocked ? 0.3 : 0);
     } catch (second) {
       // Keep whichever partial text is longer; otherwise report the first problem.
       const partials = [first, second].filter((e): e is BlockedReplyError => e instanceof BlockedReplyError);

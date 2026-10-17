@@ -2,7 +2,7 @@ import { GoogleGenerativeAI, type Part } from "@google/generative-ai";
 import type { CompletionRequest, CompletionResult, EmbeddingResult, LlmProviderAdapter } from "@/lib/llm/types";
 import { assertHeaderSafe } from "@/lib/llm/assert-header-safe";
 import { withNetworkRetry, fetchOrThrowTransient } from "@/lib/llm/retry";
-import { BlockedReplyError } from "@/lib/errors";
+import { BlockedReplyError, DAILY_LIMIT } from "@/lib/errors";
 
 // Long worksheets and 80-mark papers with answer keys need room; Flash models
 // allow far more than this.
@@ -20,92 +20,124 @@ function client() {
   return new GoogleGenerativeAI(googleApiKey());
 }
 
+// Google's free tier gives each model its own allowance, so when one model is
+// out of requests for the day, or stays overloaded after retries, the other
+// Flash model can still answer.
+const FLASH = "gemini-flash-latest";
+const FLASH_LITE = "gemini-flash-lite-latest";
+const OUT_OF_CAPACITY = /\b(429|500|502|503|504)\b|RESOURCE_EXHAUSTED|overloaded|UNAVAILABLE/i;
+
+/** The other free model to try, if this one can't serve the request. */
+export function standInFor(model: string): string | null {
+  if (model === FLASH_LITE) return FLASH;
+  return model.startsWith("gemini-") ? FLASH_LITE : null;
+}
+
+/** One Gemini call with the given model (search first when allowed, then without). */
+async function completeWith(req: CompletionRequest & { model: string }): Promise<CompletionResult> {
+  const genAI = client();
+
+  const modelWith = (search: boolean) =>
+    genAI.getGenerativeModel({
+      model: req.model,
+      systemInstruction: req.systemInstructions,
+      tools: (search ? [{ googleSearch: {} }] : undefined) as never,
+    });
+
+  const parts: Part[] = [];
+  if (req.context) parts.push({ text: `Reference material (RAG context):\n${req.context}` });
+  parts.push({ text: req.prompt });
+  for (const img of req.images ?? []) {
+    parts.push({ inlineData: { data: img.data, mimeType: img.mimeType } });
+  }
+
+  const request = {
+    contents: [{ role: "user", parts }],
+    generationConfig: {
+      temperature: req.temperature ?? 0.4,
+      maxOutputTokens: req.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+      ...(req.jsonSchema ? { responseMimeType: "application/json", responseSchema: req.jsonSchema as never } : {}),
+    },
+  };
+
+  // Google Search is a bonus, not a requirement: a key without search quota
+  // (the free tier often has none) gets "429 quota exceeded" for searched
+  // calls only. Then answer without search rather than fail the request.
+  let searchSkipped = false;
+  let result;
+  if (req.allowSearchGrounding) {
+    try {
+      result = await modelWith(true).generateContent(request);
+    } catch (err) {
+      console.warn("[google] search-grounded call failed; answering without search:", err instanceof Error ? err.message : err);
+      searchSkipped = true;
+    }
+  }
+  result ??= await withNetworkRetry(() => modelWith(false).generateContent(request));
+
+  const response = result.response;
+  const usage = response.usageMetadata;
+  const candidate = response.candidates?.[0];
+  const grounding = candidate?.groundingMetadata as
+    | { webSearchQueries?: string[]; searchEntryPoint?: { renderedContent?: string } }
+    | undefined;
+  const groundingUsed = Boolean(grounding?.webSearchQueries?.length);
+
+  // A blocked prompt or answer has no text; response.text() would throw a
+  // technical error, so say plainly what happened instead.
+  let text: string;
+  try {
+    text = response.text();
+  } catch (err) {
+    const reason = String(candidate?.finishReason ?? response.promptFeedback?.blockReason ?? "EMPTY");
+    console.error("[google] no text in response", reason, response.promptFeedback, err);
+    const partial = (candidate?.content?.parts ?? []).map((p) => ("text" in p && typeof p.text === "string" ? p.text : "")).join("");
+    throw new BlockedReplyError(
+      reason === "RECITATION"
+        ? "The AI declined to copy this text word for word (it looks like published text)."
+        : "The AI didn't answer this one (its safety filter or an empty reply). Try rephrasing the question or attaching a clearer photo.",
+      reason,
+      partial
+    );
+  }
+  const truncated = String(candidate?.finishReason) === "MAX_TOKENS";
+  if (truncated) {
+    text += "\n\n---\n*This answer reached the length limit and stops here. Ask for the remaining questions separately.*";
+  }
+
+  return {
+    text,
+    truncated,
+    searchSuggestionsHtml: groundingUsed ? grounding?.searchEntryPoint?.renderedContent : undefined,
+    provider: "google",
+    model: req.model,
+    usage: {
+      inputTokens: usage?.promptTokenCount ?? 0,
+      outputTokens: usage?.candidatesTokenCount ?? 0,
+      totalTokens: usage?.totalTokenCount ?? 0,
+    },
+    usedSearchGrounding: groundingUsed,
+    searchSkipped,
+  };
+}
+
 export const googleAdapter: LlmProviderAdapter = {
   async generateCompletion(req: CompletionRequest & { model: string }): Promise<CompletionResult> {
-    const genAI = client();
-
-    const modelWith = (search: boolean) =>
-      genAI.getGenerativeModel({
-        model: req.model,
-        systemInstruction: req.systemInstructions,
-        tools: (search ? [{ googleSearch: {} }] : undefined) as never,
-      });
-
-    const parts: Part[] = [];
-    if (req.context) parts.push({ text: `Reference material (RAG context):\n${req.context}` });
-    parts.push({ text: req.prompt });
-    for (const img of req.images ?? []) {
-      parts.push({ inlineData: { data: img.data, mimeType: img.mimeType } });
-    }
-
-    const request = {
-      contents: [{ role: "user", parts }],
-      generationConfig: {
-        temperature: req.temperature ?? 0.4,
-        maxOutputTokens: req.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
-        ...(req.jsonSchema ? { responseMimeType: "application/json", responseSchema: req.jsonSchema as never } : {}),
-      },
-    };
-
-    // Google Search is a bonus, not a requirement: a key without search quota
-    // (the free tier often has none) gets "429 quota exceeded" for searched
-    // calls only. Then answer without search rather than fail the request.
-    let searchSkipped = false;
-    let result;
-    if (req.allowSearchGrounding) {
+    try {
+      return await completeWith(req);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const other = standInFor(req.model);
+      if (!other || err instanceof BlockedReplyError || !(DAILY_LIMIT.test(message) || OUT_OF_CAPACITY.test(message))) throw err;
+      console.warn(`[google] ${req.model} can't answer now (${DAILY_LIMIT.test(message) ? "daily allowance used up" : "busy"}); using ${other}`);
       try {
-        result = await modelWith(true).generateContent(request);
-      } catch (err) {
-        console.warn("[google] search-grounded call failed; answering without search:", err instanceof Error ? err.message : err);
-        searchSkipped = true;
+        return await completeWith({ ...req, model: other });
+      } catch (second) {
+        // Report the first model's problem: it names the setting the admin chose.
+        console.error("[google] stand-in model failed too", second);
+        throw err;
       }
     }
-    result ??= await withNetworkRetry(() => modelWith(false).generateContent(request));
-
-    const response = result.response;
-    const usage = response.usageMetadata;
-    const candidate = response.candidates?.[0];
-    const grounding = candidate?.groundingMetadata as
-      | { webSearchQueries?: string[]; searchEntryPoint?: { renderedContent?: string } }
-      | undefined;
-    const groundingUsed = Boolean(grounding?.webSearchQueries?.length);
-
-    // A blocked prompt or answer has no text; response.text() would throw a
-    // technical error, so say plainly what happened instead.
-    let text: string;
-    try {
-      text = response.text();
-    } catch (err) {
-      const reason = String(candidate?.finishReason ?? response.promptFeedback?.blockReason ?? "EMPTY");
-      console.error("[google] no text in response", reason, response.promptFeedback, err);
-      const partial = (candidate?.content?.parts ?? []).map((p) => ("text" in p && typeof p.text === "string" ? p.text : "")).join("");
-      throw new BlockedReplyError(
-        reason === "RECITATION"
-          ? "The AI declined to copy this text word for word (it looks like published text)."
-          : "The AI didn't answer this one (its safety filter or an empty reply). Try rephrasing the question or attaching a clearer photo.",
-        reason,
-        partial
-      );
-    }
-    const truncated = String(candidate?.finishReason) === "MAX_TOKENS";
-    if (truncated) {
-      text += "\n\n---\n*This answer reached the length limit and stops here. Ask for the remaining questions separately.*";
-    }
-
-    return {
-      text,
-      truncated,
-      searchSuggestionsHtml: groundingUsed ? grounding?.searchEntryPoint?.renderedContent : undefined,
-      provider: "google",
-      model: req.model,
-      usage: {
-        inputTokens: usage?.promptTokenCount ?? 0,
-        outputTokens: usage?.candidatesTokenCount ?? 0,
-        totalTokens: usage?.totalTokenCount ?? 0,
-      },
-      usedSearchGrounding: groundingUsed,
-      searchSkipped,
-    };
   },
 
   async embed(text: string, model: string): Promise<EmbeddingResult> {

@@ -7,7 +7,7 @@ import type { LlmSetting, Provider, TaskType } from "@/types/database";
 // project (zero free-tier quota), so Pro is opt-in per task type via
 // /admin/llm-settings once billing is enabled, not the out-of-the-box default.
 const FALLBACK: Record<TaskType, { provider: Provider; model: string }> = {
-  ocr_extraction: { provider: "google", model: "gemini-flash-latest" },
+  ocr_extraction: { provider: "google", model: "gemini-flash-lite-latest" },
   embedding: { provider: "google", model: "gemini-embedding-001" },
   solution: { provider: "google", model: "gemini-flash-latest" },
   notes: { provider: "google", model: "gemini-flash-latest" },

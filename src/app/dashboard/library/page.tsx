@@ -92,12 +92,17 @@ interface DocumentRowView {
   grade: string | null;
 }
 
-/** Splits pages into contiguous runs of the same source type (and book, for pages left over from an earlier try), preserving scan order. */
-function groupByContiguousSourceType(pageList: PendingPage[]): PendingPage[][] {
+/**
+ * Splits pages by the book they go into: one new book for this upload, plus
+ * any books that pages left over from an earlier try belong to. Pages of
+ * different kinds (a chapter and its exercises) stay in one book, each page
+ * keeping its own kind.
+ */
+function groupByBook(pageList: PendingPage[]): PendingPage[][] {
   const groups: PendingPage[][] = [];
   for (const page of pageList) {
-    const last = groups[groups.length - 1];
-    if (last && last[0].sourceType === page.sourceType && last[0].bookId === page.bookId) {
+    const last = groups.find((g) => g[0].bookId === page.bookId);
+    if (last) {
       last.push(page);
     } else {
       groups.push([page]);
@@ -139,8 +144,16 @@ function toRequests(pageList: PendingPage[]): PendingPage[][] {
 }
 
 /** The page as the server expects it. */
-function uploadShape({ imageBase64, mimeType, text, pdfText, hint }: PendingPage) {
-  return text !== undefined ? { text } : pdfText !== undefined ? { text: pdfText, imageBase64, mimeType } : { imageBase64, mimeType, hint };
+function uploadShape({ imageBase64, mimeType, text, pdfText, hint, sourceType }: PendingPage) {
+  const page = text !== undefined ? { text } : pdfText !== undefined ? { text: pdfText, imageBase64, mimeType } : { imageBase64, mimeType, hint };
+  return { ...page, sourceType };
+}
+
+/** The kind most of a book's pages are, shown as the book's kind. */
+function mainKind(pageList: PendingPage[]): SourceType {
+  const counts = new Map<SourceType, number>();
+  for (const p of pageList) counts.set(p.sourceType, (counts.get(p.sourceType) ?? 0) + 1);
+  return [...counts].sort((a, b) => b[1] - a[1])[0][0];
 }
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -401,6 +414,17 @@ export default function LibraryPage() {
       setError("Please confirm you own this copy before uploading");
       return;
     }
+    // Don't make a second copy of a book by accident.
+    const sameTitle = documents.find((d) => d.title.trim().toLowerCase() === title.trim().toLowerCase());
+    if (
+      sameTitle &&
+      pages.some((p) => !p.bookId) &&
+      !window.confirm(
+        `You already have a book called "${sameTitle.title}". Upload these pages as another copy?\n\nCancel to change the title, or delete the old book first.`
+      )
+    ) {
+      return;
+    }
 
     const controller = new AbortController();
     stopRef.current = controller;
@@ -411,16 +435,14 @@ export default function LibraryPage() {
     setUploadTotal(pages.length);
     setPages((prev) => prev.map((p) => ({ ...p, failure: undefined })));
 
-    const typeLabel = (t: SourceType) => SOURCE_TYPE_OPTIONS.find((o) => o.value === t)?.label ?? t;
     const failures = new Map<string, string>(); // page id → reason
     const saved = new Set<string>();
-    const books: { id: string }[] = [];
     let stopReason: string | null = null; // a failure that every later page would hit too
     let fatal: string | null = null;
     let sent = 0;
 
     try {
-      for (let group of groupByContiguousSourceType(pages)) {
+      for (let group of groupByBook(pages)) {
         if (controller.signal.aborted || stopReason) break;
 
         // A new book is created first, so a retried page can never start a second copy of it.
@@ -431,7 +453,7 @@ export default function LibraryPage() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             signal: controller.signal,
-            body: JSON.stringify({ title: title.trim(), subject: subject.trim(), grade: grade.trim(), rightsConfirmed, sourceType: group[0].sourceType }),
+            body: JSON.stringify({ title: title.trim(), subject: subject.trim(), grade: grade.trim(), rightsConfirmed, sourceType: mainKind(group) }),
           });
           const data = await res.json().catch(() => ({}));
           if (!res.ok || !data.documentId) throw new Error(data.error ?? "Couldn't start the upload. Please try again.");
@@ -442,11 +464,9 @@ export default function LibraryPage() {
           void load();
         }
         const book = { id: group[0].bookId! };
-        books.push(book);
         setActiveBooks((a) => [...a, book.id]);
 
         const queue = toRequests(group);
-        const label = typeLabel(group[0].sourceType).toLowerCase();
         const worker = async () => {
           for (let batch = queue.shift(); batch; batch = queue.shift()) {
             if (controller.signal.aborted || stopReason) return;
@@ -486,10 +506,10 @@ export default function LibraryPage() {
               await wait(RETRY_WAIT_MS * attempt);
               if (controller.signal.aborted) return;
             }
-            if (!stopReason) setUploadProgress(`Sending ${label} pages`);
+            if (!stopReason) setUploadProgress("Sending the pages");
           }
         };
-        setUploadProgress(`Sending ${label} pages`);
+        setUploadProgress("Sending the pages");
         await Promise.all(Array.from({ length: PARALLEL_REQUESTS }, worker));
 
         // A book started now that got none of its pages is removed; the pages stay below to try again.
@@ -511,7 +531,7 @@ export default function LibraryPage() {
     if (left === 0) {
       const minutes = Math.max(1, Math.ceil((saved.size * 12) / 60));
       setSuccess(
-        `All ${saved.size} page${saved.size === 1 ? "" : "s"} of "${title.trim()}" sent${books.length > 1 ? ` (as ${books.length} books by type)` : ""}. ` +
+        `All ${saved.size} page${saved.size === 1 ? "" : "s"} of "${title.trim()}" sent. ` +
           `Syllabi is reading them now, about ${minutes} minute${minutes === 1 ? "" : "s"}. You can close the app: reading carries on, and the book shows Ready when it's done.`
       );
       setTitle("");
