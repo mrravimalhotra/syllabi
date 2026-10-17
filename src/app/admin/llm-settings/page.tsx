@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Alert, PageHeader, PageSkeleton, card, cx } from "@/components/ui";
 import type { LlmSetting, Provider } from "@/types/database";
 
-const PROVIDERS: Provider[] = ["google", "anthropic", "openai"];
+const PROVIDERS: Provider[] = ["google", "anthropic", "openai", "groq", "openrouter", "mistral"];
 
 const TASK_TYPE_LABELS: Record<string, string> = {
   ocr_extraction: "Page text extraction (ingestion, vision)",

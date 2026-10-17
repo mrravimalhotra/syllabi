@@ -66,3 +66,22 @@ update students set role = 'admin', active = true where email = '<your email>';
 ```bash
 npm ci && npm run lint && npm run build
 ```
+
+
+## Optional: free backup AI services
+
+When Gemini can't answer (its free daily allowance is used up, it is
+overloaded, or it declines a page), Syllabi tries these in order, if their key
+is set in Vercel → Settings → Environment Variables (then redeploy):
+
+| Service | Key name | Get a key | Notes |
+|---|---|---|---|
+| Groq | `GROQ_API_KEY` | https://console.groq.com/keys | Free tier, very fast; text only |
+| OpenRouter | `OPENROUTER_API_KEY` | https://openrouter.ai/settings/keys | Free router (`openrouter/free`), ~50 free requests a day; reads page images |
+| Mistral | `MISTRAL_API_KEY` | https://console.mistral.ai/api-keys | Free monthly credit; reads page images |
+
+Models can be changed with `GROQ_MODEL`, `OPENROUTER_MODEL`, `MISTRAL_MODEL`.
+Admin → Health tests each one. Any of them can also be chosen for a task in
+Admin → AI settings (embeddings stay on Gemini: the database stores 768-number
+Gemini vectors). Free tiers may use requests to train their models; check
+each service's terms before using real children's material.

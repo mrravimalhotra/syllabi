@@ -21,7 +21,7 @@ export type TaskType =
 
 export type GenerationTaskType = "solution" | "notes" | "sample_paper" | "ad_hoc" | "study_pack";
 
-export type Provider = "google" | "anthropic" | "openai";
+export type Provider = "google" | "anthropic" | "openai" | "groq" | "openrouter" | "mistral";
 
 export interface School {
   id: string;

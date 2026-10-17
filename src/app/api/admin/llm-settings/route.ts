@@ -28,7 +28,7 @@ const TASK_TYPES = new Set<TaskType>([
   "coverage_check",
   "study_pack",
 ]);
-const PROVIDERS = new Set<Provider>(["google", "anthropic", "openai"]);
+const PROVIDERS = new Set<Provider>(["google", "anthropic", "openai", "groq", "openrouter", "mistral"]);
 
 interface PatchBody {
   taskType: TaskType;

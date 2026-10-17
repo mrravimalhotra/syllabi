@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { embed, generateCompletion } from "@/lib/llm";
+import { BACKUPS, embed, generateCompletion } from "@/lib/llm";
+import { OPENAI_COMPATIBLE, hasKey, openAiCompatibleAdapter } from "@/lib/llm/providers/openai";
 import { getLlmSetting } from "@/lib/llm/config";
 import { checkQuota } from "@/lib/quota";
 import { retrieveContext } from "@/lib/rag/retrieve";
@@ -178,6 +179,25 @@ export async function POST() {
       return `Timer runs every minute${runner?.app_url ? ` and calls ${runner.app_url}` : " (it starts calling the app after the first upload)"}. Pages: ${queue}.`;
     })
   );
+
+  // The free services that stand in when Gemini can't answer: each one whose key is set gets a tiny test.
+  for (const backup of BACKUPS) {
+    checks.push(
+      await run(`Backup AI: ${backup.provider}`, async () => {
+        if (!hasKey(backup.provider)) {
+          throw new Error(`Not set up (optional). Add ${OPENAI_COMPATIBLE[backup.provider].keyName} in Vercel to use it when Gemini runs out.`);
+        }
+        const model = backup.model();
+        const result = await openAiCompatibleAdapter(backup.provider).generateCompletion({
+          taskType: "ad_hoc",
+          systemInstructions: "Reply with one word.",
+          prompt: "Say ok.",
+          model,
+        });
+        return `${result.model} replied "${result.text.trim().slice(0, 20)}".${backup.readsImages ? " Can also read page images." : ""}`;
+      })
+    );
+  }
 
   return NextResponse.json({ checks });
 }
