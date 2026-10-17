@@ -147,5 +147,37 @@ export async function POST() {
     })
   );
 
+  checks.push(
+    await run("Reading book pages (AI)", async () => {
+      const { provider, model } = await getLlmSetting("ocr_extraction");
+      const result = await generateCompletion({
+        taskType: "ocr_extraction",
+        systemInstructions: "Reply with one word.",
+        prompt: "Say ok.",
+        maxOutputTokens: 256,
+      });
+      return `${provider} / ${model} replied "${result.text.trim().slice(0, 20)}". If this model's free daily allowance runs out, pages are read with gemini-flash-lite-latest instead.`;
+    })
+  );
+
+  checks.push(
+    await run("Background page reading", async () => {
+      const db = createAdminClient();
+      const [{ data: runner }, { data: timer }, { data: jobs }] = await Promise.all([
+        db.from("job_runner").select("app_url").eq("id", 1).maybeSingle(),
+        db.rpc("background_timer_ready"),
+        db.from("page_jobs").select("status"),
+      ]);
+      const count = (status: string) => (jobs ?? []).filter((j) => j.status === status).length;
+      const queue = `${count("pending")} waiting, ${count("working")} being read, ${count("failed")} couldn't be read`;
+      if (!timer) {
+        throw new Error(
+          `The once-a-minute timer isn't set up (Supabase extensions pg_cron and pg_net), so reading only continues while uploads arrive. Pages: ${queue}.`
+        );
+      }
+      return `Timer runs every minute${runner?.app_url ? ` and calls ${runner.app_url}` : " (it starts calling the app after the first upload)"}. Pages: ${queue}.`;
+    })
+  );
+
   return NextResponse.json({ checks });
 }

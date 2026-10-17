@@ -12,6 +12,8 @@ const PUBLIC_PATHS = [
   "/pending",
   "/forgot-password",
   "/reset-password",
+  // Background page reading: called by the database's timer, checks its own token.
+  "/api/jobs",
   "/manifest.webmanifest",
 ];
 

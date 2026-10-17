@@ -1,18 +1,20 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { getCurrentStudent } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { IngestError, ingestDocument } from "@/lib/ingestion/ingest";
-import { checkPages, isPageNumber, toIngestPages } from "@/lib/ingestion/upload-pages";
+import { queuePages, readQueuedPages, rememberAppUrl } from "@/lib/ingestion/jobs";
+import { checkPages, isPageNumber } from "@/lib/ingestion/upload-pages";
 import { checkQuota } from "@/lib/quota";
 import { userMessage } from "@/lib/errors";
 import { isUuid } from "@/lib/validate";
 
-export const maxDuration = 300; // reading a page can take a while, with retries
+// The reply comes in seconds; reading queued pages carries on after it, for up to this long.
+export const maxDuration = 300;
 
 /**
- * Adds pages to one of the caller's books and reads them. The browser sends
- * one scanned page per request (several at once), so a slow or failed page
- * never holds up or sinks the others. A page sent again replaces itself.
+ * Adds pages to one of the caller's books: stores them and queues them for
+ * reading, then answers. The pages are read in the background (see
+ * lib/ingestion/jobs.ts), so the upload finishes even if the app is closed.
+ * A page sent again replaces itself.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentStudent();
@@ -35,31 +37,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const { data: book } = await createAdminClient()
     .from("documents")
-    .select("id, title, subject, grade, source_type")
+    .select("id")
     .eq("id", id)
     .eq("owner_id", user.id)
     .maybeSingle();
   if (!book) return NextResponse.json({ error: "This book was deleted.", retryable: false }, { status: 404 });
 
   try {
-    await ingestDocument({
-      title: book.title,
-      ownerId: user.id,
-      subject: book.subject,
-      grade: book.grade,
-      sourceType: book.source_type,
-      documentId: id,
-      finalize: false,
-      pages: toIngestPages(checked.pages, body.startPageNumber),
-    });
-    return NextResponse.json({ ok: true });
+    await queuePages(id, user.id, checked.pages, body.startPageNumber);
   } catch (err) {
-    return NextResponse.json(
-      {
-        error: userMessage(err, "library pages", "Saving the pages failed. Please try again."),
-        retryable: err instanceof IngestError ? err.retryable : true,
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: userMessage(err, "library pages", "Saving the pages failed. Please try again.") }, { status: 500 });
   }
+  const origin = new URL(request.url).origin;
+  after(async () => {
+    await rememberAppUrl(origin);
+    await readQueuedPages(origin);
+  });
+  return NextResponse.json({ ok: true });
 }

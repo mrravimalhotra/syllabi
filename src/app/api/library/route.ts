@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentStudent } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { IngestError, ingestDocument } from "@/lib/ingestion/ingest";
+import { pageProgress } from "@/lib/ingestion/jobs";
 import { checkQuota } from "@/lib/quota";
 import type { DocumentRow } from "@/types/database";
 import { userMessage } from "@/lib/errors";
@@ -25,7 +26,9 @@ export async function GET() {
     .order("created_at", { ascending: false });
 
   if (error) return NextResponse.json({ error: userMessage(error, "library GET") }, { status: 500 });
-  return NextResponse.json({ documents: data });
+  // How far background reading has got, for books uploaded page by page.
+  const progress = await pageProgress(user.id);
+  return NextResponse.json({ documents: data.map((d) => ({ ...d, pages: progress[d.id] ?? null })) });
 }
 
 interface UploadBody {

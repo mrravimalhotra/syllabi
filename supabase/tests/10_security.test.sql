@@ -53,6 +53,29 @@ begin
     format('select 1 from llm_settings where task_type = %L', 'study_pack'), '1');
 end $$;
 
+-- Background page reading: only the server sees jobs and the runner token,
+-- and at most `max_working` pages are handed out at once.
+create function pg_temp.check_page_jobs() returns void language plpgsql as $$
+declare
+  p1 uuid := '00000000-0000-0000-0000-0000000000b1';
+  book uuid := '00000000-0000-0000-0000-0000000000d3';
+begin
+  insert into page_jobs (document_id, owner_id, page_number, page_text)
+  select book, p1, n, 'page ' || n from generate_series(1, 3) n;
+  perform pg_temp.check('user cannot read page jobs', 'authenticated', p1, 'select * from page_jobs', 'error');
+  perform pg_temp.check('anon cannot read the job runner token', 'anon', null, 'select * from job_runner', 'error');
+  perform pg_temp.check('user cannot read the job runner token', 'authenticated', p1, 'select * from job_runner', 'error');
+  perform pg_temp.check('user cannot claim page jobs', 'authenticated', p1, 'select * from claim_page_job(2)', 'error');
+  perform pg_temp.check('the job runner has a token', 'service_role', null, 'select 1 from job_runner where length(token) >= 32', '1');
+  perform pg_temp.check('server claims a page', 'service_role', null, 'select * from claim_page_job(2)', '1');
+  perform pg_temp.check('server claims a second page', 'service_role', null, 'select * from claim_page_job(2)', '1');
+  perform pg_temp.check('no third page while two are being read', 'service_role', null, 'select * from claim_page_job(2)', '0');
+  perform pg_temp.check('a stopped reader''s page is handed out again', 'service_role', null,
+    'update page_jobs set locked_at = now() - interval ''10 minutes'' where status = ''working''; select * from claim_page_job(2)', '1');
+  perform pg_temp.check('jobs go when their book is deleted', 'service_role', null,
+    format('delete from documents where id = %L; select 1 from page_jobs where document_id = %L', book, book), '0');
+end $$;
+
 -- Seed (as table owner): two parents/tutors, one admin, one book each.
 insert into auth.users values
   ('00000000-0000-0000-0000-00000000000a', 'admin@example.com'),
@@ -131,6 +154,7 @@ begin
   perform pg_temp.check('anon cannot call monthly_usage_all', 'anon', null,
     'select * from monthly_usage_all()', 'error');
   perform pg_temp.check_answer_row();
+  perform pg_temp.check_page_jobs();
 
   -- At least one active admin always remains.
   perform pg_temp.check('cannot demote the last admin', 'service_role', null,

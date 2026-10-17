@@ -53,7 +53,9 @@ export class IngestError extends UserError {
   constructor(
     message: string,
     readonly documentId: string,
-    readonly retryable = true
+    readonly retryable = true,
+    /** The AI's free daily allowance is used up: try again after it resets. */
+    readonly dailyLimit = false
   ) {
     super(message);
   }
@@ -94,14 +96,104 @@ async function forEachLimited<T>(items: T[], limit: number, fn: (item: T) => Pro
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
 }
 
+export interface PageContext {
+  documentId: string;
+  ownerId: string;
+  sourceType: DocumentRow["source_type"];
+}
+
+/** Where a failure happened, logged in full and reported as the page and step. */
+function stageError(documentId: string) {
+  return (label: string, pageNumber: number, err: unknown): never => {
+    console.error(`[ingest] page ${pageNumber} (${label})`, err);
+    const daily = DAILY_LIMIT.test(err instanceof Error ? err.message : String(err));
+    throw new IngestError(`Page ${pageNumber}: ${label} failed${failureReason(err)}.`, documentId, !hopeless(err), daily);
+  };
+}
+
 /**
- * Full ingestion pipeline for one uploaded document: vision text extraction per
- * page → chunking → embedding → pgvector insert, owned by (and searchable only
- * by) the uploading account. Every page's image is also persisted and linked
- * to its chunks — text alone loses diagrams/maps/figures, so retrieval and
- * generation need the original image, not just its OCR'd caption. Runs to
- * completion (or through this batch, when `documentId`/`finalize` are used to
- * span multiple calls) or marks the document failed.
+ * Reads and indexes one page of a book: stores its image (unless
+ * `storedImagePath` says it is stored already), reads its text with the AI
+ * unless it already has text, then chunks, embeds and saves it. A page saved
+ * before is replaced, never duplicated.
+ */
+export async function ingestPage(ctx: PageContext, page: IngestPage, storedImagePath?: string): Promise<void> {
+  const admin = createAdminClient();
+  const stage = stageError(ctx.documentId);
+  let imagePath: string | null = storedImagePath ?? null;
+
+  // Store the page image (scans, photos, PDF pages); Word text has none.
+  if (page.imageBase64 !== undefined && !storedImagePath) {
+    const ext = MIME_EXTENSIONS[page.mimeType] ?? "bin";
+    imagePath = `sources/${ctx.documentId}/page-${page.pageNumber}.${ext}`;
+    await uploadSourceFile(imagePath, Buffer.from(page.imageBase64, "base64"), page.mimeType).catch((err) =>
+      stage("saving the page image", page.pageNumber, err)
+    );
+  }
+  if (imagePath && page.pageNumber === 1) {
+    const { error } = await admin.from("documents").update({ storage_path: imagePath }).eq("id", ctx.documentId);
+    if (error) stage("saving the page preview", page.pageNumber, error);
+  }
+
+  // Text from Word files and digital PDFs is used as it is; only pages
+  // without text (scans, photos) are read by the AI.
+  let pageText: string;
+  if (page.text !== undefined) {
+    pageText = page.text;
+  } else {
+    const extraction = await extractPageText(page.imageBase64, page.mimeType, page.hint).catch((err) =>
+      stage("reading the page", page.pageNumber, err)
+    );
+    await recordTokenUsage({
+      studentId: ctx.ownerId,
+      taskType: "ocr_extraction",
+      provider: extraction.provider,
+      model: extraction.model,
+      usage: extraction.usage,
+    });
+    pageText = extraction.text;
+  }
+
+  const textChunks = chunkPageText(pageText, page.pageNumber);
+
+  // A page read again replaces its earlier chunks.
+  await admin.from("chunks").delete().eq("document_id", ctx.documentId).eq("page_number", page.pageNumber);
+
+  // One request embeds all of the page's chunks; one insert saves them.
+  const embeddings = await embedMany(textChunks.map((c) => c.content)).catch((err) => stage("indexing the page", page.pageNumber, err));
+  const embeddingTokens = embeddings.reduce((sum, e) => sum + e.usage.totalTokens, 0);
+  const embeddingModel = embeddings[0]?.model ?? "";
+  if (textChunks.length > 0) {
+    const { error: insertError } = await admin.from("chunks").insert(
+      textChunks.map((chunk, i) => ({
+        document_id: ctx.documentId,
+        owner_id: ctx.ownerId,
+        source_type: ctx.sourceType,
+        page_number: page.pageNumber,
+        section_label: chunk.sectionLabel,
+        chunk_index: i,
+        content: chunk.content,
+        image_path: imagePath,
+        embedding: embeddings[i].embedding,
+      }))
+    );
+    if (insertError) stage("saving the page", page.pageNumber, insertError);
+  }
+  if (embeddingTokens > 0) {
+    await recordTokenUsage({
+      studentId: ctx.ownerId,
+      taskType: "embedding",
+      provider: "google",
+      model: embeddingModel,
+      usage: { inputTokens: embeddingTokens, outputTokens: 0, totalTokens: embeddingTokens },
+    });
+  }
+}
+
+/**
+ * Older single-request uploads: creates the book (or continues one), reads
+ * every page in this request, and marks the book ready or failed. New uploads
+ * queue pages for background reading instead (see jobs.ts).
  */
 export async function ingestDocument(input: IngestDocumentInput): Promise<string> {
   const admin = createAdminClient();
@@ -138,94 +230,9 @@ export async function ingestDocument(input: IngestDocumentInput): Promise<string
     await admin.from("documents").update({ status: "processing" }).eq("id", documentId);
   }
 
-  // Each step is labeled with which page/stage it failed at — an ingestion
-  // error can originate from three very different systems (R2, Gemini,
-  // Supabase), and an unlabeled error is nearly impossible to place. The full
-  // detail goes to the server log; the user sees the page and step only.
-  const stage = (label: string, pageNumber: number, err: unknown): never => {
-    console.error(`[ingest] page ${pageNumber} (${label})`, err);
-    throw new IngestError(`Page ${pageNumber}: ${label} failed${failureReason(err)}.`, documentId!, !hopeless(err));
-  };
-
+  const ctx = { documentId, ownerId: input.ownerId, sourceType: input.sourceType };
   try {
-    await forEachLimited(input.pages, PAGES_AT_ONCE, async (page) => {
-      let imagePath: string | null = null;
-
-      // Store the page image (scans, photos, PDF pages); Word text has none.
-      if (page.imageBase64 !== undefined) {
-        const ext = MIME_EXTENSIONS[page.mimeType] ?? "bin";
-        const path = `sources/${documentId}/page-${page.pageNumber}.${ext}`;
-        imagePath = path;
-
-        await uploadSourceFile(path, Buffer.from(page.imageBase64, "base64"), page.mimeType).catch((err) =>
-          stage("saving the page image", page.pageNumber, err)
-        );
-
-        if (page.pageNumber === 1) {
-          const { error } = await admin.from("documents").update({ storage_path: path }).eq("id", documentId);
-          if (error) stage("saving the page preview", page.pageNumber, error);
-        }
-      }
-
-      // Text from Word files and digital PDFs is used as it is; only pages
-      // without text (scans, photos) are read by the AI.
-      let pageText: string;
-      if (page.text !== undefined) {
-        pageText = page.text;
-      } else {
-        const extraction = await extractPageText(page.imageBase64, page.mimeType, page.hint).catch((err) =>
-          stage("reading the page", page.pageNumber, err)
-        );
-        await recordTokenUsage({
-          studentId: input.ownerId,
-          taskType: "ocr_extraction",
-          provider: extraction.provider,
-          model: extraction.model,
-          usage: extraction.usage,
-        });
-        pageText = extraction.text;
-      }
-
-      const textChunks = chunkPageText(pageText, page.pageNumber);
-
-      // A retried batch may have saved this page already: replace, don't duplicate.
-      if (input.documentId) {
-        await admin.from("chunks").delete().eq("document_id", documentId).eq("page_number", page.pageNumber);
-      }
-
-      // One request embeds all of the page's chunks; one insert saves them.
-      const embeddings = await embedMany(textChunks.map((c) => c.content)).catch((err) =>
-        stage("indexing the page", page.pageNumber, err)
-      );
-      const embeddingTokens = embeddings.reduce((sum, e) => sum + e.usage.totalTokens, 0);
-      const embeddingModel = embeddings[0]?.model ?? "";
-      if (textChunks.length > 0) {
-        const { error: insertError } = await admin.from("chunks").insert(
-          textChunks.map((chunk, i) => ({
-            document_id: documentId,
-            owner_id: input.ownerId,
-            source_type: input.sourceType,
-            page_number: page.pageNumber,
-            section_label: chunk.sectionLabel,
-            chunk_index: i,
-            content: chunk.content,
-            image_path: imagePath,
-            embedding: embeddings[i].embedding,
-          }))
-        );
-        if (insertError) stage("saving the page", page.pageNumber, insertError);
-      }
-      if (embeddingTokens > 0) {
-        await recordTokenUsage({
-          studentId: input.ownerId,
-          taskType: "embedding",
-          provider: "google",
-          model: embeddingModel,
-          usage: { inputTokens: embeddingTokens, outputTokens: 0, totalTokens: embeddingTokens },
-        });
-      }
-    });
-
+    await forEachLimited(input.pages, PAGES_AT_ONCE, (page) => ingestPage(ctx, page));
     if (input.finalize !== false) {
       await admin.from("documents").update({ status: "ready" }).eq("id", documentId);
     }
@@ -234,7 +241,7 @@ export async function ingestDocument(input: IngestDocumentInput): Promise<string
     if (err instanceof IngestError) throw err;
     // Anything unlabelled still names its book, so the browser retries into it rather than starting a new one.
     console.error("[ingest]", err);
-    throw new IngestError("Saving the pages failed. Please try again.", documentId!);
+    throw new IngestError("Saving the pages failed. Please try again.", documentId);
   }
 
   return documentId;

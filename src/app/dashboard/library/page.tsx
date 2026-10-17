@@ -71,10 +71,21 @@ interface PendingPage {
   failure?: string;
 }
 
+/** How far the server has got reading a book's pages in the background. */
+interface PageProgress {
+  total: number;
+  done: number;
+  failed: number;
+  problems: string[];
+  waitingUntil: string | null;
+}
+
 interface DocumentRowView {
   id: string;
   title: string;
   status: "processing" | "ready" | "failed";
+  /** Background reading progress; null for books uploaded before pages were read in the background. */
+  pages: PageProgress | null;
   source_type: string;
   created_at: string;
   subject: string | null;
@@ -196,6 +207,14 @@ export default function LibraryPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch-on-mount is intentional here
     load();
   }, []);
+
+  // While the server reads pages in the background, refresh the list to show its progress.
+  const reading = documents.some((d) => d.status === "processing" && d.pages);
+  useEffect(() => {
+    if (!reading) return;
+    const timer = setInterval(() => void load(), 10_000);
+    return () => clearInterval(timer);
+  }, [reading]);
 
   async function addFiles(fileList: FileList | null) {
     if (!fileList || fileList.length === 0) return;
@@ -351,8 +370,18 @@ export default function LibraryPage() {
     await removeBook(doc.id);
   }
 
+  // Older uploads that stopped part-way, or a book whose pages never arrived.
   const unfinished = (d: DocumentRowView) =>
-    !activeBooks.includes(d.id) && (d.status === "failed" || (d.status === "processing" && listedAt - Date.parse(d.created_at) > STALE_UPLOAD_MS));
+    !activeBooks.includes(d.id) &&
+    !d.pages &&
+    (d.status === "failed" || (d.status === "processing" && listedAt - Date.parse(d.created_at) > STALE_UPLOAD_MS));
+
+  async function retryPages(id: string) {
+    setBookErrors((e) => Object.fromEntries(Object.entries(e).filter(([k]) => k !== id)));
+    const res = await fetch(`/api/library/${id}/retry`, { method: "POST" }).catch(() => null);
+    if (!res?.ok) setBookErrors((e) => ({ ...e, [id]: "Couldn't start reading again. Please try again." }));
+    await load();
+  }
 
   async function removeUnfinished() {
     const list = documents.filter(unfinished);
@@ -395,6 +424,7 @@ export default function LibraryPage() {
         if (controller.signal.aborted || stopReason) break;
 
         // A new book is created first, so a retried page can never start a second copy of it.
+        const createdNow = !group[0].bookId;
         if (!group[0].bookId) {
           setUploadProgress(`Starting "${title.trim()}"`);
           const res = await fetch("/api/library", {
@@ -456,19 +486,14 @@ export default function LibraryPage() {
               await wait(RETRY_WAIT_MS * attempt);
               if (controller.signal.aborted) return;
             }
-            if (!stopReason) setUploadProgress(`Reading ${label} pages`);
+            if (!stopReason) setUploadProgress(`Sending ${label} pages`);
           }
         };
-        setUploadProgress(`Reading ${label} pages`);
+        setUploadProgress(`Sending ${label} pages`);
         await Promise.all(Array.from({ length: PARALLEL_REQUESTS }, worker));
 
-        // Finish the book with the pages read so far (now or in an earlier try); one with none is removed.
-        const res = await fetch(`/api/library/${book.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ready: true }),
-        });
-        if (res.status === 400) await removeBook(book.id);
+        // A book started now that got none of its pages is removed; the pages stay below to try again.
+        if (createdNow && !group.some((p) => saved.has(p.id))) await removeBook(book.id);
       }
     } catch (err) {
       if (!controller.signal.aborted) fatal = err instanceof Error ? err.message : "Upload failed.";
@@ -484,7 +509,11 @@ export default function LibraryPage() {
 
     const left = pages.length - saved.size;
     if (left === 0) {
-      setSuccess(`Uploaded and read "${title.trim()}" (${saved.size} page${saved.size === 1 ? "" : "s"}${books.length > 1 ? `, as ${books.length} books by type` : ""}).`);
+      const minutes = Math.max(1, Math.ceil((saved.size * 12) / 60));
+      setSuccess(
+        `All ${saved.size} page${saved.size === 1 ? "" : "s"} of "${title.trim()}" sent${books.length > 1 ? ` (as ${books.length} books by type)` : ""}. ` +
+          `Syllabi is reading them now, about ${minutes} minute${minutes === 1 ? "" : "s"}. You can close the app: reading carries on, and the book shows Ready when it's done.`
+      );
       setTitle("");
       return;
     }
@@ -492,8 +521,8 @@ export default function LibraryPage() {
     setError(
       [
         controller.signal.aborted ? "Upload stopped." : fatal,
-        saved.size > 0 ? `${saved.size} page${saved.size === 1 ? " was" : "s were"} read and saved.` : null,
-        reasons.length ? `${failures.size} page${failures.size === 1 ? "" : "s"} couldn't be read: ${reasons.join(" ")}` : null,
+        saved.size > 0 ? `${saved.size} page${saved.size === 1 ? " was" : "s were"} sent and ${saved.size === 1 ? "is" : "are"} being read.` : null,
+        reasons.length ? `${failures.size} page${failures.size === 1 ? "" : "s"} couldn't be sent: ${reasons.join(" ")}` : null,
         `The ${left} remaining page${left === 1 ? " is" : "s are"} still below. Press Upload to try again${saved.size > 0 ? "; they'll be added to the same book" : ""}.`,
       ]
         .filter(Boolean)
@@ -687,7 +716,7 @@ export default function LibraryPage() {
             <div className="flex justify-between gap-3 text-xs text-slate-600">
               <span>{uploadProgress ?? "Uploading"}... keep this page open (the screen stays on)</span>
               <span className="shrink-0 tabular-nums">
-                {pagesSent} of {uploadTotal} read
+                {pagesSent} of {uploadTotal} sent
               </span>
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-slate-100">
@@ -703,14 +732,14 @@ export default function LibraryPage() {
           <button disabled={submitting || processingFiles || pages.length === 0} className={cx(button.primary, "w-full sm:w-auto")}>
             {submitting ? <Spinner /> : <UploadIcon className="h-4.5 w-4.5" />}
             {submitting
-              ? "Reading pages..."
+              ? "Sending pages..."
               : pages.length
                 ? `${resuming ? "Try again: read" : "Upload & read"} ${pages.length} page${pages.length === 1 ? "" : "s"}`
                 : "Upload & read"}
           </button>
           {submitting && (
             <button type="button" onClick={() => stopRef.current?.abort()} className={cx(button.secondary, "w-full sm:w-auto")}>
-              Stop (keep the pages read so far)
+              Stop (keep the pages sent so far)
             </button>
           )}
         </div>
@@ -754,7 +783,18 @@ export default function LibraryPage() {
                       .filter(Boolean)
                       .join(" · ")}
                   </p>
-                  <StatusBadge status={d.status} unfinished={unfinished(d)} />
+                  <StatusBadge status={d.status} unfinished={unfinished(d)} pages={d.pages} />
+                  {d.pages && d.pages.failed > 0 && d.status !== "processing" && (
+                    <p className="text-xs text-red-600">
+                      {d.pages.failed} page{d.pages.failed === 1 ? "" : "s"} couldn&apos;t be read: {d.pages.problems.join(" ")}{" "}
+                      <button type="button" onClick={() => retryPages(d.id)} className={cx(link, "text-xs")}>
+                        Try {d.pages.failed === 1 ? "it" : "them"} again
+                      </button>
+                    </p>
+                  )}
+                  {d.pages && d.status === "processing" && d.pages.problems.length > 0 && !d.pages.waitingUntil && (
+                    <p className="text-xs text-amber-700">Trying again shortly: {d.pages.problems[0]}</p>
+                  )}
                   {bookErrors[d.id] && <p className="text-xs text-red-600">{bookErrors[d.id]}</p>}
                 </div>
                 <button
@@ -775,12 +815,21 @@ export default function LibraryPage() {
   );
 }
 
-function StatusBadge({ status, unfinished }: { status: DocumentRowView["status"]; unfinished: boolean }) {
+function StatusBadge({ status, unfinished, pages }: { status: DocumentRowView["status"]; unfinished: boolean; pages: PageProgress | null }) {
   if (status === "ready") return <Badge tone="success">Ready</Badge>;
   if (unfinished) return <Badge tone="danger">Upload didn&apos;t finish: delete it and upload again</Badge>;
+  if (status === "failed") return <Badge tone="danger">No pages could be read</Badge>;
+  if (pages?.waitingUntil) {
+    const time = new Date(pages.waitingUntil).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    return (
+      <Badge tone="warning">
+        Read {pages.done} of {pages.total}. The AI&apos;s free daily allowance is used up; reading carries on by itself after {time}
+      </Badge>
+    );
+  }
   return (
     <Badge tone="warning">
-      <Spinner className="h-3 w-3" /> Reading pages
+      <Spinner className="h-3 w-3" /> Reading pages{pages ? `: ${pages.done} of ${pages.total}` : ""}
     </Badge>
   );
 }
