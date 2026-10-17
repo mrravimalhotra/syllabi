@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeftIcon, ChevronRightIcon, PrinterIcon, SpeakerIcon, StopIcon } from "@/components/icons";
+import { ChevronLeftIcon, ChevronRightIcon, SpeakerIcon, StopIcon } from "@/components/icons";
+import { PrintButton } from "@/components/PrintButton";
 import { Badge, button, card, cx } from "@/components/ui";
 import { speakOnce } from "@/components/study-pack/useSpeech";
 import type { Cell, Tone, WorkedExample } from "@/lib/worked/types";
@@ -24,7 +25,16 @@ const TONE: Record<Tone, string> = {
  * teacher's words, played automatically (read aloud) or stepped through by
  * hand. Printing gives the finished board and every step written out.
  */
-export function WorkedExampleView({ example, actions }: { example: WorkedExample; actions?: React.ReactNode }) {
+export function WorkedExampleView({
+  example,
+  actions,
+  pdfUrl,
+}: {
+  example: WorkedExample;
+  actions?: React.ReactNode;
+  /** The saved example's PDF, for printing where the page itself can't be printed. */
+  pdfUrl?: string | null;
+}) {
   const language = example.problem.language ?? "en";
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -68,9 +78,7 @@ export function WorkedExampleView({ example, actions }: { example: WorkedExample
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
           {actions}
-          <button type="button" onClick={() => window.print()} className={button.small}>
-            <PrinterIcon className="h-4 w-4" /> Print
-          </button>
+          <PrintButton pdfUrl={pdfUrl} />
         </div>
       </header>
 

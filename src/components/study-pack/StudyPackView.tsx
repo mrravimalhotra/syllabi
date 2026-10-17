@@ -10,13 +10,13 @@ import {
   CopyIcon,
   DownloadIcon,
   LightbulbIcon,
-  PrinterIcon,
   SearchIcon,
   SparklesIcon,
   SpeakerIcon,
   StopIcon,
   UndoIcon,
 } from "@/components/icons";
+import { PrintButton } from "@/components/PrintButton";
 import { Badge, Spinner, button, card, cx, input } from "@/components/ui";
 import { useSpeech, type Speech } from "@/components/study-pack/useSpeech";
 import { normaliseResponse } from "@/lib/study-pack/auto-key";
@@ -99,9 +99,7 @@ export function StudyPackView({
               {copied ? <CheckIcon className="h-4 w-4 text-emerald-600" /> : <CopyIcon className="h-4 w-4" />}
               {copied ? "Copied" : "Copy"}
             </button>
-            <button type="button" onClick={() => window.print()} className={button.small}>
-              <PrinterIcon className="h-4 w-4" /> Print
-            </button>
+            <PrintButton pdfUrl={pdfUrl} />
             {pdfUrl && (
               <a href={pdfUrl} target="_blank" rel="noreferrer" className={button.smallPrimary}>
                 <DownloadIcon className="h-4 w-4" /> PDF

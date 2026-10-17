@@ -105,6 +105,7 @@ export default function AnswerPage() {
           {answer.worked && solve(answer.worked) ? (
             <WorkedExampleView
               example={solve(answer.worked)!}
+              pdfUrl={answer.pdfUrl}
               actions={
                 <button type="button" onClick={remove} className={button.smallDanger} aria-label="Delete this worked example">
                   <TrashIcon className="h-4 w-4" /> Delete

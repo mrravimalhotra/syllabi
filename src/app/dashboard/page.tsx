@@ -764,7 +764,7 @@ export default function DashboardPage() {
 
       {worked && (
         <div className="space-y-3">
-          <WorkedExampleView key={worked.example.title} example={worked.example} />
+          <WorkedExampleView key={worked.example.title} example={worked.example} pdfUrl={worked.id ? `/api/documents/${worked.id}/pdf` : null} />
           {worked.id && (
             <p className="text-center text-xs text-slate-500 print:hidden">
               Saved to{" "}

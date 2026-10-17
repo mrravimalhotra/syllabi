@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { Markdown } from "@/components/Markdown";
-import { AlertIcon, CheckIcon, CopyIcon, DownloadIcon, PrinterIcon } from "@/components/icons";
+import { AlertIcon, CheckIcon, CopyIcon, DownloadIcon } from "@/components/icons";
+import { PrintButton } from "@/components/PrintButton";
 import type { AnswerCheck } from "@/types/database";
 import { button, card, cx } from "@/components/ui";
 import { hasAnswerKey } from "@/lib/format";
@@ -43,9 +44,7 @@ export function AnswerView({ answer, actions, meta }: { answer: Answer; actions?
         <div className="flex shrink-0 flex-wrap gap-2 print:hidden">
           {actions}
           <CopyButton text={answer.text} />
-          <button type="button" onClick={() => window.print()} className={button.small}>
-            <PrinterIcon className="h-4 w-4" /> Print
-          </button>
+          <PrintButton pdfUrl={answer.pdfUrl} />
           {answer.pdfUrl && hasAnswerKey(answer.text) && (
             <a href={`${answer.pdfUrl}?part=questions`} target="_blank" rel="noreferrer" className={button.small}>
               <DownloadIcon className="h-4 w-4" /> Questions only
