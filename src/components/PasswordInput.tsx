@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import { input, label as labelClass } from "@/components/ui";
 
 interface PasswordInputProps {
   name: string;
@@ -49,10 +50,10 @@ export function PasswordInput({ name, label, required, minLength, autoComplete, 
 
   return (
     <div>
-      <label className="block text-sm font-medium text-slate-700" htmlFor={id}>
+      <label className={labelClass} htmlFor={id}>
         {label}
       </label>
-      <div className="relative mt-1">
+      <div className="relative mt-1.5">
         <input
           id={id}
           name={name}
@@ -62,19 +63,25 @@ export function PasswordInput({ name, label, required, minLength, autoComplete, 
           autoComplete={autoComplete}
           value={value}
           onChange={onChange ? (e) => onChange(e.target.value) : undefined}
-          className="w-full rounded-md border border-slate-300 px-3 py-2 pr-10 text-sm focus:border-slate-500 focus:outline-none"
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? `${id}-error` : undefined}
+          className={`${input} pr-11`}
         />
         <button
           type="button"
           onClick={() => setVisible((v) => !v)}
           aria-label={visible ? "Hide password" : "Show password"}
           aria-pressed={visible}
-          className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-600"
+          className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-lg text-slate-400 hover:text-slate-600"
         >
           {visible ? <EyeOffIcon /> : <EyeIcon />}
         </button>
       </div>
-      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+      {error && (
+        <p id={`${id}-error`} className="mt-1.5 text-xs text-red-600">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

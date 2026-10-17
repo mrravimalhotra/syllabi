@@ -20,6 +20,7 @@ What was decided, when, and why, so the same question isn't asked twice. Newest 
 | 2026-10-17 | Photos can be attached to a question (up to 3) | Matches how people use Claude/Gemini with homework photos |
 | 2026-10-17 | Database changes are applied by the Supabase GitHub integration on push to `main` | No copy-pasting SQL; free plan supports production deploys (not preview branches) |
 | 2026-10-17 | Supabase in South Asia (Mumbai); Vercel functions in `bom1` | Owner and users are in India; app and database must be close |
+| 2026-10-17 | UI redesign: one design system (`src/components/ui.tsx`, indigo accent, Geist font), phone tab bar, drag-and-drop and paste for attachments, progress steps while generating, search in My Documents | Owner asked for a world-class, optimised UI |
 | 2026-10-17 | Product name: Syllabi (renamed from StudySprint) | Owner's choice |
 | 2026-10-17 | Setup instructions are given one step at a time, one product per message | Owner preference |
 | 2026-10-17 | Development uses BMAD v6 (installed); groundwork docs first to cut its cost | Owner preference |
@@ -41,3 +42,4 @@ What was decided, when, and why, so the same question isn't asked twice. Newest 
 | Migrate from `@google/generative-ai` to `@google/genai` (D1) | Old SDK still works against the same API; switching untested code paths without a live key is riskier than waiting until after the first live test |
 | Make the GitHub repo private | Public repo exposes the code; Vercel Hobby supports private repos. Owner's call |
 | Private evaluation set built from real worksheets and answer keys (C2) | Must be stored outside the public repo |
+| Dark mode | Light-only for now (a forced dark mode once made typed text invisible); add once the token colours are tested on real phones |

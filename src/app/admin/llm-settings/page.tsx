@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Alert, PageHeader, PageSkeleton, card, cx } from "@/components/ui";
 import type { LlmSetting, Provider } from "@/types/database";
 
 const PROVIDERS: Provider[] = ["google", "anthropic", "openai"];
@@ -45,21 +46,19 @@ export default function LlmSettingsPage() {
     setSettings((prev) => prev.map((s) => (s.task_type === taskType ? data.setting : s)));
   }
 
-  if (loading) return <p className="text-sm text-slate-500">Loading...</p>;
+  if (loading) return <PageSkeleton rows={2} />;
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-lg font-semibold text-slate-900">LLM Provider Settings</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Route each task to a provider + model. Changes apply immediately — no redeploy needed.
-        </p>
-      </div>
-      {error && <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      <PageHeader
+        title="AI models"
+        description="Route each task to a provider and model. Changes apply immediately, no redeploy needed."
+      />
+      {error && <Alert tone="error">{error}</Alert>}
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className={cx(card, "overflow-x-auto")}>
         <table className="w-full text-left text-sm">
-          <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
+          <thead className="border-b border-slate-200 bg-slate-50/80 text-xs tracking-wide text-slate-500 uppercase">
             <tr>
               <th className="px-4 py-2 font-medium">Task</th>
               <th className="px-4 py-2 font-medium">Provider</th>
@@ -97,7 +96,7 @@ function SettingRow({
         <select
           value={provider}
           onChange={(e) => setProvider(e.target.value as Provider)}
-          className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+          className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs"
         >
           {PROVIDERS.map((p) => (
             <option key={p} value={p}>
@@ -110,14 +109,14 @@ function SettingRow({
         <input
           value={model}
           onChange={(e) => setModel(e.target.value)}
-          className="w-56 rounded-md border border-slate-300 px-2 py-1 text-xs"
+          className="w-56 rounded-lg border border-slate-300 px-2 py-1.5 text-xs"
         />
       </td>
       <td className="px-4 py-3">
         <button
           disabled={saving}
           onClick={() => onSave(setting.task_type, provider, model)}
-          className="rounded-md bg-slate-900 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
+          className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-700 disabled:opacity-50"
         >
           {saving ? "Saving..." : "Save"}
         </button>

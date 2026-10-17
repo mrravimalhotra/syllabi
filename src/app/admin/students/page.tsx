@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Alert, PageHeader, PageSkeleton, card, cx } from "@/components/ui";
 import type { Student } from "@/types/database";
 
 type StudentWithUsage = Student & { monthly_usage: number };
@@ -40,17 +41,16 @@ export default function StudentsPage() {
     setStudents((prev) => prev.map((s) => (s.id === id ? { ...s, ...data.student } : s)));
   }
 
-  if (loading) return <p className="text-sm text-slate-500">Loading...</p>;
+  if (loading) return <PageSkeleton rows={2} />;
 
   return (
     <div className="space-y-4">
-      <h1 className="text-lg font-semibold text-slate-900">Accounts</h1>
-      <p className="text-sm text-slate-500">Parents and tutors. Each manages their own private books under My books.</p>
-      {error && <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      <PageHeader title="Accounts" description="Parents and tutors. Each manages their own private books under My books." />
+      {error && <Alert tone="error">{error}</Alert>}
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className={cx(card, "overflow-x-auto")}>
         <table className="w-full min-w-[640px] text-left text-sm">
-          <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
+          <thead className="border-b border-slate-200 bg-slate-50/80 text-xs tracking-wide text-slate-500 uppercase">
             <tr>
               <th className="px-4 py-2 font-medium">Parent / tutor</th>
               <th className="px-4 py-2 font-medium">Status</th>
@@ -73,14 +73,14 @@ export default function StudentsPage() {
                       s.active ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
                     }`}
                   >
-                    {s.active ? "Active" : "Pending/Revoked"}
+                    {s.active ? "Active" : "No access"}
                   </span>
                 </td>
                 <td className="px-4 py-3">
                   <select
                     value={s.role}
                     onChange={(e) => patch(s.id, { role: e.target.value as "student" | "admin" })}
-                    className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+                    className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs"
                   >
                     <option value="student">user</option>
                     <option value="admin">admin</option>
@@ -88,7 +88,7 @@ export default function StudentsPage() {
                 </td>
                 <td className="px-4 py-3">
                   <p className="text-xs text-slate-700">
-                    {s.monthly_usage.toLocaleString()} / {s.token_quota.toLocaleString()}
+                    {s.monthly_usage.toLocaleString("en-IN")} / {s.token_quota.toLocaleString("en-IN")}
                   </p>
                   <input
                     type="number"
@@ -97,13 +97,13 @@ export default function StudentsPage() {
                       const value = Number(e.target.value);
                       if (value !== s.token_quota) patch(s.id, { token_quota: value });
                     }}
-                    className="mt-1 w-28 rounded-md border border-slate-300 px-2 py-1 text-xs"
+                    className="mt-1 w-28 rounded-lg border border-slate-300 px-2 py-1.5 text-xs"
                   />
                 </td>
                 <td className="px-4 py-3">
                   <button
                     onClick={() => patch(s.id, { active: !s.active })}
-                    className={`rounded-md px-2 py-1 text-xs font-medium ${
+                    className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
                       s.active
                         ? "bg-red-50 text-red-700 hover:bg-red-100"
                         : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"

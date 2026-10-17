@@ -3,6 +3,13 @@
 import { useState } from "react";
 import { signUp } from "@/lib/actions/auth";
 import { PasswordInput } from "@/components/PasswordInput";
+import { SubmitButton } from "@/components/SubmitButton";
+import { Field, cx, input, label } from "@/components/ui";
+
+const ACCOUNT_TYPES = [
+  { value: "parent", title: "Parent or guardian", detail: "Helping my own child" },
+  { value: "tutor", title: "Tutor or teacher", detail: "Helping my students" },
+];
 
 export function SignUpForm() {
   const [password, setPassword] = useState("");
@@ -12,40 +19,30 @@ export function SignUpForm() {
 
   return (
     <form action={signUp} className="space-y-4">
-      <div>
-        <label className="block text-sm font-medium text-slate-700" htmlFor="full_name">
-          Full name
-        </label>
-        <input
-          id="full_name"
-          name="full_name"
-          type="text"
-          required
-          className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
-        />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-slate-700" htmlFor="email">
-          Email
-        </label>
-        <input
-          id="email"
-          name="email"
-          type="email"
-          required
-          className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
-        />
-      </div>
+      <Field label="Full name" htmlFor="full_name">
+        <input id="full_name" name="full_name" type="text" autoComplete="name" required className={input} />
+      </Field>
+      <Field label="Email" htmlFor="email">
+        <input id="email" name="email" type="email" autoComplete="email" inputMode="email" required className={input} />
+      </Field>
 
       <fieldset>
-        <legend className="block text-sm font-medium text-slate-700">I am a</legend>
-        <div className="mt-1 flex gap-4 text-sm text-slate-700">
-          <label className="flex items-center gap-2">
-            <input type="radio" name="account_type" value="parent" required /> Parent or guardian
-          </label>
-          <label className="flex items-center gap-2">
-            <input type="radio" name="account_type" value="tutor" required /> Tutor or teacher
-          </label>
+        <legend className={label}>I am a</legend>
+        <div className="mt-1.5 grid grid-cols-2 gap-2">
+          {ACCOUNT_TYPES.map((t) => (
+            <label
+              key={t.value}
+              className={cx(
+                "cursor-pointer rounded-xl border border-slate-300 p-3 transition",
+                "has-[:checked]:border-brand-500 has-[:checked]:bg-brand-50 has-[:checked]:ring-1 has-[:checked]:ring-brand-500",
+                "has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brand-500"
+              )}
+            >
+              <input type="radio" name="account_type" value={t.value} required className="sr-only" />
+              <span className="block text-sm font-medium text-slate-900">{t.title}</span>
+              <span className="block text-xs text-slate-500">{t.detail}</span>
+            </label>
+          ))}
         </div>
       </fieldset>
 
@@ -70,21 +67,17 @@ export function SignUpForm() {
         error={mismatch ? "Passwords do not match" : undefined}
       />
 
-      <label className="flex items-start gap-2 text-sm text-slate-600">
-        <input type="checkbox" name="adult_confirmed" value="yes" required className="mt-1" />
+      <label className="flex items-start gap-2.5 rounded-xl bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
+        <input type="checkbox" name="adult_confirmed" value="yes" required className="mt-0.5 h-4 w-4 shrink-0 accent-brand-600" />
         <span>
-          I am 18 or older. I will use Syllabi myself to prepare study material for my child or
-          students, and I will not let anyone under 18 use my account.
+          I am 18 or older. I will use Syllabi myself to prepare study material for my child or students, and I will
+          not let anyone under 18 use my account.
         </span>
       </label>
 
-      <button
-        type="submit"
-        disabled={mismatch}
-        className="w-full rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        Sign up
-      </button>
+      <SubmitButton pendingLabel="Creating account..." disabled={mismatch}>
+        Create account
+      </SubmitButton>
     </form>
   );
 }

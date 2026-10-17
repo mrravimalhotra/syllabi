@@ -7,20 +7,24 @@ const geistSans = Geist({
   subsets: ["latin"],
 });
 
+// Only code blocks in answers use the mono face: don't hold up first paint for it.
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  preload: false,
 });
 
 export const metadata: Metadata = {
-  title: "Syllabi",
+  title: { default: "Syllabi", template: "%s · Syllabi" },
   description: "Step-by-step solutions, revision notes and sample papers from your child's or student's own books.",
   icons: { icon: "/icon.svg", apple: "/apple-icon.png" },
   appleWebApp: { capable: true, title: "Syllabi", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0f172a",
+  themeColor: "#ffffff",
+  // Lets the phone tab bar sit above the iPhone home indicator.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -29,7 +33,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="flex min-h-full flex-col">{children}</body>
     </html>
   );
 }

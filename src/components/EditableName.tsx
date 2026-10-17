@@ -1,25 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { PencilIcon } from "@/components/icons";
+import { Spinner, cx, input } from "@/components/ui";
 
 interface EditableNameProps {
   value: string;
   onSave: (newValue: string) => Promise<void>;
   className?: string;
-}
-
-function PencilIcon() {
-  return (
-    <svg viewBox="0 0 20 20" fill="none" className="h-3.5 w-3.5" aria-hidden="true">
-      <path
-        d="M13.5 3.5l3 3L7 16H4v-3l9.5-9.5Z"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
 }
 
 /** An inline-editable text label — click the pencil to rename, Enter to save, Escape to cancel. */
@@ -57,8 +45,10 @@ export function EditableName({ value, onSave, className }: EditableNameProps) {
   if (editing) {
     return (
       <div className={className}>
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           <input
+            aria-label="New name"
+            maxLength={200}
             autoFocus
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -67,16 +57,16 @@ export function EditableName({ value, onSave, className }: EditableNameProps) {
               if (e.key === "Escape") cancel();
             }}
             disabled={saving}
-            className="rounded-md border border-slate-300 px-2 py-0.5 text-sm focus:border-slate-500 focus:outline-none"
+            className={cx(input, "w-64 max-w-full")}
           />
           <button
             onClick={save}
             disabled={saving}
-            className="rounded-md bg-slate-900 px-2 py-0.5 text-xs font-medium text-white disabled:opacity-50"
+            className="inline-flex min-h-9 items-center gap-1 rounded-lg bg-brand-600 px-3 text-xs font-medium text-white hover:bg-brand-700 disabled:opacity-50"
           >
-            {saving ? "..." : "Save"}
+            {saving ? <Spinner className="h-3.5 w-3.5" /> : "Save"}
           </button>
-          <button onClick={cancel} disabled={saving} className="text-xs text-slate-500 hover:text-slate-700">
+          <button onClick={cancel} disabled={saving} className="min-h-9 rounded-lg px-2 text-xs text-slate-500 hover:bg-slate-100">
             Cancel
           </button>
         </div>
@@ -86,14 +76,14 @@ export function EditableName({ value, onSave, className }: EditableNameProps) {
   }
 
   return (
-    <div className={`group flex items-center gap-1.5 ${className ?? ""}`}>
-      <span>{value}</span>
+    <div className={cx("group flex min-w-0 items-center gap-1", className)}>
+      <span className="truncate">{value}</span>
       <button
         onClick={() => setEditing(true)}
         aria-label={`Rename ${value}`}
-        className="p-1 text-slate-400 hover:text-slate-600 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100"
+        className="shrink-0 rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
       >
-        <PencilIcon />
+        <PencilIcon className="h-3.5 w-3.5" />
       </button>
     </div>
   );

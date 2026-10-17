@@ -1,8 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useState } from "react";
 import { downscaleImageFile } from "@/lib/downscale-image";
 import { EditableName } from "@/components/EditableName";
+import { BookIcon, TrashIcon, UploadIcon, XIcon } from "@/components/icons";
+import {
+  Alert,
+  Badge,
+  EmptyState,
+  Field,
+  PageHeader,
+  PageSkeleton,
+  Spinner,
+  button,
+  card,
+  cx,
+  input,
+  label,
+  link,
+} from "@/components/ui";
 
 type SourceType = "textbook" | "exercise" | "past_paper" | "notes";
 
@@ -99,11 +115,14 @@ export default function LibraryPage() {
   const [processingFiles, setProcessingFiles] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
+  // Pages sent so far in the current upload, for the progress bar.
+  const [pagesSent, setPagesSent] = useState(0);
+  const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  // Shows the page skeleton only on the first load; later refreshes keep the page in place.
   async function load() {
-    setLoading(true);
     try {
       const docsRes = await fetch("/api/library");
       const docs = await docsRes.json();
@@ -199,13 +218,13 @@ export default function LibraryPage() {
     }
   }
 
-  function removePage(id: string) {
+  const removePage = useCallback((id: string) => {
     setPages((prev) => prev.filter((p) => p.id !== id));
-  }
+  }, []);
 
-  function setPageSourceType(id: string, sourceType: SourceType) {
+  const setPageSourceType = useCallback((id: string, sourceType: SourceType) => {
     setPages((prev) => prev.map((p) => (p.id === id ? { ...p, sourceType } : p)));
-  }
+  }, []);
 
   async function renameBook(id: string, title: string) {
     const res = await fetch(`/api/library/${id}`, {
@@ -242,6 +261,7 @@ export default function LibraryPage() {
 
     setSubmitting(true);
     setUploadProgress(null);
+    setPagesSent(0);
     try {
       // Split into contiguous same-type runs (mixed content → separate documents),
       // then split each run further by cumulative payload size — a single request
@@ -259,11 +279,9 @@ export default function LibraryPage() {
         let pageOffset = 1;
 
         for (let i = 0; i < batches.length; i++) {
-          if (groups.length > 1 || batches.length > 1) {
-            setUploadProgress(
-              `Uploading ${typeLabel(group[0].sourceType)} pages${batches.length > 1 ? ` (batch ${i + 1}/${batches.length})` : ""}...`
-            );
-          }
+          setUploadProgress(
+            `Reading ${typeLabel(group[0].sourceType).toLowerCase()} pages${batches.length > 1 ? ` (part ${i + 1} of ${batches.length})` : ""}`
+          );
 
           const res = await fetch("/api/library", {
             method: "POST",
@@ -286,6 +304,7 @@ export default function LibraryPage() {
           if (!res.ok) throw new Error(data.error);
           documentId = data.documentId;
           pageOffset += batches[i].length;
+          setPagesSent((n) => n + batches[i].length);
         }
 
         documentIds.push(documentId!);
@@ -307,71 +326,109 @@ export default function LibraryPage() {
     }
   }
 
-  if (loading) return <p className="text-sm text-slate-500">Loading...</p>;
+  if (loading) return <PageSkeleton rows={2} />;
+
+  const progressPct = pages.length > 0 ? Math.round((pagesSent / pages.length) * 100) : 0;
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-lg font-semibold text-slate-900">My books</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Upload photos, a PDF or a Word file of your child&apos;s or student&apos;s books, worksheets and past
-          papers. Syllabi reads every page so answers come from these books. Your books are private:
-          only you can see and search them. Reading pages uses part of your monthly token quota.
-        </p>
-      </div>
+      <PageHeader
+        title="My books"
+        description={
+          <>
+            Upload photos, a PDF or a Word file of your child&apos;s or student&apos;s books, worksheets and past
+            papers. Syllabi reads every page so answers come from these books. Your books are private: only you can
+            see and search them.
+          </>
+        }
+      />
 
-      <form onSubmit={submit} className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
-        {error && <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-        {success && <p role="status" className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</p>}
-
-        <div>
-          <label className="text-xs font-medium text-slate-500">Title</label>
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g. Science Class 8 — Chapter 3: Motion"
-            className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm"
-          />
+      <form onSubmit={submit} className={cx(card, "space-y-6 p-5 sm:p-6")}>
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+            <UploadIcon className="h-5 w-5" />
+          </span>
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">Add a book</h2>
+            <p className="text-xs text-slate-500">Reading pages uses part of your monthly allowance.</p>
+          </div>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-3">
-          <div>
-            <label className="text-xs font-medium text-slate-500">Subject</label>
+        {error && <Alert tone="error">{error}</Alert>}
+        {success && <Alert tone="success">{success}</Alert>}
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <Field label="Title" htmlFor="book-title">
+              <input
+                id="book-title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g. Science Class 8, Chapter 3: Motion"
+                maxLength={200}
+                className={input}
+              />
+            </Field>
+          </div>
+          <Field label="Subject" htmlFor="book-subject">
             <input
+              id="book-subject"
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
               placeholder="e.g. Science"
-              className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm"
+              maxLength={100}
+              className={input}
             />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-slate-500">Grade / class</label>
+          </Field>
+          <Field label="Grade / class" htmlFor="book-grade">
             <input
+              id="book-grade"
               value={grade}
               onChange={(e) => setGrade(e.target.value)}
               placeholder="e.g. Class 8"
-              className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm"
+              maxLength={50}
+              className={input}
             />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-slate-500">Default type for new pages</label>
-            <select
-              value={defaultSourceType}
-              onChange={(e) => setDefaultSourceType(e.target.value as SourceType)}
-              className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm"
-            >
-              {SOURCE_TYPE_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          </Field>
         </div>
 
-        <div>
-          <label className="text-xs font-medium text-slate-500">Pages</label>
-          <div className="mt-1 rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center">
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <p className={label}>Pages</p>
+            <label className="flex items-center gap-2 text-xs text-slate-500">
+              New pages are
+              <select
+                value={defaultSourceType}
+                onChange={(e) => setDefaultSourceType(e.target.value as SourceType)}
+                className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
+              >
+                {SOURCE_TYPE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <label
+            onDragOver={(e) => {
+              if (!e.dataTransfer.types.includes("Files")) return;
+              e.preventDefault();
+              setDragging(true);
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragging(false);
+              addFiles(e.dataTransfer.files);
+            }}
+            className={cx(
+              "flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-4 py-8 text-center transition",
+              dragging ? "border-brand-500 bg-brand-50" : "border-slate-300 bg-slate-50 hover:border-brand-300 hover:bg-brand-50/40",
+              (processingFiles || submitting) && "pointer-events-none opacity-60"
+            )}
+          >
             <input
               type="file"
               accept="image/*,application/pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -380,153 +437,215 @@ export default function LibraryPage() {
                 addFiles(e.target.files);
                 e.target.value = "";
               }}
-              disabled={processingFiles}
-              className="block w-full cursor-pointer text-sm text-slate-600 file:mr-4 file:cursor-pointer file:rounded-md file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-slate-700"
+              disabled={processingFiles || submitting}
+              className="sr-only"
             />
-            <p className="mt-2 text-xs text-slate-400">
-              Photos (JPG, PNG), PDF or Word (.docx) — up to {MAX_PAGES} pages total. Word files are read as text,
-              and their pictures are read too.
-            </p>
-            {processingFiles && <p className="mt-2 text-xs text-slate-500">Processing pages...</p>}
-          </div>
+            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-brand-600 shadow-xs ring-1 ring-slate-200">
+              {processingFiles ? <Spinner className="h-5 w-5" /> : <UploadIcon className="h-5 w-5" />}
+            </span>
+            <span className="mt-3 text-sm font-medium text-slate-900">
+              {processingFiles ? "Preparing pages..." : (
+                <>
+                  <span className="text-brand-700">Choose files</span>
+                  <span className="hidden sm:inline"> or drag them here</span>
+                </>
+              )}
+            </span>
+            <span className="mt-1 text-xs text-slate-500">
+              Photos, PDF or Word (.docx), up to {MAX_PAGES} pages. Word files are read as text, pictures included.
+            </span>
+          </label>
 
           {pages.length > 0 && (
-            <div className="mt-3">
-              <p className="text-xs text-slate-500">
-                {pages.length} page{pages.length > 1 ? "s" : ""} — set the type per page if a batch mixes
-                content (e.g. a chapter followed by its exercises); mixed types are uploaded as separate
-                documents automatically.
-              </p>
-              <ul className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-slate-500">
+                  <span className="font-medium text-slate-700">
+                    {pages.length} page{pages.length > 1 ? "s" : ""}
+                  </span>{" "}
+                  · set the type per page if a batch mixes content (e.g. a chapter followed by its exercises).
+                </p>
+                <button type="button" onClick={() => setPages([])} disabled={submitting} className={cx(link, "text-xs")}>
+                  Remove all
+                </button>
+              </div>
+              <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                 {pages.map((p, i) => (
-                  <li key={p.id} className="rounded-md border border-slate-200 bg-white p-2">
-                    <div className="relative">
-                      {p.text !== undefined ? (
-                        <p className="h-24 overflow-hidden whitespace-pre-line rounded bg-slate-50 p-1.5 text-[9px] leading-tight text-slate-600">
-                          {p.text.slice(0, 400)}
-                        </p>
-                      ) : (
-                        <>
-                          {/* eslint-disable-next-line @next/next/no-img-element -- local data-URI preview, not a remote image */}
-                          <img
-                            src={`data:${p.mimeType};base64,${p.imageBase64}`}
-                            alt={`Page ${i + 1}`}
-                            className="h-24 w-full rounded object-cover"
-                          />
-                        </>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => removePage(p.id)}
-                        aria-label={`Remove page ${i + 1}`}
-                        className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-slate-900/70 text-xs text-white hover:bg-slate-900"
-                      >
-                        ×
-                      </button>
-                    </div>
-                    <p className="mt-1 truncate text-[10px] text-slate-400" title={p.origin}>
-                      {p.origin}
-                    </p>
-                    <select
-                      value={p.sourceType}
-                      onChange={(e) => setPageSourceType(p.id, e.target.value as SourceType)}
-                      className="mt-1 block w-full rounded border border-slate-200 px-1 py-0.5 text-[11px]"
-                    >
-                      {SOURCE_TYPE_OPTIONS.map((o) => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </select>
-                  </li>
+                  <PageCard
+                    key={p.id}
+                    page={p}
+                    index={i}
+                    disabled={submitting}
+                    onRemove={removePage}
+                    onTypeChange={setPageSourceType}
+                  />
                 ))}
               </ul>
             </div>
           )}
         </div>
 
-        <label className="flex items-start gap-2 text-sm text-slate-600">
+        <label className="flex items-start gap-2.5 rounded-xl bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
           <input
             type="checkbox"
             checked={rightsConfirmed}
             onChange={(e) => setRightsConfirmed(e.target.checked)}
-            className="mt-1"
+            className="mt-0.5 h-4 w-4 shrink-0 accent-brand-600"
           />
           <span>
-            I own this copy (printed or digital) and will use it only to help my own child or
-            students study. I won&apos;t upload material I don&apos;t have the right to use.
+            I own this copy (printed or digital) and will use it only to help my own child or students study. I
+            won&apos;t upload material I don&apos;t have the right to use.
           </span>
         </label>
 
-        <div className="flex items-center gap-3">
-          <button
-            disabled={submitting || processingFiles}
-            className="min-h-11 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 sm:min-h-0"
-          >
-            {submitting ? "Uploading & indexing..." : "Upload & index"}
-          </button>
-          {uploadProgress && <p className="text-xs text-slate-500">{uploadProgress}</p>}
-        </div>
+        {submitting && (
+          <div className="space-y-1.5" role="status" aria-live="polite">
+            <div className="flex justify-between text-xs text-slate-600">
+              <span>{uploadProgress ?? "Uploading"}... keep this page open</span>
+              <span className="tabular-nums">
+                {pagesSent}/{pages.length}
+              </span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+              <div
+                className="h-full rounded-full bg-brand-600 transition-[width] duration-500"
+                style={{ width: `${Math.max(progressPct, 4)}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        <button disabled={submitting || processingFiles || pages.length === 0} className={cx(button.primary, "w-full sm:w-auto")}>
+          {submitting ? <Spinner /> : <UploadIcon className="h-4.5 w-4.5" />}
+          {submitting
+            ? "Reading pages..."
+            : pages.length
+              ? `Upload & read ${pages.length} page${pages.length === 1 ? "" : "s"}`
+              : "Upload & read"}
+        </button>
       </form>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
-            <tr>
-              <th className="px-4 py-2 font-medium">Title</th>
-              <th className="px-4 py-2 font-medium">Subject · Grade</th>
-              <th className="px-4 py-2 font-medium">Type</th>
-              <th className="px-4 py-2 font-medium">Status</th>
-              <th className="px-4 py-2 font-medium"></th>
-            </tr>
-          </thead>
-          <tbody>
+      <section className="space-y-3">
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-base font-semibold text-slate-900">Your books</h2>
+          {documents.length > 0 && <span className="text-xs text-slate-400">{documents.length} in total</span>}
+        </div>
+        {loadFailed ? (
+          <Alert tone="error">Couldn&apos;t load your books. Check your connection and reload the page.</Alert>
+        ) : documents.length === 0 ? (
+          <EmptyState
+            icon={<BookIcon className="h-6 w-6" />}
+            title="No books yet"
+            description="Add your first book above. Answers will then come from its pages."
+          />
+        ) : (
+          <ul className="grid gap-3 sm:grid-cols-2">
             {documents.map((d) => (
-              <tr key={d.id} className="border-b border-slate-100 last:border-0">
-                <td className="px-4 py-3 text-slate-900">
-                  <EditableName value={d.title} onSave={(title) => renameBook(d.id, title)} />
-                </td>
-                <td className="px-4 py-3 text-xs text-slate-500">
-                  {[d.subject, d.grade].filter(Boolean).join(" · ") || "—"}
-                </td>
-                <td className="px-4 py-3 text-xs text-slate-500">{d.source_type}</td>
-                <td className="px-4 py-3">
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                      d.status === "ready"
-                        ? "bg-emerald-50 text-emerald-700"
-                        : d.status === "failed"
-                          ? "bg-red-50 text-red-700"
-                          : "bg-amber-50 text-amber-700"
-                    }`}
-                  >
-                    {d.status}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <button onClick={() => deleteBook(d)} className="min-h-11 px-2 text-xs font-medium text-red-600 hover:underline sm:min-h-0">
-                    Delete
-                  </button>
-                </td>
-              </tr>
+              <li key={d.id} className={cx(card, "flex items-start gap-3 p-4")}>
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+                  <BookIcon className="h-5 w-5" />
+                </span>
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <EditableName
+                    value={d.title}
+                    onSave={(title) => renameBook(d.id, title)}
+                    className="text-sm font-medium text-slate-900"
+                  />
+                  <p className="truncate text-xs text-slate-500">
+                    {[d.subject, d.grade, SOURCE_TYPE_OPTIONS.find((o) => o.value === d.source_type)?.label ?? d.source_type]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                  <StatusBadge status={d.status} />
+                </div>
+                <button
+                  onClick={() => deleteBook(d)}
+                  className={button.iconDanger}
+                  aria-label={`Delete "${d.title}"`}
+                  title="Delete"
+                >
+                  <TrashIcon className="h-4.5 w-4.5" />
+                </button>
+              </li>
             ))}
-            {loadFailed && (
-              <tr>
-                <td colSpan={5} role="alert" className="px-4 py-6 text-center text-red-700">
-                  Couldn&apos;t load your books. Check your connection and reload the page.
-                </td>
-              </tr>
-            )}
-            {documents.length === 0 && !loadFailed && (
-              <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-slate-400">
-                  No books yet. Upload your first one above.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+          </ul>
+        )}
+      </section>
     </div>
   );
 }
+
+function StatusBadge({ status }: { status: DocumentRowView["status"] }) {
+  if (status === "ready") return <Badge tone="success">Ready</Badge>;
+  if (status === "failed") return <Badge tone="danger">Upload failed: delete and try again</Badge>;
+  return (
+    <Badge tone="warning">
+      <Spinner className="h-3 w-3" /> Reading pages
+    </Badge>
+  );
+}
+
+/** One page waiting to be uploaded. Memoised so typing a title doesn't redraw every page image. */
+const PageCard = memo(function PageCard({
+  page,
+  index,
+  disabled,
+  onRemove,
+  onTypeChange,
+}: {
+  page: PendingPage;
+  index: number;
+  disabled: boolean;
+  onRemove: (id: string) => void;
+  onTypeChange: (id: string, sourceType: SourceType) => void;
+}) {
+  return (
+    <li className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div className="relative">
+        {page.text !== undefined ? (
+          <p className="h-28 overflow-hidden bg-slate-50 p-2 text-[9px] leading-tight whitespace-pre-line text-slate-600">
+            {page.text.slice(0, 400)}
+          </p>
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element -- local data-URI preview, not a remote image
+          <img
+            src={`data:${page.mimeType};base64,${page.imageBase64}`}
+            alt={`Page ${index + 1}`}
+            decoding="async"
+            className="h-28 w-full bg-slate-100 object-cover"
+          />
+        )}
+        <span className="absolute bottom-1.5 left-1.5 rounded-md bg-slate-900/70 px-1.5 py-0.5 text-[10px] font-medium text-white">
+          {index + 1}
+        </span>
+        <button
+          type="button"
+          onClick={() => onRemove(page.id)}
+          disabled={disabled}
+          aria-label={`Remove page ${index + 1}`}
+          className="absolute top-1.5 right-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-slate-900/70 text-white hover:bg-slate-900"
+        >
+          <XIcon className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      <div className="space-y-1 p-2">
+        <p className="truncate text-[11px] text-slate-500" title={page.origin}>
+          {page.origin}
+        </p>
+        <select
+          value={page.sourceType}
+          onChange={(e) => onTypeChange(page.id, e.target.value as SourceType)}
+          disabled={disabled}
+          aria-label={`Type of page ${index + 1}`}
+          className="block w-full rounded-md border border-slate-200 bg-white px-1.5 py-1 text-xs"
+        >
+          {SOURCE_TYPE_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      </div>
+    </li>
+  );
+});

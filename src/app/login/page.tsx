@@ -1,6 +1,12 @@
+import Link from "next/link";
 import { signIn } from "@/lib/actions/auth";
+import { AuthShell } from "@/components/AuthShell";
 import { PasswordInput } from "@/components/PasswordInput";
+import { SubmitButton } from "@/components/SubmitButton";
+import { Alert, Field, input, link } from "@/components/ui";
 import { LOGIN_ERRORS, LOGIN_MESSAGES, pick, safeNext } from "@/lib/auth-messages";
+
+export const metadata = { title: "Sign in" };
 
 export default async function LoginPage({
   searchParams,
@@ -13,56 +19,36 @@ export default async function LoginPage({
   const next = safeNext(params.next);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
-      <div className="w-full max-w-sm space-y-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-900">Sign in to Syllabi</h1>
-          <p className="mt-1 text-sm text-slate-500">Access your study material and generated content.</p>
-        </div>
+    <AuthShell
+      title="Welcome back"
+      description="Sign in to your study material and saved answers."
+      footer={
+        <>
+          New to Syllabi?{" "}
+          <Link href="/signup" className={link}>
+            Create an account
+          </Link>
+        </>
+      }
+    >
+      {message && <Alert tone="success">{message}</Alert>}
+      {error && <Alert tone="error">{error}</Alert>}
 
-        {message && (
-          <p role="status" className="rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-700">{message}</p>
-        )}
-        {error && (
-          <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
-        )}
-
-        <form action={signIn} className="space-y-4">
-          <input type="hidden" name="next" value={next} />
-          <div>
-            <label className="block text-sm font-medium text-slate-700" htmlFor="email">
-              Email
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
-            />
-          </div>
+      <form action={signIn} className="space-y-4">
+        <input type="hidden" name="next" value={next} />
+        <Field label="Email" htmlFor="email">
+          <input id="email" name="email" type="email" autoComplete="email" inputMode="email" required className={input} />
+        </Field>
+        <div className="space-y-1.5">
           <PasswordInput name="password" label="Password" autoComplete="current-password" required />
           <p className="text-right text-xs">
-            <a href="/forgot-password" className="text-slate-500 underline hover:text-slate-900">
+            <Link href="/forgot-password" className={link}>
               Forgot password?
-            </a>
+            </Link>
           </p>
-          <button
-            type="submit"
-            className="w-full rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700"
-          >
-            Sign in
-          </button>
-        </form>
-
-        <p className="text-center text-sm text-slate-500">
-          No account?{" "}
-          <a href="/signup" className="font-medium text-slate-900 underline">
-            Sign up
-          </a>
-        </p>
-      </div>
-    </div>
+        </div>
+        <SubmitButton pendingLabel="Signing in...">Sign in</SubmitButton>
+      </form>
+    </AuthShell>
   );
 }

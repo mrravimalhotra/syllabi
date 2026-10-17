@@ -1,6 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Markdown } from "@/components/Markdown";
+import { CheckIcon, CopyIcon, DownloadIcon, PrinterIcon } from "@/components/icons";
+import { button, card, cx } from "@/components/ui";
 
 export interface AnswerSource {
   id: string;
@@ -22,58 +25,89 @@ export interface Answer {
 }
 
 /**
- * One answer with its sources, Print and PDF buttons: used right after
+ * One answer with its sources, Copy, Print and PDF buttons: used right after
  * generating and when reopening a saved answer. Only the answer prints.
  */
-export function AnswerView({ answer, actions }: { answer: Answer; actions?: React.ReactNode }) {
+export function AnswerView({ answer, actions, meta }: { answer: Answer; actions?: React.ReactNode; meta?: React.ReactNode }) {
   return (
-    <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 sm:p-5 print:border-0 print:p-0 print:shadow-none">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <h2 className="w-full text-base font-semibold text-slate-900 sm:w-auto sm:min-w-0 sm:flex-1">{answer.title}</h2>
+    <article className={cx(card, "animate-fade-in overflow-hidden print:border-0 print:shadow-none")}>
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-6 print:border-0 print:px-0">
+        <div className="min-w-0 flex-1 basis-60 space-y-1">
+          <h2 className="text-lg font-semibold tracking-tight text-slate-900 [overflow-wrap:anywhere]">{answer.title}</h2>
+          {meta && <div className="text-xs text-slate-500 print:hidden">{meta}</div>}
+        </div>
         <div className="flex shrink-0 flex-wrap gap-2 print:hidden">
           {actions}
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="inline-flex min-h-11 items-center rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 sm:min-h-0"
-          >
-            Print
+          <CopyButton text={answer.text} />
+          <button type="button" onClick={() => window.print()} className={button.small}>
+            <PrinterIcon className="h-4 w-4" /> Print
           </button>
           {answer.pdfUrl && (
-            <a
-              href={answer.pdfUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex min-h-11 items-center rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white sm:min-h-0"
-            >
-              Download PDF
+            <a href={answer.pdfUrl} target="_blank" rel="noreferrer" className={button.smallPrimary}>
+              <DownloadIcon className="h-4 w-4" /> PDF
             </a>
           )}
         </div>
+      </header>
+
+      <div className="space-y-4 px-4 py-5 sm:px-6 print:px-0">
+        {answer.usedSearchGrounding && (
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900 print:hidden">
+            Your books didn&apos;t fully cover this, so it was supplemented with a Google Search.
+          </p>
+        )}
+        {answer.usedSearchGrounding && (
+          <p className="hidden text-xs text-slate-500 print:block">Supplemented with a Google Search.</p>
+        )}
+        <Markdown text={answer.text} />
+        {answer.searchSuggestionsHtml && <SearchSuggestions html={answer.searchSuggestionsHtml} />}
+        <p className="text-xs text-slate-400">AI-generated. Check it before using it with your child or student.</p>
       </div>
-      {answer.usedSearchGrounding && (
-        <p className="text-xs text-slate-500">
-          Your books didn&apos;t fully cover this, so it was supplemented with a Google Search.
-        </p>
-      )}
-      <p className="text-xs text-slate-500">AI-generated. Check it before using it with your child or student.</p>
-      <Markdown text={answer.text} />
-      {answer.searchSuggestionsHtml && <SearchSuggestions html={answer.searchSuggestionsHtml} />}
+
       {answer.sources.length > 0 && (
-        <div className="border-t border-slate-100 pt-3">
-          <p className="text-xs font-medium text-slate-500">Sources from your books</p>
-          <ul className="mt-1 space-y-0.5 text-xs text-slate-500">
+        <footer className="border-t border-slate-100 bg-slate-50/60 px-4 py-4 sm:px-6 print:bg-white print:px-0">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sources from your books</p>
+          <ol className="mt-2 space-y-1 text-xs text-slate-600">
             {answer.sources.map((s, i) => (
-              <li key={s.id}>
-                [{i + 1}] {s.section_label ?? s.source_type}
-                {s.page_number ? `, p.${s.page_number}` : ""}
+              <li key={s.id} className="flex gap-2">
+                <span className="w-6 shrink-0 text-slate-400">[{i + 1}]</span>
+                <span>
+                  {s.section_label ?? s.source_type}
+                  {s.page_number ? `, p.${s.page_number}` : ""}
+                </span>
               </li>
             ))}
-          </ul>
+          </ol>
           <SourceImages sources={answer.sources} />
-        </div>
+        </footer>
       )}
-    </div>
+    </article>
+  );
+}
+
+/** Copies the answer's text (Markdown) so it can be pasted into a message or document. */
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 2000);
+    return () => clearTimeout(timer);
+  }, [copied]);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+    } catch {
+      // Clipboard can be blocked (e.g. an insecure page); nothing else to do.
+    }
+  }
+
+  return (
+    <button type="button" onClick={copy} className={button.small} aria-live="polite">
+      {copied ? <CheckIcon className="h-4 w-4 text-emerald-600" /> : <CopyIcon className="h-4 w-4" />}
+      {copied ? "Copied" : "Copy"}
+    </button>
   );
 }
 
@@ -86,7 +120,13 @@ function SourceImages({ sources }: { sources: AnswerSource[] }) {
       {uniqueUrls.map((url) => (
         <a key={url} href={url} target="_blank" rel="noreferrer">
           {/* eslint-disable-next-line @next/next/no-img-element -- short-lived signed URL, not worth Next/Image's remote-pattern config */}
-          <img src={url} alt="Referenced page" className="h-24 w-auto rounded-md border border-slate-200" />
+          <img
+            src={url}
+            alt="Referenced page"
+            loading="lazy"
+            decoding="async"
+            className="h-28 w-auto rounded-lg border border-slate-200 bg-white transition hover:shadow-md"
+          />
         </a>
       ))}
     </div>
@@ -101,7 +141,7 @@ function SourceImages({ sources }: { sources: AnswerSource[] }) {
  */
 function SearchSuggestions({ html }: { html: string }) {
   return (
-    <div className="print:hidden">
+    <div className="overflow-hidden rounded-xl border border-slate-100 print:hidden">
       <iframe
         title="Google Search suggestions"
         sandbox="allow-popups allow-popups-to-escape-sandbox"

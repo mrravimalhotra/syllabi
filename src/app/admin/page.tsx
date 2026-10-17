@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { PageHeader, card, cx } from "@/components/ui";
 
 export default async function AdminOverviewPage() {
   const admin = createAdminClient();
@@ -12,27 +14,32 @@ export default async function AdminOverviewPage() {
 
   const cards = [
     { label: "Active accounts", value: activeCount ?? 0 },
-    { label: "Pending approval", value: pendingCount ?? 0 },
+    { label: "Pending approval", value: pendingCount ?? 0, highlight: (pendingCount ?? 0) > 0 },
     { label: "Total accounts", value: studentCount ?? 0 },
     { label: "Books (all accounts)", value: documentCount ?? 0 },
   ];
 
   return (
     <div className="space-y-6">
-      <h1 className="text-lg font-semibold text-slate-900">Overview</h1>
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <PageHeader title="Overview" description="Accounts and books across Syllabi." />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
         {cards.map((c) => (
-          <div key={c.label} className="rounded-xl border border-slate-200 bg-white p-5">
-            <p className="text-2xl font-semibold text-slate-900">{c.value}</p>
+          <div key={c.label} className={cx("rounded-2xl border p-5 shadow-xs", c.highlight ? "border-amber-300 bg-amber-50" : "border-slate-200 bg-white")}>
+            <p className="text-3xl font-semibold tracking-tight text-slate-900 tabular-nums">{c.value}</p>
             <p className="mt-1 text-sm text-slate-500">{c.label}</p>
           </div>
         ))}
       </div>
-      <p className="text-sm text-slate-500">
-        Use the nav above to grant student access, manage the school/grade/subject taxonomy,
-        upload source material into the RAG knowledge base, and configure which LLM provider
-        serves each task type.
-      </p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Link href="/admin/students" className={cx(card, "group p-5 transition hover:border-brand-300")}>
+          <p className="font-medium text-slate-900">Accounts</p>
+          <p className="mt-1 text-sm text-slate-500">Grant or revoke access, set roles and monthly limits.</p>
+        </Link>
+        <Link href="/admin/llm-settings" className={cx(card, "group p-5 transition hover:border-brand-300")}>
+          <p className="font-medium text-slate-900">AI models</p>
+          <p className="mt-1 text-sm text-slate-500">Choose which provider and model handles each task.</p>
+        </Link>
+      </div>
     </div>
   );
 }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { EditableName } from "@/components/EditableName";
+import { Alert, Field, Meter, PageHeader, PageSkeleton, Spinner, button, card, cx, input } from "@/components/ui";
 import type { Student } from "@/types/database";
 
 interface Me {
@@ -59,75 +60,81 @@ export default function AccountPage() {
   }
 
   if (!me) {
-    return error ? (
-      <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-        {error}
-      </p>
-    ) : (
-      <p className="text-sm text-slate-500">Loading...</p>
-    );
+    return error ? <Alert tone="error">{error}</Alert> : <PageSkeleton rows={2} />;
   }
 
   const { student, quota } = me;
   return (
     <div className="space-y-6">
-      <h1 className="text-lg font-semibold text-slate-900">Account</h1>
+      <PageHeader title="Account" description="Your details, usage and password." />
 
-      <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 text-sm sm:p-5">
-        <div>
-          <p className="text-xs font-medium text-slate-500">Name</p>
+      <section className={cx(card, "divide-y divide-slate-100")}>
+        <Row label="Name">
           <EditableName value={student.full_name ?? "Add your name"} onSave={rename} className="text-slate-900" />
-        </div>
-        <div>
-          <p className="text-xs font-medium text-slate-500">Email</p>
-          <p className="text-slate-900">{student.email}</p>
-        </div>
+        </Row>
+        <Row label="Email">
+          <span className="break-all text-slate-900">{student.email}</span>
+        </Row>
         {student.account_type && (
-          <div>
-            <p className="text-xs font-medium text-slate-500">Account type</p>
-            <p className="capitalize text-slate-900">{student.account_type}</p>
-          </div>
+          <Row label="Account type">
+            <span className="text-slate-900 capitalize">{student.account_type}</span>
+          </Row>
         )}
-        <div>
-          <p className="text-xs font-medium text-slate-500">This month&apos;s usage</p>
-          <p className="text-slate-900">
-            {quota.used.toLocaleString()} of {quota.quota.toLocaleString()} tokens
-          </p>
-        </div>
-        <Link href="/reset-password" className="inline-block text-sm font-medium text-slate-900 underline">
-          Change password
-        </Link>
+        <Row label="This month">
+          <div className="w-full max-w-xs space-y-1.5">
+            <Meter value={quota.used} max={quota.quota} label="Monthly usage" />
+            <p className="text-xs text-slate-500 tabular-nums">
+              {quota.used.toLocaleString("en-IN")} of {quota.quota.toLocaleString("en-IN")} tokens. Resets on the 1st.
+            </p>
+          </div>
+        </Row>
+        <Row label="Password">
+          <Link href="/reset-password" className={button.secondary}>
+            Change password
+          </Link>
+        </Row>
       </section>
 
-      <section className="space-y-3 rounded-xl border border-red-200 bg-white p-4 text-sm sm:p-5">
-        <h2 className="font-semibold text-red-700">Delete my account</h2>
-        <p className="text-slate-600">
-          This permanently deletes your account, your books and their page images, and every saved answer. It can&apos;t
-          be undone.
-        </p>
-        {error && (
-          <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-            {error}
+      <section className="space-y-4 rounded-2xl border border-red-200 bg-white p-5 shadow-xs sm:p-6">
+        <div className="space-y-1">
+          <h2 className="text-base font-semibold text-red-700">Delete my account</h2>
+          <p className="text-sm text-slate-600">
+            This permanently deletes your account, your books and their page images, and every saved answer. It
+            can&apos;t be undone.
           </p>
-        )}
-        <label className="block text-slate-700">
-          Type <strong>DELETE</strong> to confirm
-          <input
-            value={confirmText}
-            onChange={(e) => setConfirmText(e.target.value)}
-            className="mt-1 block w-full max-w-xs rounded-md border border-slate-300 px-3 py-1.5 text-sm"
-            autoComplete="off"
-          />
-        </label>
-        <button
-          type="button"
-          onClick={deleteAccount}
-          disabled={confirmText !== "DELETE" || deleting}
-          className="min-h-11 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-40 sm:min-h-0"
-        >
-          {deleting ? "Deleting..." : "Delete my account"}
-        </button>
+        </div>
+        {error && <Alert tone="error">{error}</Alert>}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <Field label="Type DELETE to confirm" htmlFor="confirm-delete">
+            <input
+              id="confirm-delete"
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              className={cx(input, "sm:w-56")}
+              autoComplete="off"
+              autoCapitalize="characters"
+            />
+          </Field>
+          <button
+            type="button"
+            onClick={deleteAccount}
+            disabled={confirmText !== "DELETE" || deleting}
+            className={button.danger}
+          >
+            {deleting && <Spinner />}
+            {deleting ? "Deleting..." : "Delete my account"}
+          </button>
+        </div>
       </section>
+    </div>
+  );
+}
+
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1.5 px-5 py-4 text-sm sm:flex-row sm:items-center sm:gap-6 sm:px-6">
+      <p className="w-36 shrink-0 text-xs font-medium tracking-wide text-slate-500 uppercase">{label}</p>
+      <div className="flex min-w-0 flex-1 items-center">{children}</div>
     </div>
   );
 }
