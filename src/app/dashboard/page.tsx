@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { downscaleImageFile, type DownscaledImage } from "@/lib/downscale-image";
-import { Markdown } from "@/components/Markdown";
+import { AnswerView, type Answer } from "@/components/AnswerView";
 import type { GenerationTaskType, Student } from "@/types/database";
 
 // Attachments to a question: up to this many images (photos, PDF pages, Word
@@ -25,19 +25,7 @@ interface Book {
   status: "processing" | "ready" | "failed";
 }
 
-interface GenerationResult {
-  title: string;
-  text: string;
-  usedSearchGrounding: boolean;
-  downloadUrl: string;
-  sources: {
-    id: string;
-    section_label: string | null;
-    source_type: string;
-    page_number: number | null;
-    imageUrl?: string;
-  }[];
-}
+type GenerationResult = Answer & { id: string | null };
 
 const TABS: { value: GenerationTaskType; label: string; placeholder: string }[] = [
   { value: "solution", label: "Step-by-step solution", placeholder: "Paste the question you need solved..." },
@@ -320,71 +308,30 @@ export default function DashboardPage() {
         >
           {loading ? "Generating..." : "Generate"}
         </button>
+        {loading && (
+          <p role="status" className="text-xs text-slate-500">
+            Reading your books and writing the answer. A whole worksheet or paper can take a minute or two; keep this
+            page open.
+          </p>
+        )}
       </form>
 
       {error && <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 print:hidden">{error}</p>}
 
       {result && (
-        <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 sm:p-5 print:border-0 print:p-0 print:shadow-none">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <h2 className="w-full text-base font-semibold text-slate-900 sm:w-auto sm:min-w-0 sm:flex-1">{result.title}</h2>
-            <div className="flex shrink-0 gap-2 print:hidden">
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="inline-flex min-h-11 items-center rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 sm:min-h-0"
-              >
-                Print
-              </button>
-              <a
-                href={result.downloadUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex min-h-11 items-center rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white sm:min-h-0"
-              >
-                Download PDF
-              </a>
-            </div>
-          </div>
-          {result.usedSearchGrounding && (
-            <p className="text-xs text-slate-500">
-              The knowledge base didn&apos;t fully cover this — supplemented with a web search.
+        <>
+          <AnswerView answer={result} />
+          {result.id && (
+            <p className="text-xs text-slate-500 print:hidden">
+              Saved in{" "}
+              <Link href={`/dashboard/documents/${result.id}`} className="underline">
+                My Documents
+              </Link>
+              .
             </p>
           )}
-          <p className="text-xs text-slate-500">
-            AI-generated. Check it before using it with your child or student.
-          </p>
-          <Markdown text={result.text} />
-          {result.sources.length > 0 && (
-            <div className="border-t border-slate-100 pt-3">
-              <p className="text-xs font-medium text-slate-500">Sources</p>
-              <ul className="mt-1 space-y-0.5 text-xs text-slate-500">
-                {result.sources.map((s, i) => (
-                  <li key={s.id}>
-                    [{i + 1}] {s.section_label ?? s.source_type}
-                    {s.page_number ? `, p.${s.page_number}` : ""}
-                  </li>
-                ))}
-              </ul>
-              <SourceImages sources={result.sources} />
-            </div>
-          )}
-        </div>
+        </>
       )}
-    </div>
-  );
-}
-
-function SourceImages({ sources }: { sources: GenerationResult["sources"] }) {
-  const uniqueUrls = [...new Set(sources.map((s) => s.imageUrl).filter((u): u is string => Boolean(u)))];
-  if (uniqueUrls.length === 0) return null;
-
-  return (
-    <div className="mt-3 flex flex-wrap gap-3">
-      {uniqueUrls.map((url) => (
-        // eslint-disable-next-line @next/next/no-img-element -- short-lived signed URL, not worth Next/Image's remote-pattern config
-        <img key={url} src={url} alt="Referenced page" className="h-24 w-auto rounded-md border border-slate-200" />
-      ))}
     </div>
   );
 }

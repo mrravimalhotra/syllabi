@@ -76,7 +76,11 @@ const styles = StyleSheet.create({
 
 /** Renders one line of text with **bold** spans; other inline markdown (`code`, *italic*) is shown as plain text. */
 function InlineText({ text }: { text: string }) {
-  const clean = tidyMath(text).replace(/`([^`]+)`/g, "$1").replace(/(^|[^*])\*([^*\s][^*]*)\*/g, "$1$2");
+  const clean = tidyMath(text)
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/(^|[^*])\*([^*\s][^*]*)\*/g, "$1$2")
+    // [text](https://...) prints as "text (https://...)"
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, "$1 ($2)");
   const parts = clean.split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
   return (
     <Text>
@@ -211,6 +215,8 @@ export interface RenderPdfInput {
   sources: MatchedChunk[];
   /** Source image_path → loaded image, so diagrams/maps a source cites get embedded, not just referenced by name. */
   sourceImages: Map<string, CompletionImage>;
+  /** The answer used Google Search; the PDF says so. */
+  usedSearchGrounding?: boolean;
 }
 
 export async function renderGenerationPdf(input: RenderPdfInput): Promise<Buffer> {
@@ -223,6 +229,12 @@ export async function renderGenerationPdf(input: RenderPdfInput): Promise<Buffer
         </Text>
 
         <ContentBody text={input.content} />
+
+        {input.usedSearchGrounding && (
+          <Text style={styles.source}>
+            Parts of this answer used Google Search because the uploaded books didn&apos;t fully cover it.
+          </Text>
+        )}
 
         {input.sources.length > 0 && (
           <>

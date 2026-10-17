@@ -32,6 +32,14 @@ begin
     coalesce('error: ' || err, 'rows: ' || n));
 end $$;
 
+-- Saved answers no longer need a stored PDF (generated on demand).
+create function pg_temp.check_answer_row() returns void language plpgsql as $$
+begin
+  perform pg_temp.check('answer saved without a stored PDF', 'service_role', null,
+    format('insert into generated_documents (student_id, task_type, title, content, sources) values (%L, %L, %L, %L, %L::jsonb)',
+           '00000000-0000-0000-0000-0000000000b1', 'solution', 'Q', '# Answer', '[]'), '1');
+end $$;
+
 -- Seed (as table owner): two parents/tutors, one admin, one book each.
 insert into auth.users values
   ('00000000-0000-0000-0000-00000000000a', 'admin@example.com'),
@@ -46,6 +54,9 @@ insert into students (id, email, role, active) values
 insert into documents (id, title, owner_id, source_type, status) values
   ('00000000-0000-0000-0000-0000000000d1', 'Parent 1 book', '00000000-0000-0000-0000-0000000000b1', 'textbook', 'ready'),
   ('00000000-0000-0000-0000-0000000000d2', 'Parent 2 book', '00000000-0000-0000-0000-0000000000b2', 'textbook', 'ready');
+-- Parent 1 also has an upload that stopped midway: it must never be searched.
+insert into documents (id, title, owner_id, source_type, status) values
+  ('00000000-0000-0000-0000-0000000000d3', 'Parent 1 unfinished upload', '00000000-0000-0000-0000-0000000000b1', 'textbook', 'processing');
 insert into chunks (document_id, owner_id, source_type, content, embedding)
 select d.id, d.owner_id, 'textbook', 'chunk of ' || d.title, array_fill(0.1::real, array[768])::vector
 from documents d;
@@ -95,8 +106,18 @@ begin
   perform pg_temp.check('search ignores other owners'' book ids', 'service_role', null,
     format('select * from match_owner_chunks(%s, %L, array[%L]::uuid[])', vec, p1,
            '00000000-0000-0000-0000-0000000000d2'), '0');
+  perform pg_temp.check('search skips unfinished uploads even when asked for them', 'service_role', null,
+    format('select * from match_owner_chunks(%s, %L, array[%L]::uuid[])', vec, p1,
+           '00000000-0000-0000-0000-0000000000d3'), '0');
   perform pg_temp.check('server reads monthly usage', 'service_role', null,
     format('select 1 where student_monthly_usage(%L) = 15', p1), '1');
+  perform pg_temp.check('server reads everyone''s monthly usage in one query', 'service_role', null,
+    format('select 1 from monthly_usage_all() where student_id = %L and used = 15', p1), '1');
+  perform pg_temp.check('user cannot call monthly_usage_all', 'authenticated', p1,
+    'select * from monthly_usage_all()', 'error');
+  perform pg_temp.check('anon cannot call monthly_usage_all', 'anon', null,
+    'select * from monthly_usage_all()', 'error');
+  perform pg_temp.check_answer_row();
 
   -- At least one active admin always remains.
   perform pg_temp.check('cannot demote the last admin', 'service_role', null,

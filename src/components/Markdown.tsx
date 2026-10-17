@@ -13,6 +13,12 @@ const COMPONENTS: Components = {
   ol: ({ children }) => <ol className="mb-2 ml-5 list-decimal space-y-1">{children}</ol>,
   strong: ({ children }) => <strong className="font-semibold text-slate-900">{children}</strong>,
   hr: () => <hr className="my-3 border-slate-200" />,
+  // Links open in a new tab so the answer isn't lost.
+  a: ({ href, children }) => (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="text-slate-900 underline">
+      {children}
+    </a>
+  ),
   // Inline `code` gets a light chip; inside a code block the <pre> styles it.
   code: ({ children }) => (
     <code className="rounded bg-slate-100 px-1 font-mono text-[0.9em] [pre_&]:bg-transparent [pre_&]:p-0">

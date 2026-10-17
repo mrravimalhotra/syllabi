@@ -34,7 +34,7 @@ const nextConfig: NextConfig = {
   // The PDF renderer reads its embedded fonts from disk at runtime; make sure
   // they ship with the routes that render PDFs.
   outputFileTracingIncludes: {
-    "/api/generate/*": ["src/lib/pdf/fonts/**/*"],
+    "/api/documents/**": ["src/lib/pdf/fonts/**/*"],
   },
   async headers() {
     return [{ source: "/:path*", headers: SECURITY_HEADERS }];

@@ -116,11 +116,27 @@ export interface TokenUsageRow {
   created_at: string;
 }
 
+/** A source passage an answer used, as saved with the answer. */
+export interface SavedSource {
+  id: string;
+  document_id: string;
+  section_label: string | null;
+  page_number: number | null;
+  source_type: string;
+  image_path: string | null;
+  similarity: number;
+}
+
 export interface GeneratedDocumentRow {
   id: string;
   student_id: string;
   task_type: GenerationTaskType;
   title: string;
-  storage_path: string;
+  /** Older answers were stored as PDFs; newer ones keep their text and make the PDF on demand. */
+  storage_path: string | null;
+  content: string | null;
+  sources: SavedSource[];
+  used_search_grounding: boolean;
+  search_suggestions_html: string | null;
   created_at: string;
 }

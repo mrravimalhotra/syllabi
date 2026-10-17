@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { getCurrentStudent } from "@/lib/auth";
 import { runGeneration } from "@/lib/generation/pipeline";
-import { renderGenerationPdf } from "@/lib/pdf/render";
-import { uploadPdf, getSignedUrl } from "@/lib/storage";
+import { withImageUrls } from "@/lib/generation/sources";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { QuotaExceededError } from "@/lib/quota";
 import type { CompletionImage } from "@/lib/llm/types";
-import type { GenerationTaskType } from "@/types/database";
+import type { GenerationTaskType, SavedSource } from "@/types/database";
 import { userMessage } from "@/lib/errors";
+import { isUuid } from "@/lib/validate";
 
 const MAX_PHOTOS = 12;
 // Text of attached Word files, sent with the question.
@@ -15,20 +15,21 @@ const MAX_ATTACHED_TEXT_CHARS = 20_000;
 // Base64 characters per request across all photos — keeps the body well under
 // Vercel's ~4.5 MB request limit. The browser downscales photos before sending.
 const MAX_PHOTO_BASE64_CHARS = 3_000_000;
+const MAX_PROMPT_CHARS = 8_000;
 const PHOTO_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 const DEFAULT_PHOTO_PROMPT: Record<GenerationTaskType, string> = {
   solution: "Solve the question(s) in the attached photo or file step by step.",
-  notes: "Make revision notes on the topic shown in the attached photo.",
-  sample_paper: "Make a sample paper on the topic shown in the attached photo.",
-  ad_hoc: "Explain what is shown in the attached photo.",
+  notes: "Make revision notes on the topic shown in the attached photo or file.",
+  sample_paper: "Make a sample paper on the topic shown in the attached photo or file.",
+  ad_hoc: "Explain what is shown in the attached photo or file.",
 };
 
 /** Validates the optional `photos` field; returns the photos or an error message. */
 function parsePhotos(raw: unknown): CompletionImage[] | string {
   if (raw === undefined || raw === null) return [];
   if (!Array.isArray(raw)) return "photos must be a list";
-  if (raw.length > MAX_PHOTOS) return `Attach at most ${MAX_PHOTOS} photos`;
+  if (raw.length > MAX_PHOTOS) return `Attach at most ${MAX_PHOTOS} photos or pages`;
 
   let totalChars = 0;
   const photos: CompletionImage[] = [];
@@ -43,16 +44,27 @@ function parsePhotos(raw: unknown): CompletionImage[] | string {
   return photos;
 }
 
-/** Builds a POST handler for one of the four generation routes — same pipeline, different task type. */
+/** A short one-line title for the saved answer. */
+function titleFor(typedPrompt: string, hasAttachedText: boolean): string {
+  if (!typedPrompt) return hasAttachedText ? "Attached worksheet" : "Photo question";
+  const oneLine = typedPrompt.replace(/\s+/g, " ");
+  return oneLine.length > 80 ? `${oneLine.slice(0, 77)}...` : oneLine;
+}
+
+/**
+ * Builds a POST handler for one of the four generation routes — same pipeline,
+ * different task type. Routes export `maxDuration` too: a whole worksheet can
+ * take well over a minute.
+ */
 export function createGenerationRoute(taskType: GenerationTaskType) {
   return async function POST(request: Request) {
     const student = await getCurrentStudent();
     if (!student || !student.active) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: "Your session has ended. Please sign in again." }, { status: 401 });
     }
 
     const body = await request.json().catch(() => null);
-    const typedPrompt = typeof body?.prompt === "string" ? body.prompt.trim() : "";
+    const typedPrompt = typeof body?.prompt === "string" ? body.prompt.trim().slice(0, MAX_PROMPT_CHARS) : "";
 
     const photos = parsePhotos(body?.photos);
     if (typeof photos === "string") {
@@ -70,60 +82,53 @@ export function createGenerationRoute(taskType: GenerationTaskType) {
 
     // Optional: which of the user's own books to search. Retrieval is always
     // limited to the caller's library, so ids of other users' books match nothing.
-    const documentIds = Array.isArray(body?.documentIds)
-      ? body.documentIds.filter((id: unknown): id is string => typeof id === "string")
-      : undefined;
+    const documentIds = Array.isArray(body?.documentIds) ? body.documentIds.filter(isUuid).slice(0, 200) : undefined;
 
     try {
       const result = await runGeneration({ student, taskType, prompt, documentIds, photos });
+      const title = titleFor(typedPrompt, Boolean(attachedText));
 
-      const oneLine = typedPrompt.replace(/\s+/g, " ");
-      const title = !typedPrompt
-        ? attachedText
-          ? "Attached worksheet"
-          : "Photo question"
-        : oneLine.length > 80
-          ? `${oneLine.slice(0, 77)}...`
-          : oneLine;
-      const pdfBuffer = await renderGenerationPdf({
-        taskType,
-        title,
-        studentName: student.full_name ?? student.email,
-        content: result.text,
-        sources: result.sources,
-        sourceImages: result.sourceImages,
-      });
-
-      const path = `generated/${student.id}/${taskType}-${Date.now()}.pdf`;
-      await uploadPdf(path, pdfBuffer);
-
+      // Save the answer itself (not a PDF): it can be reopened, printed, and
+      // turned into a PDF on demand, and a PDF problem can never lose it.
+      const savedSources: SavedSource[] = result.sources.map((s) => ({
+        id: s.id,
+        document_id: s.document_id,
+        section_label: s.section_label,
+        page_number: s.page_number,
+        source_type: s.source_type,
+        image_path: s.image_path,
+        similarity: s.similarity,
+      }));
       const admin = createAdminClient();
       const { data: doc, error } = await admin
         .from("generated_documents")
-        .insert({ student_id: student.id, task_type: taskType, title, storage_path: path })
-        .select()
+        .insert({
+          student_id: student.id,
+          task_type: taskType,
+          title,
+          content: result.text,
+          sources: savedSources,
+          used_search_grounding: result.usedSearchGrounding,
+          search_suggestions_html: result.searchSuggestionsHtml ?? null,
+        })
+        .select("id")
         .single();
-      if (error) throw new Error(`Failed to save document record: ${error.message}`);
-
-      const downloadUrl = await getSignedUrl(path);
+      // The answer is still shown even if saving it failed.
+      if (error) console.error("[generate] saving answer", error);
 
       // Give the on-screen result the same source images the PDF embeds, so a
-      // diagram/map is visible before the student even downloads the PDF.
-      const imagePaths = [...new Set(result.sources.map((s) => s.image_path).filter((p): p is string => Boolean(p)))];
-      const imageUrlEntries = await Promise.all(imagePaths.map(async (p) => [p, await getSignedUrl(p)] as const));
-      const imageUrlByPath = new Map(imageUrlEntries);
-      const sources = result.sources.map((s) => ({
-        ...s,
-        imageUrl: s.image_path ? imageUrlByPath.get(s.image_path) : undefined,
-      }));
+      // diagram/map is visible before the PDF is even opened.
+      const sources = await withImageUrls(savedSources);
 
       return NextResponse.json({
-        id: doc.id,
+        id: doc?.id ?? null,
         title,
         text: result.text,
         sources,
         usedSearchGrounding: result.usedSearchGrounding,
-        downloadUrl,
+        searchSuggestionsHtml: result.searchSuggestionsHtml ?? null,
+        // Made on demand from the saved answer (null if saving failed).
+        pdfUrl: doc ? `/api/documents/${doc.id}/pdf` : null,
       });
     } catch (err) {
       if (err instanceof QuotaExceededError) {

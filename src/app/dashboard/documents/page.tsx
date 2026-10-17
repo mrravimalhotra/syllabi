@@ -1,20 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
-import { formatDate } from "@/lib/format";
+import { TASK_LABELS, formatDate } from "@/lib/format";
 import type { GeneratedDocumentRow } from "@/types/database";
 
-const TASK_LABELS: Record<string, string> = {
-  solution: "Step-by-step solution",
-  notes: "Revision notes",
-  sample_paper: "Sample paper",
-  ad_hoc: "Ask anything",
-};
+type Row = Pick<GeneratedDocumentRow, "id" | "title" | "task_type" | "created_at">;
 
 export default function MyDocumentsPage() {
-  const [documents, setDocuments] = useState<GeneratedDocumentRow[]>([]);
+  const [documents, setDocuments] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -28,75 +23,66 @@ export default function MyDocumentsPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  async function download(id: string) {
+  async function remove(doc: Row) {
+    if (!window.confirm(`Delete "${doc.title}"? This can't be undone.`)) return;
     setError(null);
-    // Open the tab now, while we still have the tap: phones block pop-ups
-    // opened after waiting for the server. Point it at the PDF once we have it.
-    const tab = window.open("", "_blank");
-    setDownloadingId(id);
-    try {
-      const res = await fetch(`/api/documents/${id}/download`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      if (tab) tab.location.href = data.url;
-      else window.location.assign(data.url);
-    } catch {
-      tab?.close();
-      setError("Couldn't open that document. Please try again.");
-    } finally {
-      setDownloadingId(null);
+    const res = await fetch(`/api/documents/${doc.id}`, { method: "DELETE" });
+    if (!res.ok) {
+      setError("Couldn't delete that answer. Please try again.");
+      return;
     }
+    setDocuments((prev) => prev.filter((d) => d.id !== doc.id));
   }
 
   if (loading) return <p className="text-sm text-slate-500">Loading...</p>;
 
   return (
     <div className="space-y-4">
-      <h1 className="text-lg font-semibold text-slate-900">My Documents</h1>
+      <div>
+        <h1 className="text-lg font-semibold text-slate-900">My Documents</h1>
+        <p className="mt-1 text-sm text-slate-500">Every answer you generate is saved here. Open one to read, print or download it.</p>
+      </div>
       {error && (
         <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
         </p>
       )}
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
-            <tr>
-              <th className="px-4 py-2 font-medium">Title</th>
-              <th className="px-4 py-2 font-medium">Type</th>
-              <th className="px-4 py-2 font-medium">Created</th>
-              <th className="px-4 py-2 font-medium"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {documents.map((d) => (
-              <tr key={d.id} className="border-b border-slate-100 last:border-0">
-                <td className="px-4 py-3 text-slate-900">{d.title}</td>
-                <td className="px-4 py-3 text-xs text-slate-500">{TASK_LABELS[d.task_type]}</td>
-                <td className="px-4 py-3 text-xs text-slate-500">
-                  {formatDate(d.created_at)}
-                </td>
-                <td className="px-4 py-3">
-                  <button
-                    onClick={() => download(d.id)}
-                    disabled={downloadingId === d.id}
-                    className="min-h-11 rounded-md bg-slate-900 px-3 py-1 text-xs font-medium text-white disabled:opacity-50 sm:min-h-0"
-                  >
-                    {downloadingId === d.id ? "Opening..." : "Download"}
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {documents.length === 0 && !error && (
-              <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-slate-400">
-                  No documents generated yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
+        {documents.map((d) => (
+          <li key={d.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+            <div className="min-w-0 flex-1">
+              <Link href={`/dashboard/documents/${d.id}`} className="block truncate text-sm font-medium text-slate-900 hover:underline">
+                {d.title}
+              </Link>
+              <p className="text-xs text-slate-500">
+                {TASK_LABELS[d.task_type] ?? d.task_type} · {formatDate(d.created_at)}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <a
+                href={`/api/documents/${d.id}/pdf`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex min-h-11 items-center rounded-md bg-slate-900 px-3 py-1 text-xs font-medium text-white sm:min-h-0"
+              >
+                PDF
+              </a>
+              <button
+                type="button"
+                onClick={() => remove(d)}
+                className="min-h-11 px-2 text-xs font-medium text-red-600 hover:underline sm:min-h-0"
+              >
+                Delete
+              </button>
+            </div>
+          </li>
+        ))}
+        {documents.length === 0 && !error && (
+          <li className="px-4 py-6 text-center text-sm text-slate-400">
+            No answers yet. Generate one and it will be saved here.
+          </li>
+        )}
+      </ul>
     </div>
   );
 }
