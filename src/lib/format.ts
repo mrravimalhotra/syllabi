@@ -16,4 +16,5 @@ export const TASK_LABELS: Record<string, string> = {
   notes: "Revision notes",
   sample_paper: "Sample paper",
   ad_hoc: "Ask anything",
+  study_pack: "Study pack",
 };

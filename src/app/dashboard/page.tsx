@@ -4,6 +4,8 @@ import Link from "next/link";
 import { memo, useEffect, useRef, useState } from "react";
 import { downscaleImageFile, imageFingerprint, type DownscaledImage } from "@/lib/downscale-image";
 import { AnswerView, type Answer } from "@/components/AnswerView";
+import { StudyPackView } from "@/components/study-pack/StudyPackView";
+import type { StudyPack } from "@/lib/study-pack/types";
 import {
   ArrowRightIcon,
   BookIcon,
@@ -11,13 +13,14 @@ import {
   CheckIcon,
   ClipboardIcon,
   DocumentIcon,
+  LayersIcon,
   ListCheckIcon,
   NotesIcon,
   PaperclipIcon,
   SparklesIcon,
   XIcon,
 } from "@/components/icons";
-import { Alert, Meter, Skeleton, Spinner, button, card, cx, link } from "@/components/ui";
+import { Alert, Meter, Skeleton, Spinner, button, card, cx, input, link } from "@/components/ui";
 import type { GenerationTaskType, Student } from "@/types/database";
 
 // Attachments to a question: up to this many images (photos, PDF pages, Word
@@ -41,7 +44,7 @@ interface Book {
   status: "processing" | "ready" | "failed";
 }
 
-type GenerationResult = Answer & { id: string | null };
+type GenerationResult = Answer & { id: string | null; pack?: StudyPack };
 
 const TABS: {
   value: GenerationTaskType;
@@ -83,6 +86,14 @@ const TABS: {
     placeholder: "Ask any study-related question...",
     examples: ["Ideas for a Class 6 science project on plants", "How should we plan revision for next week's test?"],
   },
+  {
+    value: "study_pack",
+    label: "Study pack",
+    description: "A whole chapter",
+    icon: LayersIcon,
+    placeholder: "Optional: anything to focus on, e.g. \"explain it for Class 6\" or \"extra practice on dates\"",
+    examples: [],
+  },
 ];
 
 const ROUTE_BY_TASK: Record<GenerationTaskType, string> = {
@@ -90,10 +101,18 @@ const ROUTE_BY_TASK: Record<GenerationTaskType, string> = {
   notes: "/api/generate/notes",
   sample_paper: "/api/generate/sample-paper",
   ad_hoc: "/api/generate/ad-hoc",
+  study_pack: "/api/generate/study-pack",
 };
 
 // What the person sees while waiting; the steps move on with time, since the
 // server answers in one go.
+const PACK_WAIT_STEPS = [
+  { after: 0, text: "Reading the chapter" },
+  { after: 6, text: "Writing the walkthrough, answers and practice test" },
+  { after: 50, text: "Checking every quote against the book" },
+  { after: 90, text: "Still working: a long chapter can take two or three minutes" },
+];
+
 const WAIT_STEPS = [
   { after: 0, text: "Reading your question and attachments" },
   { after: 4, text: "Finding the right pages in your books" },
@@ -125,6 +144,8 @@ export default function DashboardPage() {
   const [booksLoaded, setBooksLoaded] = useState(false);
   const [booksError, setBooksError] = useState(false);
   const [showBooks, setShowBooks] = useState(false);
+  // Study packs: the chapter (a book from My books); "" means use attached pages.
+  const [packBookId, setPackBookId] = useState<string | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
   const busyRef = useRef(false);
@@ -169,6 +190,8 @@ export default function DashboardPage() {
   }, [result]);
 
   const activeBookIds = selectedBookIds ?? books.map((b) => b.id);
+  // The chapter for a study pack: the one picked, else the newest book.
+  const chosenPackBook = packBookId ?? books[0]?.id ?? "";
   const currentTab = TABS.find((t) => t.value === tab)!;
 
   function toggleBook(id: string) {
@@ -237,7 +260,12 @@ export default function DashboardPage() {
     // A ref, not state: two quick triggers (double click, Ctrl+Enter) in the
     // same moment would both still see the old state.
     if (busyRef.current || readingFiles) return;
-    if (!prompt.trim() && photos.length === 0 && attachedDocs.length === 0) {
+    const isPack = tab === "study_pack";
+    if (isPack && !chosenPackBook && photos.length === 0) {
+      setError("Choose the chapter from My books, or attach photos or a PDF of it.");
+      return;
+    }
+    if (!isPack && !prompt.trim() && photos.length === 0 && attachedDocs.length === 0) {
       setError("Type a question or attach a photo or file first.");
       return;
     }
@@ -254,7 +282,14 @@ export default function DashboardPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         signal: controller.signal,
-        body: JSON.stringify({
+        body: JSON.stringify(
+          isPack
+            ? {
+                documentId: chosenPackBook || undefined,
+                photos: chosenPackBook ? [] : photos.map((p) => ({ data: p.imageBase64, mimeType: p.mimeType })),
+                focus: prompt.trim(),
+              }
+            : {
           prompt: tab === "sample_paper" ? `${prompt.trim()}\n\nTotal marks: ${totalMarks}`.trim() : prompt.trim(),
           documentIds: activeBookIds,
           photos: photos.map((p) => ({ data: p.imageBase64, mimeType: p.mimeType })),
@@ -262,7 +297,8 @@ export default function DashboardPage() {
             .map((d) => `Attached file "${d.name}":\n${d.text}`)
             .join("\n\n")
             .slice(0, MAX_ATTACHED_TEXT_CHARS),
-        }),
+              }
+        ),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Couldn't generate an answer right now. Please try again.");
@@ -291,7 +327,7 @@ export default function DashboardPage() {
     }
   }
 
-  const noBookSelected = books.length > 0 && activeBookIds.length === 0;
+  const noBookSelected = tab !== "study_pack" && books.length > 0 && activeBookIds.length === 0;
   const overQuota = me?.quota.overQuota ?? false;
   const hasInput = Boolean(prompt.trim()) || photos.length > 0 || attachedDocs.length > 0;
   const firstName = me?.student.full_name?.split(" ")[0];
@@ -339,7 +375,7 @@ export default function DashboardPage() {
         </Alert>
       )}
 
-      <div role="radiogroup" aria-label="What to make" className="grid grid-cols-2 gap-2 sm:grid-cols-4 print:hidden">
+      <div role="radiogroup" aria-label="What to make" className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5 print:hidden [&>*:last-child]:col-span-2 sm:[&>*:last-child]:col-span-1">
         {TABS.map((t) => {
           const Icon = t.icon;
           const selected = tab === t.value;
@@ -403,6 +439,42 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {tab === "study_pack" && (
+          <div className="space-y-2 border-b border-slate-100 px-4 pt-4 pb-3 sm:px-5">
+            <label htmlFor="pack-book" className="text-sm font-medium text-slate-900">
+              Which chapter?
+            </label>
+            {books.length > 0 ? (
+              <select
+                id="pack-book"
+                value={chosenPackBook}
+                onChange={(e) => setPackBookId(e.target.value)}
+                className={cx(input, "max-w-xl")}
+              >
+                {books.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.title}
+                    {b.subject || b.grade ? ` (${[b.subject, b.grade].filter(Boolean).join(", ")})` : ""}
+                  </option>
+                ))}
+                <option value="">Use the pages I attach below</option>
+              </select>
+            ) : (
+              <p className="text-xs text-slate-500">
+                Attach the chapter&apos;s pages below, or add it to{" "}
+                <Link href="/dashboard/library" className={link}>
+                  My books
+                </Link>{" "}
+                first (best for long chapters: it&apos;s read once and quotes can be checked).
+              </p>
+            )}
+            <p className="text-xs text-slate-500">
+              Makes a walkthrough with read-aloud, answers to every textbook question, a practice test and a glossary.
+              Takes one to three minutes.
+            </p>
+          </div>
+        )}
+
         <label htmlFor="prompt" className="sr-only">
           Your question
         </label>
@@ -428,7 +500,7 @@ export default function DashboardPage() {
           className="block max-h-[50vh] min-h-32 w-full resize-none rounded-t-2xl border-0 bg-transparent px-4 pt-4 pb-2 text-base text-slate-900 placeholder:text-slate-400 [field-sizing:content] focus:ring-0 focus:outline-none focus-visible:outline-none sm:px-5 sm:text-[15px]"
         />
 
-        {!hasInput && (
+        {!hasInput && currentTab.examples.length > 0 && (
           <div className="flex flex-wrap gap-2 px-4 pb-3 sm:px-5">
             {currentTab.examples.map((example) => (
               <button
@@ -483,7 +555,7 @@ export default function DashboardPage() {
           </ul>
         )}
 
-        {books.length > 0 && showBooks && (
+        {books.length > 0 && showBooks && tab !== "study_pack" && (
           <div className="border-t border-slate-100 px-4 py-3 sm:px-5">
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs font-medium text-slate-500">Search these books</p>
@@ -544,7 +616,7 @@ export default function DashboardPage() {
             />
           </label>
 
-          {books.length > 0 && (
+          {books.length > 0 && tab !== "study_pack" && (
             <button
               type="button"
               onClick={() => setShowBooks((v) => !v)}
@@ -601,11 +673,17 @@ export default function DashboardPage() {
         </Alert>
       )}
 
-      {loading && <GeneratingCard onStop={() => abortRef.current?.abort()} />}
+      {loading && (
+        <GeneratingCard steps={tab === "study_pack" ? PACK_WAIT_STEPS : WAIT_STEPS} onStop={() => abortRef.current?.abort()} />
+      )}
 
       {result && (
         <div ref={resultRef} className="space-y-3">
-          <AnswerView answer={result} />
+          {result.pack ? (
+            <StudyPackView pack={result.pack} answerId={result.id} pdfUrl={result.pdfUrl} />
+          ) : (
+            <AnswerView answer={result} />
+          )}
           {result.id && (
             <p className="text-center text-xs text-slate-500 print:hidden">
               Saved to{" "}
@@ -634,19 +712,19 @@ const Thumb = memo(function Thumb({ image, alt }: { image: DownscaledImage; alt:
 });
 
 /** Shown while an answer is being written: progress steps and a placeholder answer. */
-function GeneratingCard({ onStop }: { onStop: () => void }) {
+function GeneratingCard({ steps, onStop }: { steps: { after: number; text: string }[]; onStop: () => void }) {
   const [seconds, setSeconds] = useState(0);
   useEffect(() => {
     const timer = setInterval(() => setSeconds((s) => s + 1), 1000);
     return () => clearInterval(timer);
   }, []);
-  const step = WAIT_STEPS.filter((s) => seconds >= s.after).length - 1;
+  const step = steps.filter((s) => seconds >= s.after).length - 1;
 
   return (
     <div className={cx(card, "animate-fade-in space-y-5 p-5 sm:p-6 print:hidden")} role="status" aria-live="polite">
       <div className="flex items-start justify-between gap-3">
         <ol className="space-y-2.5">
-          {WAIT_STEPS.slice(0, 3).map((s, i) => {
+          {steps.slice(0, 3).map((s, i) => {
             const done = i < step;
             const current = i === Math.min(step, 2);
             return (
@@ -668,7 +746,7 @@ function GeneratingCard({ onStop }: { onStop: () => void }) {
           Stop
         </button>
       </div>
-      {step === 3 && <p className="text-xs text-slate-500">{WAIT_STEPS[3].text}. Keep this page open.</p>}
+      {step === 3 && <p className="text-xs text-slate-500">{steps[3].text}. Keep this page open.</p>}
       <div className="space-y-2.5">
         <Skeleton className="h-5 w-2/3" />
         <Skeleton className="h-3.5 w-full" />

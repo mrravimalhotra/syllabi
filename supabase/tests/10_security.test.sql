@@ -38,6 +38,14 @@ begin
   perform pg_temp.check('answer saved without a stored PDF', 'service_role', null,
     format('insert into generated_documents (student_id, task_type, title, content, sources) values (%L, %L, %L, %L, %L::jsonb)',
            '00000000-0000-0000-0000-0000000000b1', 'solution', 'Q', '# Answer', '[]'), '1');
+  perform pg_temp.check('study pack saved with its pack', 'service_role', null,
+    format('insert into generated_documents (student_id, task_type, title, content, pack) values (%L, %L, %L, %L, %L::jsonb)',
+           '00000000-0000-0000-0000-0000000000b1', 'study_pack', 'Study pack: Ch 1', '# Pack', '{"version":1}'), '1');
+  perform pg_temp.check('unknown answer kinds are still refused', 'service_role', null,
+    format('insert into generated_documents (student_id, task_type, title, content) values (%L, %L, %L, %L)',
+           '00000000-0000-0000-0000-0000000000b1', 'essay', 'X', 'x'), 'error');
+  perform pg_temp.check('study packs have a model setting', 'service_role', null,
+    format('select 1 from llm_settings where task_type = %L', 'study_pack'), '1');
 end $$;
 
 -- Seed (as table owner): two parents/tutors, one admin, one book each.

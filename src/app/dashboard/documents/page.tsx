@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ChatIcon, ClipboardIcon, DownloadIcon, ListCheckIcon, NotesIcon, SearchIcon, SparklesIcon, TrashIcon } from "@/components/icons";
+import { ChatIcon, ClipboardIcon, DownloadIcon, LayersIcon, ListCheckIcon, NotesIcon, SearchIcon, SparklesIcon, TrashIcon } from "@/components/icons";
 import { Alert, EmptyState, PageHeader, Skeleton, button, card, cx, input } from "@/components/ui";
 import { TASK_LABELS, formatDate } from "@/lib/format";
 import type { GeneratedDocumentRow } from "@/types/database";
@@ -14,6 +14,7 @@ const TASK_ICONS: Record<string, typeof ListCheckIcon> = {
   notes: NotesIcon,
   sample_paper: ClipboardIcon,
   ad_hoc: ChatIcon,
+  study_pack: LayersIcon,
 };
 
 export default function MyDocumentsPage() {

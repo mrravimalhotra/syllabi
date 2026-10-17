@@ -17,6 +17,7 @@ export const button = {
   primary: cx(BUTTON_BASE, "px-4 bg-brand-600 text-white shadow-sm hover:bg-brand-700 active:bg-brand-800"),
   secondary: cx(BUTTON_BASE, "px-4 border border-slate-300 bg-white text-slate-700 shadow-xs hover:bg-slate-50 active:bg-slate-100"),
   ghost: cx(BUTTON_BASE, "px-3 text-slate-600 hover:bg-slate-100 hover:text-slate-900"),
+  success: cx(BUTTON_BASE, "px-4 bg-emerald-600 text-white shadow-sm hover:bg-emerald-700"),
   danger: cx(BUTTON_BASE, "px-4 bg-red-600 text-white shadow-sm hover:bg-red-700"),
   dangerGhost: cx(BUTTON_BASE, "px-3 text-red-600 hover:bg-red-50"),
   /** Small icon-and-label button for toolbars (Print, PDF, Copy...). */

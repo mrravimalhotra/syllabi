@@ -14,6 +14,7 @@ const TASK_TYPE_LABELS: Record<string, string> = {
   sample_paper: "Sample papers",
   ad_hoc: "Ad-hoc prompts",
   coverage_check: "RAG coverage / search-grounding check",
+  study_pack: "Chapter study packs",
 };
 
 export default function LlmSettingsPage() {

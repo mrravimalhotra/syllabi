@@ -108,6 +108,7 @@ marks add up to the total. Then add a separate "Answer Key" section with model a
 sized to each question's marks (for multiple choice, give the option letter and text).`;
 
     case "ad_hoc":
+    case "study_pack":
       return `${RAG_POLICY}
 
 ${EXAM_CONVENTIONS}

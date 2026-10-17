@@ -28,6 +28,12 @@ export interface CompletionRequest {
   temperature?: number;
   /** Longest answer allowed, in tokens. */
   maxOutputTokens?: number;
+  /**
+   * Ask for JSON matching this schema (OpenAPI subset, as Gemini takes it).
+   * Providers without structured output get the instruction in the prompt only,
+   * so callers must still parse defensively.
+   */
+  jsonSchema?: Record<string, unknown>;
 }
 
 export interface CompletionResult {

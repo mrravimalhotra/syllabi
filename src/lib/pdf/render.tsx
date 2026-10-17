@@ -59,7 +59,17 @@ const styles = StyleSheet.create({
   tableRow: { flexDirection: "row" },
   tableCell: { flex: 1, padding: 4, borderRightWidth: 1, borderBottomWidth: 1, borderColor: "#cbd5e1", fontSize: 10, lineHeight: 1.4 },
   tableHeader: { backgroundColor: "#f1f5f9", fontWeight: 700 },
-  sourcesTitle: { fontSize: 11, fontWeight: 700, marginTop: 18, marginBottom: 6 },
+  quote: {
+    borderLeftWidth: 3,
+    borderColor: "#a5b4fc",
+    backgroundColor: "#eef2ff",
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    marginBottom: 6,
+    fontSize: 10,
+    lineHeight: 1.5,
+  },
+    sourcesTitle: { fontSize: 11, fontWeight: 700, marginTop: 18, marginBottom: 6 },
   source: { fontSize: 9, color: "#475569", marginBottom: 3 },
   sourceBlock: { marginBottom: 8 },
   sourceImage: { width: 240, marginTop: 4, marginBottom: 2, borderRadius: 2 },
@@ -104,7 +114,7 @@ function splitTableRow(line: string): string[] {
 /**
  * Markdown renderer for the subset the prompts ask for: headings (#, ##, ###),
  * bullet and numbered lists (indented for nesting), tables, ``` code blocks,
- * horizontal rules, paragraphs, and bold.
+ * quotes (>), horizontal rules, paragraphs, and bold.
  */
 function ContentBody({ text }: { text: string }) {
   const lines = text.split("\n");
@@ -170,6 +180,18 @@ function ContentBody({ text }: { text: string }) {
       continue;
     }
 
+    if (line.startsWith(">")) {
+      const quote: string[] = [];
+      while (i < lines.length && lines[i].trim().startsWith(">")) quote.push(lines[i++].trim().replace(/^>\s?/, ""));
+      i--;
+      blocks.push(
+        <View key={i} style={styles.quote} wrap={false}>
+          <InlineText text={quote.join(" ")} />
+        </View>
+      );
+      continue;
+    }
+
     if (/^(-{3,}|\*{3,}|_{3,})$/.test(line)) {
       blocks.push(<View key={i} style={styles.rule} />);
       continue;
@@ -205,6 +227,7 @@ const TASK_LABELS: Record<GenerationTaskType, string> = {
   notes: "Revision Notes",
   sample_paper: "Sample Paper",
   ad_hoc: "Answer",
+  study_pack: "Chapter Study Pack",
 };
 
 export interface RenderPdfInput {

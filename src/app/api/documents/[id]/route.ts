@@ -27,6 +27,7 @@ export async function GET(_request: Request, { params }: Params) {
       sources: await withImageUrls(answer.sources ?? []),
       usedSearchGrounding: answer.used_search_grounding,
       searchSuggestionsHtml: answer.search_suggestions_html,
+      pack: answer.pack ?? null,
       pdfUrl: `/api/documents/${answer.id}/pdf`,
     },
   });

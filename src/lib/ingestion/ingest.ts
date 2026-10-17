@@ -187,6 +187,7 @@ export async function ingestDocument(input: IngestDocumentInput): Promise<string
             source_type: input.sourceType,
             page_number: page.pageNumber,
             section_label: chunk.sectionLabel,
+            chunk_index: i,
             content: chunk.content,
             image_path: imagePath,
             embedding: embeddings[i].embedding,

@@ -1,3 +1,5 @@
+import type { StudyPack } from "@/lib/study-pack/types";
+
 export type TaskType =
   | "ocr_extraction"
   | "embedding"
@@ -5,9 +7,10 @@ export type TaskType =
   | "notes"
   | "sample_paper"
   | "ad_hoc"
-  | "coverage_check";
+  | "coverage_check"
+  | "study_pack";
 
-export type GenerationTaskType = "solution" | "notes" | "sample_paper" | "ad_hoc";
+export type GenerationTaskType = "solution" | "notes" | "sample_paper" | "ad_hoc" | "study_pack";
 
 export type Provider = "google" | "anthropic" | "openai";
 
@@ -138,5 +141,7 @@ export interface GeneratedDocumentRow {
   sources: SavedSource[];
   used_search_grounding: boolean;
   search_suggestions_html: string | null;
+  /** Study packs only: the structured pack (content holds its Markdown, for PDF and copy). */
+  pack: StudyPack | null;
   created_at: string;
 }

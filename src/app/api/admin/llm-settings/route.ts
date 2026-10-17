@@ -26,6 +26,7 @@ const TASK_TYPES = new Set<TaskType>([
   "sample_paper",
   "ad_hoc",
   "coverage_check",
+  "study_pack",
 ]);
 const PROVIDERS = new Set<Provider>(["google", "anthropic", "openai"]);
 

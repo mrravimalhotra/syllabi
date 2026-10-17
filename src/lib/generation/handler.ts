@@ -23,6 +23,7 @@ const DEFAULT_PHOTO_PROMPT: Record<GenerationTaskType, string> = {
   notes: "Make revision notes on the topic shown in the attached photo or file.",
   sample_paper: "Make a sample paper on the topic shown in the attached photo or file.",
   ad_hoc: "Explain what is shown in the attached photo or file.",
+  study_pack: "Make a study pack for the chapter in the attached photos or file.",
 };
 
 /** Validates the optional `photos` field; returns the photos or an error message. */

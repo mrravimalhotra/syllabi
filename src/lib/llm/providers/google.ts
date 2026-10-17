@@ -43,6 +43,7 @@ export const googleAdapter: LlmProviderAdapter = {
       generationConfig: {
         temperature: req.temperature ?? 0.4,
         maxOutputTokens: req.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+        ...(req.jsonSchema ? { responseMimeType: "application/json", responseSchema: req.jsonSchema as never } : {}),
       },
     };
 

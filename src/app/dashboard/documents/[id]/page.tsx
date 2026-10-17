@@ -5,11 +5,13 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AnswerView, type Answer } from "@/components/AnswerView";
 import { EditableName } from "@/components/EditableName";
+import { StudyPackView } from "@/components/study-pack/StudyPackView";
+import type { StudyPack } from "@/lib/study-pack/types";
 import { ChevronLeftIcon, DocumentIcon, TrashIcon } from "@/components/icons";
 import { Alert, EmptyState, Skeleton, button, card, cx } from "@/components/ui";
 import { TASK_LABELS, formatDate } from "@/lib/format";
 
-type SavedAnswer = Answer & { id: string; taskType: string; createdAt: string; text: string | null };
+type SavedAnswer = Answer & { id: string; taskType: string; createdAt: string; text: string | null; pack: StudyPack | null };
 
 /** One saved answer: read, print, download, rename or delete it. */
 export default function AnswerPage() {
@@ -90,7 +92,19 @@ export default function AnswerPage() {
             <span className="text-xs font-medium tracking-wide text-slate-400 uppercase">Name</span>
             <EditableName value={answer.title} onSave={rename} className="min-w-0 max-w-full font-medium text-slate-800" />
           </div>
-          {answer.text === null ? (
+          {answer.pack ? (
+            <StudyPackView
+              pack={answer.pack}
+              answerId={answer.id}
+              pdfUrl={answer.pdfUrl}
+              meta={formatDate(answer.createdAt)}
+              actions={
+                <button type="button" onClick={remove} className={button.smallDanger} aria-label="Delete this study pack">
+                  <TrashIcon className="h-4 w-4" /> Delete
+                </button>
+              }
+            />
+          ) : answer.text === null ? (
             <Alert tone="info">
               This older answer was saved as a PDF only.{" "}
               <a href={answer.pdfUrl ?? "#"} target="_blank" rel="noreferrer" className="font-medium underline">
