@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentStudent } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ingestDocument } from "@/lib/ingestion/ingest";
+import { IngestError, ingestDocument } from "@/lib/ingestion/ingest";
 import { checkQuota } from "@/lib/quota";
 import type { DocumentRow } from "@/types/database";
 import { userMessage } from "@/lib/errors";
@@ -126,7 +126,8 @@ export async function POST(request: Request) {
       .select("id")
       .eq("id", body.documentId)
       .eq("owner_id", user.id)
-      .eq("status", "processing")
+      // "failed" too: the browser retries a batch that failed part-way.
+      .in("status", ["processing", "failed"])
       .maybeSingle();
     if (!existing) return NextResponse.json({ error: "Book not found" }, { status: 404 });
   }
@@ -151,7 +152,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ documentId, status: body.finalize === false ? "processing" : "ready" });
   } catch (err) {
     return NextResponse.json(
-      { error: userMessage(err, "library POST ingest", "Upload failed. Please try again.") },
+      {
+        error: userMessage(err, "library POST ingest", "Upload failed. Please try again."),
+        // Lets the browser retry this batch into the same book, or delete it.
+        documentId: err instanceof IngestError ? err.documentId : body.documentId,
+      },
       { status: 500 }
     );
   }

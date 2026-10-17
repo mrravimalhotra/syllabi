@@ -9,7 +9,8 @@
 const TRANSIENT =
   /fetch failed|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|socket hang up|network|\b(429|500|502|503|504)\b|overloaded|UNAVAILABLE|RESOURCE_EXHAUSTED|try again later/i;
 
-const DELAYS_MS = [2000, 6000];
+// Gemini "overloaded" (503) spells often last 10-20 seconds.
+const DELAYS_MS = [2000, 6000, 15000];
 
 // Rate limits (429) say how long to wait ("Please retry in 23.4s" or
 // "retryDelay":"23s"); wait that long, up to this cap, a few times.

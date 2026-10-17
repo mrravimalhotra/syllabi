@@ -42,6 +42,27 @@ export interface IngestDocumentInput {
   finalize?: boolean;
 }
 
+/** A failed upload batch, with the book it belongs to so the browser can retry or clean up. */
+export class IngestError extends UserError {
+  constructor(
+    message: string,
+    readonly documentId: string
+  ) {
+    super(message);
+  }
+}
+
+/** A short, plain reason for a failure, from the provider's error text. */
+function failureReason(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  if (/\b429\b|RESOURCE_EXHAUSTED|quota/i.test(message)) return " (the AI's free-tier limit was reached; wait a minute)";
+  if (/\b50[0-4]\b|overloaded|UNAVAILABLE/i.test(message)) return " (the AI service was busy)";
+  if (/SAFETY|blocked|safety filter/i.test(message)) return " (the AI's safety filter refused this page)";
+  if (/timeout|timed out|ETIMEDOUT|aborted/i.test(message)) return " (it took too long)";
+  if (/fetch failed|ECONNRESET|ENOTFOUND|network/i.test(message)) return " (a network problem)";
+  return "";
+}
+
 // Pages read at the same time. Reading a scanned page takes Gemini 15-25s, so
 // one at a time made a 12-page chapter take minutes; more than 3 at once runs
 // into the free tier's requests-per-minute limit.
@@ -95,13 +116,21 @@ export async function ingestDocument(input: IngestDocumentInput): Promise<string
     }
   }
 
+  // Continuing (or retrying) a batch of an existing book: it is in progress again.
+  if (input.documentId) {
+    await admin.from("documents").update({ status: "processing" }).eq("id", documentId);
+  }
+
   // Each step is labeled with which page/stage it failed at — an ingestion
   // error can originate from three very different systems (R2, Gemini,
   // Supabase), and an unlabeled error is nearly impossible to place. The full
   // detail goes to the server log; the user sees the page and step only.
   const stage = (label: string, pageNumber: number, err: unknown): never => {
     console.error(`[ingest] page ${pageNumber} (${label})`, err);
-    throw new UserError(`Page ${pageNumber}: ${label.charAt(0).toUpperCase()}${label.slice(1)} failed. Delete this book and try again.`);
+    throw new IngestError(
+      `Page ${pageNumber}: ${label} failed${failureReason(err)}.`,
+      documentId!
+    );
   };
 
   try {
@@ -138,6 +167,11 @@ export async function ingestDocument(input: IngestDocumentInput): Promise<string
         pageText = extraction.text;
       }
       const textChunks = chunkPageText(pageText, page.pageNumber);
+
+      // A retried batch may have saved this page already: replace, don't duplicate.
+      if (input.documentId) {
+        await admin.from("chunks").delete().eq("document_id", documentId).eq("page_number", page.pageNumber);
+      }
 
       // One request embeds all of the page's chunks; one insert saves them.
       const embeddings = await embedMany(textChunks.map((c) => c.content)).catch((err) =>

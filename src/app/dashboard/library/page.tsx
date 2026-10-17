@@ -39,6 +39,11 @@ const MAX_IMAGES_PER_BATCH = 4;
 // body limit (JSON overhead included); larger books go up in several batches.
 const MAX_BATCH_BASE64_CHARS = 3 * 1024 * 1024;
 
+// A part that fails on the server is retried this many times in all, waiting
+// longer each time (the AI service's busy spells pass within seconds).
+const UPLOAD_ATTEMPTS = 3;
+const RETRY_WAIT_MS = 8000;
+
 interface PendingPage {
   id: string;
   /** Image pages (scans, photos, PDF pages); empty for text pages. */
@@ -274,41 +279,76 @@ export default function LibraryPage() {
       const documentIds: string[] = [];
       const typeLabel = (t: SourceType) => SOURCE_TYPE_OPTIONS.find((o) => o.value === t)?.label ?? t;
 
-      for (const group of groups) {
-        const batches = chunkBySize(group, MAX_BATCH_BASE64_CHARS);
-        let documentId: string | undefined;
-        let pageOffset = 1;
+      // Pages of groups that finished, so a later failure doesn't re-upload them.
+      const savedPageIds = new Set<string>();
+      let currentDocumentId: string | undefined;
 
-        for (let i = 0; i < batches.length; i++) {
-          setUploadProgress(
-            `Reading ${typeLabel(group[0].sourceType).toLowerCase()} pages${batches.length > 1 ? ` (part ${i + 1} of ${batches.length})` : ""}`
-          );
+      try {
+        for (const group of groups) {
+          const batches = chunkBySize(group, MAX_BATCH_BASE64_CHARS);
+          currentDocumentId = undefined;
+          let pageOffset = 1;
 
-          const res = await fetch("/api/library", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              title: title.trim(),
-              subject: subject.trim(),
-              grade: grade.trim(),
-              rightsConfirmed,
-              sourceType: group[0].sourceType,
-              pages: batches[i].map(({ imageBase64, mimeType, text, hint }) =>
-                text !== undefined ? { text } : { imageBase64, mimeType, hint }
-              ),
-              documentId,
-              startPageNumber: pageOffset,
-              finalize: i === batches.length - 1,
-            }),
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error);
-          documentId = data.documentId;
-          pageOffset += batches[i].length;
-          setPagesSent((n) => n + batches[i].length);
+          for (let i = 0; i < batches.length; i++) {
+            const label = `Reading ${typeLabel(group[0].sourceType).toLowerCase()} pages${batches.length > 1 ? ` (part ${i + 1} of ${batches.length})` : ""}`;
+            // The AI service is often briefly busy on the free tier: retry a
+            // failed part into the same book (pages already saved are replaced,
+            // not duplicated) before giving up.
+            for (let attempt = 1; ; attempt++) {
+              setUploadProgress(attempt === 1 ? label : `${label}, retrying (${attempt} of ${UPLOAD_ATTEMPTS})`);
+              let res: Response;
+              let data: { error?: string; documentId?: string } = {};
+              try {
+                res = await fetch("/api/library", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    title: title.trim(),
+                    subject: subject.trim(),
+                    grade: grade.trim(),
+                    rightsConfirmed,
+                    sourceType: group[0].sourceType,
+                    pages: batches[i].map(({ imageBase64, mimeType, text, hint }) =>
+                      text !== undefined ? { text } : { imageBase64, mimeType, hint }
+                    ),
+                    documentId: currentDocumentId,
+                    startPageNumber: pageOffset,
+                    finalize: i === batches.length - 1,
+                  }),
+                });
+                data = await res.json().catch(() => ({}));
+              } catch {
+                // Connection dropped: treat like a server error and retry.
+                res = new Response(null, { status: 503 });
+                data = { error: "The connection dropped during the upload." };
+              }
+              if (data.documentId) currentDocumentId = data.documentId;
+              if (res.ok) break;
+              // Retry only server-side failures; a rejected upload (4xx) won't change.
+              if (res.status < 500 || attempt >= UPLOAD_ATTEMPTS) throw new Error(data.error ?? "Upload failed");
+              await new Promise((resolve) => setTimeout(resolve, RETRY_WAIT_MS * attempt));
+            }
+            pageOffset += batches[i].length;
+            setPagesSent((n) => n + batches[i].length);
+          }
+
+          documentIds.push(currentDocumentId!);
+          group.forEach((p) => savedPageIds.add(p.id));
         }
-
-        documentIds.push(documentId!);
+      } catch (err) {
+        // Remove the half-read book so it doesn't linger as "failed"; the pages
+        // stay below so pressing Upload again simply starts it over.
+        if (currentDocumentId) {
+          await fetch(`/api/library/${currentDocumentId}`, { method: "DELETE" }).catch(() => {});
+        }
+        if (savedPageIds.size > 0) setPages((prev) => prev.filter((p) => !savedPageIds.has(p.id)));
+        const message = err instanceof Error ? err.message : "Upload failed.";
+        setError(
+          `${message} ${savedPageIds.size > 0 ? `The first ${savedPageIds.size} page(s) were saved. ` : ""}` +
+            "The remaining pages are still below: press Upload to try them again."
+        );
+        await load();
+        return;
       }
 
       setSuccess(
@@ -319,8 +359,6 @@ export default function LibraryPage() {
       setTitle("");
       setPages([]);
       await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed");
     } finally {
       setSubmitting(false);
       setUploadProgress(null);
