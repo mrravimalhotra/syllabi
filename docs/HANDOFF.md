@@ -13,6 +13,8 @@ Read this first. It covers what we are building and why, everything built so far
 
 ## 1. What we are building
 
+> **Private testing (2026-10-17):** until the owner finishes testing, the app is limited to one admin tester. While `OPEN_SIGNUPS` is not `true`, only `ADMIN_EMAIL` can sign up and the access gate (`src/lib/supabase/middleware.ts`, switch in `src/lib/access.ts`) admits only admin accounts. To open to parents and tutors: set `OPEN_SIGNUPS=true` in Vercel and redeploy.
+>
 > **Bring your own book (2026-10-17):** the admin-curated shared library is retired. Each parent/tutor uploads their own child's/student's books under **My books** (`/dashboard/library`, APIs `/api/library`), with an ownership confirmation; books are private to the uploader and searched via `match_owner_chunks` (migration `20261017000006_private_libraries.sql`). Reading/indexing counts against the uploader's quota. The admin now only approves accounts, sets quotas and LLM settings. Schools/grades/subjects tables remain in the DB, unused. Sections 5–7 below still describe the old shared-library design in places.
 >
 > **Repositioned 2026-10-17:** accounts are for **adults only — parents and tutors** — who use Syllabi to prepare study material for their children/students. Students do not log in. Signup requires an 18+ confirmation and a parent/tutor choice (migration `20261017000005_adult_accounts.sql`); parents/tutors pick any grade of their assigned school and any assigned subject per request. Reason: the Gemini API terms forbid apps "likely to be accessed by individuals under the age of 18" (see `docs/app-review.md`, F1). The `students` table name and `role = 'student'` value were kept; each row is an adult account.

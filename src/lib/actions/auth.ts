@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { canSignUp } from "@/lib/access";
 
 export async function signIn(formData: FormData) {
   const email = String(formData.get("email") ?? "");
@@ -27,6 +28,9 @@ export async function signUp(formData: FormData) {
   const accountType = String(formData.get("account_type") ?? "");
   const adultConfirmed = formData.get("adult_confirmed") === "yes";
 
+  if (!canSignUp(email)) {
+    redirect(`/signup?error=${encodeURIComponent("Syllabi is in private testing. Sign-ups will open soon.")}`);
+  }
   if (password !== confirmPassword) {
     redirect(`/signup?error=${encodeURIComponent("Passwords do not match")}`);
   }

@@ -38,6 +38,8 @@ Create an API key at aistudio.google.com. The default models are Flash tier, whi
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | from step 2 |
 | `R2_BUCKET_NAME` | `syllabi` (default if unset) |
 | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` | optional fallbacks |
+| `ADMIN_EMAIL` | your email: during private testing, the only address allowed to sign up |
+| `OPEN_SIGNUPS` | `false` during private testing; set `true` (and redeploy) to let parents and tutors sign up |
 
 3. Server region is pinned to Mumbai (`bom1`, next to the Supabase database in South Asia (Mumbai)) by `vercel.json`; change it there if the database moves.
 4. Deploy. Then put the Vercel domain into Supabase's Auth URL settings (step 1.3) if you hadn't yet.

@@ -1,4 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
+import { signupsOpen } from "@/lib/access";
 import { NextResponse, type NextRequest } from "next/server";
 
 const PUBLIC_PATHS = ["/login", "/signup", "/auth/callback", "/pending"];
@@ -46,8 +47,9 @@ export async function updateSession(request: NextRequest) {
       .eq("id", user.id)
       .single();
 
-    // Revoked/unapproved students are blocked here, before any protected route runs.
-    if (!student || !student.active) {
+    // Revoked/unapproved accounts are blocked here, before any protected route
+    // runs. During private testing only admins get in, even if approved.
+    if (!student || !student.active || (!signupsOpen() && student.role !== "admin")) {
       const url = request.nextUrl.clone();
       url.pathname = "/pending";
       return NextResponse.redirect(url);

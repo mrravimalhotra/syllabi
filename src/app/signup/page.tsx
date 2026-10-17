@@ -1,4 +1,5 @@
 import { SignUpForm } from "@/components/SignUpForm";
+import { signupsOpen } from "@/lib/access";
 
 export default async function SignupPage({
   searchParams,
@@ -16,6 +17,11 @@ export default async function SignupPage({
             For parents and tutors (18+) preparing study material for their children or students.
             An admin will need to approve your access before you can sign in.
           </p>
+          {!signupsOpen() && (
+            <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              Private testing: sign-ups are currently limited to the Syllabi team.
+            </p>
+          )}
         </div>
 
         {error && (
