@@ -6,7 +6,8 @@ import { systemInstructionsFor } from "@/lib/generation/prompts";
 import { levelLine } from "@/lib/generation/level";
 import type { AnswerLanguage } from "@/lib/generation/language";
 import type { CompletionImage } from "@/lib/llm/types";
-import type { GenerationTaskType, MatchedChunk, Student } from "@/types/database";
+import type { AnswerCheck, GenerationTaskType, MatchedChunk, Student } from "@/types/database";
+import { checkArithmetic } from "@/lib/checks/arithmetic";
 
 export interface GenerationInput {
   student: Student;
@@ -33,7 +34,19 @@ export interface GenerationOutput {
   usedSearchGrounding: boolean;
   /** Google's Search Suggestions HTML when the answer used web search (must be shown with it). */
   searchSuggestionsHtml?: string;
+  /** What Syllabi's own code checked (calculations), shown with the answer. */
+  checks: AnswerCheck[];
 }
+
+// Lower for answers that must be exact and repeatable (solutions, answer
+// keys); a little higher where variety helps (notes, open questions).
+const TEMPERATURE: Record<GenerationTaskType, number> = {
+  solution: 0.2,
+  sample_paper: 0.3,
+  notes: 0.3,
+  ad_hoc: 0.4,
+  study_pack: 0.3,
+};
 
 /**
  * Shared generation pipeline: quota check → RAG retrieval → LLM call → usage
@@ -72,7 +85,7 @@ export async function runGeneration({
       ? `\n\n(The first ${photos.length} attached image(s) are photos from the user — the question to work on. Any further images are reference-material pages.)`
       : "";
 
-  const result = await generateCompletion({
+  const request = {
     taskType,
     systemInstructions: systemInstructionsFor(taskType, levelLine(student), language),
     prompt: `${prompt}${photoNote}`,
@@ -81,8 +94,9 @@ export async function runGeneration({
     // Search grounding is opt-in per the RAG-first policy: only fires when
     // coverage from the knowledge base is weak.
     allowSearchGrounding: retrieval.coverageLow,
-  });
-
+    temperature: TEMPERATURE[taskType],
+  };
+  let result = await generateCompletion(request);
   await recordTokenUsage({
     studentId: student.id,
     taskType,
@@ -91,12 +105,41 @@ export async function runGeneration({
     usage: result.usage,
   });
 
+  // Every calculation in the answer is recomputed by code. Only when one is
+  // wrong is the AI asked (once) to correct it.
+  let checks = checkArithmetic(result.text);
+  const wrong = checks.filter((c) => !c.ok);
+  if (wrong.length > 0) {
+    const repaired = await generateCompletion({
+      ...request,
+      prompt:
+        `${request.prompt}\n\nYour draft answer below has calculation mistakes, found by an exact calculator:\n` +
+        wrong.map((c) => `- ${c.message}`).join("\n") +
+        "\nWrite the complete answer again with these corrected, and anything that follows from them. Keep everything else the same." +
+        `\n\nDraft answer:\n${result.text}`,
+    });
+    await recordTokenUsage({
+      studentId: student.id,
+      taskType,
+      provider: repaired.provider,
+      model: repaired.model,
+      usage: repaired.usage,
+    });
+    const recheck = checkArithmetic(repaired.text);
+    // Keep the repair only if it really has fewer wrong calculations.
+    if (recheck.filter((c) => !c.ok).length < wrong.length) {
+      result = { ...repaired, searchSuggestionsHtml: repaired.searchSuggestionsHtml ?? result.searchSuggestionsHtml };
+      checks = recheck;
+    }
+  }
+
   return {
     text: result.text,
     sources: retrieval.chunks,
     sourceImages,
     usedSearchGrounding: Boolean(result.usedSearchGrounding),
     searchSuggestionsHtml: result.searchSuggestionsHtml,
+    checks,
   };
 }
 

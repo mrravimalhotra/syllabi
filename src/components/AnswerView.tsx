@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { Markdown } from "@/components/Markdown";
-import { CheckIcon, CopyIcon, DownloadIcon, PrinterIcon } from "@/components/icons";
+import { AlertIcon, CheckIcon, CopyIcon, DownloadIcon, PrinterIcon } from "@/components/icons";
+import type { AnswerCheck } from "@/types/database";
 import { button, card, cx } from "@/components/ui";
 import { hasAnswerKey } from "@/lib/format";
 
@@ -23,6 +24,8 @@ export interface Answer {
   searchSuggestionsHtml: string | null;
   /** On-demand PDF of the saved answer; null if it couldn't be saved. */
   pdfUrl: string | null;
+  /** What Syllabi's own code checked (calculations, marks...). */
+  checks?: AnswerCheck[];
 }
 
 /**
@@ -67,6 +70,7 @@ export function AnswerView({ answer, actions, meta }: { answer: Answer; actions?
         )}
         <Markdown text={answer.text} />
         {answer.searchSuggestionsHtml && <SearchSuggestions html={answer.searchSuggestionsHtml} />}
+        {answer.checks && answer.checks.length > 0 && <Checks checks={answer.checks} />}
         <p className="text-xs text-slate-400">AI-generated. Check it before using it with your child or student.</p>
       </div>
 
@@ -114,6 +118,43 @@ function CopyButton({ text }: { text: string }) {
       {copied ? <CheckIcon className="h-4 w-4 text-emerald-600" /> : <CopyIcon className="h-4 w-4" />}
       {copied ? "Copied" : "Copy"}
     </button>
+  );
+}
+
+/**
+ * What Syllabi's own code verified, without AI: each calculation recomputed,
+ * marks added up and so on. Problems are listed; correct items fold away.
+ */
+function Checks({ checks }: { checks: AnswerCheck[] }) {
+  const problems = checks.filter((c) => !c.ok);
+  const calculations = checks.filter((c) => c.kind === "calculation");
+  const summary =
+    problems.length === 0
+      ? calculations.length === checks.length
+        ? `${calculations.length} calculation${calculations.length === 1 ? "" : "s"} checked by an exact calculator: all correct`
+        : `${checks.length} checks passed`
+      : `${problems.length} problem${problems.length === 1 ? "" : "s"} found: please check before using`;
+  return (
+    <details
+      open={problems.length > 0}
+      className={cx(
+        "rounded-xl border px-3 py-2 text-xs print:hidden",
+        problems.length ? "border-amber-200 bg-amber-50 text-amber-900" : "border-emerald-200 bg-emerald-50 text-emerald-900"
+      )}
+    >
+      <summary className="flex cursor-pointer items-center gap-1.5 font-medium">
+        {problems.length ? <AlertIcon className="h-4 w-4 shrink-0" /> : <CheckIcon className="h-4 w-4 shrink-0" />}
+        {summary}
+      </summary>
+      <ul className="mt-2 space-y-1">
+        {[...problems, ...checks.filter((c) => c.ok)].map((c, i) => (
+          <li key={i} className="flex gap-1.5">
+            <span aria-hidden="true">{c.ok ? "✓" : "⚠"}</span>
+            <span className="[overflow-wrap:anywhere]">{c.message}</span>
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }
 

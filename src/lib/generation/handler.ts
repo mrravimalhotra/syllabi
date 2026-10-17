@@ -157,6 +157,7 @@ export function createGenerationRoute(taskType: GenerationTaskType) {
           used_search_grounding: result.usedSearchGrounding,
           search_suggestions_html: result.searchSuggestionsHtml ?? null,
           cache_key: cacheKey,
+          checks: result.checks,
         })
         .select("id")
         .single();
@@ -174,6 +175,7 @@ export function createGenerationRoute(taskType: GenerationTaskType) {
         sources,
         usedSearchGrounding: result.usedSearchGrounding,
         searchSuggestionsHtml: result.searchSuggestionsHtml ?? null,
+        checks: result.checks,
         // Made on demand from the saved answer (null if saving failed).
         pdfUrl: doc ? `/api/documents/${doc.id}/pdf` : null,
       });
