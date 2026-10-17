@@ -8,6 +8,7 @@ const NAV = [
   { href: "/admin", label: "Overview" },
   { href: "/admin/students", label: "Accounts" },
   { href: "/admin/llm-settings", label: "AI models" },
+  { href: "/admin/health", label: "Health check" },
 ];
 
 export function AdminTabs() {

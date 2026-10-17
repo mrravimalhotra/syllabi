@@ -30,10 +30,14 @@ export default async function AdminOverviewPage() {
           </div>
         ))}
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-3">
         <Link href="/admin/students" className={cx(card, "group p-5 transition hover:border-brand-300")}>
           <p className="font-medium text-slate-900">Accounts</p>
           <p className="mt-1 text-sm text-slate-500">Grant or revoke access, set roles and monthly limits.</p>
+        </Link>
+        <Link href="/admin/health" className={cx(card, "group p-5 transition hover:border-brand-300")}>
+          <p className="font-medium text-slate-900">Health check</p>
+          <p className="mt-1 text-sm text-slate-500">Test the database, Gemini and file storage after a deploy.</p>
         </Link>
         <Link href="/admin/llm-settings" className={cx(card, "group p-5 transition hover:border-brand-300")}>
           <p className="font-medium text-slate-900">AI models</p>
