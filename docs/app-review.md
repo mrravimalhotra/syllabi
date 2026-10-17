@@ -7,7 +7,7 @@ Input for BMAD planning (PRD, epics, stories). Written 2026-10-17 from a read of
 - **Users (decided 2026-10-17):** adults only — **parents and tutors** who prepare study material for their children/students. Students do not get accounts. Payers are tutors, coaching centres and parents (schools optional later).
 - Not individual students: for one learner alone, Google NotebookLM is free and more polished.
 - **Why Syllabi wins for that customer:**
-  - Curated once by the admin, not uploaded per student.
+  - Private "bring your own book" library: answers come from the student's actual books, kept private to the parent or tutor.
   - Material matched to the student's school, grade and subject.
   - Admin approves and revokes access.
   - Hard per-account cost cap.
@@ -61,7 +61,7 @@ Input for BMAD planning (PRD, epics, stories). Written 2026-10-17 from a read of
 | B2 | Bulk student import (CSV) | ❌ | |
 | B3 | Roles: super-admin / school admin / teacher / student / parent | ⚠️ | Only admin and student |
 | B4 | Teacher dashboard: usage, topics studied, weak areas | ❌ | |
-| B5 | Board-level shared library (NCERT once, used by all CBSE schools) | ❌ | Taxonomy is per school, so the same book is re-ingested per school |
+| B5 | ~~Board-level shared library~~ | — | Retired 2026-10-17: replaced by private per-account libraries ("bring your own book") |
 | B6 | Per-school settings (hint-first, web research allowed, quota defaults) | ❌ | |
 | B7 | Audit log of admin actions | ❌ | |
 
@@ -74,7 +74,7 @@ Input for BMAD planning (PRD, epics, stories). Written 2026-10-17 from a read of
 | C4 | Child-safety guardrails: age-appropriate refusals, self-harm escalation text | ⚠️ | Relies on provider defaults |
 | C5 | Prompt-injection resistance (uploaded content and student input are data, not instructions) | ⚠️ | |
 | C6 | Answer caching for repeated questions | ❌ | Cost saver |
-| C7 | Vector index suited to growing data (HNSW, or IVFFlat rebuilt after load) | ⚠️ | IVFFlat built on an empty table |
+| C7 | Vector index suited to growing data | ✅ | 2026-10-17: searches are per owner with an exact scan (no approximate index), which always returns true top matches at this scale |
 
 ### D. Engineering & operations
 | # | Standard | Status | Note |
@@ -113,7 +113,7 @@ Input for BMAD planning (PRD, epics, stories). Written 2026-10-17 from a read of
 | # | Item | Status | Note |
 |---|---|---|---|
 | F1 | **AI provider allows apps used by under-18s** | ⚠️ **Mitigated by repositioning, not yet confirmed** | 2026-10-17: Syllabi is now adults-only (parents/tutors), with an 18+ confirmation at signup and AI-generated notices. Residual risk: the terms also cover apps "likely to be accessed" by under-18s; a parent could let a child use their account. Get Google or legal confirmation before launch; keep Claude (allows minors with safeguards) as the fallback. Original finding: | Gemini API Additional Terms (modified 2026-04-28): "You must be 18 years of age or older to use the APIs" and API clients must not be "directed towards or is likely to be accessed by individuals under the age of 18". Syllabi serves school students, so this applies to completions **and** embeddings. Vertex AI / Google Cloud terms may contain similar language (unverified). Anthropic's usage policy (May 2024 update) allows API use in products for minors if the operator adds safety features (age verification, content moderation) and discloses AI use. Decide the provider before onboarding students; get legal confirmation. |
-| F2 | Textbook copyright | ❌ | Ingestion copies whole pages (images + text) into storage. India Copyright Act s.52(1)(i) covers reproduction "in the course of instruction" (Delhi HC, *Rameshwari Photocopy*, 2016–17), but a commercial service storing and serving copies is not clearly covered. NCERT and private-publisher books are copyrighted; NCERT being free to read online is not a licence to copy. Mitigations: written permission/licence per publisher (or the school's own licence), uploader rights declaration (E5), content visible only to that school's enrolled students, show only cited page snippets, takedown process in the terms. |
+| F2 | Textbook copyright | ⚠️ **Mitigated 2026-10-17** | Switched to "bring your own book": each parent/tutor uploads their own copy, kept private to their account, with an ownership confirmation at upload — the same model as uploading a PDF to Claude or Gemini (user-provided, private, platform acts at the user's direction). Still needed: terms of service with a takedown process (E4), and a short legal check. Original finding: Ingestion copies whole pages (images + text) into storage. India Copyright Act s.52(1)(i) covers reproduction "in the course of instruction" (Delhi HC, *Rameshwari Photocopy*, 2016–17), but a commercial service storing and serving copies is not clearly covered. NCERT and private-publisher books are copyrighted; NCERT being free to read online is not a licence to copy. Mitigations: written permission/licence per publisher (or the school's own licence), uploader rights declaration (E5), content visible only to that school's enrolled students, show only cited page snippets, takedown process in the terms. |
 | F3 | Past papers | ⚠️ | A school's own papers belong to the school (get its consent). Board sample papers (e.g. CBSE) are published openly but still copyrighted — confirm terms. |
 | F4 | Grounding with Google Search display rules | ❌ | If kept: show the returned Search Suggestions with grounded answers to that user only, don't modify or intersperse them, and don't cache them beyond the allowed exceptions. Today the PDF and history store grounded output without suggestions. |
 | F5 | Open-source licences | ✅ | All permissive; notices in `THIRD_PARTY_NOTICES.md` (BMAD MIT notice, pdf.js Apache header). |

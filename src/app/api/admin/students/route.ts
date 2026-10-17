@@ -35,9 +35,6 @@ interface PatchBody {
   active?: boolean;
   role?: "student" | "admin";
   token_quota?: number;
-  school_id?: string | null;
-  grade_id?: string | null;
-  subject_ids?: string[];
 }
 
 export async function PATCH(request: Request) {
@@ -50,7 +47,12 @@ export async function PATCH(request: Request) {
   const body = (await request.json().catch(() => null)) as PatchBody | null;
   if (!body?.id) return NextResponse.json({ error: "id is required" }, { status: 400 });
 
-  const { id, ...updates } = body;
+  // Only these fields are editable here; anything else in the body is ignored.
+  const updates: Omit<PatchBody, "id"> = {};
+  if (typeof body.active === "boolean") updates.active = body.active;
+  if (body.role === "student" || body.role === "admin") updates.role = body.role;
+  if (Number.isInteger(body.token_quota) && (body.token_quota as number) >= 0) updates.token_quota = body.token_quota;
+  const { id } = body;
   const admin = createAdminClient();
   const { data, error } = await admin.from("students").update(updates).eq("id", id).select().single();
 

@@ -60,15 +60,14 @@ export function createGenerationRoute(taskType: GenerationTaskType) {
     }
     const prompt = typedPrompt || DEFAULT_PHOTO_PROMPT[taskType];
 
-    // Optional school/grade/subject choice — validated against the caller's
-    // permissions inside runGeneration.
-    const scopeOverride =
-      typeof body?.schoolId === "string" && typeof body?.gradeId === "string" && typeof body?.subjectId === "string"
-        ? { schoolId: body.schoolId, gradeId: body.gradeId, subjectId: body.subjectId }
-        : undefined;
+    // Optional: which of the user's own books to search. Retrieval is always
+    // limited to the caller's library, so ids of other users' books match nothing.
+    const documentIds = Array.isArray(body?.documentIds)
+      ? body.documentIds.filter((id: unknown): id is string => typeof id === "string")
+      : undefined;
 
     try {
-      const result = await runGeneration({ student, taskType, prompt, scopeOverride, photos });
+      const result = await runGeneration({ student, taskType, prompt, documentIds, photos });
 
       const title = !typedPrompt ? "Photo question" : prompt.length > 80 ? `${prompt.slice(0, 77)}...` : prompt;
       const pdfBuffer = await renderGenerationPdf({

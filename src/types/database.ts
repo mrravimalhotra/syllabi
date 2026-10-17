@@ -59,9 +59,16 @@ export interface LlmSetting {
 export interface DocumentRow {
   id: string;
   title: string;
-  school_id: string;
-  grade_id: string;
-  subject_id: string;
+  /** The account that uploaded this book; only they can search it. */
+  owner_id: string | null;
+  /** Free-text labels the owner gives the book, e.g. "Science" and "Class 8". */
+  subject: string | null;
+  grade: string | null;
+  rights_confirmed_at: string | null;
+  /** Retired shared-library taxonomy; no longer written. */
+  school_id: string | null;
+  grade_id: string | null;
+  subject_id: string | null;
   source_type: "textbook" | "exercise" | "past_paper" | "notes";
   storage_path: string | null;
   status: "processing" | "ready" | "failed";
@@ -72,9 +79,10 @@ export interface DocumentRow {
 export interface ChunkRow {
   id: string;
   document_id: string;
-  school_id: string;
-  grade_id: string;
-  subject_id: string;
+  owner_id: string | null;
+  school_id: string | null;
+  grade_id: string | null;
+  subject_id: string | null;
   source_type: string;
   page_number: number | null;
   section_label: string | null;

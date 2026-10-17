@@ -1,4 +1,4 @@
-import { generateCompletion } from "@/lib/llm";
+import { generateCompletion, type CompletionResult } from "@/lib/llm";
 
 const EXTRACTION_SYSTEM_PROMPT = `You transcribe scanned or photographed textbook/exercise/past-paper pages into
 clean, well-structured plain text. Preserve headings, question numbers, and paragraph
@@ -10,7 +10,7 @@ or unreadable, output exactly: [EMPTY PAGE]`;
  * Extracts clean text from one scanned/photographed page using the LLM's native
  * vision input — no dedicated OCR vendor needed (Requirement: no OCR bill).
  */
-export async function extractPageText(imageBase64: string, mimeType: string): Promise<string> {
+export async function extractPageText(imageBase64: string, mimeType: string): Promise<CompletionResult> {
   const result = await generateCompletion({
     taskType: "ocr_extraction",
     systemInstructions: EXTRACTION_SYSTEM_PROMPT,
@@ -19,5 +19,5 @@ export async function extractPageText(imageBase64: string, mimeType: string): Pr
     temperature: 0,
   });
 
-  return result.text.trim();
+  return { ...result, text: result.text.trim() };
 }

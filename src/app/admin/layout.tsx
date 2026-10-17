@@ -5,8 +5,6 @@ import { signOut } from "@/lib/actions/auth";
 const NAV = [
   { href: "/admin", label: "Overview" },
   { href: "/admin/students", label: "Accounts" },
-  { href: "/admin/taxonomy", label: "Schools & Taxonomy" },
-  { href: "/admin/documents", label: "Knowledge Base" },
   { href: "/admin/llm-settings", label: "LLM Settings" },
 ];
 

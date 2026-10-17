@@ -1,14 +1,23 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { downscaleImageFile, type DownscaledImage } from "@/lib/downscale-image";
-import type { Grade, GenerationTaskType, School, Student, Subject } from "@/types/database";
+import type { GenerationTaskType, Student } from "@/types/database";
 
 const MAX_PHOTOS = 3;
 
 interface MeResponse {
   student: Student;
   quota: { used: number; quota: number; remaining: number; overQuota: boolean };
+}
+
+interface Book {
+  id: string;
+  title: string;
+  subject: string | null;
+  grade: string | null;
+  status: "processing" | "ready" | "failed";
 }
 
 interface GenerationResult {
@@ -50,40 +59,36 @@ export default function DashboardPage() {
   // browser so they fit the request size limit.
   const [photos, setPhotos] = useState<DownscaledImage[]>([]);
 
-  // Which school/grade/subject to generate for. Admins can pick any school; a
-  // parent or tutor picks a grade and subject within their assigned school.
-  const [schools, setSchools] = useState<School[]>([]);
-  const [grades, setGrades] = useState<Grade[]>([]);
-  const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [scopeSchoolId, setScopeSchoolId] = useState("");
-  const [scopeGradeId, setScopeGradeId] = useState("");
-  const [scopeSubjectId, setScopeSubjectId] = useState("");
-
-  const isAdmin = me?.student.role === "admin";
+  // The user's own books; answers search only the ones ticked (all by default).
+  const [books, setBooks] = useState<Book[]>([]);
+  const [selectedBookIds, setSelectedBookIds] = useState<string[] | null>(null);
 
   async function loadMe() {
     const res = await fetch("/api/me");
     const data = await res.json();
     if (res.ok) setMe(data);
+  }
 
-    if (res.ok) {
-      const taxRes = await fetch("/api/taxonomy");
-      const tax = await taxRes.json();
-      if (taxRes.ok) {
-        setSchools(tax.schools);
-        setGrades(tax.grades);
-        setSubjects(tax.subjects);
-        setScopeSchoolId((prev) => prev || data.student.school_id || tax.schools[0]?.id || "");
-        setScopeGradeId((prev) => prev || data.student.grade_id || "");
-        setScopeSubjectId((prev) => prev || data.student.subject_ids[0] || "");
-      }
-    }
+  async function loadBooks() {
+    const res = await fetch("/api/library");
+    const data = await res.json();
+    if (res.ok) setBooks((data.documents as Book[]).filter((b) => b.status === "ready"));
   }
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch-on-mount is intentional here
     loadMe();
+    loadBooks();
   }, []);
+
+  const activeBookIds = selectedBookIds ?? books.map((b) => b.id);
+
+  function toggleBook(id: string) {
+    setSelectedBookIds((prev) => {
+      const current = prev ?? books.map((b) => b.id);
+      return current.includes(id) ? current.filter((x) => x !== id) : [...current, id];
+    });
+  }
 
   async function addPhotos(files: FileList | null) {
     if (!files) return;
@@ -112,9 +117,7 @@ export default function DashboardPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt: prompt.trim(),
-          schoolId: scopeSchoolId,
-          gradeId: scopeGradeId,
-          subjectId: scopeSubjectId,
+          documentIds: activeBookIds,
           photos: photos.map((p) => ({ data: p.imageBase64, mimeType: p.mimeType })),
         }),
       });
@@ -130,8 +133,7 @@ export default function DashboardPage() {
     }
   }
 
-  const profileIncomplete = me && !isAdmin && (!me.student.school_id || me.student.subject_ids.length === 0);
-  const scopeIncomplete = !scopeSchoolId || !scopeGradeId || !scopeSubjectId;
+  const noBookSelected = books.length > 0 && activeBookIds.length === 0;
 
   return (
     <div className="space-y-6">
@@ -139,10 +141,13 @@ export default function DashboardPage() {
         <QuotaBar used={me.quota.used} quota={me.quota.quota} />
       )}
 
-      {profileIncomplete && (
+      {me && books.length === 0 && (
         <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-700">
-          Your account has no school or subjects yet. Ask an admin to complete it before generating
-          content.
+          Add your child&apos;s or student&apos;s books in{" "}
+          <Link href="/dashboard/library" className="font-medium underline">
+            My books
+          </Link>{" "}
+          so answers come from them. Until then, Syllabi answers from general knowledge.
         </p>
       )}
 
@@ -161,58 +166,19 @@ export default function DashboardPage() {
       </div>
 
       <form onSubmit={submit} className="space-y-3 rounded-xl border border-slate-200 bg-white p-5">
-        {!profileIncomplete && (
-          <div className={`grid gap-3 border-b border-slate-100 pb-3 ${isAdmin ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
-            <div className={isAdmin ? "" : "hidden"}>
-              <label className="text-xs font-medium text-slate-500">School</label>
-              <select
-                value={scopeSchoolId}
-                onChange={(e) => {
-                  setScopeSchoolId(e.target.value);
-                  setScopeGradeId("");
-                  setScopeSubjectId("");
-                }}
-                className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm"
-              >
-                <option value="">Select</option>
-                {schools.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-slate-500">Grade</label>
-              <select
-                value={scopeGradeId}
-                onChange={(e) => setScopeGradeId(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm"
-                disabled={!scopeSchoolId}
-              >
-                <option value="">Select</option>
-                {grades.filter((g) => g.school_id === scopeSchoolId).map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-slate-500">Subject</label>
-              <select
-                value={scopeSubjectId}
-                onChange={(e) => setScopeSubjectId(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm"
-                disabled={!scopeSchoolId}
-              >
-                <option value="">Select</option>
-                {subjects.filter((s) => s.school_id === scopeSchoolId).map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
+        {books.length > 0 && (
+          <div className="border-b border-slate-100 pb-3">
+            <p className="text-xs font-medium text-slate-500">Use these books</p>
+            <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+              {books.map((b) => (
+                <label key={b.id} className="flex items-center gap-1.5 text-sm text-slate-700">
+                  <input type="checkbox" checked={activeBookIds.includes(b.id)} onChange={() => toggleBook(b.id)} />
+                  {b.title}
+                  {(b.subject || b.grade) && (
+                    <span className="text-xs text-slate-400">({[b.subject, b.grade].filter(Boolean).join(", ")})</span>
+                  )}
+                </label>
+              ))}
             </div>
           </div>
         )}
@@ -261,7 +227,7 @@ export default function DashboardPage() {
         </div>
         <button
           type="submit"
-          disabled={loading || !!profileIncomplete || scopeIncomplete}
+          disabled={loading || noBookSelected}
           className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
           {loading ? "Generating..." : "Generate"}

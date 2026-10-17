@@ -1,35 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Grade, School, Student, Subject } from "@/types/database";
+import type { Student } from "@/types/database";
 
 type StudentWithUsage = Student & { monthly_usage: number };
 
 export default function StudentsPage() {
   const [students, setStudents] = useState<StudentWithUsage[]>([]);
-  const [schools, setSchools] = useState<School[]>([]);
-  const [grades, setGrades] = useState<Grade[]>([]);
-  const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
-    const [studentsRes, taxonomyRes] = await Promise.all([
-      fetch("/api/admin/students"),
-      fetch("/api/admin/taxonomy"),
-    ]);
+    const studentsRes = await fetch("/api/admin/students");
     const studentsData = await studentsRes.json();
-    const taxonomyData = await taxonomyRes.json();
 
     if (studentsRes.ok) setStudents(studentsData.students);
     else setError(studentsData.error);
-
-    if (taxonomyRes.ok) {
-      setSchools(taxonomyData.schools);
-      setGrades(taxonomyData.grades);
-      setSubjects(taxonomyData.subjects);
-    }
     setLoading(false);
   }
 
@@ -58,19 +45,16 @@ export default function StudentsPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-lg font-semibold text-slate-900">Accounts</h1>
-      <p className="text-sm text-slate-500">Parents and tutors. Grade is their default; they can pick any grade of their school when generating.</p>
+      <p className="text-sm text-slate-500">Parents and tutors. Each manages their own private books under My books.</p>
       {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-        <table className="w-full min-w-[900px] text-left text-sm">
+        <table className="w-full min-w-[640px] text-left text-sm">
           <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
             <tr>
               <th className="px-4 py-2 font-medium">Parent / tutor</th>
               <th className="px-4 py-2 font-medium">Status</th>
               <th className="px-4 py-2 font-medium">Role</th>
-              <th className="px-4 py-2 font-medium">School</th>
-              <th className="px-4 py-2 font-medium">Grade</th>
-              <th className="px-4 py-2 font-medium">Subjects</th>
               <th className="px-4 py-2 font-medium">Usage / Quota</th>
               <th className="px-4 py-2 font-medium"></th>
             </tr>
@@ -103,52 +87,6 @@ export default function StudentsPage() {
                   </select>
                 </td>
                 <td className="px-4 py-3">
-                  <select
-                    value={s.school_id ?? ""}
-                    onChange={(e) => patch(s.id, { school_id: e.target.value || null, grade_id: null, subject_ids: [] })}
-                    className="rounded-md border border-slate-300 px-2 py-1 text-xs"
-                  >
-                    <option value="">—</option>
-                    {schools.map((sc) => (
-                      <option key={sc.id} value={sc.id}>
-                        {sc.name}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-                <td className="px-4 py-3">
-                  <select
-                    value={s.grade_id ?? ""}
-                    onChange={(e) => patch(s.id, { grade_id: e.target.value || null })}
-                    className="rounded-md border border-slate-300 px-2 py-1 text-xs"
-                    disabled={!s.school_id}
-                  >
-                    <option value="">—</option>
-                    {grades.filter((g) => g.school_id === s.school_id).map((g) => (
-                      <option key={g.id} value={g.id}>
-                        {g.name}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-                <td className="px-4 py-3">
-                  <select
-                    multiple
-                    value={s.subject_ids}
-                    onChange={(e) =>
-                      patch(s.id, { subject_ids: Array.from(e.target.selectedOptions, (o) => o.value) })
-                    }
-                    className="h-16 w-32 rounded-md border border-slate-300 px-2 py-1 text-xs"
-                    disabled={!s.school_id}
-                  >
-                    {subjects.filter((sub) => sub.school_id === s.school_id).map((sub) => (
-                      <option key={sub.id} value={sub.id}>
-                        {sub.name}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-                <td className="px-4 py-3">
                   <p className="text-xs text-slate-700">
                     {s.monthly_usage.toLocaleString()} / {s.token_quota.toLocaleString()}
                   </p>
@@ -178,8 +116,8 @@ export default function StudentsPage() {
             ))}
             {students.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-6 text-center text-slate-400">
-                  No students yet.
+                <td colSpan={5} className="px-4 py-6 text-center text-slate-400">
+                  No accounts yet.
                 </td>
               </tr>
             )}

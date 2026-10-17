@@ -52,10 +52,11 @@ update students set role = 'admin', active = true where email = '<your email>';
 
 ## 6. Smoke test
 
-1. Sign up a second (student) account → it lands on `/pending`.
-2. As admin: create a school, grade and subject (`/admin/taxonomy`); activate the student and assign them (`/admin/students`).
-3. Upload a few pages (`/admin/documents`) and wait for status `ready`.
-4. As the student: generate a solution, download the PDF, and check that quota usage went up.
+1. Sign up a second account (parent or tutor) → it lands on `/pending`.
+2. As admin: grant it access (`/admin/students`).
+3. As that account: upload a few pages under **My books** (`/dashboard/library`), tick the ownership box, and wait for status `ready`.
+4. Generate a solution (optionally with a photo), download the PDF, and check that quota usage went up (reading the pages counts too).
+5. Sign in as a different account and confirm it cannot see or search the first account's books.
 
 ## Local check
 

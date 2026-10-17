@@ -5,9 +5,10 @@ import type { CompletionImage } from "@/lib/llm/types";
 import type { MatchedChunk } from "@/types/database";
 
 export interface RetrievalScope {
-  schoolId: string;
-  gradeId: string;
-  subjectId: string;
+  /** Only this account's own books are searched. */
+  ownerId: string;
+  /** Optionally narrow the search to these of the owner's books. */
+  documentIds?: string[];
 }
 
 export interface RetrievalResult {
@@ -23,19 +24,18 @@ const COVERAGE_THRESHOLD = 0.55;
 const MAX_SOURCE_IMAGES = 4;
 
 /**
- * The reusable RAG retrieval core: embed the query, then run a taxonomy-filtered
- * vector search in pgvector via the `match_chunks` RPC. Every generation route
+ * The reusable RAG retrieval core: embed the query, then run a vector search
+ * over the owner's private library in pgvector via the `match_owner_chunks` RPC. Every generation route
  * (solutions, notes, sample papers, ad-hoc) calls this same function.
  */
 export async function retrieveContext(query: string, scope: RetrievalScope): Promise<RetrievalResult> {
   const { embedding } = await embed(query);
   const admin = createAdminClient();
 
-  const { data, error } = await admin.rpc("match_chunks", {
+  const { data, error } = await admin.rpc("match_owner_chunks", {
     query_embedding: embedding,
-    match_school_id: scope.schoolId,
-    match_grade_id: scope.gradeId,
-    match_subject_id: scope.subjectId,
+    match_owner_id: scope.ownerId,
+    match_document_ids: scope.documentIds?.length ? scope.documentIds : null,
     match_count: MATCH_COUNT,
   });
 

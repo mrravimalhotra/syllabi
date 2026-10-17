@@ -2,9 +2,10 @@
 
 A RAG-powered study assistant for **parents and tutors** (adults only) to
 prepare study material for school students: step-by-step solutions, revision
-notes, sample papers, and ad-hoc Q&A — grounded first in each school's own
-curriculum material, exportable to PDF. Students do not get accounts; the
-adult reviews and hands over the material. Per-account token quotas and a
+notes, sample papers, and ad-hoc Q&A — grounded first in the student's own
+books, which the parent or tutor uploads to a private library ("bring your
+own book", like uploading a PDF to Claude or Gemini), exportable to PDF.
+Students do not get accounts; the adult reviews and hands over the material. Per-account token quotas and a
 provider-agnostic LLM layer (defaults to Google Gemini, swappable to
 Anthropic/OpenAI per task type from the admin panel, no redeploy needed).
 

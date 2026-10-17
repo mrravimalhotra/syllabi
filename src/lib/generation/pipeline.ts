@@ -4,26 +4,14 @@ import { retrieveContext, formatContext, loadSourceImages } from "@/lib/rag/retr
 import { checkQuota, QuotaExceededError } from "@/lib/quota";
 import { systemInstructionsFor } from "@/lib/generation/prompts";
 import type { CompletionImage } from "@/lib/llm/types";
-import { createAdminClient } from "@/lib/supabase/admin";
 import type { GenerationTaskType, MatchedChunk, Student } from "@/types/database";
-
-export interface GenerationScope {
-  schoolId: string;
-  gradeId: string;
-  subjectId: string;
-}
 
 export interface GenerationInput {
   student: Student;
   taskType: GenerationTaskType;
   prompt: string;
-  /**
-   * Query a specific school/grade/subject instead of the caller's profile
-   * defaults. Admins may pick any school. A parent or tutor may pick any grade
-   * of their assigned school and any of their assigned subjects (they help
-   * students at several levels); see resolveScope.
-   */
-  scopeOverride?: GenerationScope;
+  /** Search only these of the user's own books; all of their books when omitted. */
+  documentIds?: string[];
   /**
    * Photos the user attached to this request (e.g. a homework page). They go
    * straight to the model alongside the question — the same way Claude and
@@ -51,13 +39,11 @@ export async function runGeneration({
   student,
   taskType,
   prompt,
-  scopeOverride,
+  documentIds,
   photos = [],
 }: GenerationInput): Promise<GenerationOutput> {
   const quota = await checkQuota(student.id);
   if (quota.overQuota) throw new QuotaExceededError(quota);
-
-  const scope = await resolveScope(student, scopeOverride);
 
   // The knowledge-base search needs text, so photos are transcribed first and
   // that text joins the typed prompt as the search query.
@@ -67,7 +53,7 @@ export async function runGeneration({
     searchQuery = `${prompt}\n\n${transcription}`.trim().slice(0, MAX_SEARCH_QUERY_CHARS);
   }
 
-  const retrieval = await retrieveContext(searchQuery, scope);
+  const retrieval = await retrieveContext(searchQuery, { ownerId: student.id, documentIds });
 
   const { images: sourcePageImages, byPath: sourceImages } = await loadSourceImages(retrieval.chunks);
 
@@ -123,40 +109,4 @@ async function transcribePhotos(studentId: string, photos: CompletionImage[]): P
     usage: result.usage,
   });
   return result.text.trim();
-}
-
-/**
- * Works out which school/grade/subject to search. Admins can use any scope.
- * Everyone else is held to their assigned school: the grade must belong to it,
- * and the subject must be one of their assigned subjects. Without an override
- * the profile's own grade and first subject are used.
- */
-async function resolveScope(student: Student, override?: GenerationScope): Promise<GenerationScope> {
-  if (override && student.role === "admin") return override;
-
-  if (!student.school_id) {
-    throw new Error("Your profile has no school yet — ask an admin to complete it.");
-  }
-  if (student.subject_ids.length === 0) {
-    throw new Error("Your profile has no subjects yet — ask an admin to add them.");
-  }
-
-  if (!override) {
-    if (!student.grade_id) throw new Error("Choose a grade before generating.");
-    return { schoolId: student.school_id, gradeId: student.grade_id, subjectId: student.subject_ids[0] };
-  }
-
-  if (override.schoolId !== student.school_id || !student.subject_ids.includes(override.subjectId)) {
-    throw new Error("You can only generate for your own school and assigned subjects.");
-  }
-  const admin = createAdminClient();
-  const { data: grade } = await admin
-    .from("grades")
-    .select("id")
-    .eq("id", override.gradeId)
-    .eq("school_id", student.school_id)
-    .maybeSingle();
-  if (!grade) throw new Error("That grade does not belong to your school.");
-
-  return override;
 }

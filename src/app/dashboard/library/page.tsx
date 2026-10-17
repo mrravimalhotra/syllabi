@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Grade, School, Subject } from "@/types/database";
 import { pdfToPageImages } from "@/lib/pdf-to-images";
 import { downscaleImageFile } from "@/lib/downscale-image";
 
@@ -16,10 +15,9 @@ const SOURCE_TYPE_OPTIONS: { value: SourceType; label: string }[] = [
 
 const MAX_PAGES = 30;
 
-// A single request carrying this much base64 text stays comfortably under the
-// ~10MB ceiling we've observed some local Windows dev setups silently
-// truncate large POST bodies at (surfaces as "Unterminated string in JSON").
-const MAX_BATCH_BASE64_CHARS = 5 * 1024 * 1024;
+// Base64 characters per request. Keeps each request under Vercel's ~4.5 MB
+// body limit (JSON overhead included); larger books go up in several batches.
+const MAX_BATCH_BASE64_CHARS = 3 * 1024 * 1024;
 
 interface PendingPage {
   id: string;
@@ -36,9 +34,8 @@ interface DocumentRowView {
   status: "processing" | "ready" | "failed";
   source_type: string;
   created_at: string;
-  schools: { name: string } | null;
-  grades: { name: string } | null;
-  subjects: { name: string } | null;
+  subject: string | null;
+  grade: string | null;
 }
 
 /** Splits pages into contiguous runs of the same source type, preserving scan order. */
@@ -73,17 +70,14 @@ function chunkBySize(pageList: PendingPage[], maxChars: number): PendingPage[][]
   return batches;
 }
 
-export default function DocumentsPage() {
-  const [schools, setSchools] = useState<School[]>([]);
-  const [grades, setGrades] = useState<Grade[]>([]);
-  const [subjects, setSubjects] = useState<Subject[]>([]);
+export default function LibraryPage() {
   const [documents, setDocuments] = useState<DocumentRowView[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [title, setTitle] = useState("");
-  const [schoolId, setSchoolId] = useState("");
-  const [gradeId, setGradeId] = useState("");
-  const [subjectId, setSubjectId] = useState("");
+  const [subject, setSubject] = useState("");
+  const [grade, setGrade] = useState("");
+  const [rightsConfirmed, setRightsConfirmed] = useState(false);
   const [defaultSourceType, setDefaultSourceType] = useState<SourceType>("textbook");
   const [pages, setPages] = useState<PendingPage[]>([]);
   const [processingFiles, setProcessingFiles] = useState(false);
@@ -94,15 +88,8 @@ export default function DocumentsPage() {
 
   async function load() {
     setLoading(true);
-    const [taxRes, docsRes] = await Promise.all([fetch("/api/admin/taxonomy"), fetch("/api/admin/documents")]);
-    const tax = await taxRes.json();
+    const docsRes = await fetch("/api/library");
     const docs = await docsRes.json();
-    if (taxRes.ok) {
-      setSchools(tax.schools);
-      setGrades(tax.grades);
-      setSubjects(tax.subjects);
-      setSchoolId((prev) => prev || tax.schools[0]?.id || "");
-    }
     if (docsRes.ok) setDocuments(docs.documents);
     setLoading(false);
   }
@@ -165,12 +152,25 @@ export default function DocumentsPage() {
     setPages((prev) => prev.map((p) => (p.id === id ? { ...p, sourceType } : p)));
   }
 
+  async function deleteBook(doc: DocumentRowView) {
+    if (!window.confirm(`Delete "${doc.title}"? Its pages and search index are removed for good.`)) return;
+    setError(null);
+    const res = await fetch(`/api/library/${doc.id}`, { method: "DELETE" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) setError(data.error ?? "Delete failed");
+    await load();
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setSuccess(null);
-    if (!title.trim() || !schoolId || !gradeId || !subjectId || pages.length === 0) {
-      setError("Title, school, grade, subject, and at least one page are required");
+    if (!title.trim() || pages.length === 0) {
+      setError("A title and at least one page are required");
+      return;
+    }
+    if (!rightsConfirmed) {
+      setError("Please confirm you own this copy before uploading");
       return;
     }
 
@@ -199,14 +199,14 @@ export default function DocumentsPage() {
             );
           }
 
-          const res = await fetch("/api/admin/documents", {
+          const res = await fetch("/api/library", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               title: title.trim(),
-              schoolId,
-              gradeId,
-              subjectId,
+              subject: subject.trim(),
+              grade: grade.trim(),
+              rightsConfirmed,
               sourceType: group[0].sourceType,
               pages: batches[i].map(({ imageBase64, mimeType }) => ({ imageBase64, mimeType })),
               documentId,
@@ -244,11 +244,11 @@ export default function DocumentsPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-lg font-semibold text-slate-900">Knowledge Base</h1>
+        <h1 className="text-lg font-semibold text-slate-900">My books</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Upload scanned/photographed pages, or a PDF. Each page is read directly via the
-          LLM&apos;s vision input (no separate OCR bill), chunked, embedded, and indexed into
-          pgvector — tagged by school, grade, and subject so retrieval stays scoped correctly.
+          Upload photos or a PDF of your child&apos;s or student&apos;s books, exercises and past
+          papers. Syllabi reads every page so answers come from these books. Your books are private:
+          only you can see and search them. Reading pages uses part of your monthly token quota.
         </p>
       </div>
 
@@ -261,62 +261,29 @@ export default function DocumentsPage() {
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g. Physics Grade 9 — Chapter 3: Motion"
+            placeholder="e.g. Science Class 8 — Chapter 3: Motion"
             className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm"
           />
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-4">
-          <div>
-            <label className="text-xs font-medium text-slate-500">School</label>
-            <select
-              value={schoolId}
-              onChange={(e) => {
-                setSchoolId(e.target.value);
-                setGradeId("");
-                setSubjectId("");
-              }}
-              className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm"
-            >
-              <option value="">Select</option>
-              {schools.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="text-xs font-medium text-slate-500">Grade</label>
-            <select
-              value={gradeId}
-              onChange={(e) => setGradeId(e.target.value)}
-              className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm"
-              disabled={!schoolId}
-            >
-              <option value="">Select</option>
-              {grades.filter((g) => g.school_id === schoolId).map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.name}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div className="grid gap-4 sm:grid-cols-3">
           <div>
             <label className="text-xs font-medium text-slate-500">Subject</label>
-            <select
-              value={subjectId}
-              onChange={(e) => setSubjectId(e.target.value)}
+            <input
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              placeholder="e.g. Science"
               className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm"
-              disabled={!schoolId}
-            >
-              <option value="">Select</option>
-              {subjects.filter((s) => s.school_id === schoolId).map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-500">Grade / class</label>
+            <input
+              value={grade}
+              onChange={(e) => setGrade(e.target.value)}
+              placeholder="e.g. Class 8"
+              className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm"
+            />
           </div>
           <div>
             <label className="text-xs font-medium text-slate-500">Default type for new pages</label>
@@ -401,6 +368,19 @@ export default function DocumentsPage() {
           )}
         </div>
 
+        <label className="flex items-start gap-2 text-sm text-slate-600">
+          <input
+            type="checkbox"
+            checked={rightsConfirmed}
+            onChange={(e) => setRightsConfirmed(e.target.checked)}
+            className="mt-1"
+          />
+          <span>
+            I own this copy (printed or digital) and will use it only to help my own child or
+            students study. I won&apos;t upload material I don&apos;t have the right to use.
+          </span>
+        </label>
+
         <div className="flex items-center gap-3">
           <button
             disabled={submitting || processingFiles}
@@ -417,9 +397,10 @@ export default function DocumentsPage() {
           <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
             <tr>
               <th className="px-4 py-2 font-medium">Title</th>
-              <th className="px-4 py-2 font-medium">Taxonomy</th>
+              <th className="px-4 py-2 font-medium">Subject · Grade</th>
               <th className="px-4 py-2 font-medium">Type</th>
               <th className="px-4 py-2 font-medium">Status</th>
+              <th className="px-4 py-2 font-medium"></th>
             </tr>
           </thead>
           <tbody>
@@ -427,7 +408,7 @@ export default function DocumentsPage() {
               <tr key={d.id} className="border-b border-slate-100 last:border-0">
                 <td className="px-4 py-3 text-slate-900">{d.title}</td>
                 <td className="px-4 py-3 text-xs text-slate-500">
-                  {d.schools?.name} · {d.grades?.name} · {d.subjects?.name}
+                  {[d.subject, d.grade].filter(Boolean).join(" · ") || "—"}
                 </td>
                 <td className="px-4 py-3 text-xs text-slate-500">{d.source_type}</td>
                 <td className="px-4 py-3">
@@ -443,12 +424,17 @@ export default function DocumentsPage() {
                     {d.status}
                   </span>
                 </td>
+                <td className="px-4 py-3 text-right">
+                  <button onClick={() => deleteBook(d)} className="text-xs font-medium text-red-600 hover:underline">
+                    Delete
+                  </button>
+                </td>
               </tr>
             ))}
             {documents.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-slate-400">
-                  No documents uploaded yet.
+                <td colSpan={5} className="px-4 py-6 text-center text-slate-400">
+                  No books yet. Upload your first one above.
                 </td>
               </tr>
             )}

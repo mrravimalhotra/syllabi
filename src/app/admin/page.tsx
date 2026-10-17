@@ -14,7 +14,7 @@ export default async function AdminOverviewPage() {
     { label: "Active accounts", value: activeCount ?? 0 },
     { label: "Pending approval", value: pendingCount ?? 0 },
     { label: "Total accounts", value: studentCount ?? 0 },
-    { label: "Knowledge base documents", value: documentCount ?? 0 },
+    { label: "Books (all accounts)", value: documentCount ?? 0 },
   ];
 
   return (

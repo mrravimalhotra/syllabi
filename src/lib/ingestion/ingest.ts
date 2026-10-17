@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { extractPageText } from "@/lib/ingestion/extract";
 import { chunkPageText } from "@/lib/ingestion/chunk";
 import { embed } from "@/lib/llm";
+import { recordTokenUsage } from "@/lib/llm/usage";
 import { uploadSourceFile } from "@/lib/storage";
 import type { DocumentRow } from "@/types/database";
 
@@ -20,11 +21,11 @@ export interface IngestPage {
 
 export interface IngestDocumentInput {
   title: string;
-  schoolId: string;
-  gradeId: string;
-  subjectId: string;
+  /** The account uploading the book — it becomes the owner, and the reading/indexing cost counts against its quota. */
+  ownerId: string;
+  subject: string | null;
+  grade: string | null;
   sourceType: DocumentRow["source_type"];
-  uploadedBy: string;
   pages: IngestPage[];
   /**
    * Append these pages to an already-created document instead of creating a
@@ -39,8 +40,8 @@ export interface IngestDocumentInput {
 
 /**
  * Full ingestion pipeline for one uploaded document: vision text extraction per
- * page → chunking → embedding → pgvector insert, tagged with the taxonomy the
- * admin selected at upload time. Every page's image is also persisted and linked
+ * page → chunking → embedding → pgvector insert, owned by (and searchable only
+ * by) the uploading account. Every page's image is also persisted and linked
  * to its chunks — text alone loses diagrams/maps/figures, so retrieval and
  * generation need the original image, not just its OCR'd caption. Runs to
  * completion (or through this batch, when `documentId`/`finalize` are used to
@@ -56,12 +57,13 @@ export async function ingestDocument(input: IngestDocumentInput): Promise<string
         .from("documents")
         .insert({
           title: input.title,
-          school_id: input.schoolId,
-          grade_id: input.gradeId,
-          subject_id: input.subjectId,
+          owner_id: input.ownerId,
+          subject: input.subject,
+          grade: input.grade,
+          rights_confirmed_at: new Date().toISOString(),
           source_type: input.sourceType,
           storage_path: null,
-          uploaded_by: input.uploadedBy,
+          uploaded_by: input.ownerId,
           status: "processing",
         })
         .select()
@@ -97,26 +99,44 @@ export async function ingestDocument(input: IngestDocumentInput): Promise<string
         if (error) stage("saving preview path", page.pageNumber, error);
       }
 
-      const pageText = await extractPageText(page.imageBase64, page.mimeType).catch((err) =>
+      const extraction = await extractPageText(page.imageBase64, page.mimeType).catch((err) =>
         stage("vision text extraction", page.pageNumber, err)
       );
-      const textChunks = chunkPageText(pageText, page.pageNumber);
+      await recordTokenUsage({
+        studentId: input.ownerId,
+        taskType: "ocr_extraction",
+        provider: extraction.provider,
+        model: extraction.model,
+        usage: extraction.usage,
+      });
+      const textChunks = chunkPageText(extraction.text, page.pageNumber);
 
+      let embeddingTokens = 0;
+      let embeddingModel = "";
       for (const chunk of textChunks) {
-        const { embedding } = await embed(chunk.content).catch((err) => stage("embedding", page.pageNumber, err));
+        const result = await embed(chunk.content).catch((err) => stage("embedding", page.pageNumber, err));
+        embeddingTokens += result.usage.totalTokens;
+        embeddingModel = result.model;
         const { error: insertError } = await admin.from("chunks").insert({
           document_id: documentId,
-          school_id: input.schoolId,
-          grade_id: input.gradeId,
-          subject_id: input.subjectId,
+          owner_id: input.ownerId,
           source_type: input.sourceType,
           page_number: page.pageNumber,
           section_label: chunk.sectionLabel,
           content: chunk.content,
           image_path: imagePath,
-          embedding,
+          embedding: result.embedding,
         });
         if (insertError) stage("saving chunk to database", page.pageNumber, insertError);
+      }
+      if (embeddingTokens > 0) {
+        await recordTokenUsage({
+          studentId: input.ownerId,
+          taskType: "embedding",
+          provider: "google",
+          model: embeddingModel,
+          usage: { inputTokens: embeddingTokens, outputTokens: 0, totalTokens: embeddingTokens },
+        });
       }
     }
 

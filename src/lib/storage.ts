@@ -1,4 +1,10 @@
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  ListObjectsV2Command,
+  DeleteObjectsCommand,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl as presign } from "@aws-sdk/s3-request-presigner";
 
 // Cloudflare R2 is S3-compatible, so the AWS SDK talks to it directly — only the
@@ -56,4 +62,22 @@ export async function downloadFile(path: string): Promise<{ data: Buffer; conten
   if (!response.Body) throw new Error(`Download failed: empty object body for ${path}`);
   const bytes = await response.Body.transformToByteArray();
   return { data: Buffer.from(bytes), contentType: response.ContentType || "application/octet-stream" };
+}
+
+/** Deletes every stored object whose key starts with `prefix` (e.g. all page images of one book). */
+export async function deletePrefix(prefix: string): Promise<void> {
+  const r2 = client();
+  let continuationToken: string | undefined;
+  do {
+    const listed = await r2.send(
+      new ListObjectsV2Command({ Bucket: BUCKET, Prefix: prefix, ContinuationToken: continuationToken })
+    );
+    const keys = (listed.Contents ?? []).map((o) => o.Key).filter((k): k is string => Boolean(k));
+    if (keys.length > 0) {
+      await r2.send(
+        new DeleteObjectsCommand({ Bucket: BUCKET, Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true } })
+      );
+    }
+    continuationToken = listed.IsTruncated ? listed.NextContinuationToken : undefined;
+  } while (continuationToken);
 }
