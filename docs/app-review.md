@@ -35,8 +35,8 @@ Input for BMAD planning (PRD, epics, stories). Written 2026-10-17 from a read of
 ### A. Student experience
 | # | Standard | Status | Note |
 |---|---|---|---|
-| A1 | Markdown + math rendering on screen | ❌ | Shown as raw text (`whitespace-pre-wrap`); needs markdown + KaTeX |
-| A2 | PDF supports math symbols and Hindi | ❌ | Built-in Helvetica has no √ π ≤ ∫ and no Devanagari; embed Noto fonts |
+| A1 | Markdown + math rendering on screen | ✅ | 2026-10-17: react-markdown + GFM tables; prompts ask for Unicode math; stray LaTeX converted (`src/lib/tidy-math.ts`) |
+| A2 | PDF supports math symbols and Hindi | ✅ | 2026-10-17: embedded Noto Sans → Noto Sans Math → Noto Sans Devanagari fallback; lists, tables, page numbers; footer bug fixed |
 | A3 | Streaming answers | ❌ | 10–30 s blank wait today |
 | A4 | Inline citations `[Source n, p.x]` linking to the page image | ⚠️ | Sources listed below the answer, not cited inline |
 | A5 | Follow-up chat on an answer | ❌ | Every request is one-shot |
@@ -49,7 +49,7 @@ Input for BMAD planning (PRD, epics, stories). Written 2026-10-17 from a read of
 | A12 | 👍/👎 + "report a problem" on each answer | ❌ | Needed for the quality loop |
 | A13 | Quota meter visible to the student | ⚠️ | Only shown as an error on hitting the limit |
 | A14 | PDF generated on demand, not on every answer | ❌ | Wastes time and storage |
-| A15 | Mobile-first, installable (PWA) | ⚠️ | Responsive Tailwind; no PWA |
+| A15 | Mobile-first, installable (PWA) | ⚠️ | 2026-10-17: phone layouts checked at 375 px (no sideways scroll, no iOS zoom, light-only colours); Print button prints just the answer. No PWA yet |
 | A16 | Hindi/regional UI and answers | ❌ | |
 | A17 | Accessibility (WCAG 2.1 AA: contrast, keyboard, labels) | ⚠️ | Not audited |
 | A18 | Onboarding, empty states, friendly errors | ⚠️ | |

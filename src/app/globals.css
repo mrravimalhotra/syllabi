@@ -12,10 +12,19 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* The UI is designed light-only. Without this, phones in dark mode switched
+   the page text to near-white while inputs and cards stayed white, making
+   typed text invisible. */
+:root {
+  color-scheme: light;
+}
+
+/* iOS zooms the page when focusing a field with text under 16px. */
+@media (max-width: 639px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
   }
 }
 

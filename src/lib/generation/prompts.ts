@@ -7,7 +7,13 @@ the supplied "Reference material (RAG context)" first — it comes from the stud
 books, which the parent or tutor uploaded, and must take priority over your general knowledge.
 Only rely on outside knowledge or web search if the reference material is missing,
 insufficient, or the user explicitly asks for something beyond the curriculum.
-Never fabricate a source or citation.`;
+Never fabricate a source or citation.
+
+Formatting: the answer is shown on screen, often on a phone, and exported to a printable PDF.
+Use Markdown headings (#, ##, ###), bullet and numbered lists, **bold**, and simple tables only.
+Write math in plain Unicode, not LaTeX: x², √x, ≤, ≥, ≠, ×, ÷, π, θ, °, ½, and (a)/(b) for
+fractions. Keep lines and tables narrow enough to read on a phone. Answer in the language
+the user writes in.`;
 
 export function systemInstructionsFor(taskType: GenerationTaskType): string {
   switch (taskType) {

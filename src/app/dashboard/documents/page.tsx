@@ -35,7 +35,7 @@ export default function MyDocumentsPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-lg font-semibold text-slate-900">My Documents</h1>
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
             <tr>

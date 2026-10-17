@@ -4,6 +4,9 @@ Syllabi's own code is proprietary (all rights reserved; no open-source licence g
 
 ## Bundled in this repository
 
+### Noto fonts — `src/lib/pdf/fonts/`
+Noto Sans, Noto Sans Devanagari and Noto Sans Math, embedded in generated PDFs. Copyright 2022 The Noto Project Authors. SIL Open Font License 1.1; full text in `src/lib/pdf/fonts/OFL.txt`.
+
 ### pdf.js — `public/pdf.worker.min.mjs`
 Copyright Mozilla Foundation. Apache License 2.0. The licence header is preserved at the top of the file; full text: https://www.apache.org/licenses/LICENSE-2.0
 

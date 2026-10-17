@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { downscaleImageFile, type DownscaledImage } from "@/lib/downscale-image";
+import { Markdown } from "@/components/Markdown";
 import type { GenerationTaskType, Student } from "@/types/database";
 
 const MAX_PHOTOS = 3;
@@ -138,11 +139,13 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       {me && (
-        <QuotaBar used={me.quota.used} quota={me.quota.quota} />
+        <div className="print:hidden">
+          <QuotaBar used={me.quota.used} quota={me.quota.quota} />
+        </div>
       )}
 
       {me && books.length === 0 && (
-        <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-700">
+        <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-700 print:hidden">
           Add your child&apos;s or student&apos;s books in{" "}
           <Link href="/dashboard/library" className="font-medium underline">
             My books
@@ -151,12 +154,12 @@ export default function DashboardPage() {
         </p>
       )}
 
-      <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
+      <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1 sm:flex print:hidden">
         {TABS.map((t) => (
           <button
             key={t.value}
             onClick={() => setTab(t.value)}
-            className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition ${
+            className={`rounded-md px-2 py-2 text-sm font-medium transition sm:flex-1 sm:px-3 ${
               tab === t.value ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-900"
             }`}
           >
@@ -165,7 +168,7 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      <form onSubmit={submit} className="space-y-3 rounded-xl border border-slate-200 bg-white p-5">
+      <form onSubmit={submit} className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 sm:p-5 print:hidden">
         {books.length > 0 && (
           <div className="border-b border-slate-100 pb-3">
             <p className="text-xs font-medium text-slate-500">Use these books</p>
@@ -187,7 +190,7 @@ export default function DashboardPage() {
           onChange={(e) => setPrompt(e.target.value)}
           placeholder={TABS.find((t) => t.value === tab)?.placeholder}
           rows={4}
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+          className="w-full rounded-md border border-slate-300 px-3 py-2 text-base focus:border-slate-500 focus:outline-none sm:text-sm"
         />
         <div className="flex flex-wrap items-center gap-3">
           {photos.map((p, i) => (
@@ -234,20 +237,29 @@ export default function DashboardPage() {
         </button>
       </form>
 
-      {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 print:hidden">{error}</p>}
 
       {result && (
-        <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-5">
-          <div className="flex items-start justify-between gap-4">
-            <h2 className="text-sm font-semibold text-slate-900">{result.title}</h2>
-            <a
-              href={result.downloadUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="shrink-0 rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white"
-            >
-              Download PDF
-            </a>
+        <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 sm:p-5 print:border-0 print:p-0 print:shadow-none">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <h2 className="w-full text-base font-semibold text-slate-900 sm:w-auto sm:min-w-0 sm:flex-1">{result.title}</h2>
+            <div className="flex shrink-0 gap-2 print:hidden">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Print
+              </button>
+              <a
+                href={result.downloadUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white"
+              >
+                Download PDF
+              </a>
+            </div>
           </div>
           {result.usedSearchGrounding && (
             <p className="text-xs text-slate-500">
@@ -257,7 +269,7 @@ export default function DashboardPage() {
           <p className="text-xs text-slate-500">
             AI-generated. Check it before using it with your child or student.
           </p>
-          <div className="whitespace-pre-wrap text-sm text-slate-700">{result.text}</div>
+          <Markdown text={result.text} />
           {result.sources.length > 0 && (
             <div className="border-t border-slate-100 pt-3">
               <p className="text-xs font-medium text-slate-500">Sources</p>
