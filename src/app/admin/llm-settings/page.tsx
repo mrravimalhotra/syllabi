@@ -1,50 +1,66 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Alert, PageHeader, PageSkeleton, card, cx } from "@/components/ui";
+import { Alert, PageHeader, PageSkeleton, button, card, cx, input } from "@/components/ui";
+import { OFFLINE_MESSAGE, failedRequestMessage } from "@/lib/http-errors";
 import type { LlmSetting, Provider } from "@/types/database";
 
 const PROVIDERS: Provider[] = ["google", "anthropic", "openai", "groq", "openrouter", "mistral"];
 
+// What each task is, in words an admin can act on.
 const TASK_TYPE_LABELS: Record<string, string> = {
-  ocr_extraction: "Page text extraction (ingestion, vision)",
-  embedding: "Embeddings (RAG indexing & retrieval)",
+  ocr_extraction: "Reading book pages (scans and photos)",
+  embedding: "Searching your books (must stay on Google)",
   solution: "Step-by-step solutions",
   notes: "Revision notes",
   sample_paper: "Sample papers",
-  ad_hoc: "Ad-hoc prompts",
-  coverage_check: "RAG coverage / search-grounding check",
+  ad_hoc: "Ask (quick answers)",
+  coverage_check: "Checking book coverage",
   study_pack: "Chapter study packs",
 };
+const labelFor = (taskType: string) =>
+  TASK_TYPE_LABELS[taskType] ?? taskType.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
 
 export default function LlmSettingsPage() {
   const [settings, setSettings] = useState<LlmSetting[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [savingTaskType, setSavingTaskType] = useState<string | null>(null);
+  const [saved, setSaved] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/admin/llm-settings")
-      .then((r) => r.json())
-      .then((data) => setSettings(data.settings ?? []))
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error ?? failedRequestMessage(res.status, "load the AI model settings"));
+        setSettings(data.settings ?? []);
+      })
+      .catch((err) => setError(err instanceof TypeError ? OFFLINE_MESSAGE : err instanceof Error ? err.message : "Couldn't load the AI model settings. Reload the page."))
       .finally(() => setLoading(false));
   }, []);
 
   async function save(taskType: string, provider: Provider, model: string) {
     setSavingTaskType(taskType);
     setError(null);
-    const res = await fetch("/api/admin/llm-settings", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ taskType, provider, model }),
-    });
-    const data = await res.json();
-    setSavingTaskType(null);
-    if (!res.ok) {
-      setError(data.error);
-      return;
+    setSaved(null);
+    try {
+      const res = await fetch("/api/admin/llm-settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ taskType, provider, model }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error ?? failedRequestMessage(res.status, `save the model for ${labelFor(taskType).toLowerCase()}`));
+        return;
+      }
+      setSettings((prev) => prev.map((s) => (s.task_type === taskType ? data.setting : s)));
+      setSaved(`${labelFor(taskType)}: now uses ${provider} / ${model}. Applies to the next request.`);
+    } catch (err) {
+      setError(err instanceof TypeError ? OFFLINE_MESSAGE : "Couldn't save that setting. Try again.");
+    } finally {
+      setSavingTaskType(null);
     }
-    setSettings((prev) => prev.map((s) => (s.task_type === taskType ? data.setting : s)));
   }
 
   if (loading) return <PageSkeleton rows={2} />;
@@ -53,24 +69,34 @@ export default function LlmSettingsPage() {
     <div className="space-y-4">
       <PageHeader
         title="AI models"
-        description="Route each task to a provider and model. Changes apply immediately, no redeploy needed."
+        description="Choose which AI service and model does each job. Changes apply to the next request; no redeploy needed. Use the exact model name from the provider (for example gemini-flash-latest). Check Admin → Health after a change."
       />
       {error && <Alert tone="error">{error}</Alert>}
+      {saved && <Alert tone="success">{saved}</Alert>}
 
       <div className={cx(card, "overflow-x-auto")}>
         <table className="w-full text-left text-sm">
           <thead className="border-b border-slate-200 bg-slate-50/80 text-xs tracking-wide text-slate-500 uppercase">
             <tr>
-              <th className="px-4 py-2 font-medium">Task</th>
-              <th className="px-4 py-2 font-medium">Provider</th>
-              <th className="px-4 py-2 font-medium">Model</th>
-              <th className="px-4 py-2 font-medium"></th>
+              <th scope="col" className="px-4 py-2 font-medium">Job</th>
+              <th scope="col" className="px-4 py-2 font-medium">AI service</th>
+              <th scope="col" className="px-4 py-2 font-medium">Model name</th>
+              <th scope="col" className="px-4 py-2 font-medium">
+                <span className="sr-only">Save</span>
+              </th>
             </tr>
           </thead>
           <tbody>
             {settings.map((s) => (
               <SettingRow key={s.task_type} setting={s} saving={savingTaskType === s.task_type} onSave={save} />
             ))}
+            {settings.length === 0 && (
+              <tr>
+                <td colSpan={4} className="px-4 py-6 text-center text-slate-500">
+                  {error ? "The settings couldn't be loaded." : "No jobs are configured."}
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -92,12 +118,13 @@ function SettingRow({
 
   return (
     <tr className="border-b border-slate-100 last:border-0">
-      <td className="px-4 py-3 text-slate-700">{TASK_TYPE_LABELS[setting.task_type] ?? setting.task_type}</td>
+      <td className="px-4 py-3 text-slate-700">{labelFor(setting.task_type)}</td>
       <td className="px-4 py-3">
         <select
+          aria-label={`AI service for ${labelFor(setting.task_type)}`}
           value={provider}
           onChange={(e) => setProvider(e.target.value as Provider)}
-          className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs"
+          className={cx(input, "w-auto py-1.5 text-xs")}
         >
           {PROVIDERS.map((p) => (
             <option key={p} value={p}>
@@ -108,16 +135,18 @@ function SettingRow({
       </td>
       <td className="px-4 py-3">
         <input
+          aria-label={`Model name for ${labelFor(setting.task_type)}`}
           value={model}
           onChange={(e) => setModel(e.target.value)}
-          className="w-56 rounded-lg border border-slate-300 px-2 py-1.5 text-xs"
+          className={cx(input, "w-56 py-1.5 text-xs")}
         />
       </td>
       <td className="px-4 py-3">
         <button
-          disabled={saving}
-          onClick={() => onSave(setting.task_type, provider, model)}
-          className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+          type="button"
+          disabled={saving || !model.trim() || (provider === setting.provider && model.trim() === setting.model)}
+          onClick={() => onSave(setting.task_type, provider, model.trim())}
+          className={button.smallPrimary}
         >
           {saving ? "Saving..." : "Save"}
         </button>

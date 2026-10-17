@@ -141,7 +141,8 @@ export function OrderQuiz({
               q.ascending ? "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200" : "bg-amber-50 text-amber-800 ring-1 ring-amber-200"
             )}
           >
-            {q.ascending ? "Smallest → Biggest" : "Biggest → Smallest"}
+            <span aria-hidden="true">{q.ascending ? "Smallest → Biggest" : "Biggest → Smallest"}</span>
+            <span className="sr-only">{q.ascending ? "Put the numbers in order from smallest to biggest" : "Put the numbers in order from biggest to smallest"}</span>
           </p>
 
           <section aria-label="Numbers to put in order">

@@ -17,9 +17,9 @@ export default function DashboardError({ error, reset }: { error: Error & { dige
       </div>
       <p className="mt-4 text-base font-semibold text-slate-900">Something went wrong on this page</p>
       <p className="mt-1 max-w-sm text-sm text-slate-500">
-        Your books and saved answers are safe. Try again, or reload the page.
+        Your books and saved answers are safe. Press Try again. If it keeps happening, reload the page, or sign out and in again.
       </p>
-      <button onClick={reset} className={cx(button.primary, "mt-5")}>
+      <button type="button" onClick={reset} className={cx(button.primary, "mt-5")}>
         Try again
       </button>
     </div>

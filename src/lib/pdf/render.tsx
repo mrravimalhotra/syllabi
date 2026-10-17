@@ -1,3 +1,4 @@
+import { taskLabel } from "@/lib/format";
 import path from "node:path";
 import { Document, Page, Text, View, Image, StyleSheet, Font, renderToBuffer } from "@react-pdf/renderer";
 import { tidyMath } from "@/lib/tidy-math";
@@ -229,13 +230,6 @@ function ContentBody({ text }: { text: string }) {
   return <>{blocks}</>;
 }
 
-const TASK_LABELS: Record<GenerationTaskType, string> = {
-  solution: "Step-by-Step Solution",
-  notes: "Revision Notes",
-  sample_paper: "Sample Paper",
-  ad_hoc: "Answer",
-  study_pack: "Chapter Study Pack",
-};
 
 export interface RenderPdfInput {
   taskType: GenerationTaskType;
@@ -259,7 +253,7 @@ export async function renderGenerationPdf(input: RenderPdfInput): Promise<Buffer
       <Page size="A4" style={styles.page}>
         <Text style={styles.title}>{input.title}</Text>
         <Text style={styles.subtitle}>
-          {input.label ?? TASK_LABELS[input.taskType]} · Prepared by {input.studentName} · Syllabi
+          {input.label ?? taskLabel(input.taskType)} · Prepared by {input.studentName} · Syllabi
         </Text>
 
         <ContentBody text={input.content} />

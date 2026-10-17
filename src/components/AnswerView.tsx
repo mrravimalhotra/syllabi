@@ -1,5 +1,6 @@
 "use client";
 
+import { sourceTypeLabel } from "@/lib/format";
 import { useEffect, useState } from "react";
 import { Markdown } from "@/components/Markdown";
 import { AlertIcon, CheckIcon, CopyIcon, DownloadIcon } from "@/components/icons";
@@ -48,7 +49,7 @@ export function AnswerView({ answer, actions, meta }: { answer: Answer; actions?
           <PrintButton pdfUrl={answer.pdfUrl} name={answer.title} />
           {answer.pdfUrl && hasAnswerKey(answer.text) && (
             <PdfButton url={`${answer.pdfUrl}?part=questions`} name={`${answer.title} (questions)`} className={button.small}>
-              <DownloadIcon className="h-4 w-4" /> Questions only
+              <DownloadIcon className="h-4 w-4" /> Questions-only PDF
             </PdfButton>
           )}
           {answer.pdfUrl && (
@@ -62,11 +63,11 @@ export function AnswerView({ answer, actions, meta }: { answer: Answer; actions?
       <div className="space-y-4 px-4 py-5 sm:px-6 print:px-0">
         {answer.usedSearchGrounding && (
           <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900 print:hidden">
-            Your books didn&apos;t fully cover this, so it was supplemented with a Google Search.
+            Your books didn&apos;t fully cover this, so a web search was used as well. Check this answer carefully.
           </p>
         )}
         {answer.usedSearchGrounding && (
-          <p className="hidden text-xs text-slate-500 print:block">Supplemented with a Google Search.</p>
+          <p className="hidden text-xs text-slate-500 print:block">Supplemented with a web search.</p>
         )}
         <Markdown text={answer.text} />
         {answer.searchSuggestionsHtml && <SearchSuggestions html={answer.searchSuggestionsHtml} />}
@@ -82,7 +83,7 @@ export function AnswerView({ answer, actions, meta }: { answer: Answer; actions?
               <li key={s.id} className="flex gap-2">
                 <span className="w-6 shrink-0 text-slate-400">[{i + 1}]</span>
                 <span>
-                  {s.section_label ?? s.source_type}
+                  {s.section_label ?? sourceTypeLabel(s.source_type)}
                   {s.page_number ? `, p.${s.page_number}` : ""}
                 </span>
               </li>

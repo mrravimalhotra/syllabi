@@ -13,7 +13,7 @@ export function PrintButton({ pdfUrl, name = "Syllabi" }: { pdfUrl?: string | nu
   const print = () => {
     if (!inIosHomeScreenApp()) window.print();
     else if (pdfUrl) void pdf.open(pdfUrl);
-    else window.alert("Printing isn't available in the home-screen app for this yet. Open Syllabi in Safari to print it.");
+    else window.alert("This can't be printed from the Home Screen app. Open Syllabi in Safari and print it from there.");
   };
   return (
     <button type="button" onClick={print} className={button.small} disabled={pdf.state === "preparing"}>

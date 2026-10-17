@@ -1,5 +1,6 @@
 "use client";
 
+import { failedRequestMessage } from "@/lib/http-errors";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -40,7 +41,7 @@ export default function AccountPage() {
       body: JSON.stringify({ fullName }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error ?? "Couldn't save your name");
+    if (!res.ok) throw new Error(data.error ?? failedRequestMessage(res.status, "save your name"));
     setMe((prev) => (prev ? { ...prev, student: { ...prev.student, full_name: data.fullName } } : prev));
   }
 
@@ -52,7 +53,7 @@ export default function AccountPage() {
       body: JSON.stringify(change),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error ?? "Couldn't save that");
+    if (!res.ok) throw new Error(data.error ?? failedRequestMessage(res.status, "save that change"));
     setMe((prev) =>
       prev
         ? {
@@ -81,7 +82,7 @@ export default function AccountPage() {
     const data = await res.json().catch(() => ({}));
     setDeleting(false);
     if (!res.ok) {
-      setError(data.error ?? "Couldn't delete your account. Please try again.");
+      setError(data.error ?? failedRequestMessage(res.status, "delete your account"));
       return;
     }
     router.replace("/login");
@@ -97,12 +98,12 @@ export default function AccountPage() {
     <div className="space-y-6">
       <PageHeader
         title="Account"
-        description="Your details, your child's class, board and answer language, usage and password."
+        description="Your name and email, the class and board your answers are written for, the answer language, this month's usage, and your password."
       />
 
       <section className={cx(card, "divide-y divide-slate-100")}>
         <Row label="Name">
-          <EditableName value={student.full_name ?? "Add your name"} onSave={rename} className="text-slate-900" />
+          <EditableName value={student.full_name ?? ""} emptyText="Not set: tap the pencil to add your name" onSave={rename} className="text-slate-900" />
         </Row>
         <Row label="Email">
           <span className="break-all text-slate-900">{student.email}</span>
@@ -112,9 +113,9 @@ export default function AccountPage() {
             <span className="text-slate-900 capitalize">{student.account_type}</span>
           </Row>
         )}
-        <Row label="Child's class">
+        <Row label={student.account_type === "tutor" ? "Student's class" : "Child's class"}>
           <LevelSelect
-            label="Child's class"
+            label={student.account_type === "tutor" ? "Student's class" : "Child's class"}
             value={student.class_level ?? ""}
             options={CLASS_LEVELS.map((c) => ({ value: c, label: c }))}
             onSave={(v) => saveLevel({ classLevel: v })}
@@ -139,7 +140,10 @@ export default function AccountPage() {
           <div className="w-full max-w-xs space-y-1.5">
             <Meter value={quota.used} max={quota.quota} label="Monthly usage" />
             <p className="text-xs text-slate-500 tabular-nums">
-              {quota.used.toLocaleString("en-IN")} of {quota.quota.toLocaleString("en-IN")} tokens. Resets on the 1st.
+              {Math.min(100, Math.round((quota.used / Math.max(quota.quota, 1)) * 100))}% of this month&apos;s allowance used. It resets on the 1st.
+              <span className="block text-slate-400">
+                ({quota.used.toLocaleString("en-IN")} of {quota.quota.toLocaleString("en-IN")} AI tokens)
+              </span>
             </p>
           </div>
         </Row>
@@ -235,12 +239,14 @@ function LevelSelect({
         ))}
       </select>
       {state === "saving" && <Spinner />}
-      {state === "saved" && (
-        <span className="inline-flex items-center gap-1 text-xs text-emerald-700">
-          <CheckIcon className="h-3.5 w-3.5" /> Saved
-        </span>
-      )}
-      {state === "error" && <span className="text-xs text-red-600">Couldn&apos;t save. Try again.</span>}
+      <span role="status" className="contents">
+        {state === "saved" && (
+          <span className="inline-flex items-center gap-1 text-xs text-emerald-700">
+            <CheckIcon className="h-3.5 w-3.5" /> Saved
+          </span>
+        )}
+        {state === "error" && <span className="text-xs text-red-600">Couldn&apos;t save. Check your connection and choose again.</span>}
+      </span>
     </div>
   );
 }

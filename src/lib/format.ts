@@ -10,14 +10,31 @@ export function formatDate(iso: string): string {
   return DATE_FORMAT.format(new Date(iso)).replace(/\//g, "-");
 }
 
-/** Display names for the four kinds of answer. */
+/** Display names for the kinds of saved document. */
 export const TASK_LABELS: Record<string, string> = {
   solution: "Step-by-step solution",
   notes: "Revision notes",
   sample_paper: "Sample paper",
-  ad_hoc: "Ask anything",
+  ad_hoc: "Quick answer",
   study_pack: "Study pack",
 };
+
+/** A kind of document in words; never a raw code like "sample_paper". */
+export function taskLabel(taskType: string): string {
+  return TASK_LABELS[taskType] ?? taskType.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+}
+
+/** The kinds of material a book page can be, as shown to people. */
+export const SOURCE_TYPE_LABELS: Record<string, string> = {
+  textbook: "Textbook",
+  exercise: "Exercise",
+  past_paper: "Past paper",
+  notes: "Notes",
+};
+
+export function sourceTypeLabel(sourceType: string): string {
+  return SOURCE_TYPE_LABELS[sourceType] ?? sourceType.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+}
 
 // A sample paper's answer key starts at a "## Answer Key" heading.
 const ANSWER_KEY_START = /^#{1,3}\s*\**(?:answer key\b|उत्तर कुंजी|उत्तरसूची|उत्तर सूची|corrigé)/im;

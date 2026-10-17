@@ -11,8 +11,8 @@ export default function PendingPage() {
       title="Awaiting approval"
       description={
         signupsOpen()
-          ? "Your account has been created but is not active yet. An admin needs to grant you access. Check back soon."
-          : "Syllabi is in private testing. Access will open to parents and tutors soon."
+          ? "Your account was created, but it hasn't been approved yet. Sign in again later to check; once it is approved you can start using Syllabi."
+          : "Syllabi is in private testing. Sign-ups will open soon."
       }
     >
       <form action={signOut}>

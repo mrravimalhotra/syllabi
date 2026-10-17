@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ChatIcon, ClipboardIcon, DownloadIcon, LayersIcon, ListCheckIcon, NotesIcon, SearchIcon, SparklesIcon, TrashIcon } from "@/components/icons";
+import { OFFLINE_MESSAGE, failedRequestMessage } from "@/lib/http-errors";
 import { PdfButton } from "@/components/PdfButton";
 import { Alert, EmptyState, PageHeader, Skeleton, button, card, cx, input } from "@/components/ui";
-import { TASK_LABELS, formatDate } from "@/lib/format";
+import { formatDate, taskLabel } from "@/lib/format";
 import type { GeneratedDocumentRow } from "@/types/database";
 
 type Row = Pick<GeneratedDocumentRow, "id" | "title" | "task_type" | "created_at">;
@@ -28,11 +29,11 @@ export default function MyDocumentsPage() {
   useEffect(() => {
     fetch("/api/documents")
       .then(async (r) => {
-        const data = await r.json();
-        if (!r.ok) throw new Error(data.error);
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.error ?? failedRequestMessage(r.status, "load your documents"));
         setDocuments(data.documents ?? []);
       })
-      .catch(() => setError("Couldn't load your documents. Check your connection and reload the page."))
+      .catch((err) => setError(err instanceof TypeError ? OFFLINE_MESSAGE : err instanceof Error ? err.message : "Couldn't load your documents. Reload the page to try again."))
       .finally(() => setLoading(false));
   }, []);
 
@@ -59,7 +60,7 @@ export default function MyDocumentsPage() {
     <div className="space-y-6">
       <PageHeader
         title="My Documents"
-        description="Every answer you generate is saved here. Open one to read, print or download it."
+        description="Everything you generate (answers, notes, sample papers, study packs and worked examples) is saved here. Open one to read, print or download it."
       />
 
       {error && <Alert tone="error">{error}</Alert>}
@@ -73,11 +74,11 @@ export default function MyDocumentsPage() {
       ) : documents.length === 0 && !error ? (
         <EmptyState
           icon={<SparklesIcon className="h-6 w-6" />}
-          title="No answers yet"
-          description="Generate a solution, notes or a sample paper and it will be saved here automatically."
+          title="Nothing saved yet"
+          description="Solve a worksheet, make notes or a sample paper on the Generate page, and it is saved here automatically."
           action={
             <Link href="/dashboard" className={button.primary}>
-              Generate your first answer
+              Go to Generate
             </Link>
           }
         />
@@ -91,7 +92,7 @@ export default function MyDocumentsPage() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search by title"
-                aria-label="Search your documents"
+                aria-label="Search your documents by title"
                 className={cx(input, "pl-10")}
               />
             </div>
@@ -110,7 +111,7 @@ export default function MyDocumentsPage() {
                         : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
                     )}
                   >
-                    {t === "all" ? "All" : (TASK_LABELS[t] ?? t)}
+                    {t === "all" ? "All" : taskLabel(t)}
                   </button>
                 ))}
               </div>
@@ -133,7 +134,7 @@ export default function MyDocumentsPage() {
                       {d.title}
                     </Link>
                     <p className="mt-0.5 text-xs text-slate-500">
-                      {TASK_LABELS[d.task_type] ?? d.task_type} · {formatDate(d.created_at)}
+                      {taskLabel(d.task_type)} · {formatDate(d.created_at)}
                     </p>
                   </div>
                   {/* Above the row-wide link, so these stay clickable. */}

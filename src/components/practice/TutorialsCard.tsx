@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { CheckIcon, SparklesIcon } from "@/components/icons";
 import { Field, button, card, cx, input, link } from "@/components/ui";
 import { WorkedExampleView } from "@/components/worked/WorkedExampleView";
+import { OFFLINE_MESSAGE, failedRequestMessage } from "@/lib/http-errors";
 import { cleanNumber } from "@/lib/worked/division";
 import { solve } from "@/lib/worked/detect";
 import type { WorkedExample, WorkedProblem } from "@/lib/worked/types";
@@ -295,7 +296,7 @@ export function TutorialsCard() {
     }).catch(() => null);
     const data = await res?.json().catch(() => null);
     setShown((s) => s && { ...s, saving: false, savedId: res?.ok ? (data?.id ?? null) : null });
-    if (!res?.ok) setProblemError(data?.error ?? "Couldn't save it. Please try again.");
+    if (!res?.ok) setProblemError(data?.error ?? (res ? failedRequestMessage(res.status, "save this to My Documents") : OFFLINE_MESSAGE));
   };
 
   return (

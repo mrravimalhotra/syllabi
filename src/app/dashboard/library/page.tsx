@@ -2,6 +2,8 @@
 
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { downscaleImageFile, formatBytes, imageFingerprint } from "@/lib/downscale-image";
+import { fileReadError } from "@/lib/file-errors";
+import { SOURCE_TYPE_LABELS, sourceTypeLabel } from "@/lib/format";
 import { EditableName } from "@/components/EditableName";
 import { BookIcon, CheckIcon, TrashIcon, UploadIcon, XIcon } from "@/components/icons";
 import {
@@ -22,12 +24,7 @@ import {
 
 type SourceType = "textbook" | "exercise" | "past_paper" | "notes";
 
-const SOURCE_TYPE_OPTIONS: { value: SourceType; label: string }[] = [
-  { value: "textbook", label: "Textbook" },
-  { value: "exercise", label: "Exercise" },
-  { value: "past_paper", label: "Past paper" },
-  { value: "notes", label: "Notes" },
-];
+const SOURCE_TYPE_OPTIONS = (Object.keys(SOURCE_TYPE_LABELS) as SourceType[]).map((value) => ({ value, label: SOURCE_TYPE_LABELS[value] }));
 
 const MAX_PAGES = 60;
 // Pages the AI has to read go one per request, so each request is short, the
@@ -239,6 +236,7 @@ export default function LibraryPage() {
       let originalBytes = 0;
       let shrunkBytes = 0;
       for (const file of Array.from(fileList)) {
+        try {
         if (file.name.toLowerCase().endsWith(".docx")) {
           // Word files: read the text right here (no page reading needed), and
           // keep each picture as an image page with a note of where it was.
@@ -299,6 +297,9 @@ export default function LibraryPage() {
             origin: file.name,
           });
         }
+        } catch (err) {
+          throw new Error(fileReadError(file, err));
+        }
       }
 
       // The same photo picked twice would be read (and paid for) twice.
@@ -313,7 +314,10 @@ export default function LibraryPage() {
 
       const combined = [...pages, ...unique];
       if (combined.length > MAX_PAGES) {
-        setError(`Up to ${MAX_PAGES} pages per upload: ${combined.length} selected, so the extra pages were left out.`);
+        setError(
+          `You chose ${combined.length} pages, but one upload takes at most ${MAX_PAGES}. The first ${MAX_PAGES} were added; ` +
+            "upload the rest afterwards as a separate book."
+        );
       }
       setPages(combined.slice(0, MAX_PAGES));
 
@@ -324,11 +328,11 @@ export default function LibraryPage() {
       if (duplicates > 0) notes.push(`${duplicates} duplicate page${duplicates > 1 ? "s" : ""} skipped.`);
       const codeRead = unique.filter((p) => p.pdfText !== undefined).length;
       if (codeRead > 0) {
-        notes.push(`${codeRead} PDF page${codeRead > 1 ? "s have" : " has"} its own text, so no AI reading is needed (quicker, and uses less of your allowance).`);
+        notes.push(`${codeRead} PDF page${codeRead > 1 ? "s have" : " has"} typed text, so ${codeRead > 1 ? "they need" : "it needs"} no AI reading: quicker, and it uses none of your monthly allowance.`);
       }
       setShrinkNote(notes.length ? notes.join(" ") : null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to read one of the selected files");
+      setError(err instanceof Error ? err.message : "Couldn't read the files you chose. Try again, or add fewer files at a time.");
     } finally {
       setProcessingFiles(false);
     }
@@ -363,7 +367,7 @@ export default function LibraryPage() {
       const data = await res.json().catch(() => ({}));
       // Already gone counts as deleted.
       if (!res.ok && res.status !== 404) {
-        setBookErrors((e) => ({ ...e, [id]: data.error ?? "Couldn't delete this book. Please try again." }));
+        setBookErrors((e) => ({ ...e, [id]: data.error ?? "Couldn't delete this book. Try again in a moment." }));
         return false;
       }
       setDocuments((docs) => docs.filter((d) => d.id !== id));
@@ -379,7 +383,7 @@ export default function LibraryPage() {
   }
 
   async function deleteBook(doc: DocumentRowView) {
-    if (!window.confirm(`Delete "${doc.title}"? Its pages and search index are removed for good.`)) return;
+    if (!window.confirm(`Delete "${doc.title}"? Its pages are removed for good, and answers can no longer use this book. Answers you already saved stay in My Documents.`)) return;
     await removeBook(doc.id);
   }
 
@@ -392,7 +396,7 @@ export default function LibraryPage() {
   async function retryPages(id: string) {
     setBookErrors((e) => Object.fromEntries(Object.entries(e).filter(([k]) => k !== id)));
     const res = await fetch(`/api/library/${id}/retry`, { method: "POST" }).catch(() => null);
-    if (!res?.ok) setBookErrors((e) => ({ ...e, [id]: "Couldn't start reading again. Please try again." }));
+    if (!res?.ok) setBookErrors((e) => ({ ...e, [id]: "Couldn't restart reading. Check your connection and try again." }));
     await load();
   }
 
@@ -406,12 +410,16 @@ export default function LibraryPage() {
     e.preventDefault();
     setError(null);
     setSuccess(null);
-    if (!title.trim() || pages.length === 0) {
-      setError("A title and at least one page are required");
+    if (!title.trim()) {
+      setError("Type a title for the book (for example, Science Class 8, Chapter 3), then press Upload again.");
+      return;
+    }
+    if (pages.length === 0) {
+      setError("Add at least one photo, PDF or Word file with “Choose files”, then press Upload.");
       return;
     }
     if (!rightsConfirmed) {
-      setError("Please confirm you own this copy before uploading");
+      setError("Tick the box that says you own this copy, then press Upload again.");
       return;
     }
     // Don't make a second copy of a book by accident.
@@ -495,7 +503,13 @@ export default function LibraryPage() {
                 setPages((prev) => prev.filter((p) => !saved.has(p.id)));
                 break;
               }
-              const reason = data.error ?? "Upload failed.";
+              const reason =
+                data.error ??
+                (res.status === 413
+                  ? "This page is too large to send. Add it again as a smaller photo."
+                  : res.status === 401
+                    ? "You were signed out. Sign in again, then press Upload to continue."
+                    : "The page couldn't be sent. Check your connection, then press Upload to try again.");
               const retry = res.status >= 500 && data.retryable !== false && attempt < UPLOAD_ATTEMPTS;
               if (!retry) {
                 batch.forEach((p) => failures.set(p.id, reason));
@@ -516,7 +530,7 @@ export default function LibraryPage() {
         if (createdNow && !group.some((p) => saved.has(p.id))) await removeBook(book.id);
       }
     } catch (err) {
-      if (!controller.signal.aborted) fatal = err instanceof Error ? err.message : "Upload failed.";
+      if (!controller.signal.aborted) fatal = err instanceof Error ? err.message : "The upload stopped unexpectedly. Check your connection, then press Upload to try again.";
     } finally {
       setPages((prev) => prev.map((p) => (failures.has(p.id) ? { ...p, failure: failures.get(p.id) } : p)));
       releaseScreen();
@@ -538,12 +552,15 @@ export default function LibraryPage() {
       return;
     }
     const reasons = [...new Set(failures.values())];
+    const stopped = controller.signal.aborted;
     setError(
       [
-        controller.signal.aborted ? "Upload stopped." : fatal,
-        saved.size > 0 ? `${saved.size} page${saved.size === 1 ? " was" : "s were"} sent and ${saved.size === 1 ? "is" : "are"} being read.` : null,
-        reasons.length ? `${failures.size} page${failures.size === 1 ? "" : "s"} couldn't be sent: ${reasons.join(" ")}` : null,
-        `The ${left} remaining page${left === 1 ? " is" : "s are"} still below. Press Upload to try again${saved.size > 0 ? "; they'll be added to the same book" : ""}.`,
+        stopped
+          ? `Upload stopped. ${left} page${left === 1 ? " is" : "s are"} still below: press Upload to continue${saved.size > 0 ? " (they go into the same book)" : ""}.`
+          : `${left} page${left === 1 ? " is" : "s are"} still below: press Upload to try again${saved.size > 0 ? " (they go into the same book)" : ""}.`,
+        !stopped && fatal ? fatal : null,
+        reasons.length ? `Why: ${reasons.join(" ")}` : null,
+        saved.size > 0 ? `${saved.size} page${saved.size === 1 ? " was" : "s were"} already sent and ${saved.size === 1 ? "is" : "are"} being read.` : null,
       ]
         .filter(Boolean)
         .join(" ")
@@ -596,7 +613,7 @@ export default function LibraryPage() {
               />
             </Field>
           </div>
-          <Field label="Subject" htmlFor="book-subject">
+          <Field label="Subject (optional)" htmlFor="book-subject">
             <input
               id="book-subject"
               value={subject}
@@ -606,7 +623,7 @@ export default function LibraryPage() {
               className={input}
             />
           </Field>
-          <Field label="Grade / class" htmlFor="book-grade">
+          <Field label="Class (optional)" htmlFor="book-grade">
             <input
               id="book-grade"
               value={grade}
@@ -622,7 +639,7 @@ export default function LibraryPage() {
           <div className="flex flex-wrap items-end justify-between gap-2">
             <p className={label}>Pages</p>
             <label className="flex items-center gap-2 text-xs text-slate-500">
-              New pages are
+              Kind of material
               <select
                 value={defaultSourceType}
                 onChange={(e) => setDefaultSourceType(e.target.value as SourceType)}
@@ -696,7 +713,7 @@ export default function LibraryPage() {
                   <span className="font-medium text-slate-700">
                     {pages.length} page{pages.length > 1 ? "s" : ""}
                   </span>{" "}
-                  · set the type per page if a batch mixes content (e.g. a chapter followed by its exercises).
+                  · mixing a chapter with its exercises? Set the kind on each page.
                 </p>
                 <button type="button" onClick={() => setPages([])} disabled={submitting} className={cx(link, "text-xs")}>
                   Remove all
@@ -799,7 +816,7 @@ export default function LibraryPage() {
                     className="text-sm font-medium text-slate-900"
                   />
                   <p className="truncate text-xs text-slate-500">
-                    {[d.subject, d.grade, SOURCE_TYPE_OPTIONS.find((o) => o.value === d.source_type)?.label ?? d.source_type]
+                    {[d.subject, d.grade, sourceTypeLabel(d.source_type)]
                       .filter(Boolean)
                       .join(" · ")}
                   </p>
@@ -813,7 +830,7 @@ export default function LibraryPage() {
                     </p>
                   )}
                   {d.pages && d.status === "processing" && d.pages.problems.length > 0 && !d.pages.waitingUntil && (
-                    <p className="text-xs text-amber-700">Trying again shortly: {d.pages.problems[0]}</p>
+                    <p className="text-xs text-amber-700">Some pages are taking longer and will be tried again shortly. Reason: {d.pages.problems[0]}</p>
                   )}
                   {bookErrors[d.id] && <p className="text-xs text-red-600">{bookErrors[d.id]}</p>}
                 </div>
@@ -837,13 +854,13 @@ export default function LibraryPage() {
 
 function StatusBadge({ status, unfinished, pages }: { status: DocumentRowView["status"]; unfinished: boolean; pages: PageProgress | null }) {
   if (status === "ready") return <Badge tone="success">Ready</Badge>;
-  if (unfinished) return <Badge tone="danger">Upload didn&apos;t finish: delete it and upload again</Badge>;
-  if (status === "failed") return <Badge tone="danger">No pages could be read</Badge>;
+  if (unfinished) return <Badge tone="danger">Upload incomplete: delete this book and upload it again</Badge>;
+  if (status === "failed") return <Badge tone="danger">No page could be read: check the photos are clear, then try again or upload again</Badge>;
   if (pages?.waitingUntil) {
     const time = new Date(pages.waitingUntil).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
     return (
       <Badge tone="warning">
-        Read {pages.done} of {pages.total}. The AI&apos;s free daily allowance is used up; reading carries on by itself after {time}
+        Paused at {pages.done} of {pages.total} pages: the daily limit of the reading service was reached. It carries on by itself after {time}
       </Badge>
     );
   }
@@ -890,9 +907,9 @@ const PageCard = memo(function PageCard({
         {page.pdfText !== undefined && (
           <span
             className="absolute right-1.5 bottom-1.5 rounded-md bg-emerald-600/90 px-1.5 py-0.5 text-[10px] font-medium text-white"
-            title="This page's text is read straight from the PDF: no AI needed"
+            title="Typed text found in the PDF: this page needs no AI reading"
           >
-            Text
+            Typed text
           </span>
         )}
         <button
@@ -914,7 +931,7 @@ const PageCard = memo(function PageCard({
           value={page.sourceType}
           onChange={(e) => onTypeChange(page.id, e.target.value as SourceType)}
           disabled={disabled || page.bookId !== undefined}
-          aria-label={`Type of page ${index + 1}`}
+          aria-label={`Kind of material for page ${index + 1}`}
           className="block w-full rounded-md border border-slate-200 bg-white px-1.5 py-1 text-xs"
         >
           {SOURCE_TYPE_OPTIONS.map((o) => (

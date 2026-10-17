@@ -72,7 +72,7 @@ export function WorkedExampleView({
         <div className="min-w-0 flex-1 basis-60 space-y-1.5">
           <div className="flex flex-wrap gap-2">
             <Badge tone="brand">Worked example</Badge>
-            <Badge tone="success">Exact: worked out by code, no AI</Badge>
+            <Badge tone="success">Exact: worked out by Syllabi&apos;s calculator, not AI</Badge>
           </div>
           <h2 className="text-lg font-semibold tracking-tight text-slate-900">{example.title}</h2>
         </div>
@@ -139,7 +139,7 @@ export function WorkedExampleView({
             <li key={i}>{s.say}</li>
           ))}
         </ol>
-        <p className="text-xs text-slate-500">Worked out step by step by Syllabi&apos;s calculator (no AI).</p>
+        <p className="text-xs text-slate-500">Worked out step by step by Syllabi&apos;s calculator, not AI.</p>
       </div>
     </article>
   );

@@ -11,9 +11,10 @@ import { solve } from "@/lib/worked/detect";
 import type { WorkedProblem } from "@/lib/worked/types";
 import type { StudyPack } from "@/lib/study-pack/types";
 import { ChevronLeftIcon, DocumentIcon, TrashIcon } from "@/components/icons";
+import { OFFLINE_MESSAGE, failedRequestMessage } from "@/lib/http-errors";
 import { PdfButton } from "@/components/PdfButton";
 import { Alert, EmptyState, Skeleton, button, card, cx } from "@/components/ui";
-import { TASK_LABELS, formatDate } from "@/lib/format";
+import { formatDate, taskLabel } from "@/lib/format";
 
 type SavedAnswer = Answer & {
   id: string;
@@ -35,15 +36,17 @@ export default function AnswerPage() {
   useEffect(() => {
     fetch(`/api/documents/${id}`)
       .then(async (r) => {
-        const data = await r.json();
+        const data = await r.json().catch(() => ({}));
         if (r.status === 404) {
           setMissing(true);
           return;
         }
-        if (!r.ok) throw new Error(data.error);
+        if (!r.ok) throw new Error(data.error ?? failedRequestMessage(r.status, "open this document"));
         setAnswer(data.answer);
       })
-      .catch((err) => setError(err instanceof Error && err.message ? err.message : "Couldn't load this answer."));
+      .catch((err) =>
+        setError(err instanceof TypeError ? OFFLINE_MESSAGE : err instanceof Error && err.message ? err.message : "Couldn't open this document. Reload the page to try again.")
+      );
   }, [id]);
 
   async function rename(title: string) {
@@ -53,7 +56,7 @@ export default function AnswerPage() {
       body: JSON.stringify({ title }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error ?? "Rename failed");
+    if (!res.ok) throw new Error(data.error ?? failedRequestMessage(res.status, "rename this document"));
     setAnswer((prev) => (prev ? { ...prev, title: data.title } : prev));
   }
 
@@ -138,7 +141,7 @@ export default function AnswerPage() {
           ) : (
             <AnswerView
               answer={{ ...answer, text: answer.text }}
-              meta={`${TASK_LABELS[answer.taskType] ?? answer.taskType} · ${formatDate(answer.createdAt)}`}
+              meta={`${taskLabel(answer.taskType)} · ${formatDate(answer.createdAt)}`}
               actions={
                 <button
                   type="button"

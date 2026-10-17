@@ -17,7 +17,7 @@ export default async function SignupPage({
   return (
     <AuthShell
       title="Create your account"
-      description="For parents and tutors (18+) preparing study material for their children or students. An admin approves each new account."
+      description="For parents and tutors (18+) preparing study material for their children or students. Each new account is approved before it can be used."
       footer={
         <>
           Already have an account?{" "}
@@ -28,7 +28,7 @@ export default async function SignupPage({
       }
     >
       {!signupsOpen() && (
-        <Alert tone="warning">Private testing: sign-ups are currently limited to the Syllabi team.</Alert>
+        <Alert tone="warning">Syllabi is in private testing. Sign-ups will open soon.</Alert>
       )}
       {error && <Alert tone="error">{error}</Alert>}
       <SignUpForm />

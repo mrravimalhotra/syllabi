@@ -1,5 +1,6 @@
 "use client";
 
+import { OFFLINE_MESSAGE, failedRequestMessage } from "@/lib/http-errors";
 import { useMemo, useState } from "react";
 import { Markdown } from "@/components/Markdown";
 import {
@@ -392,11 +393,11 @@ function AnswerBlock({
         body: JSON.stringify({ section, index, ...payload }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? "Couldn't change the answer.");
+      if (!res.ok) throw new Error(data.error ?? failedRequestMessage(res.status, "change this answer"));
       onChange(section, index, data.question);
       return true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't change the answer.");
+      setError(err instanceof TypeError ? OFFLINE_MESSAGE : err instanceof Error ? err.message : "Couldn't change this answer. Try again in a moment.");
       return false;
     } finally {
       setBusy(false);
@@ -452,7 +453,7 @@ function AnswerBlock({
             Change this answer
           </label>
           <div className="flex flex-wrap gap-1.5">
-            {["Make it simpler", "Make it shorter", "Add more detail", "Write it for 5 marks"].map((s) => (
+            {["Make it simpler", "Make it shorter", "Add more detail", "Make it a 5-mark answer"].map((s) => (
               <button
                 key={s}
                 type="button"
@@ -469,7 +470,7 @@ function AnswerBlock({
               id={`refine-${section}-${index}`}
               value={request}
               onChange={(e) => setRequest(e.target.value)}
-              placeholder="Or say what to change..."
+              placeholder="Or type what to change, for example “use an example from daily life”"
               maxLength={500}
               disabled={busy}
               className={cx(input, "min-w-0 flex-1")}
@@ -477,6 +478,7 @@ function AnswerBlock({
             <button type="submit" disabled={busy || !request.trim()} className={button.primary}>
               {busy ? <Spinner /> : <SparklesIcon className="h-4 w-4" />}
               <span className="hidden sm:inline">{busy ? "Changing..." : "Change"}</span>
+              <span className="sr-only sm:hidden">Change this answer</span>
             </button>
           </div>
           {error && <p className="text-xs text-red-600">{error}</p>}
@@ -656,7 +658,7 @@ function PracticeTest({
         <div className="flex flex-wrap justify-center gap-2">
           {missed.length > 0 && (
             <button type="button" onClick={() => restart(true)} className={button.primary}>
-              Try the Not yet ones
+              Try again the ones marked Not yet
             </button>
           )}
           <button type="button" onClick={() => restart(false)} className={button.secondary}>

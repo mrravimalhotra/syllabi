@@ -19,7 +19,7 @@ export function SignUpForm() {
 
   return (
     <form action={signUp} className="space-y-4">
-      <Field label="Full name" htmlFor="full_name">
+      <Field label="Your full name" htmlFor="full_name" hint="Your own name, shown on printouts. You don't need to enter your child's name.">
         <input id="full_name" name="full_name" type="text" autoComplete="name" required className={input} />
       </Field>
       <Field label="Email" htmlFor="email">
@@ -48,7 +48,7 @@ export function SignUpForm() {
 
       <PasswordInput
         name="password"
-        label="Password"
+        label="Password (at least 8 characters)"
         autoComplete="new-password"
         minLength={8}
         required
@@ -64,7 +64,7 @@ export function SignUpForm() {
         required
         value={confirmPassword}
         onChange={setConfirmPassword}
-        error={mismatch ? "Passwords do not match" : undefined}
+        error={mismatch ? "The two passwords don't match." : undefined}
       />
 
       <label className="flex items-start gap-2.5 rounded-xl bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">

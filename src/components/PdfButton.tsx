@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Spinner } from "@/components/ui";
+import { OFFLINE_MESSAGE, failedRequestMessage } from "@/lib/http-errors";
 
 /**
  * True in Syllabi opened from the iPhone/iPad home screen. There, a PDF
@@ -45,17 +46,17 @@ export function usePdfOpener(name: string) {
     setState({ kind: "preparing" });
     try {
       const res = await fetch(url);
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Couldn't make the PDF.");
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? failedRequestMessage(res.status, "make the PDF"));
       const file = new File([await res.blob()], `${name.replace(/[\\/:*?"<>|]+/g, " ").trim().slice(0, 80) || "Syllabi"}.pdf`, { type: "application/pdf" });
       if (!navigator.canShare?.({ files: [file] })) {
         setState({ kind: "idle" });
-        window.alert("This phone can't share files from the app. Open Syllabi in Safari to print or save PDFs.");
+        window.alert("This phone can't share PDFs from the Home Screen app. Open Syllabi in Safari to print or save PDFs.");
         return;
       }
       await share(file);
     } catch (err) {
       setState({ kind: "idle" });
-      window.alert(err instanceof Error ? err.message : "Couldn't make the PDF. Please try again.");
+      window.alert(err instanceof TypeError ? OFFLINE_MESSAGE : err instanceof Error ? err.message : "Couldn't make the PDF. Check your connection and try again.");
     }
   };
 

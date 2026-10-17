@@ -253,10 +253,10 @@ export default function PracticePage() {
           </button>
           <button type="button" onClick={() => printNew(true)} disabled={Boolean(problem) || worksheet.state === "preparing"} className={button.secondary}>
             {worksheet.state === "preparing" ? <Spinner className="h-4 w-4" /> : <PrinterIcon className="h-4 w-4" />}
-            {worksheet.state === "ready" ? "Tap to share the worksheet" : "Printable worksheet"}
+            {worksheet.state === "ready" ? "Tap to share the worksheet" : "Worksheet with answers (PDF)"}
           </button>
           <button type="button" onClick={() => printNew(false)} disabled={Boolean(problem)} className={button.ghost}>
-            Worksheet without answers
+            Worksheet without answers (PDF)
           </button>
         </div>
       </section>

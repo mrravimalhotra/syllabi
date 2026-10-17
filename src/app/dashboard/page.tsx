@@ -10,6 +10,8 @@ import { findProblems, pureProblem, solve } from "@/lib/worked/detect";
 import type { WorkedExample } from "@/lib/worked/types";
 import type { StudyPack } from "@/lib/study-pack/types";
 import { LANGUAGE_NAMES, type AnswerLanguage } from "@/lib/generation/language";
+import { fileReadError } from "@/lib/file-errors";
+import { OFFLINE_MESSAGE, failedRequestMessage } from "@/lib/http-errors";
 import { formatDate } from "@/lib/format";
 import {
   ArrowRightIcon,
@@ -69,7 +71,7 @@ const TABS: {
     label: "Solve",
     description: "Step by step",
     icon: ListCheckIcon,
-    placeholder: "Type or paste the question, or attach a photo of the worksheet...",
+    placeholder: "Type or paste the question, or attach a photo or PDF of the worksheet",
     examples: ["Solve all the questions in the attached exercise", "Explain how to find the LCM of 12, 18 and 30"],
   },
   {
@@ -93,7 +95,7 @@ const TABS: {
     label: "Ask",
     description: "Any question",
     icon: ChatIcon,
-    placeholder: "Ask any study-related question...",
+    placeholder: "Ask any study question",
     examples: ["Ideas for a Class 6 science project on plants", "How should we plan revision for next week's test?"],
   },
   {
@@ -101,7 +103,7 @@ const TABS: {
     label: "Study pack",
     description: "A whole chapter",
     icon: LayersIcon,
-    placeholder: "Optional: anything to focus on, e.g. \"explain it for Class 6\" or \"extra practice on dates\"",
+    placeholder: "Optional: what to focus on, for example “keep the language simple” or “extra practice on dates”",
     examples: [],
   },
 ];
@@ -227,8 +229,11 @@ export default function DashboardPage() {
     const images: DownscaledImage[] = [];
     const docs: { name: string; text: string }[] = [];
     const notes: string[] = [];
+    let failingFile: File = files[0];
+    let failure: unknown;
     try {
       for (const file of Array.from(files)) {
+        failingFile = file;
         const name = file.name.toLowerCase();
         if (name.endsWith(".docx")) {
           const { readDocx } = await import("@/lib/docx-to-text");
@@ -245,8 +250,9 @@ export default function DashboardPage() {
           notes.push(`${file.name}: not a photo, PDF or Word file, so it was skipped.`);
         }
       }
-    } catch {
-      setError("Couldn't read one of those files. Use photos (JPEG, PNG), PDF or Word (.docx).");
+    } catch (err) {
+      failure = err;
+      setError(fileReadError(failingFile, failure));
       setReadingFiles(false);
       return;
     }
@@ -266,7 +272,12 @@ export default function DashboardPage() {
         size += image.imageBase64.length;
       } else dropped++;
     }
-    if (dropped) notes.push(`${dropped} page(s) or picture(s) left out: up to ${MAX_PHOTOS} images per question.`);
+    if (dropped) {
+      notes.push(
+        `${dropped} ${dropped === 1 ? "page or photo was" : "pages or photos were"} not attached: a question takes up to ${MAX_PHOTOS} photos or pages, and a limited total size. ` +
+          "Ask the rest in a second question."
+      );
+    }
     setPhotos(kept);
     setAttachedDocs((prev) => [...prev, ...docs]);
     if (notes.length) setNotice(notes.join(" "));
@@ -352,7 +363,7 @@ export default function DashboardPage() {
         body: JSON.stringify(body),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? "Couldn't generate an answer right now. Please try again.");
+      if (!res.ok) throw new Error(data.error ?? failedRequestMessage(res.status, "make your answer"));
       setLoading(false);
       setResult(data);
       setPhotos([]);
@@ -361,14 +372,14 @@ export default function DashboardPage() {
       loadMe().catch(() => {});
     } catch (err) {
       if (controller.signal.aborted) {
-        setNotice("Stopped waiting. If the answer finishes anyway, it will appear in My Documents.");
+        setNotice("You stopped waiting. If the answer still finishes, it will appear in My Documents.");
       } else {
         setError(
           err instanceof TypeError
-            ? "Couldn't reach Syllabi. Check your connection and try again."
+            ? OFFLINE_MESSAGE
             : err instanceof Error
               ? err.message
-              : "Generation failed"
+              : "Couldn't make your answer. Check your connection and try again."
         );
       }
     } finally {
@@ -398,6 +409,14 @@ export default function DashboardPage() {
 
   const noBookSelected = tab !== "study_pack" && books.length > 0 && activeBookIds.length === 0;
   const overQuota = me?.quota.overQuota ?? false;
+  // Why the Generate button is off, so a disabled button is never a mystery.
+  const blockedReason = overQuota
+    ? "Generate is paused: you've used this month's allowance (see the message above)."
+    : noBookSelected
+      ? "Generate is off because no book is selected. Under “Search these books”, tap a book, or tap All."
+      : readingFiles
+        ? "Preparing your attachment. Generate turns on when it's ready."
+        : null;
   const hasInput = Boolean(prompt.trim()) || photos.length > 0 || attachedDocs.length > 0;
   const firstName = me?.student.full_name?.split(" ")[0];
 
@@ -408,7 +427,7 @@ export default function DashboardPage() {
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
             {firstName ? `Hi ${firstName}, what shall we work on?` : "What shall we work on?"}
           </h1>
-          <p className="text-sm text-slate-500">Answers come from your books, step by step, ready to print.</p>
+          <p className="text-sm text-slate-500">Pick what you need, then ask. Answers come from your uploaded books and can be printed or saved as a PDF.</p>
         </div>
         {me && (
           <Link
@@ -426,7 +445,8 @@ export default function DashboardPage() {
 
       {overQuota && (
         <Alert tone="error" className="print:hidden">
-          You&apos;ve used this month&apos;s allowance. Ask an admin to raise your limit.
+          You&apos;ve used all of this month&apos;s allowance, so new answers are paused. It resets on the 1st. To get more now, ask the person who runs
+          Syllabi for you to raise your limit (Admin → Accounts). Saved answers, worked examples and Practice still work.
         </Alert>
       )}
       {booksError && (
@@ -735,6 +755,7 @@ export default function DashboardPage() {
             <button
               type="submit"
               disabled={loading || readingFiles || noBookSelected || overQuota}
+              aria-describedby={blockedReason ? "generate-blocked" : undefined}
               className={button.primary}
             >
               {loading ? <Spinner /> : <SparklesIcon className="h-4.5 w-4.5" />}
@@ -744,8 +765,10 @@ export default function DashboardPage() {
         </div>
       </form>
 
-      {noBookSelected && (
-        <p className="text-xs text-red-600 print:hidden">Pick at least one book to search, or choose All.</p>
+      {blockedReason && !loading && (
+        <p id="generate-blocked" className="text-sm text-slate-600 print:hidden">
+          {blockedReason}
+        </p>
       )}
       {error && (
         <Alert tone="error" className="print:hidden">
@@ -785,8 +808,9 @@ export default function DashboardPage() {
                 was used.
               </span>{" "}
               <button type="button" onClick={makeNewAnswer} className="font-medium underline">
-                Make a new answer
-              </button>
+                Generate a fresh answer instead
+              </button>{" "}
+              <span className="text-xs">(uses your monthly allowance)</span>
             </Alert>
           )}
           {result.pack ? (

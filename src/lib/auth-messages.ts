@@ -2,35 +2,37 @@
 // in the URL (?error=invalid), never taken from the URL as text, so a crafted
 // link can't make Syllabi display words it didn't write.
 
+const PRIVATE_TESTING = "Syllabi is in private testing. Sign-ups will open soon.";
+
 export const LOGIN_MESSAGES: Record<string, string> = {
-  created: "Account created. An admin must approve access before you can sign in.",
-  "reset-sent": "If an account exists for that email, a link to reset your password is on its way. Check your inbox and spam folder.",
-  "password-updated": "Password changed. You're signed in.",
+  created: "Your account was created. It must be approved before you can sign in. Try signing in again later.",
+  "reset-sent":
+    "If an account exists for that email, a link to reset your password is on its way. Check your inbox and spam folder; it can take a few minutes. Still nothing after 10 minutes? Request another link.",
 };
 
 export const LOGIN_ERRORS: Record<string, string> = {
   // One message for a wrong password and an unknown email, so the page never
   // reveals which emails have accounts.
-  invalid: "Wrong email or password.",
-  "link-expired": "That link has expired or was already used. Request a new one.",
-  unknown: "Something went wrong. Please try again.",
+  invalid: "Wrong email or password. Check them and try again, or use “Forgot password?” below.",
+  "link-expired": "That link has expired or was already used. Request a new one from “Forgot password?”.",
+  unknown: "We couldn't sign you in just now. Wait a moment and try again.",
 };
 
 export const SIGNUP_ERRORS: Record<string, string> = {
-  private: "Syllabi is in private testing. Sign-ups will open soon.",
-  mismatch: "Passwords do not match.",
+  private: PRIVATE_TESTING,
+  mismatch: "The two passwords don't match. Type the same password in both boxes.",
   "account-type": "Choose whether you are a parent or a tutor.",
-  adult: "You must confirm you are 18 or older to create an account.",
-  weak: "Choose a stronger password: at least 8 characters.",
-  exists: "An account with this email already exists. Sign in, or reset your password.",
-  unknown: "Something went wrong. Please try again.",
+  adult: "Tick the box to confirm you are 18 or older. Syllabi is for adults only.",
+  weak: "Use a password of at least 8 characters.",
+  exists: "An account with this email already exists. Go to Sign in, or use “Forgot password?” if you don't remember the password.",
+  unknown: "We couldn't create your account just now. Wait a few minutes and try again.",
 };
 
 export const RESET_ERRORS: Record<string, string> = {
-  mismatch: "Passwords do not match.",
-  weak: "Choose a stronger password: at least 8 characters.",
-  "no-session": "That reset link has expired. Request a new one.",
-  unknown: "Something went wrong. Please try again.",
+  mismatch: "The two passwords don't match. Type the same password in both boxes.",
+  weak: "Use a password of at least 8 characters.",
+  "no-session": "That reset link has expired or was already used. Request a new one from “Forgot password?”.",
+  unknown: "We couldn't change your password just now. Wait a moment and try again.",
 };
 
 /** Looks up a message by key; unknown keys show nothing. */

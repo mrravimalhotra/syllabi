@@ -86,7 +86,7 @@ export function AppNav({ name, isAdmin }: { name: string; isAdmin: boolean }) {
 
           <div className="ml-auto flex min-w-0 items-center gap-1">
             {isAdmin && (
-              <Link href="/admin" className={button.ghost} title="Admin">
+              <Link href="/admin" className={button.ghost} title="Admin" aria-label="Admin">
                 <ShieldIcon className="h-4.5 w-4.5" />
                 <span className="hidden sm:inline">Admin</span>
               </Link>
