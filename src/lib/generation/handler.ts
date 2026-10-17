@@ -70,7 +70,8 @@ export function createGenerationRoute(taskType: GenerationTaskType) {
     try {
       const result = await runGeneration({ student, taskType, prompt, documentIds, photos });
 
-      const title = !typedPrompt ? "Photo question" : prompt.length > 80 ? `${prompt.slice(0, 77)}...` : prompt;
+      const oneLine = prompt.replace(/\s+/g, " ");
+      const title = !typedPrompt ? "Photo question" : oneLine.length > 80 ? `${oneLine.slice(0, 77)}...` : oneLine;
       const pdfBuffer = await renderGenerationPdf({
         taskType,
         title,

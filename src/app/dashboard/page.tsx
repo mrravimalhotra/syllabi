@@ -53,6 +53,8 @@ export default function DashboardPage() {
   const [me, setMe] = useState<MeResponse | null>(null);
   const [tab, setTab] = useState<GenerationTaskType>("solution");
   const [prompt, setPrompt] = useState("");
+  // Sample papers: total marks to aim for (Indian school papers are often 80).
+  const [totalMarks, setTotalMarks] = useState("80");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<GenerationResult | null>(null);
@@ -125,7 +127,7 @@ export default function DashboardPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: prompt.trim(),
+          prompt: tab === "sample_paper" ? `${prompt.trim()}\n\nTotal marks: ${totalMarks}`.trim() : prompt.trim(),
           documentIds: activeBookIds,
           photos: photos.map((p) => ({ data: p.imageBase64, mimeType: p.mimeType })),
         }),
@@ -198,6 +200,22 @@ export default function DashboardPage() {
               ))}
             </div>
           </div>
+        )}
+        {tab === "sample_paper" && (
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            Total marks
+            <select
+              value={totalMarks}
+              onChange={(e) => setTotalMarks(e.target.value)}
+              className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+            >
+              {["20", "40", "80", "100"].map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </label>
         )}
         <textarea
           value={prompt}
