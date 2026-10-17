@@ -1,5 +1,7 @@
 # Syllabi — Full Handoff for the Cloud Session
 
+> **Live (2026-10-17):** https://syllabi-study.vercel.app (Vercel project `syllabi`, Mumbai), Supabase `syllabi` (Mumbai), R2 bucket `syllabi`, Gemini key set. Private testing: `OPEN_SIGNUPS=false`, owner signed up and made admin. The old R2 bucket `studysprint` holds orphaned files from the deleted project and can be removed. Next: live tests in `docs/release-checklist.md`.
+
 > **Status update (2026-10-17):** steps 1–3 of section 12 are done: `docs/DEPLOYMENT.md` added, lint/build pass cleanly, and `supabase/migrations/20261017000004_tighten_rls.sql` fixes RLS issues 1–2 in section 10 (plus a related hole: students could insert `generated_documents` rows pointing at any storage path). Development branch: `claude/awesome-euler-jg6t9u`.
 
 Read this first. It covers what we are building and why, everything built so far, the exact technical design, deployment status, and known issues found by reading the code. Also read `AGENTS.md` (Next.js version warning: check `node_modules/next/dist/docs/` before writing code).
