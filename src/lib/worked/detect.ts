@@ -202,6 +202,8 @@ const FILLER = new Set(
    factorisation factorization ladder q ques question add sum subtract difference between from multiply product
    times plus minus total column vertical x simplify reduce simplest lowest form terms fraction fractions its
    convert express change how many there into chart
+   explain how me teach tell show can could would you i we us do does way help kindly need want know understand
+   learn example for this that these my child step by
    जोड़िए जोड़ो जोड़ें घटाइए घटाओ घटाएँ गुणा में
    बेरीज वजाबाकी गुणाकार मधून वजा यांची
    ज्ञात कीजिए करें करो का की के और तथा से को भाग दीजिए दो निकालिए दशमलव तक स्थान ला यास

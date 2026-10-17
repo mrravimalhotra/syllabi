@@ -180,7 +180,9 @@ export function checkArithmetic(answer: string): AnswerCheck[] {
     if (inCode || !raw.includes("=") || /≈|approx|about|nearly|लगभग|सुमारे|environ/i.test(raw)) continue;
     // Not "==", "<=", ">=", "≠" or "=>" (code and comparisons).
     if (/==|<=|>=|=>|≠/.test(raw)) continue;
-    const parts = normalise(raw).split("=");
+    // A Markdown list marker ("- 12 = 2 × 2 × 3", "1. ...") is not a minus sign or a number.
+    const line = raw.replace(/^\s*(?:[-*+•]|\d+[.)]|>)\s+/, "");
+    const parts = normalise(line).split("=");
     for (let i = 0; i < parts.length - 1 && checks.length < MAX_CHECKS; i++) {
       const check = checkPair(parts[i], parts[i + 1], i > 0);
       if (check && !seen.has(check.message)) {
