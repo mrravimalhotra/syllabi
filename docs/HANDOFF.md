@@ -205,6 +205,7 @@ Deployment risks:
 
 - **Never ask the owner to paste secrets into chat.** Keys go straight into Vercel or a local gitignored `.env`. Environment variables in a cloud environment are readable by anyone using it, so don't put production keys there.
 - Owner preference: end each session with a concrete next action so plans don't stall.
+- **Before every push to `main`:** follow `docs/release-checklist.md` part 1 (tsc, lint, build, `npm run test:db`, `npm audit --omit=dev`). Record decisions in `docs/decisions.md`.
 - **Setup instructions: one step at a time.** Give one small step, wait for the owner to confirm, then give the next. Never mix instructions for different products (Supabase, Cloudflare, Vercel, GitHub, Google) in the same message.
 - Keep answers short and in English. The owner has 21 years in data warehousing/BI and agile leadership but is learning cloud and AI tooling, so explain deployment steps plainly.
 - Be cost-conscious: prefer free tiers, avoid new paid services, use the cheaper model for routine work.

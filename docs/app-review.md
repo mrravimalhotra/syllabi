@@ -49,9 +49,9 @@ Input for BMAD planning (PRD, epics, stories). Written 2026-10-17 from a read of
 | A12 | 👍/👎 + "report a problem" on each answer | ❌ | Needed for the quality loop |
 | A13 | Quota meter visible to the student | ⚠️ | Only shown as an error on hitting the limit |
 | A14 | PDF generated on demand, not on every answer | ❌ | Wastes time and storage |
-| A15 | Mobile-first, installable (PWA) | ⚠️ | 2026-10-17: phone layouts checked at 375 px (no sideways scroll, no iOS zoom, light-only colours); Print button prints just the answer. No PWA yet |
+| A15 | Mobile-first, installable (PWA) | ✅ | 2026-10-17: phone layouts checked at 375 px; 44 px tap targets on phones; manifest + icons (add to home screen); Print button prints just the answer. No offline mode |
 | A16 | Hindi/regional UI and answers | ❌ | |
-| A17 | Accessibility (WCAG 2.1 AA: contrast, keyboard, labels) | ⚠️ | Not audited |
+| A17 | Accessibility (WCAG 2.1 AA: contrast, keyboard, labels) | ⚠️ | 2026-10-17: errors announced (`role="alert"`), successes (`role="status"`); full audit not done |
 | A18 | Onboarding, empty states, friendly errors | ⚠️ | |
 
 ### B. School / teacher / parent
@@ -82,17 +82,17 @@ Input for BMAD planning (PRD, epics, stories). Written 2026-10-17 from a read of
 | D1 | Current Google SDK (`@google/genai`) | ❌ | `@google/generative-ai` is Google's superseded SDK |
 | D2 | Background jobs for ingestion (queue + retries), not a 300 s request | ❌ | Sequential per-chunk embedding can time out; partial chunks remain on failure; re-upload duplicates |
 | D3 | Batch embeddings | ❌ | One API call per chunk |
-| D4 | Input validation on every API route (zod) | ❌ | zod installed but unused |
+| D4 | Input validation on every API route | ⚠️ | 2026-10-17: uploads (type, size, count), photos and admin edits validated server-side; zod not yet adopted |
 | D5 | Rate limiting per user | ❌ | Quota is checked before the call, so concurrent requests overshoot |
 | D6 | Full usage accounting (embeddings, OCR) | ❌ | Only completions are counted |
 | D7 | Uploads direct to R2 via presigned URLs | ❌ | Vercel's ~4.5 MB body limit vs the 5 MB batch cap |
-| D8 | Automated tests: unit (chunking, quota, scoping) + one e2e smoke test (Playwright) | ❌ | No tests |
+| D8 | Automated tests | ⚠️ | 2026-10-17: database security suite (`npm run test:db`, 25 checks: anon lockdown, privilege escalation, owner-only search, last-admin guard). No unit or e2e tests yet |
 | D9 | CI on every PR: lint, typecheck, build, tests (GitHub Actions) | ❌ | |
 | D10 | Error monitoring (e.g. Sentry free tier) + structured logs | ❌ | |
-| D11 | Security headers / CSP | ❌ | `next.config.ts` sets none |
+| D11 | Security headers / CSP | ⚠️ | 2026-10-17: nosniff, frame DENY, referrer and permissions policies on; CSP in report-only mode, enforce after a clean test pass |
 | D12 | Env-var validation at startup | ⚠️ | Header-safety check only |
 | D13 | Staging environment (Vercel previews + separate free Supabase project) | ❌ | |
-| D14 | Dependency updates (Dependabot) | ❌ | |
+| D14 | Dependency updates | ⚠️ | 2026-10-17: `npm audit --omit=dev` is part of the release checklist; Next.js upgraded 16.3.2 → 16.4.2 (critical advisories). Dependabot not set up |
 | D15 | Backups / restore drill | ⚠️ | Free plan: daily backups, no point-in-time recovery |
 | D16 | Product analytics, privacy-friendly | ❌ | |
 | D17 | DB migrations via GitHub → Supabase integration | ✅ | Done 2026-10-17 |
@@ -119,6 +119,28 @@ Input for BMAD planning (PRD, epics, stories). Written 2026-10-17 from a read of
 | F5 | Open-source licences | ✅ | All permissive; notices in `THIRD_PARTY_NOTICES.md` (BMAD MIT notice, pdf.js Apache header). |
 | F6 | Name "Syllabi" | ⚠️ | No conflicting product found in a web search; "syllabi" is a common word, so it is hard to register but low-risk. Search IP India (ipindiaservices.gov.in) and the USPTO before branding spend. |
 | F7 | Competitor references | ✅ | Ideas and features are not copyrightable. Don't copy others' code, UI assets, text or logos; naming competitors in internal docs is fine. |
+
+### G. Borrowed from the Next.js + Supabase best-practices checklist (2026-10-17)
+| Practice | Status | Where |
+|---|---|---|
+| Anonymous lockdown: no table or function reachable without sign-in | ✅ | Migration `20261017000007_lockdown_and_admin_guard.sql` (found: anyone could call `student_monthly_usage` for any user) |
+| Keep at least one active admin (database trigger) | ✅ | Same migration |
+| Business time zone for monthly quotas (India) | ✅ | Same migration |
+| `search_path` set on definer functions; execute granted only where needed | ✅ | Same migration |
+| Test security with direct calls as each role | ✅ | `supabase/tests/10_security.test.sql` via `npm run test:db` |
+| Never show raw database/provider errors | ✅ | `src/lib/errors.ts` (`userMessage`, `UserError`) |
+| Read failures never look like empty lists | ✅ | Dashboard, My books, My Documents |
+| Heavy libraries load on demand | ✅ | pdf.js loads only when a PDF is picked |
+| One date format (dd-mm-yyyy, India time) | ✅ | `src/lib/format.ts` |
+| PDF fonts cover ₹ and the local script | ✅ | A2 |
+| App and database in nearby regions | ✅ | Mumbai / `bom1` |
+| Phone tap targets, 16 px inputs, home-screen install | ✅ | A15 |
+| npm audit each release | ✅ | `release-checklist.md` |
+| Decisions on record, release checklist, live check list | ✅ | `decisions.md`, `release-checklist.md` |
+| Audit log of admin actions | ❌ parked | B7 |
+| Idle sign-out | ❌ parked | `decisions.md` |
+| Paging past PostgREST's 1,000-row cap | ❌ later | Lists are small during testing; needed before many books/answers per account |
+| **Discarded** (inventory-specific): ledgers and stock, units and money rounding, QC approvals and retests, sequence numbering, Excel export and formula injection, `ilike` escaping, patch-file delivery | — | Not applicable to Syllabi |
 
 ## 4. Suggested release slices
 
