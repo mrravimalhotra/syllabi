@@ -146,7 +146,8 @@ export function WorkedExampleView({
 
 /** Sizes in px for one cell row and for a column of width w characters. */
 const ROW = 40;
-const colPx = (w: number) => (w <= 1 ? 34 : w * 15 + 14);
+// A width below 1 is a narrow column (the decimal point).
+const colPx = (w: number) => (w < 1 ? 16 : w === 1 ? 34 : w * 15 + 14);
 
 function Board({ example, upTo, print }: { example: WorkedExample; upTo: number; print?: boolean }) {
   const widths = useMemo(
@@ -196,6 +197,9 @@ function Board({ example, upTo, print }: { example: WorkedExample; upTo: number;
               "absolute flex items-center justify-center text-2xl",
               print ? "text-slate-900" : TONE[c.tone ?? "given"],
               c.fresh && "animate-fade-in",
+              // Carries and borrows are written small, above the column.
+              c.tone === "carry" && c.text.length <= 3 && "text-base",
+              c.text.length === 2 && c.tone !== "carry" && "text-xl",
               c.text.length > 3 && "justify-start text-lg whitespace-nowrap"
             )}
             style={{ left: leftOf(c.col), top: c.row * ROW, width: c.text.length > 3 ? undefined : widths[c.col], height: ROW }}

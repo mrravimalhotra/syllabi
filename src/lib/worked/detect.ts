@@ -5,6 +5,8 @@
 
 import { longDivision, cleanNumber } from "@/lib/worked/division";
 import { lcmHcf } from "@/lib/worked/lcm-hcf";
+import { columnAddition, columnSubtraction } from "@/lib/worked/column";
+import { longMultiplication } from "@/lib/worked/multiplication";
 import type { WorkedExample, WorkedProblem } from "@/lib/worked/types";
 
 const DEVANAGARI_DIGITS = "०१२३४५६७८९";
@@ -19,6 +21,42 @@ const DIVISION = [
   new RegExp(String.raw`(${N})\s*(?:ला|यास)\s*(${N})\s*ने\s*भाग`),
 ];
 const DECIMALS = /decimal|दशमलव|दशांश/i;
+
+// A number standing on its own (not part of "5d", "x2" or "1.2.3").
+const B = (n: string) => String.raw`(?<![\w.])(${n})(?![\w])`;
+const ADDITION = [
+  new RegExp(String.raw`${B(N)}(?:\s*\+\s*(?:${N})(?![\w])){1,3}`),
+  new RegExp(String.raw`\b(?:add|sum of)\s+((?:${N})(?:\s*,\s*(?:${N}))*\s+and\s+(?:${N}))`, "i"),
+  new RegExp(String.raw`(${N})\s*(?:और|तथा)\s*(${N})\s*(?:को\s*)?जोड़`),
+  new RegExp(String.raw`(${N})\s*(?:आणि|व)\s*(${N})\s*(?:यांची\s*)?बेरीज`),
+];
+// [pattern, index of the number taken away from, index of the number taken away]
+const SUBTRACTION: [RegExp, number, number][] = [
+  [new RegExp(String.raw`${B(N)}\s+[-–]\s+${B(N)}`), 1, 2],
+  [new RegExp(String.raw`${B(N)}\s*−\s*${B(N)}`), 1, 2],
+  [new RegExp(String.raw`\bsubtract\s+(${N})\s+from\s+(${N})`, "i"), 2, 1],
+  [new RegExp(String.raw`(${N})\s*में\s*से\s*(${N})\s*घटा`), 1, 2],
+  [new RegExp(String.raw`(${N})\s*मधून\s*(${N})\s*वजा`), 1, 2],
+];
+const DIFFERENCE = new RegExp(String.raw`\bdifference between\s+(${N})\s+and\s+(${N})`, "i");
+const MULTIPLICATION = [
+  new RegExp(String.raw`${B(N)}\s*[×✕]\s*${B(N)}`),
+  new RegExp(String.raw`${B(N)}\s+[x*]\s+${B(N)}`),
+  new RegExp(String.raw`\b(?:multiply\s+(${N})\s+(?:by|and|with)|product of\s+(${N})\s+and)\s+(${N})`, "i"),
+  new RegExp(String.raw`(${N})\s*को\s*(${N})\s*से\s*गुणा`),
+  new RegExp(String.raw`(${N})\s*(?:ला|यास)\s*(${N})\s*ने\s*गुण`),
+];
+const OPERATOR_AFTER = /^\s*[+\-−–×✕x*÷/^]\s*\d/;
+const OPERATOR_BEFORE = /\d\s*[+\-−–×✕x*÷/^]\s*$/;
+
+/** True when a match is part of a longer expression ("12 + 5 × 3"), which needs BODMAS, not one method. */
+function partOfLongerExpression(line: string, m: RegExpMatchArray): boolean {
+  const before = line.slice(0, m.index);
+  const after = line.slice((m.index ?? 0) + m[0].length);
+  return OPERATOR_BEFORE.test(before) || OPERATOR_AFTER.test(after);
+}
+
+const numbersIn = (text: string) => [...text.matchAll(new RegExp(N, "g"))].map((x) => cleanNumber(x[0])).filter((x): x is string => Boolean(x));
 
 const LCM_WORDS = String.raw`l\.?\s?c\.?\s?m\.?|lowest common multiple|least common multiple|ल\.?\s?स\.?\s?प\.?|लघुत्तम समापवर्त्य|ल\.?\s?सा\.?\s?वि\.?|लसावि`;
 const HCF_WORDS = String.raw`h\.?\s?c\.?\s?f\.?|g\.?\s?c\.?\s?d\.?|highest common factor|greatest common (?:divisor|factor)|म\.?\s?स\.?\s?प\.?|महत्तम समापवर्तक|म\.?\s?सा\.?\s?वि\.?|मसावि`;
@@ -49,9 +87,37 @@ export function findProblems(textIn: string): FoundProblem[] {
       for (const m of line.matchAll(new RegExp(pattern.source, pattern.flags + "g"))) {
         const dividend = cleanNumber(m[1]);
         const divisor = cleanNumber(m[2]);
-        if (dividend && divisor && Number(divisor) !== 0) {
+        if (dividend && divisor && Number(divisor) !== 0 && !partOfLongerExpression(line, m)) {
           add({ kind: "division", dividend, divisor, decimals: DECIMALS.test(line) }, m[0]);
         }
+      }
+    }
+
+    for (const pattern of ADDITION) {
+      for (const m of line.matchAll(new RegExp(pattern.source, pattern.flags + "g"))) {
+        if (partOfLongerExpression(line, m)) continue;
+        // "add 12, 5 and 3" / "12 + 5 + 3": every number in the match.
+        const numbers = numbersIn(m[0]);
+        if (numbers.length >= 2) add({ kind: "column", op: "add", numbers: numbers.slice(0, 4) }, m[0]);
+      }
+    }
+    for (const [pattern, from, take] of SUBTRACTION) {
+      for (const m of line.matchAll(new RegExp(pattern.source, pattern.flags + "g"))) {
+        if (partOfLongerExpression(line, m)) continue;
+        const a = cleanNumber(m[from]);
+        const b = cleanNumber(m[take]);
+        if (a && b) add({ kind: "column", op: "subtract", numbers: [a, b] }, m[0]);
+      }
+    }
+    for (const m of line.matchAll(new RegExp(DIFFERENCE.source, "gi"))) {
+      const [a, b] = [cleanNumber(m[1]), cleanNumber(m[2])];
+      if (a && b) add({ kind: "column", op: "subtract", numbers: Number(a) >= Number(b) ? [a, b] : [b, a] }, m[0]);
+    }
+    for (const pattern of MULTIPLICATION) {
+      for (const m of line.matchAll(new RegExp(pattern.source, pattern.flags + "g"))) {
+        if (partOfLongerExpression(line, m)) continue;
+        const [a, b] = numbersIn(m[0]);
+        if (a && b) add({ kind: "multiplication", a, b }, m[0]);
       }
     }
 
@@ -80,7 +146,10 @@ const FILLER = new Set(
   `find the of and using use by long division method show steps step working work out what is are please solve
    divide calculate answer in into upto up to places place decimal decimals a an following numbers number give
    write get its their with lcm hcf gcd lowest least highest greatest common multiple factor divisor prime
-   factorisation factorization ladder q ques question
+   factorisation factorization ladder q ques question add sum subtract difference between from multiply product
+   times plus minus total column vertical x
+   जोड़िए जोड़ो जोड़ें घटाइए घटाओ घटाएँ गुणा में
+   बेरीज वजाबाकी गुणाकार मधून वजा यांची
    ज्ञात कीजिए करें करो का की के और तथा से को भाग दीजिए दो निकालिए दशमलव तक स्थान ला यास
    काढा चा ची चे आणि व ने भागा करा शोधा दशांश पर्यंत`.split(/\s+/)
 );
@@ -110,6 +179,12 @@ export function solve(problem: WorkedProblem): WorkedExample | null {
       return longDivision(problem.dividend, problem.divisor, problem.decimals);
     case "lcm-hcf":
       return lcmHcf(problem.numbers, problem.want);
+    case "column":
+      return problem.op === "add"
+        ? columnAddition(problem.numbers)
+        : columnSubtraction(problem.numbers[0], problem.numbers[1]);
+    case "multiplication":
+      return longMultiplication(problem.a, problem.b);
   }
 }
 

@@ -41,7 +41,9 @@ export interface Step {
 /** A problem a worked example can solve, as saved with an answer. */
 export type WorkedProblem =
   | { kind: "division"; dividend: string; divisor: string; decimals: boolean }
-  | { kind: "lcm-hcf"; numbers: number[]; want: "lcm" | "hcf" | "both" };
+  | { kind: "lcm-hcf"; numbers: number[]; want: "lcm" | "hcf" | "both" }
+  | { kind: "column"; op: "add" | "subtract"; numbers: string[] }
+  | { kind: "multiplication"; a: string; b: string };
 
 export interface WorkedExample {
   problem: WorkedProblem;

@@ -214,6 +214,7 @@ export function longDivision(dividendText: string, divisorText: string, decimals
     title: `Long division: ${original}`,
     rows: Math.max(...allCells.map((c) => c.row)) + 1,
     cols: lastCol + 1,
+    colWidths: Array.from({ length: lastCol + 1 }, (_, c) => (showPoint && c === pointCol ? 0.5 : 1)),
     steps,
     answer,
   };

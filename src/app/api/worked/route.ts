@@ -19,6 +19,13 @@ function parseProblem(raw: unknown): WorkedProblem | null {
   ) {
     return { kind: "lcm-hcf", numbers: p.numbers as number[], want: p.want };
   }
+  const isNumberText = (v: unknown) => typeof v === "string" && /^\d*\.?\d+$/.test(v);
+  if (p?.kind === "column" && (p.op === "add" || p.op === "subtract") && Array.isArray(p.numbers) && p.numbers.every(isNumberText)) {
+    return { kind: "column", op: p.op, numbers: p.numbers as string[] };
+  }
+  if (p?.kind === "multiplication" && isNumberText(p.a) && isNumberText(p.b)) {
+    return { kind: "multiplication", a: p.a as string, b: p.b as string };
+  }
   return null;
 }
 
