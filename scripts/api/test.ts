@@ -14,6 +14,9 @@ import * as llm from "../../src/app/api/admin/llm-settings/route";
 import * as adhoc from "../../src/app/api/generate/ad-hoc/route";
 import * as jobs from "../../src/app/api/jobs/pages/route";
 import { pipeline } from "./fakes/pipeline";
+import { llm as fakeAi } from "./fakes/llm";
+import * as studyPack from "../../src/app/api/generate/study-pack/route";
+import { QUESTIONS_SYSTEM, WALKTHROUGH_SYSTEM } from "../../src/lib/study-pack/prompts";
 import { ssrState } from "./fakes/ssr";
 import { updateSession } from "../../src/lib/supabase/middleware";
 import { NextRequest } from "next/server";
@@ -285,6 +288,56 @@ pipeline.fail = false;
   check("gate: a live guest gets in while sign-ups are closed; an expired guest does not", (await gate("/dashboard", { person: { role: "student", guest_until: new Date(Date.now() + 86_400_000).toISOString() } })).status === 200 && (await gate("/dashboard", { person: { role: "student", guest_until: new Date(Date.now() - 1000).toISOString() } })).to === "/pending");
   check("gate: API calls leave the account check to each route", (await gate("/api/library", { person: { active: false } })).status === 200);
   process.env.OPEN_SIGNUPS = "true";
+}
+
+// ---- Study packs: the whole path, with a stand-in for the AI ----
+{
+  const CHAPTER = "Plants make food from sunlight in their leaves. This is called photosynthesis. ".repeat(4);
+  const BOOK = "00000000-0000-4000-8000-0000000000b1";
+  const setup = (status = "ready", text = CHAPTER) => {
+    fresh(person({ role: "student" }));
+    tables.documents = [{ id: BOOK, owner_id: person().id, title: "Science Ch 2", status }];
+    tables.chunks = [{ document_id: BOOK, content: text, page_number: 3, chunk_index: 0, created_at: new Date().toISOString() }];
+    tables.generated_documents = [];
+    fakeAi.calls = 0;
+    fakeAi.reply = (req) =>
+      req.systemInstructions === WALKTHROUGH_SYSTEM
+        ? { text: JSON.stringify({ title: "Photosynthesis", subject: "Science", kind: "information", language: "en", overview: "How plants eat.", themes: ["Growth"], walkthrough: [{ title: "Leaves", summary: "Leaves make food.", whyItMatters: "Food", vocabulary: [{ word: "photosynthesis", meaning: "making food" }], narration: "Leaves make food.", scene: { backdrop: "forest", actors: [{ emoji: "🌳", motion: "sway" }], caption: "A tree" } }] }) }
+        : req.systemInstructions === QUESTIONS_SYSTEM
+          ? { text: JSON.stringify({ textbookQuestions: [{ number: "1", question: "What do plants make?", answer: "Food", evidence: "Plants make food from sunlight in their leaves.", type: "short answer" }], practiceQuestions: [{ question: "Name the process.", answer: "Photosynthesis", difficulty: "easy", skill: "recall", type: "short answer" }] }) }
+          : { text: "{}" };
+  };
+  setup();
+  const made = await expect("study pack: a chapter from My books becomes a pack", studyPack.POST, 200, null, { documentId: BOOK });
+  const pack = made.json?.pack as { title: string; walkthrough: unknown[]; textbookQuestions: { evidenceFound: boolean | null }[]; practiceQuestions: unknown[]; glossary: { word: string }[] } | undefined;
+  check("study pack: it has the walkthrough, questions, glossary and a title", pack?.title === "Photosynthesis" && pack.walkthrough.length === 1 && pack.textbookQuestions.length === 1 && pack.practiceQuestions.length === 1 && pack.glossary[0]?.word === "photosynthesis", JSON.stringify(pack)?.slice(0, 120));
+  check("study pack: a quote from the chapter is checked and found", pack?.textbookQuestions[0].evidenceFound === true);
+  check("study pack: it is saved, with its fingerprint, and uses two AI calls", (tables.generated_documents ?? []).length === 1 && (tables.generated_documents ?? [])[0].task_type === "study_pack" && Boolean((tables.generated_documents ?? [])[0].cache_key) && fakeAi.calls === 2, `${(tables.generated_documents ?? []).length} ${fakeAi.calls}`);
+  const reused = await expect("study pack: the same chapter again returns the saved pack", studyPack.POST, 200, null, { documentId: BOOK });
+  check("study pack: no new AI calls, and it says it was reused", fakeAi.calls === 2 && Boolean(reused.json?.reusedFrom));
+  await expect("study pack: a fresh pack can be asked for", studyPack.POST, 200, null, { documentId: BOOK, fresh: true });
+  check("study pack: fresh makes two more AI calls and a second copy", fakeAi.calls === 4 && (tables.generated_documents ?? []).length === 2);
+
+  setup("processing");
+  await expect("study pack: a book still being read is explained", studyPack.POST, 400, /still being read/i, { documentId: BOOK });
+  setup();
+  await expect("study pack: someone else's or a missing book is not found", studyPack.POST, 400, /wasn't found/i, { documentId: "00000000-0000-4000-8000-0000000000ff" });
+  setup("ready", "Too short.");
+  await expect("study pack: a chapter with almost no text is refused", studyPack.POST, 400, /Choose a book/i, { documentId: BOOK });
+  setup("ready", "x".repeat(160_000));
+  await expect("study pack: a chapter that is too long asks for a shorter part", studyPack.POST, 400, /too long for one study pack/i, { documentId: BOOK });
+  setup();
+  fakeAi.reply = () => ({ text: "not json at all" });
+  await expect("study pack: an unreadable AI reply is explained", studyPack.POST, 400, /couldn't be read/i, { documentId: BOOK });
+  fakeAi.reply = () => ({ text: "{", truncated: true });
+  await expect("study pack: a cut-off AI reply says the pack was too long", studyPack.POST, 400, /too long to finish/i, { documentId: BOOK });
+  fakeAi.reply = () => ({ text: "{}" });
+  await expect("study pack: an empty pack is refused", studyPack.POST, 400, /couldn't make a pack/i, { documentId: BOOK });
+  check("study pack: nothing is saved when the pack fails", (tables.generated_documents ?? []).length === 0);
+  setup();
+  rpcs.student_monthly_usage = () => 999_999_999;
+  const over = await studyPack.POST(new Request("http://test/api", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ documentId: BOOK }) }));
+  check("study pack: over the monthly allowance is refused before any AI call", over.status >= 400 && fakeAi.calls === 0, `${over.status} ${fakeAi.calls}`);
 }
 
 // ---- Background reader and error log ----

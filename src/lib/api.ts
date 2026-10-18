@@ -9,7 +9,7 @@
 import { NextResponse } from "next/server";
 import { DatabaseUnavailableError, NotAdminError, getCurrentStudent, requireAdmin } from "@/lib/auth";
 import { canUseApp } from "@/lib/access";
-import { BlockedReplyError, DAILY_LIMIT, errorText, userMessage } from "@/lib/errors";
+import { BlockedReplyError, DAILY_LIMIT, UserError, errorText, userMessage } from "@/lib/errors";
 import { QuotaExceededError } from "@/lib/quota";
 import { TooFastError } from "@/lib/tts/speak";
 import { logError } from "@/lib/error-log";
@@ -28,6 +28,8 @@ function statusFor(err: unknown): number {
   if (err instanceof DatabaseUnavailableError) return 503;
   if (err instanceof NotAdminError) return 403;
   if (err instanceof BlockedReplyError) return 422;
+  // A message written for the person ("That book is still being read", "Choose a chapter"): their request can't be done as asked.
+  if (err instanceof UserError) return 400;
   const text = err instanceof Error ? err.message : typeof err === "string" ? err : "";
   if (DAILY_LIMIT.test(text)) return 429;
   if (/\b(429|500|502|503|504)\b|RESOURCE_EXHAUSTED|overloaded|UNAVAILABLE/i.test(text)) return 503;

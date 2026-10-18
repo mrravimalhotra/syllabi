@@ -3,7 +3,7 @@ import { recordTokenUsage } from "@/lib/llm/usage";
 import { checkQuota, QuotaExceededError } from "@/lib/quota";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { UserError } from "@/lib/errors";
-import type { CompletionImage } from "@/lib/llm/types";
+import type { CompletionImage, CompletionResult } from "@/lib/llm/types";
 import type { Student } from "@/types/database";
 import { QUESTIONS_SCHEMA, QUESTIONS_SYSTEM, WALKTHROUGH_SCHEMA, WALKTHROUGH_SYSTEM } from "@/lib/study-pack/prompts";
 import { evidenceFound } from "@/lib/study-pack/verify";
@@ -207,21 +207,16 @@ function buildPack(
   };
 }
 
-/**
- * Makes a study pack for one chapter: from a book in My books (preferred: no
- * re-reading, and quotes can be checked) or from attached photos. The
- * walkthrough and the questions are two calls made at the same time.
- */
-export async function generateStudyPack(input: {
+interface StudyPackInput {
   student: Student;
   documentId?: string;
   photos?: CompletionImage[];
   focus?: string;
   language?: AnswerLanguage;
-}): Promise<StudyPack> {
-  const quota = await checkQuota(input.student.id);
-  if (quota.overQuota) throw new QuotaExceededError(quota);
+}
 
+/** The chapter text: a book from My books, or attached photos; refuses one that is missing, too short or too long. */
+async function chapterFor(input: StudyPackInput): Promise<Chapter> {
   const chapter = input.documentId
     ? await loadBook(input.documentId, input.student.id)
     : input.photos?.length
@@ -233,44 +228,26 @@ export async function generateStudyPack(input: {
   if (chapter.text.length > MAX_CHAPTER_CHARS) {
     throw new UserError("That book is too long for one study pack. Upload one chapter as its own book and try again.");
   }
+  return chapter;
+}
 
+/** The prompt both calls get: the chapter, the child's level, the answer language and any focus the adult asked for. */
+function packPrompt(input: StudyPackInput, chapterText: string): string {
   const focus = input.focus?.trim().slice(0, MAX_FOCUS_CHARS);
   const level = levelLine(input.student);
-  const prompt =
-    `Chapter text:\n"""\n${chapter.text}\n"""` +
+  return (
+    `Chapter text:\n"""\n${chapterText}\n"""` +
     (level ? `\n\n${level}` : "") +
     `\n\n${languageLine(input.language ?? "auto")}` +
     (focus ? `\n\nThe parent or tutor adds: ${focus}` : "") +
-    "\n\nReturn the JSON object now.";
+    "\n\nReturn the JSON object now."
+  );
+}
 
-  const call = (systemInstructions: string, jsonSchema: Record<string, unknown>) =>
-    generateCompletion({
-      taskType: "study_pack",
-      systemInstructions,
-      prompt,
-      jsonSchema,
-      temperature: 0.3,
-    });
-
-  const [walkResult, qaResult] = await Promise.all([
-    call(WALKTHROUGH_SYSTEM, WALKTHROUGH_SCHEMA),
-    call(QUESTIONS_SYSTEM, QUESTIONS_SCHEMA),
-  ]);
-  for (const result of [walkResult, qaResult]) {
-    await recordTokenUsage({
-      studentId: input.student.id,
-      taskType: "study_pack",
-      provider: result.provider,
-      model: result.model,
-      usage: result.usage,
-    });
-  }
-
-  let walk: Record<string, unknown>;
-  let qa: Record<string, unknown>;
+/** Reads the two replies as JSON, or says plainly why they can't be (too long to finish, or unreadable). */
+function readReplies(walkResult: CompletionResult, qaResult: CompletionResult): { walk: Record<string, unknown>; qa: Record<string, unknown> } {
   try {
-    walk = parseJson(walkResult.text);
-    qa = parseJson(qaResult.text);
+    return { walk: parseJson(walkResult.text), qa: parseJson(qaResult.text) };
   } catch (err) {
     console.error("[study-pack] unreadable reply", err, walkResult.truncated, qaResult.truncated);
     throw new UserError(
@@ -279,7 +256,28 @@ export async function generateStudyPack(input: {
         : "The AI's reply couldn't be read. Please try again."
     );
   }
+}
 
+/**
+ * Makes a study pack for one chapter: from a book in My books (preferred: no
+ * re-reading, and quotes can be checked) or from attached photos. The
+ * walkthrough and the questions are two calls made at the same time.
+ */
+export async function generateStudyPack(input: StudyPackInput): Promise<StudyPack> {
+  const quota = await checkQuota(input.student.id);
+  if (quota.overQuota) throw new QuotaExceededError(quota);
+
+  const chapter = await chapterFor(input);
+  const prompt = packPrompt(input, chapter.text);
+  const call = (systemInstructions: string, jsonSchema: Record<string, unknown>) =>
+    generateCompletion({ taskType: "study_pack", systemInstructions, prompt, jsonSchema, temperature: 0.3 });
+
+  const [walkResult, qaResult] = await Promise.all([call(WALKTHROUGH_SYSTEM, WALKTHROUGH_SCHEMA), call(QUESTIONS_SYSTEM, QUESTIONS_SCHEMA)]);
+  for (const result of [walkResult, qaResult]) {
+    await recordTokenUsage({ studentId: input.student.id, taskType: "study_pack", provider: result.provider, model: result.model, usage: result.usage });
+  }
+
+  const { walk, qa } = readReplies(walkResult, qaResult);
   const pack = buildPack(walk, qa, chapter.text, chapter.source, input.documentId ?? null);
   if (pack.walkthrough.length === 0 && pack.textbookQuestions.length === 0) {
     throw new UserError("The AI couldn't make a pack from this chapter. Check the pages are readable and try again.");

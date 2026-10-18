@@ -24,6 +24,7 @@ await build({
     "@/lib/storage": fakes("storage.ts"),
     "@supabase/ssr": fakes("ssr.ts"),
     "@/lib/generation/pipeline": fakes("pipeline.ts"),
+    "@/lib/llm/usage": fakes("llm-usage.ts"),
     "@/lib/llm/config": fakes("llm-config.ts"),
     "@": join(ROOT, "src"),
   },
@@ -34,6 +35,8 @@ await build({
       name: "next-extensions",
       setup(b) {
         b.onResolve({ filter: /^next\/(server|headers|navigation|cache)$/ }, (a) => ({ path: `${a.path}.js`, external: true }));
+        // Exactly "@/lib/llm" (the AI layer), not its sub-modules.
+        b.onResolve({ filter: /^@\/lib\/llm$/ }, () => ({ path: fakes("llm.ts") }));
       },
     },
   ],
