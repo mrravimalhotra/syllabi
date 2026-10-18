@@ -267,7 +267,8 @@ await test("My Books: uploading a photo shows it was sent", async (page, ctx) =>
   await page.getByText(/1 page/).first().waitFor({ timeout: 15000 });
   await page.locator("input[type=checkbox]").check();
   await page.getByRole("button", { name: /Upload & read/ }).click();
-  await page.getByText(/sent/i).first().waitFor({ timeout: 20000 });
+  for (let i = 0; i < 100 && sent < 1; i++) await page.waitForTimeout(200);
+  await page.getByText(/sent\. Syllabi is reading them now/i).first().waitFor({ timeout: 20000 });
   if (created !== 1 || sent < 1) throw new Error(`Expected one book and at least one page request, saw ${created} and ${sent}.`);
 });
 
@@ -330,9 +331,11 @@ await test("Kindergarten: spelling a word with letters, a full round ends in sta
     for (const letter of word) {
       await tap(page.getByRole("group", { name: "Letters to choose from" }).getByRole("button", { name: letter, exact: true }).and(page.locator("button:not([disabled])")).first());
     }
-    if (q < 4) await page.locator(`[data-word]:not([data-word="${word}"])`).waitFor({ timeout: 8000 });
+    // The sounds are blended into the word ("m · a · p = map") before the next question.
+    if (q === 0) await page.getByLabel(/make the word/).waitFor({ timeout: 15000 });
+    if (q < 4) await page.locator(`[data-word]:not([data-word="${word}"])`).waitFor({ timeout: 20000 });
   }
-  await page.getByText("Well done!").first().waitFor({ timeout: 8000 });
+  await page.getByText("Well done!").first().waitFor({ timeout: 20000 });
 });
 
 await test("Kindergarten: a wrong letter says try again and does not place it", async (page, ctx) => {

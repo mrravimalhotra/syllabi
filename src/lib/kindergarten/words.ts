@@ -79,3 +79,39 @@ export const SIGHT_LEVEL_LABELS: Record<SightLevel, string> = { "pre-primer": "F
 
 /** What is counted in "more, less or same" questions. */
 export const COUNT_EMOJI = ["🍎", "⭐", "🐟", "🎈", "🐥", "🌸", "🚗", "🍪"] as const;
+
+/**
+ * How each letter is spoken when sounding a word out ("m, a, p, map"): the
+ * short sound the letter makes, not its name. Written as plain spellings a
+ * speech voice reads naturally, so they can be tuned here in one place.
+ */
+export const LETTER_SOUNDS: Record<string, string> = {
+  a: "aah",
+  b: "buh",
+  c: "kuh",
+  d: "duh",
+  e: "eh",
+  f: "fff",
+  g: "guh",
+  h: "hhh",
+  i: "ih",
+  j: "juh",
+  k: "kuh",
+  l: "lll",
+  m: "mmm",
+  n: "nnn",
+  o: "ah",
+  p: "puh",
+  q: "kwuh",
+  r: "rrr",
+  s: "sss",
+  t: "tuh",
+  u: "uh",
+  v: "vvv",
+  w: "wuh",
+  x: "ks",
+  y: "yuh",
+  z: "zzz",
+};
+
+export const isVowelLetter = (letter: string) => (VOWELS as readonly string[]).includes(letter);

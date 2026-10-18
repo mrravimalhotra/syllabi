@@ -60,6 +60,6 @@ what works.
 | # | Item | Severity | Notes |
 |---|---|---|---|
 | K.1 | Printable kindergarten worksheets | Medium | Not built yet: the PDF fonts have no emoji, so printing needs a browser print view or drawn pictures. |
-| K.2 | Letter sounds (phonics) | Medium | The voice says whole words, not single letter sounds; a speech model may say the letter name instead. Test before adding "tap a letter to hear its sound". |
+| K.2 | Letter sounds (phonics) | Medium | Spelling words now says each letter's sound ("mmm", "aah", "puh") and blends "m · a · p = map". Sounds are plain respellings in `LETTER_SOUNDS` (src/lib/kindergarten/words.ts); the speech voice may read some (especially "aah", "ah", "eh") unclearly. Listen on a phone and tune the spellings. |
 | K.3 | Gemini speech free allowance | Medium | Every new word or phrase is made once and stored; a big first session may use the free allowance, then the phone's voice reads. |
 | K.4 | Hindi and Marathi letters, counting objects, number order, shapes and colours | Low | Planned next activities. |
