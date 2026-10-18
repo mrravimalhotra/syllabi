@@ -38,14 +38,17 @@ function layout(intLen: number, fracLen: number, extraLeft: number): Layout {
   };
 }
 
-function numberCells(digits: string, row: number, colOf: (p: number) => number, pointCol: number | null, intLen: number, writtenFrac: number, tone: Cell["tone"]): Cell[] {
+/** The board's columns, with the number of digits before the decimal point. */
+type Grid = Layout & { intLen: number };
+
+function numberCells(digits: string, row: number, grid: Grid, writtenFrac: number, tone: Cell["tone"]): Cell[] {
   const cells: Cell[] = [];
   digits.split("").forEach((d, p) => {
     if (d === " ") return;
-    const isPadding = p >= intLen + writtenFrac;
-    cells.push({ row, col: colOf(p), text: d, tone: isPadding ? "muted" : tone });
+    const isPadding = p >= grid.intLen + writtenFrac;
+    cells.push({ row, col: grid.colOf(p), text: d, tone: isPadding ? "muted" : tone });
   });
-  if (pointCol !== null) cells.push({ row, col: pointCol, text: ".", tone });
+  if (grid.pointCol !== null) cells.push({ row, col: grid.pointCol, text: ".", tone });
   return cells;
 }
 
@@ -59,13 +62,14 @@ export function columnAddition(numbersIn: string[], language?: Narration): Worke
 
   // One spare column on the left for a final carry.
   const { colOf, pointCol, width } = layout(intLen, fracLen, 1);
+  const grid: Grid = { colOf, pointCol, width, intLen };
   const carryRow = 0;
   const lastNumberRow = nums.length;
   const resultRow = nums.length + 1;
   const steps: Step[] = [];
 
   const setup: Cell[] = [];
-  nums.forEach((_, i) => setup.push(...numberCells(padded[i], i + 1, colOf, pointCol, intLen, written[i], "given")));
+  nums.forEach((_, i) => setup.push(...numberCells(padded[i], i + 1, grid, written[i], "given")));
   setup.push({ row: lastNumberRow, col: 0, text: "+", tone: "given" });
   steps.push({
     say: t.addSetup(fracLen > 0, written.some((w) => w < fracLen)),
@@ -121,6 +125,38 @@ export function columnAddition(numbersIn: string[], language?: Narration): Worke
   };
 }
 
+/** What a borrow needs: the column, the digit being taken away, the working top row (changed in place) and how to name and place digits. */
+interface BorrowInput {
+  t: Phrases;
+  p: number;
+  down: number;
+  top: number[];
+  padded: string[];
+  placeName: (p: number) => string;
+  colOf: (p: number) => number;
+}
+
+/** Borrow from the nearest non-zero digit on the left; zeros on the way become 9. Updates `top`. */
+function borrowStep({ t, p, down, top, padded, placeName, colOf }: BorrowInput): Step {
+  let q = p - 1;
+  while (q >= 0 && top[q] === 0) q--;
+  const changed: Cell[] = [];
+  top[q] -= 1;
+  changed.push({ row: 1, col: colOf(q), text: String(padded[0][q]), tone: "muted" }, { row: 0, col: colOf(q), text: String(top[q]), tone: "carry" });
+  for (let z = q + 1; z < p; z++) {
+    top[z] = 9;
+    changed.push({ row: 1, col: colOf(z), text: "0", tone: "muted" }, { row: 0, col: colOf(z), text: "9", tone: "carry" });
+  }
+  const before = top[p];
+  top[p] += 10;
+  changed.push({ row: 1, col: colOf(p), text: String(padded[0][p]), tone: "muted" }, { row: 0, col: colOf(p), text: String(top[p]), tone: "carry" });
+  return {
+    say: t.borrow(placeName(p), before, down, placeName(q), q < p - 1 ? placeName(p - 1) : null, top[q], top[p]),
+    cells: changed,
+    focus: [{ row: 1, col: colOf(p) }],
+  };
+}
+
 export function columnSubtraction(aIn: string, bIn: string, language?: Narration): WorkedExample | null {
   const t = phrases(language);
   const a0 = cleanNumber(aIn);
@@ -132,6 +168,7 @@ export function columnSubtraction(aIn: string, bIn: string, language?: Narration
   const { padded, intLen, fracLen, placeName, written } = align([a, b], t);
   if (intLen + fracLen > MAX_DIGITS) return null;
   const { colOf, pointCol, width } = layout(intLen, fracLen, 0);
+  const grid: Grid = { colOf, pointCol, width, intLen };
   const steps: Step[] = [];
   const top = padded[0].split("").map((d) => (d === " " ? 0 : Number(d)));
   const bottom = padded[1].split("").map((d) => (d === " " ? -1 : Number(d)));
@@ -143,8 +180,8 @@ export function columnSubtraction(aIn: string, bIn: string, language?: Narration
   steps.push({
     say: t.subtractSetup(a, b, fracLen > 0, written.some((w) => w < fracLen)),
     cells: [
-      ...numberCells(padded[0], 1, colOf, pointCol, intLen, written[0], "given"),
-      ...numberCells(padded[1], 2, colOf, pointCol, intLen, written[1], "given"),
+      ...numberCells(padded[0], 1, grid, written[0], "given"),
+      ...numberCells(padded[1], 2, grid, written[1], "given"),
       { row: 2, col: 0, text: "−", tone: "given" },
     ],
     rules: [{ row: 2, fromCol: 0, toCol: width - 1 }],
@@ -155,26 +192,7 @@ export function columnSubtraction(aIn: string, bIn: string, language?: Narration
   for (let p = total - 1; p >= 0; p--) {
     const down = Math.max(bottom[p], 0);
     const place = placeName(p);
-    if (top[p] < down) {
-      // Borrow from the nearest non-zero digit on the left; zeros on the way become 9.
-      let q = p - 1;
-      while (q >= 0 && top[q] === 0) q--;
-      const changed: Cell[] = [];
-      top[q] -= 1;
-      changed.push({ row: 1, col: colOf(q), text: String(padded[0][q]), tone: "muted" }, { row: 0, col: colOf(q), text: String(top[q]), tone: "carry" });
-      for (let z = q + 1; z < p; z++) {
-        top[z] = 9;
-        changed.push({ row: 1, col: colOf(z), text: "0", tone: "muted" }, { row: 0, col: colOf(z), text: "9", tone: "carry" });
-      }
-      const before = top[p];
-      top[p] += 10;
-      changed.push({ row: 1, col: colOf(p), text: String(padded[0][p]), tone: "muted" }, { row: 0, col: colOf(p), text: String(top[p]), tone: "carry" });
-      steps.push({
-        say: t.borrow(place, before, down, placeName(q), q < p - 1 ? placeName(p - 1) : null, top[q], top[p]),
-        cells: changed,
-        focus: [{ row: 1, col: colOf(p) }],
-      });
-    }
+    if (top[p] < down) steps.push(borrowStep({ t, p, down, top, padded, placeName, colOf }));
     const digit = top[p] - down;
     steps.push({
       say: t.subtractColumn(place, top[p], down, digit),
