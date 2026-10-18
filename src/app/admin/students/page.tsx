@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Field } from "@/components/ui";
 import { Alert, Badge, PageHeader, PageSkeleton, button, card, cx, input } from "@/components/ui";
 import { OFFLINE_MESSAGE, failedRequestMessage } from "@/lib/http-errors";
 import type { Student } from "@/types/database";
@@ -75,6 +76,34 @@ export default function AccountsPage() {
     if (value !== account.token_quota) void change(account, { token_quota: value }, `monthly limit set to ${value.toLocaleString("en-IN")} tokens.`);
   }
 
+  const [guest, setGuest] = useState({ email: "", name: "", days: "14", allowance: "20000" });
+  const [making, setMaking] = useState(false);
+  const [made, setMade] = useState<{ email: string; password: string; until: string } | null>(null);
+
+  async function makeGuest(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setNotice(null);
+    setMade(null);
+    setMaking(true);
+    try {
+      const res = await fetch("/api/admin/guests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: guest.email, name: guest.name, days: Number(guest.days), allowance: Number(guest.allowance) }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? failedRequestMessage(res.status, "make the guest account"));
+      setAccounts((prev) => [{ ...data.account, monthly_usage: 0 }, ...prev]);
+      setMade({ email: data.account.email, password: data.password, until: data.account.guest_until });
+      setGuest((g) => ({ ...g, email: "", name: "" }));
+    } catch (err) {
+      setError(err instanceof TypeError ? OFFLINE_MESSAGE : err instanceof Error ? err.message : "Couldn't make the guest account. Try again.");
+    } finally {
+      setMaking(false);
+    }
+  }
+
   if (loading) return <PageSkeleton rows={2} />;
 
   return (
@@ -85,6 +114,43 @@ export default function AccountsPage() {
       />
       {error && <Alert tone="error">{error}</Alert>}
       {notice && <Alert tone="success">{notice}</Alert>}
+
+      <form onSubmit={makeGuest} className={cx(card, "space-y-3 p-4 sm:p-5")}>
+        <div>
+          <h2 className="text-base font-semibold text-slate-900">Add a guest</h2>
+          <p className="text-sm text-slate-500">
+            A temporary login for a reviewer, tester or visitor. It works while sign-ups are closed, has its own small monthly allowance, and stops working by itself.
+          </p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Guest's email" htmlFor="guest-email">
+            <input id="guest-email" type="email" required value={guest.email} onChange={(e) => setGuest({ ...guest, email: e.target.value })} className={input} />
+          </Field>
+          <Field label="Name (optional)" htmlFor="guest-name">
+            <input id="guest-name" value={guest.name} maxLength={120} onChange={(e) => setGuest({ ...guest, name: e.target.value })} className={input} />
+          </Field>
+          <Field label="Works for (days)" htmlFor="guest-days">
+            <input id="guest-days" type="number" min={1} max={90} required value={guest.days} onChange={(e) => setGuest({ ...guest, days: e.target.value })} className={input} />
+          </Field>
+          <Field label="Monthly allowance (tokens)" htmlFor="guest-allowance">
+            <input id="guest-allowance" type="number" min={1000} max={1000000} step={1000} required value={guest.allowance} onChange={(e) => setGuest({ ...guest, allowance: e.target.value })} className={input} />
+          </Field>
+        </div>
+        <button type="submit" disabled={making} className={button.primary}>
+          {making ? "Making the guest login..." : "Make guest login"}
+        </button>
+        {made && (
+          <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+            <p className="font-medium">Guest login ready. Copy it now: the password is shown only once.</p>
+            <p className="mt-1">Email: <span className="font-mono">{made.email}</span></p>
+            <p>Password: <span className="font-mono">{made.password}</span></p>
+            <p className="text-xs">Stops working on {new Date(made.until).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}.</p>
+            <button type="button" className={cx(button.small, "mt-2")} onClick={() => void navigator.clipboard?.writeText(`Email: ${made.email}\nPassword: ${made.password}`)}>
+              Copy email and password
+            </button>
+          </div>
+        )}
+      </form>
 
       <div className={cx(card, "overflow-x-auto")}>
         <table className="w-full min-w-[720px] text-left text-sm">
@@ -112,6 +178,12 @@ export default function AccountsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <Badge tone={a.active ? "success" : "warning"}>{a.active ? "Can sign in" : "Not approved or removed"}</Badge>
+                    {a.guest_until && (
+                      <p className="mt-1 text-xs text-slate-500">
+                        Guest, signs in until{" "}
+                        {new Date(a.guest_until).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                      </p>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <select

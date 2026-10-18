@@ -37,6 +37,8 @@ export interface Student {
   answer_language: "en" | "hi" | "mr" | "fr" | null;
   adult_confirmed_at: string | null;
   active: boolean;
+  /** Guest accounts only: when the login stops working. null for everyone else. */
+  guest_until: string | null;
   token_quota: number;
   created_at: string;
   updated_at: string;

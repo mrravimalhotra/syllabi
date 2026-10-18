@@ -13,6 +13,7 @@ import * as students from "../../src/app/api/admin/students/route";
 import * as llm from "../../src/app/api/admin/llm-settings/route";
 import * as adhoc from "../../src/app/api/generate/ad-hoc/route";
 import * as jobs from "../../src/app/api/jobs/pages/route";
+import * as guests from "../../src/app/api/admin/guests/route";
 import * as logError from "../../src/app/api/log-error/route";
 import type { Student } from "@/types/database";
 
@@ -139,6 +140,27 @@ tables.students.push({ id: OTHER, email: "o@example.com", active: true, role: "s
 await expect("admin students PATCH: a good change is saved", students.PATCH, 200, null, { id: OTHER, token_quota: 5000 });
 await expect("admin llm-settings PATCH: embeddings must stay on Google", llm.PATCH, 400, /Google/i, { taskType: "embedding", provider: "groq", model: "x" });
 await expect("admin llm-settings PATCH: a bad model name is refused", llm.PATCH, 400, /model name/i, { taskType: "notes", provider: "google", model: "bad name!" });
+
+// ---- Guest accounts ----
+fresh(person({ role: "student" }));
+await expect("guests POST: a normal account gets 403", guests.POST, 403, /admin/i, { email: "g@example.com", days: 7, allowance: 20000 });
+fresh(person({ role: "admin" }));
+await expect("guests POST: a bad email is refused", guests.POST, 400, /valid email/i, { email: "nope", days: 7, allowance: 20000 });
+await expect("guests POST: too many days is refused", guests.POST, 400, /days/i, { email: "g@example.com", days: 400, allowance: 20000 });
+await expect("guests POST: a tiny allowance is refused", guests.POST, 400, /allowance/i, { email: "g@example.com", days: 7, allowance: 5 });
+const guest = await expect("guests POST: a good guest is made", guests.POST, 200, null, { email: "G@Example.com", days: 7, allowance: 20000 });
+const row = (tables.students ?? []).find((s) => s.email === "g@example.com");
+check("guests POST: the password is returned once and is 12 characters", typeof guest.json?.password === "string" && (guest.json.password as string).length === 12);
+check("guests POST: the account is active, not an admin, with its own allowance and an expiry", row?.active === true && row.role === "student" && row.token_quota === 20000 && typeof row.guest_until === "string");
+check("guests POST: the password is not stored", !JSON.stringify(row).includes(String(guest.json?.password)));
+await expect("guests POST: the same email twice is explained", guests.POST, 400, /already exists/i, { email: "g@example.com", days: 7, allowance: 20000 });
+process.env.OPEN_SIGNUPS = "false";
+session.user = { ...(row as unknown as Student) };
+await expect("private testing: a live guest is allowed in", library.GET, 200, null, undefined);
+session.user = { ...(row as unknown as Student), guest_until: new Date(Date.now() - 1000).toISOString() };
+await expect("private testing: an expired guest is refused", library.GET, 403, /doesn't have access/i, undefined);
+process.env.OPEN_SIGNUPS = "true";
+await expect("sign-ups open: an expired guest is still refused", library.GET, 403, /doesn't have access/i, undefined);
 
 // ---- Generating: refused before any AI is used ----
 fresh();

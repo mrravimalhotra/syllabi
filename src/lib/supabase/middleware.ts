@@ -1,5 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
-import { signupsOpen } from "@/lib/access";
+import { canUseApp } from "@/lib/access";
 import { cachedStudent, identify, rememberStudent } from "@/lib/supabase/identity";
 import type { Student } from "@/types/database";
 import { NextResponse, type NextRequest } from "next/server";
@@ -71,7 +71,7 @@ export async function updateSession(request: NextRequest) {
   // API routes check the account row themselves (authenticate in lib/api.ts),
   // so only pages need the lookup here: it saves a database round trip per request.
   if (userId && !isPublic && !isApi) {
-    let student: Pick<Student, "role" | "active"> | null = cachedStudent(userId);
+    let student: Pick<Student, "role" | "active" | "guest_until"> | null = cachedStudent(userId);
     let studentError: { code?: string } | null = null;
     if (!student) {
       const result = await supabase.from("students").select("*").eq("id", userId).single();
@@ -94,7 +94,7 @@ export async function updateSession(request: NextRequest) {
 
     // Revoked/unapproved accounts are blocked here, before any protected route
     // runs. During private testing only admins get in, even if approved.
-    if (!student || !student.active || (!signupsOpen() && student.role !== "admin")) {
+    if (!student || !canUseApp(student)) {
       const url = request.nextUrl.clone();
       url.pathname = "/pending";
       return NextResponse.redirect(url);

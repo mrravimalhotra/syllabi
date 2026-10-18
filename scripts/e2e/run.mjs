@@ -292,6 +292,17 @@ await test("Admin accounts: lists accounts and explains a refused change", async
   await page.getByText("Meera").first().waitFor();
 });
 
+await test("Admin accounts: making a guest shows the password once", async (page, ctx) => {
+  await ctx.route("**/api/admin/students", (r) => json(r, { students: [] }));
+  await ctx.route("**/api/admin/guests", (r) => json(r, { account: { id: "g1", email: "reviewer@example.com", full_name: "Guest", role: "student", active: true, token_quota: 20000, guest_until: new Date(Date.now() + 14 * 86400000).toISOString(), created_at: now }, password: "Abcd2345Wxyz" }));
+  await page.goto(`${BASE}/admin/students`, { waitUntil: "networkidle" });
+  await page.fill("#guest-email", "reviewer@example.com");
+  await page.getByRole("button", { name: /Make guest login/ }).click();
+  await page.getByText("Abcd2345Wxyz").first().waitFor({ timeout: 8000 });
+  await page.getByText(/shown only once/).first().waitFor();
+  await page.getByText(/Guest, signs in until/).first().waitFor();
+});
+
 await test("Admin health: optional extras are grey, not failures", async (page, ctx) => {
   await ctx.route("**/api/admin/errors", (r) => json(r, { errors: [] }));
   await ctx.route("**/api/admin/health", (r) => json(r, { checks: [

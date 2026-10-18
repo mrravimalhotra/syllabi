@@ -5,12 +5,14 @@
 type Row = Record<string, unknown>;
 export const tables: Record<string, Row[]> = {};
 export const rpcs: Record<string, (args: Row) => unknown> = {};
+export const authUsers = new Set<string>();
 export const failures: { table?: string; message: string }[] = [];
 
 export function resetDb() {
   for (const k of Object.keys(tables)) delete tables[k];
   for (const k of Object.keys(rpcs)) delete rpcs[k];
   failures.length = 0;
+  authUsers.clear();
 }
 
 let counter = 0;
@@ -99,5 +101,13 @@ export const fakeAdmin = {
     if (!fn) return { data: null, error: { message: `no fake for rpc ${name}` } };
     return { data: fn(args), error: null };
   },
-  auth: { admin: { deleteUser: async () => ({ error: null }) } },
+  auth: {
+    admin: {
+      deleteUser: async () => ({ error: null }),
+      createUser: async ({ email }: { email: string }) =>
+        authUsers.has(email)
+          ? { data: { user: null }, error: { message: "A user with this email address has already been registered" } }
+          : (authUsers.add(email), { data: { user: { id: nextId() } }, error: null }),
+    },
+  },
 };

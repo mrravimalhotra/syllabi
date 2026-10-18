@@ -8,7 +8,7 @@
 
 import { NextResponse } from "next/server";
 import { DatabaseUnavailableError, NotAdminError, getCurrentStudent, requireAdmin } from "@/lib/auth";
-import { signupsOpen } from "@/lib/access";
+import { canUseApp } from "@/lib/access";
 import { BlockedReplyError, DAILY_LIMIT, errorText, userMessage } from "@/lib/errors";
 import { QuotaExceededError } from "@/lib/quota";
 import { logError } from "@/lib/error-log";
@@ -53,7 +53,7 @@ export async function authenticate(): Promise<{ account: Student } | { response:
     const account = await getCurrentStudent();
     if (!account) return { response: apiError(401, SIGNED_OUT_MESSAGE) };
     // During private testing only admins may use the app (the same rule the page guard applies).
-    if (!account.active || (!signupsOpen() && account.role !== "admin")) return { response: apiError(403, NO_ACCESS_MESSAGE) };
+    if (!canUseApp(account)) return { response: apiError(403, NO_ACCESS_MESSAGE) };
     return { account };
   } catch (err) {
     return { response: errorResponse(err, "authenticate") };
