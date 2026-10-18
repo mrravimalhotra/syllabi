@@ -184,6 +184,19 @@ export default function KindergartenPage() {
         </button>
       </section>
 
+      <Link href="/dashboard/practice/kindergarten/worksheets" className={cx(card, "flex items-center gap-4 p-4 transition hover:border-brand-300 sm:p-5")}>
+        <span className="text-4xl" aria-hidden>
+          🖨️
+        </span>
+        <span>
+          <span className="block text-base font-semibold text-slate-900">Printable worksheets</span>
+          <span className="block text-sm text-slate-500">Complete each word family, and match pictures to CVC words.</span>
+        </span>
+        <span className="ml-auto text-slate-400" aria-hidden>
+          →
+        </span>
+      </Link>
+
       <section className={cx(card, "space-y-2 p-4 text-sm text-slate-600")}>
         <p className="font-medium text-slate-900">Voice</p>
         <div className="flex flex-wrap gap-2" role="group" aria-label="Voice">

@@ -386,6 +386,21 @@ await test("Kindergarten: more, fewer or same - tapping the right group earns a 
   await page.getByText("Well done!").first().waitFor({ timeout: 8000 });
 });
 
+await test("Kindergarten worksheets: both sheets show, and a new sheet changes the words", async (page, ctx) => {
+  await baseRoutes(ctx);
+  await page.goto(`${BASE}/dashboard/practice/kindergarten/worksheets`, { waitUntil: "networkidle" });
+  await page.getByRole("article", { name: "Worksheet" }).getByText("Complete each word family:").waitFor();
+  const before = await page.getByRole("article", { name: "Worksheet" }).innerText();
+  await page.getByRole("button", { name: "Make another sheet" }).click();
+  await page.waitForTimeout(300);
+  const after = await page.getByRole("article", { name: "Worksheet" }).innerText();
+  if (before === after) throw new Error("Making another sheet gave the same sheet.");
+  await page.getByRole("radio", { name: /Match the picture/ }).click();
+  await page.getByRole("article", { name: "Worksheet" }).getByText("Match the picture to the word.").waitFor();
+  const pictures = await page.getByRole("article", { name: "Worksheet" }).getByRole("img", { name: "Picture" }).count();
+  if (pictures < 8) throw new Error(`Expected pictures on the matching sheet, saw ${pictures}.`);
+});
+
 await test("My Books: a failed list shows a retry message", async (page, ctx) => {
   await ctx.route("**/api/me", (r) => json(r, me));
   await ctx.route("**/api/library*", (r) => json(r, { error: "Couldn't load your books." }, 500));

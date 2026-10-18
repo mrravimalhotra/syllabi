@@ -10,7 +10,8 @@ export const ROUND_SIZES = [5, 10] as const;
 
 export interface CvcQuestion {
   word: string;
-  emoji: string;
+  /** null when the word has no clear picture (a speaker is shown instead). */
+  emoji: string | null;
   /** The letters in order, e.g. ["c", "a", "t"]. */
   letters: string[];
   /** The letters to choose from: the word's own plus two that don't belong, shuffled. */

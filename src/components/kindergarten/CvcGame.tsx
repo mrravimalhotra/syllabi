@@ -92,7 +92,7 @@ export function CvcGame({ questions, say, prepare, onAgain, onExit }: Props) {
     <RoundFrame index={index} total={questions.length} stars={stars} onExit={onExit}>
       <div data-word={question.word} className="space-y-6 text-center">
         <button type="button" onClick={() => void say(question.word)} className="mx-auto block text-8xl leading-none" aria-label="Hear the word again">
-          <span aria-hidden>{question.emoji}</span>
+          <span aria-hidden>{question.emoji ?? "🔊"}</span>
         </button>
         <p className="text-sm text-slate-500">Tap the letters to spell the word. Tap the picture to hear it again.</p>
         <button

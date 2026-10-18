@@ -8,8 +8,8 @@ export type Vowel = (typeof VOWELS)[number];
 
 export interface CvcWord {
   word: string;
-  /** One clear picture of the word. */
-  emoji: string;
+  /** One clear picture of the word, or null when no picture shows it clearly (the child hears it instead). */
+  emoji: string | null;
 }
 
 export const CVC_WORDS: Record<Vowel, CvcWord[]> = {
@@ -31,6 +31,7 @@ export const CVC_WORDS: Record<Vowel, CvcWord[]> = {
     { word: "jet", emoji: "✈️" },
     { word: "web", emoji: "🕸️" },
     { word: "leg", emoji: "🦵" },
+    { word: "keg", emoji: "🛢️" },
   ],
   i: [
     { word: "pig", emoji: "🐷" },
@@ -39,6 +40,10 @@ export const CVC_WORDS: Record<Vowel, CvcWord[]> = {
     { word: "kid", emoji: "🧒" },
     { word: "six", emoji: "6️⃣" },
     { word: "bin", emoji: "🗑️" },
+    { word: "fit", emoji: "💪" },
+    { word: "fix", emoji: "🔧" },
+    { word: "hit", emoji: null },
+    { word: "sin", emoji: null },
   ],
   o: [
     { word: "dog", emoji: "🐶" },
@@ -49,6 +54,8 @@ export const CVC_WORDS: Record<Vowel, CvcWord[]> = {
     { word: "pot", emoji: "🍲" },
     { word: "dot", emoji: "⚫" },
     { word: "top", emoji: "🔝" },
+    { word: "pod", emoji: null },
+    { word: "jog", emoji: null },
   ],
   u: [
     { word: "sun", emoji: "☀️" },
@@ -58,6 +65,9 @@ export const CVC_WORDS: Record<Vowel, CvcWord[]> = {
     { word: "hut", emoji: "🛖" },
     { word: "cup", emoji: "☕" },
     { word: "tub", emoji: "🛁" },
+    { word: "cub", emoji: "🐻" },
+    { word: "run", emoji: "🏃" },
+    { word: "rub", emoji: null },
   ],
 };
 

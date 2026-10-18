@@ -59,7 +59,7 @@ what works.
 
 | # | Item | Severity | Notes |
 |---|---|---|---|
-| K.1 | Printable kindergarten worksheets | Medium | Not built yet: the PDF fonts have no emoji, so printing needs a browser print view or drawn pictures. |
+| K.1 | Printable kindergarten worksheets | Low | Built as browser print pages (Practice → Kindergarten → Printable worksheets): word families and picture matching. They print with the browser's Print, so on an iPhone Home Screen app open Safari instead. Pictures are emoji, which look different on each phone and printer; a PDF version needs drawn pictures. |
 | K.2 | Letter sounds (phonics) | Medium | Spelling words now says each letter's sound ("mmm", "aah", "puh") and blends "m · a · p = map". Sounds are plain respellings in `LETTER_SOUNDS` (src/lib/kindergarten/words.ts); the speech voice may read some (especially "aah", "ah", "eh") unclearly. Listen on a phone and tune the spellings. |
 | K.3 | Gemini speech free allowance | Medium | Every new word or phrase is made once and stored; a big first session may use the free allowance, then the phone's voice reads. |
 | K.4 | Hindi and Marathi letters, counting objects, number order, shapes and colours | Low | Planned next activities. |

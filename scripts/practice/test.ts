@@ -1,6 +1,7 @@
 import { describe, explain, worksheetMarkdown, makeQuiz, markOrder, normaliseSettings, parseSample, settingsProblem, type OrderSettings } from "@/lib/practice/order";
 import type { PracticeNumber } from "@/lib/practice/numbers";
 import { makeCompareQuiz, makeCvcQuiz, makeSightQuiz, type CompareSettings, type SightSettings } from "@/lib/kindergarten/quiz";
+import { makeFamilySheet, makeMatchSheet } from "@/lib/kindergarten/worksheets";
 import { CVC_WORDS, SIGHT_LEVELS, SIGHT_SETS, VOWELS } from "@/lib/kindergarten/words";
 
 let passed = 0;
@@ -126,9 +127,10 @@ for (const raw of [{ kind: "whole", digits: 4 }, { kind: "decimal", digits: 1, m
 for (const vowel of VOWELS) {
   for (const { word, emoji } of CVC_WORDS[vowel]) {
     check(/^[bcdfghjklmnpqrstvwxyz][aeiou][bcdfghjklmnpqrstvwxyz]$/.test(word) && word[1] === vowel, `CVC word ${word} isn't consonant-vowel-consonant with vowel ${vowel}`);
-    check(emoji.length > 0, `CVC word ${word} has no picture`);
+    check(emoji === null || emoji.length > 0, `CVC word ${word} has an empty picture`);
   }
   check(CVC_WORDS[vowel].length >= 6, `Too few ${vowel} words`);
+  check(CVC_WORDS[vowel].filter((w) => w.emoji).length >= 5, `Too few ${vowel} words with pictures`);
 }
 const allCvc = VOWELS.flatMap((v) => CVC_WORDS[v].map((w) => w.word));
 check(new Set(allCvc).size === allCvc.length, "A CVC word is listed twice");
@@ -169,6 +171,18 @@ for (let seed = 1; seed <= 400; seed++) {
         check(q.answer === expected, `Compare answer wrong for ${q.left} vs ${q.right} (${q.ask})`);
       }
     }
+  }
+}
+for (let seed = 1; seed <= 400; seed++) {
+  for (const vowels of [["a"], ["e", "i"], [...VOWELS]] as const) {
+    const fam = makeFamilySheet(seed, [...vowels]);
+    check(fam.length >= 1 && fam.length <= 10 && new Set(fam.map((f) => f.rime)).size === fam.length, `Word-family sheet rows: ${fam.map((f) => f.rime)}`);
+    check(fam.every((f) => f.example.endsWith(f.rime) && f.example.length === 3 && (vowels as readonly string[]).includes(f.vowel)), `A word-family example doesn't match its family`);
+    const m = makeMatchSheet(seed, [...vowels]);
+    const wordSet = new Set(m.pictures.map((p) => p.word));
+    check(m.pictures.length === Math.min(10, m.pictures.length) && wordSet.size === m.pictures.length, `Match sheet repeats a picture`);
+    check(m.words.length === m.pictures.length && m.words.every((w) => wordSet.has(w)) && new Set(m.words).size === m.words.length, `Match sheet words don't match its pictures`);
+    check(m.pictures.length < 2 || m.words.some((w, i) => w !== m.pictures[i].word), `Match sheet leaves every word opposite its own picture`);
   }
 }
 // The same seed gives the same questions (so a round can be repeated or printed).
