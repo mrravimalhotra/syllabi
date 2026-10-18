@@ -20,7 +20,11 @@ function Group({ count, emoji, tone }: { count: number; emoji: string; tone: "id
     <span
       className={cx(
         "flex min-h-32 flex-1 flex-wrap content-center items-center justify-center gap-1 rounded-3xl border-4 p-3 text-3xl leading-none sm:text-4xl",
-        tone === "right" ? "border-emerald-400 bg-emerald-50" : tone === "wrong" ? "kg-shake border-red-300 bg-red-50" : "border-brand-200 bg-white"
+        tone === "right"
+          ? "border-emerald-400 bg-emerald-50"
+          : tone === "wrong"
+            ? "kg-shake border-red-300 bg-red-50"
+            : "border-brand-200 bg-white"
       )}
     >
       {Array.from({ length: count }, (_, i) => (
@@ -76,7 +80,11 @@ export function CompareGame({ questions, say, prepare, onAgain, onExit }: Props)
   return (
     <RoundFrame index={index} total={questions.length} stars={stars} onExit={onExit}>
       <div data-answer={question.answer} className="space-y-5 text-center">
-        <button type="button" onClick={() => void say(compareSpeech(question))} className="mx-auto flex items-center gap-2 rounded-full bg-brand-50 px-5 py-3 text-xl font-semibold text-brand-800">
+        <button
+          type="button"
+          onClick={() => void say(compareSpeech(question))}
+          className="mx-auto flex items-center gap-2 rounded-full bg-brand-50 px-5 py-3 text-xl font-semibold text-brand-800"
+        >
           <span aria-hidden>🔊</span> {question.ask === "more" ? "Which group has MORE?" : "Which group has FEWER?"}
         </button>
         <div className="flex gap-3">
@@ -92,7 +100,11 @@ export function CompareGame({ questions, say, prepare, onAgain, onExit }: Props)
           onClick={() => void choose("same")}
           className={cx(
             "mx-auto block rounded-full border-4 px-8 py-3 text-xl font-semibold transition active:scale-95",
-            picked?.side === "same" ? (picked.ok ? "border-emerald-400 bg-emerald-50" : "kg-shake border-red-300 bg-red-50") : "border-slate-200 bg-white text-slate-700"
+            picked?.side === "same"
+              ? picked.ok
+                ? "border-emerald-400 bg-emerald-50"
+                : "kg-shake border-red-300 bg-red-50"
+              : "border-slate-200 bg-white text-slate-700"
           )}
         >
           They are the same

@@ -27,13 +27,20 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const text = typeof body?.text === "string" ? body.text.trim() : "";
   const language = typeof body?.language === "string" && /^[a-z]{2}$/.test(body.language) ? body.language : "en";
+  const kind = body?.kind === "sound" ? "sound" : "phrase";
   if (!text) return apiError(400, "There is no text to read aloud.");
+  if (kind === "sound" && text.length > 12) return apiError(400, "A letter sound is only a few characters.");
   if (text.length > MAX_SPEECH_CHARS) return apiError(400, `This is too long to read aloud in one go (more than ${MAX_SPEECH_CHARS} characters). Read it in parts.`);
 
   try {
-    const { wav, fromCache } = await speechFor(text, language, () => {
-      if (tooFast(auth.account.id)) throw new TooFastError();
-    });
+    const { wav, fromCache } = await speechFor(
+      text,
+      language,
+      () => {
+        if (tooFast(auth.account.id)) throw new TooFastError();
+      },
+      kind
+    );
     return new NextResponse(new Uint8Array(wav), {
       headers: {
         "Content-Type": "audio/wav",

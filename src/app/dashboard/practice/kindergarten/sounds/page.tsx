@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Alert, PageHeader, button, card, cx } from "@/components/ui";
 import { OFFLINE_MESSAGE } from "@/lib/http-errors";
-import { PHONEMES, TEACHING_ORDER } from "@/lib/kindergarten/phonics";
+import { IPA, PHONEMES, TEACHING_ORDER } from "@/lib/kindergarten/phonics";
 
 const MAX_SECONDS = 3;
 
@@ -155,8 +155,8 @@ export default function RecordSoundsPage() {
                 </span>
                 <div className="min-w-0 flex-1 basis-48">
                   <p className="text-sm font-semibold text-slate-900">
-                    {letter === "c" ? "c says “k”" : `Letter ${letter}`} <span aria-hidden>{p.keyword.emoji}</span>{" "}
-                    <span className="font-normal text-slate-500">{p.keyword.word}</span>
+                    {letter === "c" ? "c says “k”" : `Letter ${letter}`} <span className="text-brand-700">/{IPA[letter]}/</span>{" "}
+                    <span aria-hidden>{p.keyword.emoji}</span> <span className="font-normal text-slate-500">{p.keyword.word}</span>
                   </p>
                   <p className="text-xs text-slate-500">{p.tip}</p>
                   <p className="text-xs font-medium">

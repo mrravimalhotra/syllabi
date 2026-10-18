@@ -14,6 +14,7 @@ import * as llm from "../../src/app/api/admin/llm-settings/route";
 import * as adhoc from "../../src/app/api/generate/ad-hoc/route";
 import * as jobs from "../../src/app/api/jobs/pages/route";
 import * as guests from "../../src/app/api/admin/guests/route";
+import * as speech from "../../src/app/api/speech/route";
 import * as sounds from "../../src/app/api/sounds/route";
 import * as sound from "../../src/app/api/sounds/[letter]/route";
 import * as logError from "../../src/app/api/log-error/route";
@@ -174,6 +175,12 @@ check("sounds GET letter: another account's recording is not reachable", theirs.
 check("sounds GET: only the caller's letters are listed", JSON.stringify((await call(sounds.GET)).json?.letters) === JSON.stringify(["m"]));
 const removed = await (sound.DELETE as unknown as Handler)(new Request("http://localhost/x", { method: "DELETE" }), { params: Promise.resolve({ letter: "m" } as never) });
 check("sounds DELETE: removes the caller's recording", removed.status === 200 && !files.has(`sounds/${ME}/m`) && files.has(`sounds/${OTHER}/p`));
+
+// ---- Speech: sounds and phrases ----
+fresh();
+await expect("speech: nothing to say is refused", speech.POST, 400, /no text/i, { text: " " });
+await expect("speech: a letter sound must be short", speech.POST, 400, /only a few characters/i, { text: "this is far too long", kind: "sound" });
+await expect("speech: a very long text is refused", speech.POST, 400, /too long/i, { text: "x".repeat(3000) });
 
 // ---- Guest accounts ----
 fresh(person({ role: "student" }));

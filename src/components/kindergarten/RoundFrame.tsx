@@ -25,7 +25,10 @@ export function RoundFrame({
         </button>
         <div className="flex gap-1.5" role="img" aria-label={`Question ${Math.min(index + 1, total)} of ${total}`}>
           {Array.from({ length: total }, (_, i) => (
-            <span key={i} className={cx("h-3 w-3 rounded-full", i < index ? "bg-amber-400" : i === index ? "bg-brand-500" : "bg-slate-200")} />
+            <span
+              key={i}
+              className={cx("h-3 w-3 rounded-full", i < index ? "bg-amber-400" : i === index ? "bg-brand-500" : "bg-slate-200")}
+            />
           ))}
         </div>
         <span className="text-lg font-semibold tabular-nums" aria-label={`${stars} stars`}>
@@ -65,7 +68,8 @@ export function RoundDone({
       </p>
       {helped.length > 0 && (
         <p className="text-sm text-slate-500">
-          For the grown-up: needed another go on <span className="font-medium text-slate-700">{helped.join(", ")}</span>. Try this activity again soon.
+          For the grown-up: needed another go on <span className="font-medium text-slate-700">{helped.join(", ")}</span>. Try this activity
+          again soon.
         </p>
       )}
       <div className="flex flex-wrap justify-center gap-3">

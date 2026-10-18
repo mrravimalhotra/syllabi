@@ -4,19 +4,20 @@ import { useEffect, useRef, useState } from "react";
 import { RoundDone, RoundFrame } from "@/components/kindergarten/RoundFrame";
 import { cx } from "@/components/ui";
 import type { CvcQuestion } from "@/lib/kindergarten/quiz";
-import { blendStart, isVowel, phoneLabel, soundText } from "@/lib/kindergarten/phonics";
+import { blendStart, isVowel, phoneLabel } from "@/lib/kindergarten/phonics";
 
 interface Props {
   questions: CvcQuestion[];
-  say: (text: string) => Promise<void>;
+  say: (text: string, kind?: "phrase" | "sound") => Promise<void>;
   sound: (letter: string, slow?: boolean) => Promise<void>;
   prepare: (texts: string[]) => void;
+  prepareSounds: (letters: string[]) => void;
   onAgain: () => void;
   onExit: () => void;
 }
 
 /** Build the word shown in the picture by tapping its letters in order. */
-export function CvcGame({ questions, say, sound, prepare, onAgain, onExit }: Props) {
+export function CvcGame({ questions, say, sound, prepare, prepareSounds, onAgain, onExit }: Props) {
   const [index, setIndex] = useState(0);
   const [placed, setPlaced] = useState(0);
   const [used, setUsed] = useState<number[]>([]);
@@ -37,8 +38,9 @@ export function CvcGame({ questions, say, sound, prepare, onAgain, onExit }: Pro
 
   useEffect(() => {
     const next = questions.slice(index, index + 2);
-    prepare([...next.flatMap((q) => [q.word, blendStart(q.letters), ...q.letters.flatMap((l) => [soundText(l), soundText(l, true)])]), "Great job!", "Try again!"]);
-  }, [index, questions, prepare]);
+    prepare([...next.map((q) => q.word), "Great job!", "Try again!"]);
+    prepareSounds(next.flatMap((q) => q.letters));
+  }, [index, questions, prepare, prepareSounds]);
 
   // Say the word when a question appears, so the child hears what to build.
   useEffect(() => {
@@ -58,7 +60,7 @@ export function CvcGame({ questions, say, sound, prepare, onAgain, onExit }: Pro
     }
     setLit(-1);
     setPair(true);
-    await say(blendStart(q.letters));
+    await say(blendStart(q.letters), "sound");
     setPair(false);
     setSweep(true);
     await say(q.word);
@@ -89,6 +91,8 @@ export function CvcGame({ questions, say, sound, prepare, onAgain, onExit }: Pro
       setStars((s) => s + 1);
       if (mistakeMade.current) setHelped((h) => [...h, question.word]);
       await soundOut(question, true);
+      // Let the child see the whole equation (k · a · t = cat) before moving on.
+      await new Promise((r) => setTimeout(r, 900));
       await say("Great job!");
       setBlended(false);
       mistakeMade.current = false;
@@ -106,7 +110,12 @@ export function CvcGame({ questions, say, sound, prepare, onAgain, onExit }: Pro
   return (
     <RoundFrame index={index} total={questions.length} stars={stars} onExit={onExit}>
       <div data-word={question.word} className="space-y-6 text-center">
-        <button type="button" onClick={() => void say(question.word)} className="mx-auto block text-8xl leading-none" aria-label="Hear the word again">
+        <button
+          type="button"
+          onClick={() => void say(question.word)}
+          className="mx-auto block text-8xl leading-none"
+          aria-label="Hear the word again"
+        >
           <span aria-hidden>{question.emoji ?? "🔊"}</span>
         </button>
         <p className="text-sm text-slate-500">Tap the letters to spell the word. Tap the picture to hear it again.</p>
@@ -129,7 +138,9 @@ export function CvcGame({ questions, say, sound, prepare, onAgain, onExit }: Pro
               className={cx(
                 "flex h-20 w-16 items-center justify-center rounded-2xl border-4 text-5xl font-bold transition-transform sm:h-24 sm:w-20",
                 (lit === i || (pair && i < 2)) && "scale-110 border-amber-400 bg-amber-100",
-                lit !== i && !(pair && i < 2) && (i < placed ? "border-emerald-400 bg-emerald-50 text-emerald-700" : "border-dashed border-slate-300 text-transparent"),
+                lit !== i &&
+                  !(pair && i < 2) &&
+                  (i < placed ? "border-emerald-400 bg-emerald-50 text-emerald-700" : "border-dashed border-slate-300 text-transparent"),
                 i < placed && isVowel(letter) && "text-red-600"
               )}
             >
@@ -139,10 +150,18 @@ export function CvcGame({ questions, say, sound, prepare, onAgain, onExit }: Pro
         </div>
 
         <div className="mx-auto h-2 w-56 overflow-hidden rounded-full bg-slate-100" aria-hidden>
-          <div className={cx("h-full rounded-full bg-amber-400 transition-[width] ease-linear", sweep ? "w-full duration-1000" : "w-0 duration-0")} />
+          <div
+            className={cx(
+              "h-full rounded-full bg-amber-400 transition-[width] ease-linear",
+              sweep ? "w-full duration-1000" : "w-0 duration-0"
+            )}
+          />
         </div>
         {blended && (
-          <p className="kg-star text-5xl font-bold tracking-wide text-slate-800" aria-label={`The sounds ${question.letters.join(", ")} make the word ${question.word}`}>
+          <p
+            className="kg-star text-5xl font-bold tracking-wide text-slate-800"
+            aria-label={`The sounds ${question.letters.join(", ")} make the word ${question.word}`}
+          >
             {question.letters.map((l, i) => (
               <span key={i} className={isVowel(l) ? "text-red-600" : "text-brand-700"}>
                 {phoneLabel(l)}

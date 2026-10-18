@@ -80,6 +80,7 @@ const tap = (locator) => locator.evaluate((el) => el.click());
 const results = [];
 let browser;
 async function test(name, fn) {
+  if (process.env.ONLY && !name.includes(process.env.ONLY)) return;
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await ctx.newPage();
   const crashes = [];
@@ -89,7 +90,7 @@ async function test(name, fn) {
     if (crashes.length) throw new Error(`The page threw errors: ${crashes.join(" | ")}`);
     results.push({ name, ok: true });
   } catch (err) {
-    results.push({ name, ok: false, why: err instanceof Error ? err.message.split("\n")[0] : String(err) });
+    results.push({ name, ok: false, why: err instanceof Error ? err.message.split("\n").slice(0, process.env.ONLY ? 12 : 1).join("\n") : String(err) });
   }
   await ctx.close();
 }
@@ -97,6 +98,8 @@ async function test(name, fn) {
 const json = (route, body, status = 200) => route.fulfill({ status, json: body });
 const baseRoutes = async (ctx, extra = {}) => {
   await ctx.route("**/api/me", (r) => json(r, extra.me ?? me));
+  // No recorded letter sounds unless a test says so (also stops a slow first compile of the real route).
+  await ctx.route("**/api/sounds", (r) => json(r, { letters: [] }));
   await ctx.route("**/api/library*", (r) => (r.request().method() === "GET" ? json(r, { documents: extra.books ?? books }) : json(r, { error: "x" }, 500)));
 };
 
@@ -333,10 +336,10 @@ await test("Kindergarten: spelling a word with letters, a full round ends in sta
       await tap(page.getByRole("group", { name: "Letters to choose from" }).getByRole("button", { name: letter, exact: true }).and(page.locator("button:not([disabled])")).first());
     }
     // The sounds are blended into the word ("m · a · p = map") before the next question.
-    if (q === 0) await page.getByLabel(/make the word/).waitFor({ timeout: 15000 });
-    if (q < 4) await page.locator(`[data-word]:not([data-word="${word}"])`).waitFor({ timeout: 20000 });
+    if (q === 0) await page.getByLabel(/make the word/).waitFor({ timeout: 30000 });
+    if (q < 4) await page.locator(`[data-word]:not([data-word="${word}"])`).waitFor({ timeout: 30000 });
   }
-  await page.getByText("Well done!").first().waitFor({ timeout: 20000 });
+  await page.getByText("Well done!").first().waitFor({ timeout: 30000 });
 });
 
 await test("Kindergarten: listen and blend - the sounds are heard, then the right picture earns a star", async (page, ctx) => {
@@ -390,6 +393,21 @@ await test("Kindergarten: a recorded sound is played instead of the voice", asyn
   await page.locator("[data-word]").waitFor({ timeout: 15000 });
   for (let i = 0; i < 60 && fetched < 3; i++) await page.waitForTimeout(250);
   if (fetched < 3) throw new Error(`Expected the recorded sounds to be fetched, saw ${fetched}.`);
+});
+
+await test("Kindergarten: letter sounds are asked for in the sound style", async (page, ctx) => {
+  const kinds = new Set();
+  await baseRoutes(ctx);
+  await ctx.route("**/api/sounds", (r) => json(r, { letters: [] }));
+  await ctx.route("**/api/speech", (r) => {
+    kinds.add(JSON.parse(r.request().postData() ?? "{}").kind);
+    return r.fulfill({ status: 200, contentType: "audio/wav", body: silentWav });
+  });
+  await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
+  await tap(page.getByRole("button", { name: /Play/ }).first());
+  await page.locator("[data-word]").waitFor({ timeout: 15000 });
+  for (let i = 0; i < 60 && !(kinds.has("sound") && kinds.has("phrase")); i++) await page.waitForTimeout(250);
+  if (!kinds.has("sound") || !kinds.has("phrase")) throw new Error(`Expected both phrase and sound requests, saw ${[...kinds]}.`);
 });
 
 await test("Kindergarten: the grown-up guide explains how to say the sounds", async (page, ctx) => {

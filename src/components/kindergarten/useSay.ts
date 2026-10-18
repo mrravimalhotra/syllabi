@@ -48,25 +48,26 @@ export function useSay() {
   const audio = useRef<HTMLAudioElement | null>(null);
   const cancel = useRef<(() => void) | null>(null);
 
-  const fetchClip = useCallback((text: string): Promise<string | null> => {
-    const known = clips.current.get(text);
+  const fetchClip = useCallback((text: string, kind: "phrase" | "sound" = "phrase"): Promise<string | null> => {
+    const id = `${kind}|${text}`;
+    const known = clips.current.get(id);
     if (known) return Promise.resolve(known);
-    let request = pending.current.get(text);
+    let request = pending.current.get(id);
     if (!request) {
       request = fetch("/api/speech", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, language: "en" }),
+        body: JSON.stringify({ text, language: "en", kind }),
       })
         .then(async (res) => {
           if (!res.ok) return null;
           const url = URL.createObjectURL(await res.blob());
-          clips.current.set(text, url);
+          clips.current.set(id, url);
           return url;
         })
         .catch(() => null)
-        .finally(() => pending.current.delete(text));
-      pending.current.set(text, request);
+        .finally(() => pending.current.delete(id));
+      pending.current.set(id, request);
     }
     return request;
   }, []);
@@ -113,14 +114,14 @@ export function useSay() {
   );
 
   const say = useCallback(
-    async (text: string): Promise<void> => {
+    async (text: string, kind: "phrase" | "sound" = "phrase"): Promise<void> => {
       stop();
       let cancelled = false;
       cancel.current = () => {
         cancelled = true;
       };
       if (voice === "natural") {
-        const url = await Promise.race([fetchClip(text), new Promise<null>((r) => setTimeout(() => r(null), NATURAL_WAIT_MS))]);
+        const url = await Promise.race([fetchClip(text, kind), new Promise<null>((r) => setTimeout(() => r(null), NATURAL_WAIT_MS))]);
         if (cancelled) return;
         if (url) {
           await playUrl(url);
@@ -176,9 +177,25 @@ export function useSay() {
         await playUrl(url);
         return;
       }
-      await say(soundText(letter, slow));
+      await say(soundText(letter, slow), "sound");
     },
     [recording, stop, playUrl, say]
+  );
+
+  /** Gets letter sounds ready in the background. */
+  const prepareSounds = useCallback(
+    (letters: string[]) => {
+      if (voice !== "natural") return;
+      for (const l of letters) {
+        void recording(l).then((url) => {
+          if (!url) {
+            void fetchClip(soundText(l), "sound");
+            void fetchClip(soundText(l, true), "sound");
+          }
+        });
+      }
+    },
+    [voice, recording, fetchClip]
   );
 
   /** Gets phrases ready in the background, so they play at once when needed. */
@@ -200,5 +217,5 @@ export function useSay() {
     };
   }, [stop]);
 
-  return { say, sound, prepare, stop };
+  return { say, sound, prepare, prepareSounds, stop };
 }

@@ -3,14 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RoundDone, RoundFrame } from "@/components/kindergarten/RoundFrame";
 import { cx } from "@/components/ui";
-import { isVowel, phoneLabel, soundText } from "@/lib/kindergarten/phonics";
+import { isVowel, phoneLabel } from "@/lib/kindergarten/phonics";
 import type { BlendQuestion } from "@/lib/kindergarten/quiz";
 
 interface Props {
   questions: BlendQuestion[];
-  say: (text: string) => Promise<void>;
+  say: (text: string, kind?: "phrase" | "sound") => Promise<void>;
   sound: (letter: string, slow?: boolean) => Promise<void>;
   prepare: (texts: string[]) => void;
+  prepareSounds: (letters: string[]) => void;
   onAgain: () => void;
   onExit: () => void;
 }
@@ -20,7 +21,7 @@ interface Props {
  * time (m... a... p), with a finger dot touching each, and the child says the
  * word and taps its picture. The way children are first taught to blend.
  */
-export function BlendGame({ questions, say, sound, prepare, onAgain, onExit }: Props) {
+export function BlendGame({ questions, say, sound, prepare, prepareSounds, onAgain, onExit }: Props) {
   const [index, setIndex] = useState(0);
   const [lit, setLit] = useState(-1);
   const [shake, setShake] = useState<string | null>(null);
@@ -36,14 +37,9 @@ export function BlendGame({ questions, say, sound, prepare, onAgain, onExit }: P
 
   useEffect(() => {
     const next = questions.slice(index, index + 2);
-    prepare([
-      ...next.flatMap((q) => [q.word, ...q.letters.map((l) => soundText(l, true))]),
-      "Listen.",
-      "What word is it?",
-      "Great job!",
-      "Try again!",
-    ]);
-  }, [index, questions, prepare]);
+    prepare([...next.map((q) => q.word), "Listen.", "What word is it?", "Great job!", "Try again!"]);
+    prepareSounds(next.flatMap((q) => q.letters));
+  }, [index, questions, prepare, prepareSounds]);
 
   /** The sounds, one at a time with a finger dot on each, then the question. */
   const listen = useCallback(
@@ -134,7 +130,11 @@ export function BlendGame({ questions, say, sound, prepare, onAgain, onExit }: P
               onClick={() => void choose(choice.word)}
               className={cx(
                 "flex aspect-square items-center justify-center rounded-3xl border-4 bg-white text-6xl shadow-sm transition active:scale-95 sm:text-7xl",
-                right === choice.word ? "border-emerald-400 bg-emerald-50" : shake === choice.word ? "kg-shake border-red-300 bg-red-50" : "border-brand-200"
+                right === choice.word
+                  ? "border-emerald-400 bg-emerald-50"
+                  : shake === choice.word
+                    ? "kg-shake border-red-300 bg-red-50"
+                    : "border-brand-200"
               )}
             >
               <span aria-hidden>{choice.emoji}</span>

@@ -58,7 +58,11 @@ export function SightGame({ questions, say, prepare, onAgain, onExit }: Props) {
   return (
     <RoundFrame index={index} total={questions.length} stars={stars} onExit={onExit}>
       <div data-word={question.word} className="space-y-6 text-center">
-        <button type="button" onClick={() => void say(prompt(question.word))} className="mx-auto flex items-center gap-2 rounded-full bg-brand-50 px-5 py-3 text-lg font-medium text-brand-800">
+        <button
+          type="button"
+          onClick={() => void say(prompt(question.word))}
+          className="mx-auto flex items-center gap-2 rounded-full bg-brand-50 px-5 py-3 text-lg font-medium text-brand-800"
+        >
           <span aria-hidden>🔊</span> Hear the word
         </button>
         <p className="text-sm text-slate-500">Find the word you heard.</p>
@@ -70,7 +74,11 @@ export function SightGame({ questions, say, prepare, onAgain, onExit }: Props) {
               onClick={() => void choose(word)}
               className={cx(
                 "min-h-24 rounded-3xl border-4 bg-white text-6xl font-bold text-slate-800 shadow-sm transition active:scale-95",
-                right === word ? "border-emerald-400 bg-emerald-50" : shake === word ? "kg-shake border-red-300 bg-red-50" : "border-brand-200"
+                right === word
+                  ? "border-emerald-400 bg-emerald-50"
+                  : shake === word
+                    ? "kg-shake border-red-300 bg-red-50"
+                    : "border-brand-200"
               )}
             >
               {word}

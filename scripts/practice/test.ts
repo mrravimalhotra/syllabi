@@ -1,7 +1,7 @@
 import { describe, explain, worksheetMarkdown, makeQuiz, markOrder, normaliseSettings, parseSample, settingsProblem, type OrderSettings } from "@/lib/practice/order";
 import type { PracticeNumber } from "@/lib/practice/numbers";
 import { makeCompareQuiz, makeCvcQuiz, makeSightQuiz, type CompareSettings, type SightSettings } from "@/lib/kindergarten/quiz";
-import { PHONEMES, blendStart, soundText } from "@/lib/kindergarten/phonics";
+import { IPA, PHONEMES, blendStart, soundText } from "@/lib/kindergarten/phonics";
 import { makeBlendQuiz } from "@/lib/kindergarten/quiz";
 import { BOARD_COLUMNS, BOARD_ROWS, makeBoardGame, makeFamilySheet, makeMatchSheet, schoolFamilySheet, schoolMatchSheet } from "@/lib/kindergarten/worksheets";
 import { BOARD_WORDS, CVC_WORDS, SIGHT_LEVELS, SIGHT_SETS, VOWELS } from "@/lib/kindergarten/words";
@@ -248,6 +248,8 @@ for (const word of [...VOWELS.flatMap((v) => CVC_WORDS[v].map((w) => w.word)), .
   check(start.length >= 2 && start.startsWith(PHONEMES[word[0]].say.replace(/(uh|ih|ah)$/i, "").replace(/(.)\1{2,}$/, "$1")), `Blend start for ${word} is wrong: ${start}`);
 }
 check(blendStart(["m", "a", "p"]) === "maah" && blendStart(["s", "a", "t"]) === "saah" && blendStart(["c", "a", "t"]) === "kaah", `Blend start of map/sat/cat: ${blendStart(["m", "a", "p"])}, ${blendStart(["s", "a", "t"])}, ${blendStart(["c", "a", "t"])}`);
+for (const l of LETTERS) check(typeof IPA[l] === "string" && IPA[l].length >= 1, `Letter ${l} has no IPA sound`);
+check(IPA.a === "æ" && IPA.c === "k" && IPA.u === "ʌ", "IPA for a, c and u");
 // The same seed gives the same questions (so a round can be repeated or printed).
 check(JSON.stringify(makeCvcQuiz({ vowels: ["a", "o"], questions: 5 }, 77)) === JSON.stringify(makeCvcQuiz({ vowels: ["a", "o"], questions: 5 }, 77)), "The same seed gave different CVC questions");
 check(JSON.stringify(makeCompareQuiz({ max: 10, questions: 5 }, 77)) === JSON.stringify(makeCompareQuiz({ max: 10, questions: 5 }, 77)), "The same seed gave different compare questions");

@@ -21,7 +21,7 @@ import {
   type CvcSettings,
   type SightSettings,
 } from "@/lib/kindergarten/quiz";
-import { PHONEMES, TEACHING_ORDER } from "@/lib/kindergarten/phonics";
+import { IPA, PHONEMES, TEACHING_ORDER } from "@/lib/kindergarten/phonics";
 import { SIGHT_LEVELS, SIGHT_LEVEL_LABELS, VOWELS, type Vowel } from "@/lib/kindergarten/words";
 import { newSeed } from "@/lib/practice/random";
 import { usePref } from "@/lib/use-pref";
@@ -73,7 +73,7 @@ export default function KindergartenPage() {
   const [sight, setSight] = usePref("syllabi-kg-sight", DEFAULT_SIGHT, isSight);
   const [compare, setCompare] = usePref("syllabi-kg-compare", DEFAULT_COMPARE, isCompare);
   const { voice, choose } = useVoiceChoice();
-  const { say, sound, prepare, stop } = useSay();
+  const { say, sound, prepare, prepareSounds, stop } = useSay();
 
   const start = (kind: Activity) => setActivity({ kind, seed: newSeed() });
   const exit = () => {
@@ -88,9 +88,31 @@ export default function KindergartenPage() {
   const compareQuiz = useMemo(() => (activity?.kind === "compare" ? makeCompareQuiz(compare, activity.seed) : null), [activity, compare]);
 
   if (activity && blendQuiz)
-    return <BlendGame key={activity.seed} questions={blendQuiz} say={say} sound={sound} prepare={prepare} onAgain={again} onExit={exit} />;
+    return (
+      <BlendGame
+        key={activity.seed}
+        questions={blendQuiz}
+        say={say}
+        sound={sound}
+        prepare={prepare}
+        prepareSounds={prepareSounds}
+        onAgain={again}
+        onExit={exit}
+      />
+    );
   if (activity && cvcQuiz)
-    return <CvcGame key={activity.seed} questions={cvcQuiz} say={say} sound={sound} prepare={prepare} onAgain={again} onExit={exit} />;
+    return (
+      <CvcGame
+        key={activity.seed}
+        questions={cvcQuiz}
+        say={say}
+        sound={sound}
+        prepare={prepare}
+        prepareSounds={prepareSounds}
+        onAgain={again}
+        onExit={exit}
+      />
+    );
   if (activity && sightQuiz)
     return <SightGame key={activity.seed} questions={sightQuiz} say={say} prepare={prepare} onAgain={again} onExit={exit} />;
   if (activity && compareQuiz)
@@ -295,6 +317,7 @@ export default function KindergartenPage() {
               .map(([letter, p]) => (
                 <p key={letter}>
                   <span className="mr-1 inline-block w-5 text-base font-bold text-slate-900">{letter}</span>
+                  <span className="mr-1 text-xs font-medium text-brand-700">/{IPA[letter]}/</span>
                   <span aria-hidden>{p.keyword.emoji}</span>{" "}
                   <span className="text-xs text-slate-500">
                     {p.keyword.word}: {p.tip}

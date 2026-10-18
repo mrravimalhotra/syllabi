@@ -110,3 +110,5 @@ Tick each one and note anything odd. Use your phone for the starred (★) checks
 | T-83 | Kindergarten → open "How to say the sounds (for grown-ups)" | Plain tips for each sound; note on recordings |
 | T-84 | Add `public/sounds/m.mp3` (a short "mmm") and redeploy; play Spell the word with "map" | The recorded "mmm" is played for m (other letters still use the voice) |
 | T-85 ★ | Practice → Kindergarten → Record the sounds on a phone: allow the microphone, record m, a, p, then Listen and Save; play Listen and blend with "map" | Recording works on iPhone Safari and Android Chrome; the saved m, a, p are used (your voice, no "uh"), other letters still use the built-in voice; Remove returns a letter to the built-in voice |
+| T-86 ★ | Kindergarten → Listen and blend / Spell the word with built-in voice (no recordings): hear the letter sounds | Sounds are short and clean (mmm, aaa, p) without a long "uh" or the letter name; if not, record them in Record the sounds |
+| T-87 | Kindergarten guide and Record the sounds page | Each letter shows its IPA symbol (like /æ/) and a mouth tip |
