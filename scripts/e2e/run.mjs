@@ -73,6 +73,25 @@ const packAnswer = { id: "a2", title: "The Plant's Journey", taskType: "study_pa
 // A one-second silent WAV, so the voice button has something to play.
 const silentWav = (() => { const n = 8000; const b = Buffer.alloc(44 + n * 2); b.write("RIFF", 0); b.writeUInt32LE(36 + n * 2, 4); b.write("WAVEfmt ", 8); b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22); b.writeUInt32LE(8000, 24); b.writeUInt32LE(16000, 28); b.writeUInt16LE(2, 32); b.writeUInt16LE(16, 34); b.write("data", 36); b.writeUInt32LE(n * 2, 40); return b; })();
 const sharp = require("sharp");
+// A small Word file: two paragraphs, a table row, and one picture after the second paragraph.
+const { zipSync, strToU8 } = require("fflate");
+const tinyPng = await sharp({ create: { width: 40, height: 40, channels: 3, background: "#336699" } }).png().toBuffer();
+const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+const sampleDocx = Buffer.from(
+  zipSync({
+    "word/document.xml": strToU8(
+      `<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="${W_NS}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><w:body>` +
+        `<w:p><w:r><w:t>Q1. Draw a line of length 5 cm.</w:t></w:r></w:p>` +
+        `<w:p><w:r><w:t>Use the figure below.</w:t></w:r><w:r><w:drawing><a:blip r:embed="rId1"/></w:drawing></w:r></w:p>` +
+        `<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Name</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>Marks</w:t></w:r></w:p></w:tc></w:tr></w:tbl>` +
+        `</w:body></w:document>`
+    ),
+    "word/_rels/document.xml.rels": strToU8(
+      `<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="image" Target="media/image1.png"/></Relationships>`
+    ),
+    "word/media/image1.png": new Uint8Array(tinyPng),
+  })
+);
 const tinyJpeg = await sharp({ create: { width: 300, height: 400, channels: 3, background: "#ffffff" } }).jpeg().toBuffer();
 // Taps by script: buttons inside the animated study pack never count as "still" for a real click.
 const tap = (locator) => locator.evaluate((el) => el.click());
@@ -599,6 +618,30 @@ await test("My Books: the same photo twice is skipped, and a failed page is kept
   await page.getByText(/1 page is still below/).first().waitFor();
   await page.getByRole("button", { name: /Upload & read 1 page/ }).click();
   await page.getByText(/sent\. Syllabi is reading them now/i).first().waitFor({ timeout: 20000 });
+});
+
+await test("My Books: a Word file's text and picture become pages", async (page, ctx) => {
+  const sent = [];
+  await ctx.route("**/api/me", (r) => json(r, me));
+  await ctx.route("**/api/library", (r) => (r.request().method() === "GET" ? json(r, { documents: [] }) : json(r, { documentId: "d7" })));
+  await ctx.route("**/api/library/d7", (r) => json(r, { ok: true }));
+  await ctx.route(/\/api\/library\/d7\/pages$/, (r) => {
+    sent.push(...r.request().postDataJSON().pages);
+    return json(r, { ok: true });
+  });
+  await page.goto(`${BASE}/dashboard/library`, { waitUntil: "networkidle" });
+  await page.fill("#book-title", "Worksheet");
+  await page.locator("input[type=file]").setInputFiles({ name: "worksheet.docx", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", buffer: sampleDocx });
+  // One page of text (both paragraphs and the table row) and one page for the picture.
+  await page.getByText(/2 pages/).first().waitFor({ timeout: 15000 });
+  await page.getByText(/worksheet\.docx \(picture 1\)/).first().waitFor({ timeout: 5000 });
+  await page.locator("input[type=checkbox]").check();
+  await page.getByRole("button", { name: /Upload & read/ }).click();
+  await page.getByText(/sent\. Syllabi is reading them now/i).first().waitFor({ timeout: 20000 });
+  const text = sent.find((p) => typeof p.text === "string" && p.text.includes("Q1."));
+  if (!text || !text.text.includes("Use the figure below. [Picture 1]") || !text.text.includes("Name | Marks")) throw new Error(`The text page was ${JSON.stringify(text)}`);
+  const picture = sent.find((p) => p.hint);
+  if (!picture || picture.hint !== "Picture 1 in worksheet.docx, after: Use the figure below." || !picture.mimeType.startsWith("image/")) throw new Error(`The picture page was ${JSON.stringify(picture && { ...picture, imageBase64: "…" })}`);
 });
 
 await test("My Books: a failed list shows a retry message", async (page, ctx) => {

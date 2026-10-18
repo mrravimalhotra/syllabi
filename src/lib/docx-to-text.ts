@@ -39,31 +39,29 @@ export interface DocxContent {
   skippedPictures: number[];
 }
 
-/** Reads a .docx file's text and pictures in document order. */
-export async function readDocx(file: File): Promise<DocxContent> {
-  const files = unzipSync(new Uint8Array(await file.arrayBuffer()), {
-    filter: (f) => f.name === "word/document.xml" || f.name === "word/_rels/document.xml.rels" || f.name.startsWith("word/media/"),
-  });
-  const xml = files["word/document.xml"];
-  if (!xml) throw new Error(`${file.name} doesn't look like a Word (.docx) file.`);
+type Files = Record<string, Uint8Array>;
+interface PictureRef {
+  media: string;
+  hint: string;
+}
 
-  // Relationship id (rId7) -> media path (word/media/image3.png).
+/** Relationship id (rId7) -> media path (word/media/image3.png). */
+function readTargets(files: Files): Map<string, string> {
   const targets = new Map<string, string>();
   const relsXml = files["word/_rels/document.xml.rels"];
-  if (relsXml) {
-    const rels = new DOMParser().parseFromString(strFromU8(relsXml), "application/xml");
-    for (const rel of Array.from(rels.getElementsByTagNameNS(REL, "Relationship"))) {
-      const target = rel.getAttribute("Target") ?? "";
-      targets.set(rel.getAttribute("Id") ?? "", target.startsWith("/") ? target.slice(1) : `word/${target}`);
-    }
+  if (!relsXml) return targets;
+  const rels = new DOMParser().parseFromString(strFromU8(relsXml), "application/xml");
+  for (const rel of Array.from(rels.getElementsByTagNameNS(REL, "Relationship"))) {
+    const target = rel.getAttribute("Target") ?? "";
+    targets.set(rel.getAttribute("Id") ?? "", target.startsWith("/") ? target.slice(1) : `word/${target}`);
   }
+  return targets;
+}
 
-  const doc = new DOMParser().parseFromString(strFromU8(xml), "application/xml");
-  const body = doc.getElementsByTagNameNS(W, "body")[0];
-  if (!body) throw new Error(`Couldn't read ${file.name}.`);
-
+/** The text of the document's paragraphs and tables, one line each, and where each picture sits. */
+function readBody(body: Element, targets: Map<string, string>): { lines: string[]; pictureRefs: PictureRef[] } {
   const lines: string[] = [];
-  const pictureRefs: { media: string; hint: string }[] = [];
+  const pictureRefs: PictureRef[] = [];
 
   const recentText = () =>
     lines
@@ -107,7 +105,11 @@ export async function readDocx(file: File): Promise<DocxContent> {
       }
     }
   }
+  return { lines, pictureRefs };
+}
 
+/** The pictures a browser can read, shrunk, each with a note of where it was; the rest are listed as skipped. */
+async function readPictures(files: Files, pictureRefs: PictureRef[], fileName: string): Promise<{ pictures: DocxPicture[]; skippedPictures: number[] }> {
   const pictures: DocxPicture[] = [];
   const skippedPictures: number[] = [];
   for (const [i, ref] of pictureRefs.entries()) {
@@ -119,15 +121,17 @@ export async function readDocx(file: File): Promise<DocxContent> {
       continue;
     }
     try {
-      const scaled = await downscaleImageFile(new File([bytes], ref.media, { type }));
-      pictures.push({ ...scaled, hint: `Picture ${i + 1} in ${file.name}, after: ${ref.hint || "(start of document)"}` });
+      const scaled = await downscaleImageFile(new File([bytes as BlobPart], ref.media, { type }));
+      pictures.push({ ...scaled, hint: `Picture ${i + 1} in ${fileName}, after: ${ref.hint || "(start of document)"}` });
     } catch {
       skippedPictures.push(i + 1);
     }
   }
+  return { pictures, skippedPictures };
+}
 
-  if (lines.length === 0 && pictures.length === 0) throw new Error(`${file.name} has nothing to read.`);
-
+/** The lines gathered into page-sized parts of about PAGE_CHARS characters. */
+function paginate(lines: string[]): string[] {
   const textPages: string[] = [];
   let current = "";
   for (const line of lines) {
@@ -138,6 +142,23 @@ export async function readDocx(file: File): Promise<DocxContent> {
     current = current ? `${current}\n\n${line}` : line;
   }
   if (current) textPages.push(current);
+  return textPages;
+}
 
-  return { textPages, pictures, skippedPictures };
+/** Reads a .docx file's text and pictures in document order. */
+export async function readDocx(file: File): Promise<DocxContent> {
+  const files = unzipSync(new Uint8Array(await file.arrayBuffer()), {
+    filter: (f) => f.name === "word/document.xml" || f.name === "word/_rels/document.xml.rels" || f.name.startsWith("word/media/"),
+  });
+  const xml = files["word/document.xml"];
+  if (!xml) throw new Error(`${file.name} doesn't look like a Word (.docx) file.`);
+
+  const doc = new DOMParser().parseFromString(strFromU8(xml), "application/xml");
+  const body = doc.getElementsByTagNameNS(W, "body")[0];
+  if (!body) throw new Error(`Couldn't read ${file.name}.`);
+
+  const { lines, pictureRefs } = readBody(body, readTargets(files));
+  const { pictures, skippedPictures } = await readPictures(files, pictureRefs, file.name);
+  if (lines.length === 0 && pictures.length === 0) throw new Error(`${file.name} has nothing to read.`);
+  return { textPages: paginate(lines), pictures, skippedPictures };
 }
