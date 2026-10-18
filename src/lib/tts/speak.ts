@@ -8,6 +8,13 @@ import { withNetworkRetry, fetchOrThrowTransient } from "@/lib/llm/retry";
 import { pcmToWav, splitForSpeech } from "@/lib/tts/wav";
 import { UserError } from "@/lib/errors";
 
+/** Too many new voice clips asked for too quickly (each one uses the AI's free allowance). */
+export class TooFastError extends UserError {
+  constructor() {
+    super("The voice is being asked for very quickly. Wait a few seconds and try again.");
+  }
+}
+
 /** Longest text read aloud in one request: a study-pack part or answer is far shorter. */
 export const MAX_SPEECH_CHARS = 2_500;
 
@@ -61,7 +68,12 @@ async function synthesizeOne(text: string, language: string): Promise<Buffer> {
  * The spoken version of a text as WAV audio. A text spoken before comes
  * straight from storage; a new one is made (in pieces if long) and saved.
  */
-export async function speechFor(text: string, language: string): Promise<{ wav: Buffer; fromCache: boolean }> {
+export async function speechFor(
+  text: string,
+  language: string,
+  /** Called only when a new clip must be made (not for one already stored); may throw to refuse. */
+  beforeMaking?: () => void
+): Promise<{ wav: Buffer; fromCache: boolean }> {
   const clean = text.replace(/\s+/g, " ").trim();
   if (!clean) throw new UserError("There is nothing to read aloud here.");
   const key = cacheKey(clean, language);
@@ -69,6 +81,7 @@ export async function speechFor(text: string, language: string): Promise<{ wav: 
   const stored = await downloadFile(key).catch(() => null);
   if (stored) return { wav: stored.data, fromCache: true };
 
+  beforeMaking?.();
   const pcm = Buffer.concat(await Promise.all(splitForSpeech(clean).map((piece) => synthesizeOne(piece, language))));
   const wav = pcmToWav(pcm);
   // Saving is for next time; a storage hiccup must not stop this reply.

@@ -54,3 +54,12 @@ what works.
 2. More practice exercises built on the worked-example engines: compare with < and >, place value, times tables, conversions, simplifying fractions.
 3. Child profiles, if several children share one account (class, board and history per child).
 4. A "Research this" switch on Generate (see 3.5).
+
+## Kindergarten (added later)
+
+| # | Item | Severity | Notes |
+|---|---|---|---|
+| K.1 | Printable kindergarten worksheets | Medium | Not built yet: the PDF fonts have no emoji, so printing needs a browser print view or drawn pictures. |
+| K.2 | Letter sounds (phonics) | Medium | The voice says whole words, not single letter sounds; a speech model may say the letter name instead. Test before adding "tap a letter to hear its sound". |
+| K.3 | Gemini speech free allowance | Medium | Every new word or phrase is made once and stored; a big first session may use the free allowance, then the phone's voice reads. |
+| K.4 | Hindi and Marathi letters, counting objects, number order, shapes and colours | Low | Planned next activities. |

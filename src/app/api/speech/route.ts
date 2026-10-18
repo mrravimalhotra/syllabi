@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { apiError, authenticate, errorResponse } from "@/lib/api";
-import { MAX_SPEECH_CHARS, speechFor } from "@/lib/tts/speak";
+import { MAX_SPEECH_CHARS, TooFastError, speechFor } from "@/lib/tts/speak";
 
 export const maxDuration = 120;
 
-// Making speech uses the AI's free allowance, so each person may ask for only so many new clips a minute.
+// Making speech uses the AI's free allowance, so each person may ask for only so many NEW clips a minute (clips already stored are free and unlimited).
 const MAX_PER_MINUTE = 12;
 const recent = new Map<string, number[]>();
 
@@ -29,10 +29,11 @@ export async function POST(request: Request) {
   const language = typeof body?.language === "string" && /^[a-z]{2}$/.test(body.language) ? body.language : "en";
   if (!text) return apiError(400, "There is no text to read aloud.");
   if (text.length > MAX_SPEECH_CHARS) return apiError(400, `This is too long to read aloud in one go (more than ${MAX_SPEECH_CHARS} characters). Read it in parts.`);
-  if (tooFast(auth.account.id)) return apiError(429, "You're asking for the voice very quickly. Wait a few seconds and press Read aloud again.");
 
   try {
-    const { wav, fromCache } = await speechFor(text, language);
+    const { wav, fromCache } = await speechFor(text, language, () => {
+      if (tooFast(auth.account.id)) throw new TooFastError();
+    });
     return new NextResponse(new Uint8Array(wav), {
       headers: {
         "Content-Type": "audio/wav",

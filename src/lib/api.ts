@@ -11,6 +11,7 @@ import { DatabaseUnavailableError, NotAdminError, getCurrentStudent, requireAdmi
 import { canUseApp } from "@/lib/access";
 import { BlockedReplyError, DAILY_LIMIT, errorText, userMessage } from "@/lib/errors";
 import { QuotaExceededError } from "@/lib/quota";
+import { TooFastError } from "@/lib/tts/speak";
 import { logError } from "@/lib/error-log";
 import type { Student } from "@/types/database";
 
@@ -23,7 +24,7 @@ const NO_ACCESS_MESSAGE = "Your account doesn't have access right now. Contact t
 
 /** The HTTP status that fits an error, for messages already chosen by userMessage. */
 function statusFor(err: unknown): number {
-  if (err instanceof QuotaExceededError) return 429;
+  if (err instanceof QuotaExceededError || err instanceof TooFastError) return 429;
   if (err instanceof DatabaseUnavailableError) return 503;
   if (err instanceof NotAdminError) return 403;
   if (err instanceof BlockedReplyError) return 422;

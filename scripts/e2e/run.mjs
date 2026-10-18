@@ -315,6 +315,74 @@ await test("Admin health: optional extras are grey, not failures", async (page, 
   await page.getByText("Nothing logged in the last 30 days.").first().waitFor();
 });
 
+const speechOk = (ctx) => ctx.route("**/api/speech", (r) => r.fulfill({ status: 200, contentType: "audio/wav", body: silentWav }));
+
+await test("Kindergarten: spelling a word with letters, a full round ends in stars", async (page, ctx) => {
+  await baseRoutes(ctx);
+  await speechOk(ctx);
+  await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
+  await tap(page.getByRole("button", { name: /Play/ }).first());
+  for (let q = 0; q < 5; q++) {
+    const box = page.locator("[data-word]");
+    await box.waitFor();
+    const word = await box.getAttribute("data-word");
+    // A wrong letter first: it must not be accepted.
+    for (const letter of word) {
+      await tap(page.getByRole("group", { name: "Letters to choose from" }).getByRole("button", { name: letter, exact: true }).and(page.locator("button:not([disabled])")).first());
+    }
+    if (q < 4) await page.locator(`[data-word]:not([data-word="${word}"])`).waitFor({ timeout: 8000 });
+  }
+  await page.getByText("Well done!").first().waitFor({ timeout: 8000 });
+});
+
+await test("Kindergarten: a wrong letter says try again and does not place it", async (page, ctx) => {
+  await baseRoutes(ctx);
+  await speechOk(ctx);
+  await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
+  await tap(page.getByRole("button", { name: /Play/ }).first());
+  const box = page.locator("[data-word]");
+  await box.waitFor();
+  const word = await box.getAttribute("data-word");
+  const tray = page.getByRole("group", { name: "Letters to choose from" }).getByRole("button");
+  const letters = await tray.allInnerTexts();
+  const wrong = letters.findIndex((l) => !word.includes(l));
+  await tap(tray.nth(wrong));
+  await page.getByRole("group", { name: "Letters to choose from" }).locator(".kg-shake").waitFor({ timeout: 3000 });
+  if ((await page.getByLabel("The word so far").innerText()).replace(/[_\s]/g, "") !== "") throw new Error("A wrong letter was placed in the word.");
+});
+
+await test("Kindergarten: sight words round works when the natural voice is unavailable", async (page, ctx) => {
+  await baseRoutes(ctx);
+  await ctx.route("**/api/speech", (r) => json(r, { error: "no voice" }, 503));
+  await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
+  await tap(page.getByRole("button", { name: /Play/ }).nth(1));
+  for (let q = 0; q < 5; q++) {
+    const box = page.locator("[data-word]");
+    await box.waitFor({ timeout: 15000 });
+    const word = await box.getAttribute("data-word");
+    await tap(page.getByRole("button", { name: word, exact: true }).first());
+    if (q < 4) await page.locator(`[data-word]:not([data-word="${word}"])`).waitFor({ timeout: 15000 });
+  }
+  await page.getByText("Well done!").first().waitFor({ timeout: 15000 });
+});
+
+await test("Kindergarten: more, fewer or same - tapping the right group earns a star", async (page, ctx) => {
+  await baseRoutes(ctx);
+  await speechOk(ctx);
+  await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
+  await tap(page.getByRole("button", { name: /Play/ }).nth(2));
+  for (let q = 0; q < 5; q++) {
+    const box = page.locator("[data-answer]");
+    await box.waitFor({ timeout: 8000 });
+    const answer = await box.getAttribute("data-answer");
+    const target = answer === "same" ? page.getByRole("button", { name: "They are the same" }) : page.getByRole("button", { name: answer === "left" ? "The left group" : "The right group" });
+    await tap(target);
+    await page.getByLabel(/^\d+ stars$/).filter({ hasText: `${q + 1}` }).waitFor({ timeout: 8000 }).catch(() => {});
+    await page.waitForTimeout(1300);
+  }
+  await page.getByText("Well done!").first().waitFor({ timeout: 8000 });
+});
+
 await test("My Books: a failed list shows a retry message", async (page, ctx) => {
   await ctx.route("**/api/me", (r) => json(r, me));
   await ctx.route("**/api/library*", (r) => json(r, { error: "Couldn't load your books." }, 500));

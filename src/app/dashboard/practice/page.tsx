@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { PrinterIcon } from "@/components/icons";
 import { Alert, Field, PageHeader, PageSkeleton, Spinner, button, card, cx, input } from "@/components/ui";
@@ -85,6 +86,22 @@ export default function PracticePage() {
         title="Practice"
         description="Quizzes and maths tutorials for your child, worked out by the app itself: always correct, and no AI used."
       />
+
+      <Link
+        href="/dashboard/practice/kindergarten"
+        className={cx(card, "flex items-center gap-4 p-4 transition hover:border-brand-300 sm:p-5")}
+      >
+        <span className="text-4xl" aria-hidden>
+          🧸
+        </span>
+        <span className="min-w-0">
+          <span className="block text-base font-semibold text-slate-900">Kindergarten</span>
+          <span className="block text-sm text-slate-500">Spell simple words, find sight words, and compare small numbers. Picture-led and read aloud.</span>
+        </span>
+        <span className="ml-auto text-slate-400" aria-hidden>
+          →
+        </span>
+      </Link>
 
       <TutorialsCard />
 

@@ -1,5 +1,7 @@
 import { describe, explain, worksheetMarkdown, makeQuiz, markOrder, normaliseSettings, parseSample, settingsProblem, type OrderSettings } from "@/lib/practice/order";
 import type { PracticeNumber } from "@/lib/practice/numbers";
+import { makeCompareQuiz, makeCvcQuiz, makeSightQuiz, type CompareSettings, type SightSettings } from "@/lib/kindergarten/quiz";
+import { CVC_WORDS, SIGHT_PRE_PRIMER, SIGHT_PRIMER, VOWELS } from "@/lib/kindergarten/words";
 
 let passed = 0;
 let failed = 0;
@@ -118,6 +120,59 @@ for (const raw of [{ kind: "whole", digits: 4 }, { kind: "decimal", digits: 1, m
   if (e.common) console.log(`  ${e.common.rows.map((r) => `${r.text} = ${r.top}/${r.bottom}`).join(", ")}`);
   for (const step of e.steps) console.log(`  ${step.relation}: ${step.reason}`);
 }
+
+
+// ---- Kindergarten: word lists and quizzes ----
+for (const vowel of VOWELS) {
+  for (const { word, emoji } of CVC_WORDS[vowel]) {
+    check(/^[bcdfghjklmnpqrstvwxyz][aeiou][bcdfghjklmnpqrstvwxyz]$/.test(word) && word[1] === vowel, `CVC word ${word} isn't consonant-vowel-consonant with vowel ${vowel}`);
+    check(emoji.length > 0, `CVC word ${word} has no picture`);
+  }
+  check(CVC_WORDS[vowel].length >= 6, `Too few ${vowel} words`);
+}
+const allCvc = VOWELS.flatMap((v) => CVC_WORDS[v].map((w) => w.word));
+check(new Set(allCvc).size === allCvc.length, "A CVC word is listed twice");
+check(new Set(SIGHT_PRE_PRIMER).size === SIGHT_PRE_PRIMER.length && SIGHT_PRE_PRIMER.length === 40, "The pre-primer list should have 40 different words");
+check(new Set(SIGHT_PRIMER).size === SIGHT_PRIMER.length && SIGHT_PRIMER.length === 52, "The primer list should have 52 different words");
+check(SIGHT_PRE_PRIMER.every((w) => !SIGHT_PRIMER.includes(w)), "A word is in both sight lists");
+
+for (let seed = 1; seed <= 400; seed++) {
+  for (const questions of [5, 10]) {
+    const vowelSets = [["a"], ["e", "i"], [...VOWELS]] as const;
+    for (const vowels of vowelSets) {
+      const quiz = makeCvcQuiz({ vowels: [...vowels], questions }, seed);
+      check(quiz.length === questions, `CVC quiz length ${quiz.length}`);
+      for (const q of quiz) {
+        check(q.letters.join("") === q.word && vowels.includes(q.word[1] as never), `CVC question ${q.word} outside the chosen vowels`);
+        check(q.tray.length === 5 && q.letters.every((l) => q.tray.includes(l)), `CVC tray for ${q.word} lacks its letters: ${q.tray}`);
+        check(new Set(q.tray).size === 5, `CVC tray for ${q.word} repeats a letter: ${q.tray}`);
+      }
+      const words = quiz.map((q) => q.word);
+      const poolSize = vowels.flatMap((v) => CVC_WORDS[v]).length;
+      if (questions <= poolSize) check(new Set(words).size === words.length, `CVC quiz repeats a word within one round: ${words}`);
+    }
+    for (const level of ["pre-primer", "primer"] as const) {
+      const settings: SightSettings = { level, questions };
+      const list = level === "primer" ? SIGHT_PRIMER : SIGHT_PRE_PRIMER;
+      for (const q of makeSightQuiz(settings, seed)) {
+        check(q.choices.length === 3 && new Set(q.choices.map((c) => c.toLowerCase())).size === 3, `Sight choices not 3 different words: ${q.choices}`);
+        check(q.choices.includes(q.word) && list.includes(q.word), `Sight answer ${q.word} missing`);
+        check(q.choices.filter((c) => c.toLowerCase() === q.word.toLowerCase()).length === 1, `Sight word ${q.word} appears twice`);
+      }
+    }
+    for (const max of [5, 10, 20] as const) {
+      const settings: CompareSettings = { max, questions };
+      for (const q of makeCompareQuiz(settings, seed)) {
+        check(q.left >= 1 && q.right >= 1 && q.left <= max && q.right <= max, `Compare group outside 1 to ${max}: ${q.left}, ${q.right}`);
+        const expected = q.left === q.right ? "same" : (q.left > q.right) === (q.ask === "more") ? "left" : "right";
+        check(q.answer === expected, `Compare answer wrong for ${q.left} vs ${q.right} (${q.ask})`);
+      }
+    }
+  }
+}
+// The same seed gives the same questions (so a round can be repeated or printed).
+check(JSON.stringify(makeCvcQuiz({ vowels: ["a", "o"], questions: 5 }, 77)) === JSON.stringify(makeCvcQuiz({ vowels: ["a", "o"], questions: 5 }, 77)), "The same seed gave different CVC questions");
+check(JSON.stringify(makeCompareQuiz({ max: 10, questions: 5 }, 77)) === JSON.stringify(makeCompareQuiz({ max: 10, questions: 5 }, 77)), "The same seed gave different compare questions");
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);
