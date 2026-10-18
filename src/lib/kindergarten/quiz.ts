@@ -2,7 +2,7 @@
 // the same questions). No AI: every answer is known for certain.
 
 import { seeded } from "@/lib/practice/random";
-import { COUNT_EMOJI, CVC_WORDS, SIGHT_PRE_PRIMER, SIGHT_PRIMER, VOWELS, type SightLevel, type Vowel } from "@/lib/kindergarten/words";
+import { COUNT_EMOJI, CVC_WORDS, SIGHT_SETS, VOWELS, type SightLevel, type Vowel } from "@/lib/kindergarten/words";
 
 export const ROUND_SIZES = [5, 10] as const;
 
@@ -53,11 +53,11 @@ export interface SightSettings {
   questions: number;
 }
 
-export const DEFAULT_SIGHT: SightSettings = { level: "pre-primer", questions: 5 };
+export const DEFAULT_SIGHT: SightSettings = { level: "set1", questions: 5 };
 
 export function makeSightQuiz(settings: SightSettings, seed: number): SightQuestion[] {
   const r = seeded(seed);
-  const list = settings.level === "primer" ? SIGHT_PRIMER : SIGHT_PRE_PRIMER;
+  const list: readonly string[] = SIGHT_SETS[settings.level];
   const order = r.shuffle(list);
   const quiz: SightQuestion[] = [];
   for (let i = 0; i < settings.questions; i++) {

@@ -1,7 +1,7 @@
 import { describe, explain, worksheetMarkdown, makeQuiz, markOrder, normaliseSettings, parseSample, settingsProblem, type OrderSettings } from "@/lib/practice/order";
 import type { PracticeNumber } from "@/lib/practice/numbers";
 import { makeCompareQuiz, makeCvcQuiz, makeSightQuiz, type CompareSettings, type SightSettings } from "@/lib/kindergarten/quiz";
-import { CVC_WORDS, SIGHT_PRE_PRIMER, SIGHT_PRIMER, VOWELS } from "@/lib/kindergarten/words";
+import { CVC_WORDS, SIGHT_LEVELS, SIGHT_SETS, VOWELS } from "@/lib/kindergarten/words";
 
 let passed = 0;
 let failed = 0;
@@ -132,9 +132,10 @@ for (const vowel of VOWELS) {
 }
 const allCvc = VOWELS.flatMap((v) => CVC_WORDS[v].map((w) => w.word));
 check(new Set(allCvc).size === allCvc.length, "A CVC word is listed twice");
-check(new Set(SIGHT_PRE_PRIMER).size === SIGHT_PRE_PRIMER.length && SIGHT_PRE_PRIMER.length === 40, "The pre-primer list should have 40 different words");
-check(new Set(SIGHT_PRIMER).size === SIGHT_PRIMER.length && SIGHT_PRIMER.length === 52, "The primer list should have 52 different words");
-check(SIGHT_PRE_PRIMER.every((w) => !SIGHT_PRIMER.includes(w)), "A word is in both sight lists");
+const everySight = SIGHT_LEVELS.flatMap((l) => [...SIGHT_SETS[l]]);
+check(SIGHT_LEVELS.length === 5 && SIGHT_LEVELS.every((l) => SIGHT_SETS[l].length === 40), "There should be five sight-word sets of 40 words");
+check(new Set(everySight.map((w) => w.toLowerCase())).size === everySight.length, "A sight word is listed twice");
+check(everySight.every((w) => /^[A-Za-z']+$/.test(w)), "A sight word has an odd character");
 
 for (let seed = 1; seed <= 400; seed++) {
   for (const questions of [5, 10]) {
@@ -151,9 +152,9 @@ for (let seed = 1; seed <= 400; seed++) {
       const poolSize = vowels.flatMap((v) => CVC_WORDS[v]).length;
       if (questions <= poolSize) check(new Set(words).size === words.length, `CVC quiz repeats a word within one round: ${words}`);
     }
-    for (const level of ["pre-primer", "primer"] as const) {
+    for (const level of SIGHT_LEVELS) {
       const settings: SightSettings = { level, questions };
-      const list = level === "primer" ? SIGHT_PRIMER : SIGHT_PRE_PRIMER;
+      const list: readonly string[] = SIGHT_SETS[level];
       for (const q of makeSightQuiz(settings, seed)) {
         check(q.choices.length === 3 && new Set(q.choices.map((c) => c.toLowerCase())).size === 3, `Sight choices not 3 different words: ${q.choices}`);
         check(q.choices.includes(q.word) && list.includes(q.word), `Sight answer ${q.word} missing`);

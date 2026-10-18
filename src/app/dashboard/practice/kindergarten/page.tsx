@@ -19,7 +19,7 @@ import {
   type CvcSettings,
   type SightSettings,
 } from "@/lib/kindergarten/quiz";
-import { SIGHT_LEVEL_LABELS, VOWELS, type SightLevel, type Vowel } from "@/lib/kindergarten/words";
+import { SIGHT_LEVELS, SIGHT_LEVEL_LABELS, VOWELS, type Vowel } from "@/lib/kindergarten/words";
 import { newSeed } from "@/lib/practice/random";
 import { usePref } from "@/lib/use-pref";
 
@@ -31,7 +31,7 @@ const isCvc = (v: unknown): v is CvcSettings => {
 };
 const isSight = (v: unknown): v is SightSettings => {
   const s = v as SightSettings;
-  return Boolean(s) && (s.level === "pre-primer" || s.level === "primer") && ROUND_SIZES.includes(s.questions as 5 | 10);
+  return Boolean(s) && (SIGHT_LEVELS as string[]).includes(s.level) && ROUND_SIZES.includes(s.questions as 5 | 10);
 };
 const isCompare = (v: unknown): v is CompareSettings => {
   const s = v as CompareSettings;
@@ -141,7 +141,7 @@ export default function KindergartenPage() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2" role="group" aria-label="Which words">
-          {(Object.keys(SIGHT_LEVEL_LABELS) as SightLevel[]).map((level) => (
+          {SIGHT_LEVELS.map((level) => (
             <Chip key={level} on={sight.level === level} onClick={() => setSight({ ...sight, level })}>
               {SIGHT_LEVEL_LABELS[level]}
             </Chip>

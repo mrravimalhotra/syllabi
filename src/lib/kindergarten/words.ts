@@ -1,7 +1,7 @@
 // Word lists for the kindergarten activities. Every CVC word is three letters
 // (consonant, vowel, consonant), has one clear picture, and is grouped by its
-// vowel sound. The sight words are the standard early-reader lists (pre-primer
-// and primer), the first words children learn to recognise at a glance.
+// vowel sound. The sight words are the Dolch words the school uses (200 words in
+// five sets), the common words children learn to recognise at a glance.
 
 export const VOWELS = ["a", "e", "i", "o", "u"] as const;
 export type Vowel = (typeof VOWELS)[number];
@@ -61,21 +61,52 @@ export const CVC_WORDS: Record<Vowel, CvcWord[]> = {
   ],
 };
 
-/** The Dolch pre-primer list: the first sight words, for the youngest readers. */
-export const SIGHT_PRE_PRIMER = [
-  "a", "and", "away", "big", "blue", "can", "come", "down", "find", "for", "funny", "go", "help", "here", "I", "in", "is", "it", "jump", "little",
-  "look", "make", "me", "my", "not", "one", "play", "red", "run", "said", "see", "the", "three", "to", "two", "up", "we", "where", "yellow", "you",
-];
+/**
+ * The sight words (Dolch words, in the order children usually learn them),
+ * as five sets of 40. From the school's printed Dolch lists, pages 1 to 5.
+ */
+export const SIGHT_SETS = {
+  set1: [
+    "the", "was", "at", "out", "to", "said", "him", "as", "and", "his",
+    "with", "be", "he", "that", "up", "have", "a", "she", "all", "go",
+    "I", "for", "look", "we", "you", "on", "is", "am", "it", "they",
+    "her", "then", "of", "but", "there", "little", "in", "had", "some", "down",
+  ],
+  set2: [
+    "do", "get", "big", "very", "can", "them", "went", "an", "could", "like",
+    "are", "over", "when", "one", "come", "your", "did", "this", "if", "its",
+    "what", "my", "now", "ride", "so", "would", "long", "into", "see", "me",
+    "no", "just", "not", "will", "came", "blue", "were", "yes", "ask", "red",
+  ],
+  set3: [
+    "from", "put", "away", "ran", "good", "too", "old", "let", "any", "got",
+    "by", "help", "about", "take", "their", "make", "around", "where", "here", "going",
+    "want", "every", "saw", "sleep", "don't", "pretty", "call", "brown", "how", "jump",
+    "after", "yellow", "know", "green", "well", "five", "right", "four", "think", "six",
+  ],
+  set4: [
+    "walk", "stop", "tell", "black", "two", "off", "much", "white", "or", "never",
+    "keep", "ten", "before", "seven", "give", "does", "eat", "eight", "work", "bring",
+    "again", "cold", "first", "goes", "play", "today", "try", "write", "who", "fly",
+    "new", "always", "been", "myself", "must", "drink", "may", "round", "start", "once",
+  ],
+  set5: [
+    "soon", "our", "use", "sit", "made", "better", "fast", "which", "run", "hold",
+    "say", "fall", "gave", "buy", "light", "carry", "open", "funny", "pick", "small",
+    "has", "warm", "hurt", "under", "find", "ate", "pull", "read", "only", "full",
+    "cut", "why", "us", "those", "kind", "own", "three", "done", "both", "found",
+  ],
+} as const;
 
-/** The Dolch primer list: the next step. */
-export const SIGHT_PRIMER = [
-  "all", "am", "are", "at", "ate", "be", "black", "brown", "but", "came", "did", "do", "eat", "four", "get", "good", "have", "he", "into", "like",
-  "must", "new", "no", "now", "on", "our", "out", "please", "pretty", "ran", "ride", "saw", "say", "she", "so", "soon", "that", "there", "they", "this",
-  "too", "under", "want", "was", "well", "went", "what", "white", "who", "will", "with", "yes",
-];
-
-export type SightLevel = "pre-primer" | "primer";
-export const SIGHT_LEVEL_LABELS: Record<SightLevel, string> = { "pre-primer": "First words", primer: "Next words" };
+export type SightLevel = keyof typeof SIGHT_SETS;
+export const SIGHT_LEVELS = Object.keys(SIGHT_SETS) as SightLevel[];
+export const SIGHT_LEVEL_LABELS: Record<SightLevel, string> = {
+  set1: "Set 1 (the, was, at)",
+  set2: "Set 2 (do, get, big)",
+  set3: "Set 3 (from, put, away)",
+  set4: "Set 4 (walk, stop, tell)",
+  set5: "Set 5 (soon, our, use)",
+};
 
 /** What is counted in "more, less or same" questions. */
 export const COUNT_EMOJI = ["🍎", "⭐", "🐟", "🎈", "🐥", "🌸", "🚗", "🍪"] as const;
