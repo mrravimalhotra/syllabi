@@ -46,46 +46,46 @@ function pauseModel(model: string, message: string) {
 
 const isPaused = (model: string) => (pausedUntil.get(model) ?? 0) > Date.now();
 
-/** One Gemini call with the given model (search first when allowed, then without). With `patient` false, a busy or rate-limited reply fails at once instead of waiting and retrying. */
-async function completeWith(req: CompletionRequest & { model: string }, patient = true): Promise<CompletionResult> {
-  const genAI = client();
+type GeminiModel = ReturnType<GoogleGenerativeAI["getGenerativeModel"]>;
+type Grounding = { webSearchQueries?: string[]; searchEntryPoint?: { renderedContent?: string } };
 
-  const modelWith = (search: boolean) =>
-    genAI.getGenerativeModel({
-      model: req.model,
-      systemInstruction: req.systemInstructions,
-      tools: (search ? [{ googleSearch: {} }] : undefined) as never,
-    });
-
+/** The message parts: reference material first, then the question, then any pictures. */
+function requestParts(req: CompletionRequest): Part[] {
   const parts: Part[] = [];
   if (req.context) parts.push({ text: `Reference material (RAG context):\n${req.context}` });
   parts.push({ text: req.prompt });
-  for (const img of req.images ?? []) {
-    parts.push({ inlineData: { data: img.data, mimeType: img.mimeType } });
-  }
+  for (const img of req.images ?? []) parts.push({ inlineData: { data: img.data, mimeType: img.mimeType } });
+  return parts;
+}
 
-  const request = {
-    contents: [{ role: "user", parts }],
+function requestBody(req: CompletionRequest) {
+  return {
+    contents: [{ role: "user" as const, parts: requestParts(req) }],
     generationConfig: {
       temperature: req.temperature ?? 0.4,
       maxOutputTokens: req.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
       ...(req.jsonSchema ? { responseMimeType: "application/json", responseSchema: req.jsonSchema as never } : {}),
     },
   };
+}
 
-  // Google Search is a bonus, not a requirement: a key without search quota
-  // (the free tier often has none) gets "429 quota exceeded" for searched
-  // calls only. Then answer without search rather than fail the request.
-  // With onText set, the answer is streamed: each piece is passed on as it
-  // arrives, and the complete response is returned at the end as usual.
+type Body = ReturnType<typeof requestBody>;
+
+/**
+ * One call to a model. With `req.onText` set, the answer is streamed: each
+ * piece is passed on as it arrives, and the complete response is returned at
+ * the end as usual. A second try after pieces were shown first says so
+ * (`onRestart`), so the screen can start the draft over.
+ */
+function caller(req: CompletionRequest, body: Body) {
   let emitted = false;
-  const generate = async (model: ReturnType<typeof modelWith>) => {
-    if (!req.onText) return model.generateContent(request);
+  return async (model: GeminiModel) => {
+    if (!req.onText) return model.generateContent(body);
     if (emitted) {
       req.onRestart?.();
       emitted = false;
     }
-    const streamed = await model.generateContentStream(request);
+    const streamed = await model.generateContentStream(body);
     for await (const chunk of streamed.stream) {
       let piece = "";
       try {
@@ -100,46 +100,31 @@ async function completeWith(req: CompletionRequest & { model: string }, patient 
     }
     return { response: await streamed.response };
   };
+}
 
-  let searchSkipped = false;
-  let result;
-  if (req.allowSearchGrounding) {
-    try {
-      result = await generate(modelWith(true));
-    } catch (err) {
-      console.warn("[google] search-grounded call failed; answering without search:", err instanceof Error ? err.message : err);
-      searchSkipped = true;
-    }
-  }
-  if (!result) {
-    if (patient) {
-      result = await withNetworkRetry(() => generate(modelWith(false)));
-    } else {
-      try {
-        result = await generate(modelWith(false));
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        // Busy or out of allowance: let the caller switch models now. Anything else (a dropped connection) is retried as usual.
-        if (DAILY_LIMIT.test(message) || OUT_OF_CAPACITY.test(message)) throw err;
-        result = await withNetworkRetry(() => generate(modelWith(false)));
-      }
-    }
-  }
+/** Busy or out of allowance, as opposed to a dropped connection or a bad request. */
+const isCapacityProblem = (message: string) => DAILY_LIMIT.test(message) || OUT_OF_CAPACITY.test(message);
 
-  const response = result.response;
-  const usage = response.usageMetadata;
-  const candidate = response.candidates?.[0];
-  const grounding = candidate?.groundingMetadata as
-    | { webSearchQueries?: string[]; searchEntryPoint?: { renderedContent?: string } }
-    | undefined;
-  const groundingUsed = Boolean(grounding?.webSearchQueries?.length);
-
-  // A blocked prompt or answer has no text; response.text() would throw a
-  // technical error, so say plainly what happened instead.
-  let text: string;
+/** The call without search. A patient call waits and retries; otherwise a busy or limited reply fails at once so the caller can switch models. */
+async function generatePlain(call: () => Promise<GenerateResult>, patient: boolean): Promise<GenerateResult> {
+  if (patient) return withNetworkRetry(call);
   try {
-    text = response.text();
+    return await call();
   } catch (err) {
+    // Anything but busy (a dropped connection) is retried as usual.
+    if (isCapacityProblem(err instanceof Error ? err.message : String(err))) throw err;
+    return withNetworkRetry(call);
+  }
+}
+
+type GenerateResult = Awaited<ReturnType<ReturnType<typeof caller>>>;
+
+/** The answer's text; a blocked prompt or answer has none, so say plainly what happened instead of a technical error. */
+function textOf(response: GenerateResult["response"]): string {
+  try {
+    return response.text();
+  } catch (err) {
+    const candidate = response.candidates?.[0];
     const reason = String(candidate?.finishReason ?? response.promptFeedback?.blockReason ?? "EMPTY");
     console.error("[google] no text in response", reason, response.promptFeedback, err);
     const partial = (candidate?.content?.parts ?? []).map((p) => ("text" in p && typeof p.text === "string" ? p.text : "")).join("");
@@ -151,17 +136,23 @@ async function completeWith(req: CompletionRequest & { model: string }, patient 
       partial
     );
   }
-  const truncated = String(candidate?.finishReason) === "MAX_TOKENS";
-  if (truncated) {
-    text += "\n\n---\n*This answer reached the length limit and stops here. Ask for the remaining questions separately.*";
-  }
+}
 
+/** What a finished call gives back: the text, the tokens used, and whether search was used or skipped. */
+function toResult(model: string, response: GenerateResult["response"], searchSkipped: boolean): CompletionResult {
+  const usage = response.usageMetadata;
+  const candidate = response.candidates?.[0];
+  const grounding = candidate?.groundingMetadata as Grounding | undefined;
+  const groundingUsed = Boolean(grounding?.webSearchQueries?.length);
+  let text = textOf(response);
+  const truncated = String(candidate?.finishReason) === "MAX_TOKENS";
+  if (truncated) text += "\n\n---\n*This answer reached the length limit and stops here. Ask for the remaining questions separately.*";
   return {
     text,
     truncated,
     searchSuggestionsHtml: groundingUsed ? grounding?.searchEntryPoint?.renderedContent : undefined,
     provider: "google",
-    model: req.model,
+    model,
     usage: {
       inputTokens: usage?.promptTokenCount ?? 0,
       outputTokens: usage?.candidatesTokenCount ?? 0,
@@ -172,6 +163,35 @@ async function completeWith(req: CompletionRequest & { model: string }, patient 
   };
 }
 
+/** One Gemini call with the given model (search first when allowed, then without). With `patient` false, a busy or rate-limited reply fails at once instead of waiting and retrying. */
+async function completeWith(req: CompletionRequest & { model: string }, patient = true): Promise<CompletionResult> {
+  const genAI = client();
+  const modelWith = (search: boolean) =>
+    genAI.getGenerativeModel({
+      model: req.model,
+      systemInstruction: req.systemInstructions,
+      tools: (search ? [{ googleSearch: {} }] : undefined) as never,
+    });
+  const generate = caller(req, requestBody(req));
+
+  // Google Search is a bonus, not a requirement: a key without search quota
+  // (the free tier often has none) gets "429 quota exceeded" for searched
+  // calls only. Then answer without search rather than fail the request.
+  let searchSkipped = false;
+  let result: GenerateResult | undefined;
+  if (req.allowSearchGrounding) {
+    try {
+      result = await generate(modelWith(true));
+    } catch (err) {
+      console.warn("[google] search-grounded call failed; answering without search:", err instanceof Error ? err.message : err);
+      searchSkipped = true;
+    }
+  }
+  result ??= await generatePlain(() => generate(modelWith(false)), patient);
+
+  return toResult(req.model, result.response, searchSkipped);
+}
+
 export const googleAdapter: LlmProviderAdapter = {
   async generateCompletion(req: CompletionRequest & { model: string }): Promise<CompletionResult> {
     const other = standInFor(req.model);
@@ -180,7 +200,10 @@ export const googleAdapter: LlmProviderAdapter = {
       try {
         return { ...(await completeWith({ ...req, model: other })), standInFor: req.model };
       } catch (err) {
-        console.warn("[google] stand-in failed while the main model is paused; trying the main model", err instanceof Error ? err.message : err);
+        console.warn(
+          "[google] stand-in failed while the main model is paused; trying the main model",
+          err instanceof Error ? err.message : err
+        );
         req.onRestart?.();
         return completeWith(req);
       }
@@ -190,10 +213,12 @@ export const googleAdapter: LlmProviderAdapter = {
       return await completeWith(req, !other);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      if (!other || err instanceof BlockedReplyError || !(DAILY_LIMIT.test(message) || OUT_OF_CAPACITY.test(message))) throw err;
+      if (!other || err instanceof BlockedReplyError || !isCapacityProblem(message)) throw err;
       pauseModel(req.model, message);
       req.onRestart?.();
-      console.warn(`[google] ${req.model} can't answer now (${DAILY_LIMIT.test(message) ? "daily allowance used up" : "busy"}); using ${other}`);
+      console.warn(
+        `[google] ${req.model} can't answer now (${DAILY_LIMIT.test(message) ? "daily allowance used up" : "busy"}); using ${other}`
+      );
       try {
         return { ...(await completeWith({ ...req, model: other })), standInFor: req.model };
       } catch (second) {

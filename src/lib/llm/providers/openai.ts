@@ -32,28 +32,27 @@ function client(provider: OpenAiCompatible) {
   });
 }
 
+/** The user's message: the question (with any reference material before it) and any pictures. */
+function userContent(req: CompletionRequest): OpenAI.Chat.Completions.ChatCompletionContentPart[] {
+  const text = req.context ? `Reference material (RAG context):\n${req.context}\n\n${req.prompt}` : req.prompt;
+  return [
+    { type: "text", text },
+    ...(req.images ?? []).map((img) => ({ type: "image_url" as const, image_url: { url: `data:${img.mimeType};base64,${img.data}` } })),
+  ];
+}
+
 /** An adapter for one OpenAI-compatible service. */
 export function openAiCompatibleAdapter(provider: OpenAiCompatible): LlmProviderAdapter {
   return {
     async generateCompletion(req: CompletionRequest & { model: string }): Promise<CompletionResult> {
       const openai = client(provider);
 
-      const userContent: OpenAI.Chat.Completions.ChatCompletionContentPart[] = [];
-      const text = req.context ? `Reference material (RAG context):\n${req.context}\n\n${req.prompt}` : req.prompt;
-      userContent.push({ type: "text", text });
-      for (const img of req.images ?? []) {
-        userContent.push({
-          type: "image_url",
-          image_url: { url: `data:${img.mimeType};base64,${img.data}` },
-        });
-      }
-
       const completion = await openai.chat.completions.create({
         model: req.model,
         temperature: req.temperature ?? 0.4,
         messages: [
           { role: "system", content: req.systemInstructions },
-          { role: "user", content: userContent },
+          { role: "user", content: userContent(req) },
         ],
       });
 
