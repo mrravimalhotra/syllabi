@@ -77,7 +77,8 @@ export function CvcGame({ questions, say, sound, prepare, prepareSounds, onAgain
       mistakeMade.current = true;
       setShake(trayIndex);
       setTimeout(() => setShake(null), 450);
-      void say("Try again!");
+      // The tapped letter still says its sound, so every click is heard.
+      void sound(letter).then(() => say("Try again!"));
       return;
     }
     setUsed((u) => [...u, trayIndex]);

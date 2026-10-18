@@ -5,15 +5,17 @@ import { MAX_SPEECH_CHARS, TooFastError, speechFor } from "@/lib/tts/speak";
 export const maxDuration = 120;
 
 // Making speech uses the AI's free allowance, so each person may ask for only so many NEW clips a minute (clips already stored are free and unlimited).
-const MAX_PER_MINUTE = 12;
+// Letter sounds have their own, larger allowance: there are only a few dozen, each is stored for good, and a lesson fetches several at once.
+const MAX_PER_MINUTE = { phrase: 12, sound: 60 };
 const recent = new Map<string, number[]>();
 
-function tooFast(userId: string): boolean {
+function tooFast(userId: string, kind: "phrase" | "sound"): boolean {
   const now = Date.now();
-  const times = (recent.get(userId) ?? []).filter((t) => now - t < 60_000);
+  const key = `${kind}:${userId}`;
+  const times = (recent.get(key) ?? []).filter((t) => now - t < 60_000);
   times.push(now);
-  recent.set(userId, times);
-  return times.length > MAX_PER_MINUTE;
+  recent.set(key, times);
+  return times.length > MAX_PER_MINUTE[kind];
 }
 
 /**
@@ -37,7 +39,7 @@ export async function POST(request: Request) {
       text,
       language,
       () => {
-        if (tooFast(auth.account.id)) throw new TooFastError();
+        if (tooFast(auth.account.id, kind)) throw new TooFastError();
       },
       kind
     );
