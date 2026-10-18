@@ -61,6 +61,123 @@ async function run(name: string, fn: () => Promise<string>): Promise<Check> {
   }
 }
 
+const checkSettings = async () => {
+  const missing = REQUIRED_ENV.filter((name) => !process.env[name]?.trim());
+  const padded = REQUIRED_ENV.filter((name) => {
+    const v = process.env[name];
+    return v && v !== v.trim();
+  });
+  if (missing.length) throw new Error(`Missing: ${missing.join(", ")}`);
+  if (padded.length) throw new Error(`Has spaces or a line break around the value: ${padded.join(", ")}`);
+  return `All ${REQUIRED_ENV.length} required settings are present. Sign-ups open: ${process.env.OPEN_SIGNUPS === "true" ? "yes" : "no"}.`;
+};
+
+const checkDatabase = async (adminId: string) => {
+  const db = createAdminClient();
+  const { count, error } = await db.from("students").select("*", { count: "exact", head: true });
+  if (error) throw error;
+  const quota = await checkQuota(adminId);
+  return `Connected. ${count ?? 0} account(s). Your usage this month: ${quota.used.toLocaleString("en-IN")} of ${quota.quota.toLocaleString("en-IN")} tokens.`;
+};
+
+const checkAnswers = async () => {
+  const { provider, model } = await getLlmSetting("ad_hoc");
+  const result = await generateCompletion({
+    taskType: "ad_hoc",
+    systemInstructions: "Reply with the single word OK.",
+    prompt: "Health check.",
+    maxOutputTokens: 1024,
+  });
+  return `${provider} / ${model} replied "${result.text.trim().slice(0, 40)}".`;
+};
+
+const checkSearch = async () => {
+  const result = await generateCompletion({
+    taskType: "ad_hoc",
+    systemInstructions: "Answer in one short sentence.",
+    prompt: "What is today's date in India?",
+    allowSearchGrounding: true,
+    maxOutputTokens: 1024,
+  });
+  if (result.searchSkipped) {
+    throw new NotSetUp(
+      "Optional. Google Search isn't available on this Gemini key (Google answered 429: quota exceeded; free keys often have no search quota). " +
+        "Answers still work, just without web search. To turn search on, enable billing for this key's project in Google AI Studio."
+    );
+  }
+  return result.usedSearchGrounding
+    ? "Search was used and returned results."
+    : `Answered without searching ("${result.text.trim().slice(0, 60)}"). That is allowed; search only runs when the model decides it needs it.`;
+};
+
+const checkEmbeddings = async (adminId: string) => {
+  const { model } = await getLlmSetting("embedding");
+  const { embedding } = await embed("Find the LCM of 12, 18 and 30");
+  if (embedding.length !== 768) throw new Error(`${model} returned ${embedding.length} numbers; the database expects 768.`);
+  const found = await retrieveContext("Find the LCM of 12, 18 and 30", { ownerId: adminId });
+  return `${model} works (768 numbers). Searching your books found ${found.chunks.length} matching passage(s).`;
+};
+
+const checkStorage = async (adminId: string) => {
+  const prefix = `health/${adminId}/`;
+  const key = `${prefix}${Date.now()}.txt`;
+  await uploadSourceFile(key, Buffer.from("ok"), "text/plain");
+  const back = await downloadFile(key);
+  await deletePrefix(prefix);
+  if (back.data.toString() !== "ok") throw new Error("Saved a test file but read back something different.");
+  return `Saved, read back and deleted a test file in bucket "${process.env.R2_BUCKET_NAME ?? "syllabi"}".`;
+};
+
+const checkPageReading = async () => {
+  const { provider, model } = await getLlmSetting("ocr_extraction");
+  const result = await generateCompletion({
+    taskType: "ocr_extraction",
+    systemInstructions: "Reply with one word.",
+    prompt: "Say ok.",
+    maxOutputTokens: 256,
+  });
+  return `${provider} / ${model} replied "${result.text.trim().slice(0, 20)}".${model === "gemini-flash-lite-latest" ? " If its free daily allowance runs out, pages wait until it resets (or are read by a backup AI that can read images, if one is set up)." : " If this model's free daily allowance runs out, pages are read with gemini-flash-lite-latest instead."}`;
+};
+
+const checkBackground = async (origin: string) => {
+  // Tell the timer where this app lives, so it doesn't have to wait for the first upload.
+  await rememberAppUrl(origin);
+  const db = createAdminClient();
+  const countOf = async (status: string) => {
+    const { count, error } = await db.from("page_jobs").select("id", { count: "exact", head: true }).eq("status", status);
+    if (error) throw error;
+    return count ?? 0;
+  };
+  const [{ data: runner }, { data: timer }, pending, working, failed] = await Promise.all([
+    db.from("job_runner").select("app_url").eq("id", 1).maybeSingle(),
+    db.rpc("background_timer_ready"),
+    countOf("pending"),
+    countOf("working"),
+    countOf("failed"),
+  ]);
+  const queue = `${pending} waiting, ${working} being read, ${failed} couldn't be read`;
+  if (!timer) {
+    throw new Error(
+      `The once-a-minute timer isn't set up (Supabase extensions pg_cron and pg_net), so reading only continues while uploads arrive. Pages: ${queue}.`
+    );
+  }
+  return `Timer runs every minute${runner?.app_url ? ` and calls ${runner.app_url}` : " (it starts calling the app after the first upload)"}. Pages: ${queue}.`;
+};
+
+const checkBackup = async (backup: (typeof BACKUPS)[number]) => {
+  if (!hasKey(backup.provider)) {
+    throw new NotSetUp(`Not set up (optional). Add ${OPENAI_COMPATIBLE[backup.provider].keyName} in Vercel to use it when Gemini runs out.`);
+  }
+  const model = backup.model();
+  const result = await openAiCompatibleAdapter(backup.provider).generateCompletion({
+    taskType: "ad_hoc",
+    systemInstructions: "Reply with one word.",
+    prompt: "Say ok.",
+    model,
+  });
+  return `${result.model} replied "${result.text.trim().slice(0, 20)}".${backup.readsImages ? " Can also read page images." : ""}`;
+};
+
 /**
  * Admin-only self-test of every outside service the app depends on, with the
  * real error (keys removed) shown on screen: the quickest way to find a wrong
@@ -69,147 +186,22 @@ async function run(name: string, fn: () => Promise<string>): Promise<Check> {
 export async function POST(request: Request) {
   const auth = await authenticateAdmin();
   if ("response" in auth) return auth.response;
-  const admin = auth.account;
+  const adminId = auth.account.id;
+  const origin = new URL(request.url).origin;
 
-  const checks: Check[] = [];
-
-  checks.push(
-    await run("Settings (environment variables)", async () => {
-      const missing = REQUIRED_ENV.filter((name) => !process.env[name]?.trim());
-      const padded = REQUIRED_ENV.filter((name) => {
-        const v = process.env[name];
-        return v && v !== v.trim();
-      });
-      if (missing.length) throw new Error(`Missing: ${missing.join(", ")}`);
-      if (padded.length) throw new Error(`Has spaces or a line break around the value: ${padded.join(", ")}`);
-      return `All ${REQUIRED_ENV.length} required settings are present. Sign-ups open: ${process.env.OPEN_SIGNUPS === "true" ? "yes" : "no"}.`;
-    })
-  );
-
-  checks.push(
-    await run("Database", async () => {
-      const db = createAdminClient();
-      const { count, error } = await db.from("students").select("*", { count: "exact", head: true });
-      if (error) throw error;
-      const quota = await checkQuota(admin.id);
-      return `Connected. ${count ?? 0} account(s). Your usage this month: ${quota.used.toLocaleString("en-IN")} of ${quota.quota.toLocaleString("en-IN")} tokens.`;
-    })
-  );
-
-  checks.push(
-    await run("AI answers (Gemini)", async () => {
-      const { provider, model } = await getLlmSetting("ad_hoc");
-      const result = await generateCompletion({
-        taskType: "ad_hoc",
-        systemInstructions: "Reply with the single word OK.",
-        prompt: "Health check.",
-        maxOutputTokens: 1024,
-      });
-      return `${provider} / ${model} replied "${result.text.trim().slice(0, 40)}".`;
-    })
-  );
-
-  checks.push(
-    await run("AI with Google Search", async () => {
-      const result = await generateCompletion({
-        taskType: "ad_hoc",
-        systemInstructions: "Answer in one short sentence.",
-        prompt: "What is today's date in India?",
-        allowSearchGrounding: true,
-        maxOutputTokens: 1024,
-      });
-      if (result.searchSkipped) {
-        throw new NotSetUp(
-          "Optional. Google Search isn't available on this Gemini key (Google answered 429: quota exceeded; free keys often have no search quota). " +
-            "Answers still work, just without web search. To turn search on, enable billing for this key's project in Google AI Studio."
-        );
-      }
-      return result.usedSearchGrounding
-        ? "Search was used and returned results."
-        : `Answered without searching ("${result.text.trim().slice(0, 60)}"). That is allowed; search only runs when the model decides it needs it.`;
-    })
-  );
-
-  checks.push(
-    await run("Book search (embeddings)", async () => {
-      const { model } = await getLlmSetting("embedding");
-      const { embedding } = await embed("Find the LCM of 12, 18 and 30");
-      if (embedding.length !== 768) throw new Error(`${model} returned ${embedding.length} numbers; the database expects 768.`);
-      const found = await retrieveContext("Find the LCM of 12, 18 and 30", { ownerId: admin.id });
-      return `${model} works (768 numbers). Searching your books found ${found.chunks.length} matching passage(s).`;
-    })
-  );
-
-  checks.push(
-    await run("File storage (Cloudflare R2)", async () => {
-      const prefix = `health/${admin.id}/`;
-      const key = `${prefix}${Date.now()}.txt`;
-      await uploadSourceFile(key, Buffer.from("ok"), "text/plain");
-      const back = await downloadFile(key);
-      await deletePrefix(prefix);
-      if (back.data.toString() !== "ok") throw new Error("Saved a test file but read back something different.");
-      return `Saved, read back and deleted a test file in bucket "${process.env.R2_BUCKET_NAME ?? "syllabi"}".`;
-    })
-  );
-
-  checks.push(
-    await run("Reading book pages (AI)", async () => {
-      const { provider, model } = await getLlmSetting("ocr_extraction");
-      const result = await generateCompletion({
-        taskType: "ocr_extraction",
-        systemInstructions: "Reply with one word.",
-        prompt: "Say ok.",
-        maxOutputTokens: 256,
-      });
-      return `${provider} / ${model} replied "${result.text.trim().slice(0, 20)}".${model === "gemini-flash-lite-latest" ? " If its free daily allowance runs out, pages wait until it resets (or are read by a backup AI that can read images, if one is set up)." : " If this model's free daily allowance runs out, pages are read with gemini-flash-lite-latest instead."}`;
-    })
-  );
-
-  checks.push(
-    await run("Background page reading", async () => {
-      // Tell the timer where this app lives, so it doesn't have to wait for the first upload.
-      await rememberAppUrl(new URL(request.url).origin);
-      const db = createAdminClient();
-      const countOf = async (status: string) => {
-        const { count, error } = await db.from("page_jobs").select("id", { count: "exact", head: true }).eq("status", status);
-        if (error) throw error;
-        return count ?? 0;
-      };
-      const [{ data: runner }, { data: timer }, pending, working, failed] = await Promise.all([
-        db.from("job_runner").select("app_url").eq("id", 1).maybeSingle(),
-        db.rpc("background_timer_ready"),
-        countOf("pending"),
-        countOf("working"),
-        countOf("failed"),
-      ]);
-      const queue = `${pending} waiting, ${working} being read, ${failed} couldn't be read`;
-      if (!timer) {
-        throw new Error(
-          `The once-a-minute timer isn't set up (Supabase extensions pg_cron and pg_net), so reading only continues while uploads arrive. Pages: ${queue}.`
-        );
-      }
-      return `Timer runs every minute${runner?.app_url ? ` and calls ${runner.app_url}` : " (it starts calling the app after the first upload)"}. Pages: ${queue}.`;
-    })
-  );
-
+  // One after another, so the services aren't all hit at once.
+  const checks: Check[] = [
+    await run("Settings (environment variables)", checkSettings),
+    await run("Database", () => checkDatabase(adminId)),
+    await run("AI answers (Gemini)", checkAnswers),
+    await run("AI with Google Search", checkSearch),
+    await run("Book search (embeddings)", () => checkEmbeddings(adminId)),
+    await run("File storage (Cloudflare R2)", () => checkStorage(adminId)),
+    await run("Reading book pages (AI)", checkPageReading),
+    await run("Background page reading", () => checkBackground(origin)),
+  ];
   // The free services that stand in when Gemini can't answer: each one whose key is set gets a tiny test.
-  for (const backup of BACKUPS) {
-    checks.push(
-      await run(`Backup AI: ${backup.provider}`, async () => {
-        if (!hasKey(backup.provider)) {
-          throw new NotSetUp(`Not set up (optional). Add ${OPENAI_COMPATIBLE[backup.provider].keyName} in Vercel to use it when Gemini runs out.`);
-        }
-        const model = backup.model();
-        const result = await openAiCompatibleAdapter(backup.provider).generateCompletion({
-          taskType: "ad_hoc",
-          systemInstructions: "Reply with one word.",
-          prompt: "Say ok.",
-          model,
-        });
-        return `${result.model} replied "${result.text.trim().slice(0, 20)}".${backup.readsImages ? " Can also read page images." : ""}`;
-      })
-    );
-  }
+  for (const backup of BACKUPS) checks.push(await run(`Backup AI: ${backup.provider}`, () => checkBackup(backup)));
 
   return NextResponse.json({ checks });
 }

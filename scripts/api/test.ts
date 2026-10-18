@@ -20,6 +20,7 @@ import { QUESTIONS_SYSTEM, WALKTHROUGH_SYSTEM } from "../../src/lib/study-pack/p
 import { ssrState } from "./fakes/ssr";
 import { updateSession } from "../../src/lib/supabase/middleware";
 import { NextRequest } from "next/server";
+import * as health from "../../src/app/api/admin/health/route";
 import * as guests from "../../src/app/api/admin/guests/route";
 import * as speech from "../../src/app/api/speech/route";
 import * as sounds from "../../src/app/api/sounds/route";
@@ -338,6 +339,17 @@ pipeline.fail = false;
   rpcs.student_monthly_usage = () => 999_999_999;
   const over = await studyPack.POST(new Request("http://test/api", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ documentId: BOOK }) }));
   check("study pack: over the monthly allowance is refused before any AI call", over.status >= 400 && fakeAi.calls === 0, `${over.status} ${fakeAi.calls}`);
+}
+
+// ---- Health check ----
+fresh();
+session.user = person();
+await expect("health: a normal account gets 403", health.POST, 403, /admin/i, {});
+session.user = person({ role: "admin" });
+{
+  const res = await call(health.POST, {});
+  const checks = (res.json?.checks ?? []) as { name: string; ok: boolean; skipped?: boolean; detail: string }[];
+  check("health: every service is checked in order", checks.map((c) => c.name).join("|").startsWith("Settings (environment variables)|Database|AI answers (Gemini)|AI with Google Search|Book search (embeddings)|File storage (Cloudflare R2)|Reading book pages (AI)|Background page reading"), checks.map((c) => c.name).join("|"));
 }
 
 // ---- Background reader and error log ----
