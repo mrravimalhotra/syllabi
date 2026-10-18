@@ -23,7 +23,7 @@ are still useful, its "next steps" are done.
 - Work on branch `claude/awesome-euler-jg6t9u`. After each finished change, also fast-forward main: `git push origin claude/awesome-euler-jg6t9u:main`. A push to main deploys Vercel and applies new Supabase migrations automatically.
 - Stage files by name (never `git add -A`). No pull requests unless asked.
 - Commit messages: a plain summary line, a short body, then the attribution lines the session's harness asks for. Don't put AI model names in commits, code or docs.
-- Before every push, all must pass: `npx tsc --noEmit`, `npm run lint`, `npm run build`, `npm run test:db`, `npm run test:practice`, `npm run test:llm`, `npm run test:e2e`, `npm audit --omit=dev`, `npm run scenarios`.
+- Before every push, all must pass: `npx tsc --noEmit`, `npm run lint`, `npm run build`, `npm run test:db`, `npm run test:practice`, `npm run test:llm`, `npm run test:api`, `npm run test:e2e`, `npm audit --omit=dev`, `npm run scenarios`.
 - Record each design decision as a row in `docs/decisions.md`, and add live test rows (T-62 onward) to `docs/release-checklist.md`.
 
 ## Stack and where things live
