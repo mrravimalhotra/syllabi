@@ -4,11 +4,12 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { PrinterIcon } from "@/components/icons";
 import { Alert, Field, PageHeader, PageSkeleton, Spinner, button, card, cx, input } from "@/components/ui";
+import { KindPicker } from "@/app/dashboard/practice/_parts/KindPicker";
+import { SettingsFields } from "@/app/dashboard/practice/_parts/SettingsFields";
 import { NumberView } from "@/components/practice/NumberView";
 import { OrderQuiz } from "@/components/practice/OrderQuiz";
 import { TutorialsCard } from "@/components/practice/TutorialsCard";
 import {
-  KIND_LABELS,
   describe,
   makeQuiz,
   normaliseSettings,
@@ -18,12 +19,10 @@ import {
   type OrderQuestion,
   type OrderSettings,
 } from "@/lib/practice/order";
-import { groupDigits, type NumberKind } from "@/lib/practice/numbers";
+import type { NumberKind } from "@/lib/practice/numbers";
 import { newSeed, shuffled } from "@/lib/practice/random";
 import { usePdfOpener } from "@/components/PdfButton";
 
-const KINDS: NumberKind[] = ["whole", "decimal", "fraction"];
-const select = cx(input, "pr-8");
 
 function worksheetUrl(settings: OrderSettings, seed: number, answers = true) {
   return `/api/practice/worksheet?settings=${encodeURIComponent(JSON.stringify(settings))}&seed=${seed}${answers ? "" : "&answers=0"}`;
@@ -111,23 +110,7 @@ export default function PracticePage() {
           <p className="text-sm text-slate-500">Each question has {settings.size} numbers to arrange from smallest to biggest, or biggest to smallest.</p>
         </div>
 
-        <div role="radiogroup" aria-label="Kind of numbers" className="grid grid-cols-3 gap-2">
-          {KINDS.map((kind) => (
-            <button
-              key={kind}
-              type="button"
-              role="radio"
-              aria-checked={settings.kind === kind}
-              onClick={() => chooseKind(kind)}
-              className={cx(
-                "min-h-11 rounded-xl border-2 px-2 py-2 text-sm font-medium transition-colors",
-                settings.kind === kind ? "border-brand-500 bg-brand-50 text-brand-800" : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
-              )}
-            >
-              {KIND_LABELS[kind]}
-            </button>
-          ))}
-        </div>
+        <KindPicker kind={settings.kind} onChoose={chooseKind} />
 
         <Field
           label="Example number (optional)"
@@ -147,107 +130,7 @@ export default function PracticePage() {
           {sampleError && <p className="text-sm text-red-600">{sampleError}</p>}
         </Field>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          {settings.kind === "whole" && (
-            <Field label="Size of numbers" htmlFor="digits">
-              <select id="digits" className={select} value={settings.digits} onChange={(e) => update({ digits: Number(e.target.value) })}>
-                {[1, 2, 3, 4, 5, 6, 7].map((d) => (
-                  <option key={d} value={d}>
-                    {d} digit{d === 1 ? "" : "s"} ({groupDigits(String(d === 1 ? 1 : 10 ** (d - 1)))} to {groupDigits(String(10 ** d - 1))})
-                  </option>
-                ))}
-              </select>
-            </Field>
-          )}
-          {settings.kind === "decimal" && (
-            <>
-              <Field label="Before the point" htmlFor="intDigits">
-                <select id="intDigits" className={select} value={settings.digits} onChange={(e) => update({ digits: Number(e.target.value) })}>
-                  <option value={0}>Just 0 (like 0.25)</option>
-                  <option value={1}>1 digit (like 3.25)</option>
-                  <option value={2}>2 digits (like 43.25)</option>
-                  <option value={3}>3 digits (like 543.25)</option>
-                </select>
-              </Field>
-              <Field label="After the point" htmlFor="places" hint="Mixed lengths (like 3.7 and 3.142) catch the most common mistake.">
-                <select
-                  id="places"
-                  className={select}
-                  value={`${settings.minPlaces}-${settings.maxPlaces}`}
-                  onChange={(e) => {
-                    const [minPlaces, maxPlaces] = e.target.value.split("-").map(Number);
-                    update({ minPlaces, maxPlaces });
-                  }}
-                >
-                  {[[1, 1], [2, 2], [1, 2], [1, 3], [2, 3], [1, 4]].map(([a, b]) => (
-                    <option key={`${a}-${b}`} value={`${a}-${b}`}>
-                      {a === b ? `${a} digit${a === 1 ? "" : "s"}` : `${a} to ${b} digits (mixed)`}
-                    </option>
-                  ))}
-                  {/* A sample like 3.1415 can set a range that isn't in the list above. */}
-                  {![[1, 1], [2, 2], [1, 2], [1, 3], [2, 3], [1, 4]].some(([a, b]) => a === settings.minPlaces && b === settings.maxPlaces) && (
-                    <option value={`${settings.minPlaces}-${settings.maxPlaces}`}>
-                      {settings.minPlaces} to {settings.maxPlaces} digits (mixed)
-                    </option>
-                  )}
-                </select>
-              </Field>
-            </>
-          )}
-          {settings.kind === "fraction" && (
-            <>
-              <Field label="Bottom numbers up to" htmlFor="maxDen">
-                <select id="maxDen" className={select} value={settings.maxDenominator} onChange={(e) => update({ maxDenominator: Number(e.target.value) })}>
-                  {Array.from({ length: 17 }, (_, i) => i + 4).map((d) => (
-                    <option key={d} value={d}>
-                      {d}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <fieldset className="space-y-2 self-end">
-                <legend className="sr-only">Fractions bigger than 1</legend>
-                <label className="flex items-center gap-2 text-sm text-slate-700">
-                  <input type="checkbox" checked={settings.improper} onChange={(e) => update({ improper: e.target.checked })} className="h-4 w-4 accent-brand-600" />
-                  Include fractions bigger than 1
-                </label>
-                {settings.improper && (
-                  <label className="flex items-center gap-2 text-sm text-slate-700">
-                    <input type="checkbox" checked={settings.mixed} onChange={(e) => update({ mixed: e.target.checked })} className="h-4 w-4 accent-brand-600" />
-                    Write them as mixed numbers (1 3/4)
-                  </label>
-                )}
-              </fieldset>
-            </>
-          )}
-          {settings.kind !== "fraction" && (
-            <Field
-              label="Keep numbers close (optional)"
-              htmlFor="spread"
-              hint={settings.kind === "whole" ? "The biggest gap between the smallest and biggest number." : "How far apart the whole number parts may be. 0 keeps them all the same."}
-            >
-              <input
-                id="spread"
-                type="number"
-                min={0}
-                inputMode="numeric"
-                placeholder="Any"
-                value={settings.spread ?? ""}
-                onChange={(e) => update({ spread: e.target.value === "" ? null : Number(e.target.value) })}
-                className={input}
-              />
-            </Field>
-          )}
-          <Field label="Questions" htmlFor="questions">
-            <select id="questions" className={select} value={settings.questions} onChange={(e) => update({ questions: Number(e.target.value) })}>
-              {[5, 10, 15, 20].map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
-          </Field>
-        </div>
+        <SettingsFields settings={settings} update={update} />
 
         {problem ? (
           <Alert tone="warning">{problem}</Alert>

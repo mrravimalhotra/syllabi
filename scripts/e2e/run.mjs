@@ -677,6 +677,38 @@ await test("Account: shows the signed-in details", async (page, ctx) => {
   await page.getByText("parent@example.com").first().waitFor();
 });
 
+await test("Practice: the choices follow the kind of numbers", async (page, ctx) => {
+  await baseRoutes(ctx);
+  await page.goto(`${BASE}/dashboard/practice`, { waitUntil: "networkidle" });
+  await page.getByLabel("Size of numbers").waitFor();
+  const kinds = page.getByRole("radiogroup", { name: "Kind of numbers" });
+  await kinds.getByRole("radio", { name: /Decimal/i }).click();
+  await page.getByLabel("After the point").waitFor();
+  await page.getByLabel("Before the point").waitFor();
+  await kinds.getByRole("radio", { name: /Fraction/i }).click();
+  await page.getByLabel("Bottom numbers up to").waitFor();
+  await page.getByLabel("Include fractions bigger than 1").check();
+  await page.getByLabel("Write them as mixed numbers (1 3/4)").waitFor();
+  await page.getByLabel("Keep numbers close (optional)").waitFor({ state: "detached", timeout: 3000 });
+});
+
+await test("Practice: an example number sets the kind, and a bad one says why", async (page, ctx) => {
+  await baseRoutes(ctx);
+  await page.goto(`${BASE}/dashboard/practice`, { waitUntil: "networkidle" });
+  const sample = page.getByLabel("Example number (optional)");
+  await sample.fill("3.141");
+  await page.getByLabel("After the point").waitFor({ timeout: 5000 });
+  await sample.fill("3/7");
+  await page.getByLabel("Bottom numbers up to").waitFor({ timeout: 5000 });
+  await sample.fill("3.14159");
+  await page.getByText("Decimals can have up to 4 digits after the point.").waitFor({ timeout: 5000 });
+  await sample.fill("abc");
+  await page.getByText("Type a number like 456, 3.14, 3/7 or 1 3/4.").first().waitFor({ timeout: 5000 });
+  await sample.fill("4,507");
+  await page.getByLabel("Size of numbers").waitFor({ timeout: 5000 });
+  await page.getByText("Type a number like 456, 3.14, 3/7 or 1 3/4.").first().waitFor({ state: "detached", timeout: 3000 });
+});
+
 await test("Practice: starts a quiz", async (page, ctx) => {
   await baseRoutes(ctx);
   await page.goto(`${BASE}/dashboard/practice`, { waitUntil: "networkidle" });
