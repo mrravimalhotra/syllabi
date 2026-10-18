@@ -4,6 +4,7 @@ import { makeCompareQuiz, makeCvcQuiz, makeSightQuiz, type CompareSettings, type
 import { IPA, PHONEMES, blendStart, soundText } from "@/lib/kindergarten/phonics";
 import { makeBlendQuiz } from "@/lib/kindergarten/quiz";
 import { blockedReason, buildRequestBody, questionProblem, type Question } from "@/app/dashboard/_ask/build-request";
+import { checkPages } from "@/lib/ingestion/upload-pages";
 import { parseGenerationRequest } from "@/lib/generation/request";
 import { parseProfileUpdate } from "@/lib/profile-update";
 import { parseAccountUpdate } from "@/lib/account-update";
@@ -345,6 +346,21 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
   check(d.ok && d.value.language === "hi" && d.value.documentIds === undefined && !d.value.fresh && !d.value.stream, "Answer: defaults apply when nothing is chosen");
   const f = parseGenerationRequest({ attachedText: "Q1. 2+2?" }, "sample_paper", "auto");
   check(f.ok && f.value.typedPrompt === "" && f.value.hasAttachedText && f.value.prompt.startsWith("Make a sample paper") && f.value.prompt.endsWith("---\nQ1. 2+2?"), "Answer: an attached file alone gets the kind's default instruction");
+}
+
+// Pages sent for a book.
+{
+  const jpeg = "/9j/4AAQSkZJRgABAQEASABIAAD";
+  const msg = (pages: unknown) => ("error" in checkPages(pages) ? (checkPages(pages) as { error: string }).error : "");
+  check(/No pages/.test(msg([])) && /No pages/.test(msg("x")) && /Too many pages/.test(msg(Array.from({ length: 500 }, () => ({ text: "a" })))), "Pages: none, not a list and too many are refused");
+  check(/Page 1 wasn't sent correctly/.test(msg([null])) && /Page 1 has an unknown kind/.test(msg([{ text: "a", sourceType: "nope" }])), "Pages: an empty entry or an unknown kind is refused");
+  check(/Page 2 has an empty picture/.test(msg([{ text: "a" }, { imageBase64: "", mimeType: "image/jpeg" }])), "Pages: the page number is named, and an empty picture is refused");
+  check(/isn't a JPEG, PNG or WebP/.test(msg([{ imageBase64: jpeg, mimeType: "image/gif" }])) && /damaged or isn't really a picture/.test(msg([{ imageBase64: "AAAAAAAA", mimeType: "image/jpeg" }])), "Pages: wrong type and fake pictures are refused");
+  check(/too large \(over 3 MB/.test(msg([{ imageBase64: "/9j/" + "A".repeat(3_200_000), mimeType: "image/jpeg" }])), "Pages: an oversized picture is refused");
+  check(/has no text/.test(msg([{ text: "   " }])) && /too much text/.test(msg([{ text: "a".repeat(200_000) }])) && /neither a picture nor text/.test(msg([{ sourceType: "textbook" }])), "Pages: empty, huge and missing content are refused");
+  check(/note that is too long/.test(msg([{ imageBase64: jpeg, mimeType: "image/jpeg", hint: "x".repeat(501) }])), "Pages: a long note is refused");
+  const ok = checkPages([{ text: "Chapter 1", sourceType: "textbook" }, { imageBase64: jpeg, mimeType: "image/jpeg", hint: "figure 2" }, { text: "typed", imageBase64: jpeg, mimeType: "image/jpeg" }]);
+  check("pages" in ok && ok.pages.length === 3, "Pages: text, picture and picture-with-text pages are accepted");
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

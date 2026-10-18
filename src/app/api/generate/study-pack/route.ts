@@ -8,9 +8,36 @@ import { QUESTIONS_SYSTEM, WALKTHROUGH_SYSTEM } from "@/lib/study-pack/prompts";
 import { generateStudyPack } from "@/lib/study-pack/generate";
 import { packToMarkdown } from "@/lib/study-pack/markdown";
 import { parseStudyPackRequest } from "@/lib/study-pack/request";
+import type { StudyPack } from "@/lib/study-pack/types";
 
 // Two long AI calls (run together) for a whole chapter.
 export const maxDuration = 300;
+
+/** Saves a new study pack (the answer itself, not a PDF) and describes it for the screen. It is still shown if saving fails. */
+async function saveStudyPack(studentId: string, pack: StudyPack, cacheKey: string) {
+  const content = packToMarkdown(pack);
+  const { data: doc, error } = await createAdminClient()
+    .from("generated_documents")
+    .insert({
+      student_id: studentId,
+      task_type: "study_pack",
+      title: `Study pack: ${pack.title}`.slice(0, 200),
+      content,
+      pack,
+      sources: [],
+      cache_key: cacheKey,
+    })
+    .select("id, title")
+    .single();
+  if (error) console.error("[study-pack] saving", error);
+  return {
+    id: doc?.id ?? null,
+    title: doc?.title ?? `Study pack: ${pack.title}`,
+    pack,
+    text: content,
+    pdfUrl: doc ? `/api/documents/${doc.id}/pdf` : null,
+  };
+}
 
 /** Makes and saves a study pack for one chapter: a book from My books, or attached pages. */
 export async function POST(request: Request) {
@@ -53,30 +80,7 @@ export async function POST(request: Request) {
     }
 
     const pack = await generateStudyPack({ student, documentId, photos: documentId ? undefined : photos, focus, language });
-    const content = packToMarkdown(pack);
-    const admin = createAdminClient();
-    const { data: doc, error } = await admin
-      .from("generated_documents")
-      .insert({
-        student_id: student.id,
-        task_type: "study_pack",
-        title: `Study pack: ${pack.title}`.slice(0, 200),
-        content,
-        pack,
-        sources: [],
-        cache_key: cacheKey,
-      })
-      .select("id, title")
-      .single();
-    if (error) console.error("[study-pack] saving", error);
-
-    return NextResponse.json({
-      id: doc?.id ?? null,
-      title: doc?.title ?? `Study pack: ${pack.title}`,
-      pack,
-      text: content,
-      pdfUrl: doc ? `/api/documents/${doc.id}/pdf` : null,
-    });
+    return NextResponse.json(await saveStudyPack(student.id, pack, cacheKey));
   } catch (err) {
     return errorResponse(err, "generate study_pack", "Couldn't make the study pack. Wait a minute and try again. If it keeps happening, tell the person who runs Syllabi.");
   }

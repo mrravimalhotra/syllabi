@@ -18,6 +18,22 @@ export type UploadPage = (
   | { text: string; imageBase64?: string; mimeType?: string }
 ) & { sourceType?: SourceType };
 
+/** What is wrong with a page's picture, or null if it is fine. */
+function pictureProblem(imageBase64: unknown, mimeType: unknown): string | null {
+  if (typeof imageBase64 !== "string" || imageBase64.length === 0) return "has an empty picture";
+  if (imageBase64.length > MAX_PAGE_BASE64_CHARS) return "is too large (over 3 MB after shrinking). Add it again as a smaller photo";
+  if (typeof mimeType !== "string" || !IMAGE_MIME_TYPES.has(mimeType)) return "isn't a JPEG, PNG or WebP picture";
+  if (!looksLikeImage(imageBase64, mimeType)) return "is damaged or isn't really a picture";
+  return null;
+}
+
+/** What is wrong with a page's text, or null if it is fine. */
+function textProblem(text: string): string | null {
+  if (text.trim().length === 0) return "has no text";
+  if (text.length > MAX_PAGE_TEXT_CHARS) return `has too much text on one page (over ${MAX_PAGE_TEXT_CHARS.toLocaleString("en-IN")} characters)`;
+  return null;
+}
+
 /** What is wrong with one page, or null if it is fine. */
 function problemWith(p: unknown): string | null {
   const page = p as { imageBase64?: unknown; mimeType?: unknown; text?: unknown; hint?: unknown; sourceType?: unknown } | null;
@@ -25,17 +41,9 @@ function problemWith(p: unknown): string | null {
   if (page.sourceType !== undefined && !SOURCE_TYPES.includes(page.sourceType as SourceType)) return "has an unknown kind of material";
 
   const hasImage = page.imageBase64 !== undefined;
-  if (hasImage) {
-    if (typeof page.imageBase64 !== "string" || page.imageBase64.length === 0) return "has an empty picture";
-    if (page.imageBase64.length > MAX_PAGE_BASE64_CHARS) return "is too large (over 3 MB after shrinking). Add it again as a smaller photo";
-    if (typeof page.mimeType !== "string" || !IMAGE_MIME_TYPES.has(page.mimeType)) return "isn't a JPEG, PNG or WebP picture";
-    if (!looksLikeImage(page.imageBase64, page.mimeType)) return "is damaged or isn't really a picture";
-  }
-  if (typeof page.text === "string") {
-    if (page.text.trim().length === 0) return "has no text";
-    if (page.text.length > MAX_PAGE_TEXT_CHARS) return `has too much text on one page (over ${MAX_PAGE_TEXT_CHARS.toLocaleString("en-IN")} characters)`;
-    return null;
-  }
+  const problem = hasImage ? pictureProblem(page.imageBase64, page.mimeType) : null;
+  if (problem) return problem;
+  if (typeof page.text === "string") return textProblem(page.text);
   if (!hasImage) return "has neither a picture nor text";
   if (page.hint !== undefined && (typeof page.hint !== "string" || page.hint.length > 500)) return "has a note that is too long";
   return null;

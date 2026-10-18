@@ -112,6 +112,39 @@ function nextDailyReset(): Date {
   return reset;
 }
 
+/** The page to read: its saved text (with its stored image, if any) or its stored image. */
+async function pageToRead(job: Job): Promise<IngestPage> {
+  if (job.page_text !== null) {
+    // The page image (if any) is already stored; ingestPage links it without uploading again.
+    return job.image_path && job.mime_type
+      ? { pageNumber: job.page_number, text: job.page_text, imageBase64: "", mimeType: job.mime_type }
+      : { pageNumber: job.page_number, text: job.page_text };
+  }
+  if (!job.image_path) throw new IngestError(`Page ${job.page_number}: its saved image is missing. Upload this page again.`, false);
+  const image = await downloadFile(job.image_path);
+  return { pageNumber: job.page_number, imageBase64: image.data.toString("base64"), mimeType: job.mime_type ?? image.contentType, hint: job.hint ?? undefined };
+}
+
+/** A page that couldn't be read: tried again later, or marked failed once the tries are used up. A daily-limit wait doesn't count as a try. */
+async function recordPageFailure(job: Job, err: unknown): Promise<void> {
+  const message = err instanceof IngestError ? err.message : `Page ${job.page_number}: reading the page failed.`;
+  if (!(err instanceof IngestError)) console.error("[jobs] page", job.page_number, err);
+  const daily = err instanceof IngestError && err.dailyLimit;
+  const again = daily || ((!(err instanceof IngestError) || err.retryable) && job.attempts < MAX_ATTEMPTS);
+  const wait = daily ? nextDailyReset() : new Date(Date.now() + (RETRY_AFTER_MINUTES[job.attempts - 1] ?? 30) * 60_000);
+  const { error: failError } = await createAdminClient()
+    .from("page_jobs")
+    .update({
+      status: again ? "pending" : "failed",
+      error: message,
+      locked_at: null,
+      next_attempt_at: wait.toISOString(),
+      ...(daily ? { attempts: job.attempts - 1 } : {}),
+    })
+    .eq("id", job.id);
+  if (failError) console.error("[jobs] recording a page failure", job.id, failError);
+}
+
 async function readOne(job: Job): Promise<void> {
   const admin = createAdminClient();
   const { data: book, error: bookError } = await admin.from("documents").select("id, owner_id, source_type").eq("id", job.document_id).maybeSingle();
@@ -124,39 +157,13 @@ async function readOne(job: Job): Promise<void> {
   if (!book) return; // deleted meanwhile; its jobs go with it
 
   try {
-    let page: IngestPage;
-    if (job.page_text !== null) {
-      // The page image (if any) is already stored; ingestPage links it without uploading again.
-      page = job.image_path && job.mime_type
-        ? { pageNumber: job.page_number, text: job.page_text, imageBase64: "", mimeType: job.mime_type }
-        : { pageNumber: job.page_number, text: job.page_text };
-    } else {
-      if (!job.image_path) throw new IngestError(`Page ${job.page_number}: its saved image is missing. Upload this page again.`, false);
-      const image = await downloadFile(job.image_path);
-      page = { pageNumber: job.page_number, imageBase64: image.data.toString("base64"), mimeType: job.mime_type ?? image.contentType, hint: job.hint ?? undefined };
-    }
+    const page = await pageToRead(job);
     // A page keeps its own kind (e.g. the exercises after a chapter) within its book.
     await ingestPage({ documentId: book.id, ownerId: book.owner_id, sourceType: job.source_type ?? book.source_type }, page, job.image_path ?? undefined);
     const { error: doneError } = await admin.from("page_jobs").update({ status: "done", error: null, locked_at: null }).eq("id", job.id);
     if (doneError) console.error("[jobs] marking a page done", job.id, doneError);
   } catch (err) {
-    const message = err instanceof IngestError ? err.message : `Page ${job.page_number}: reading the page failed.`;
-    if (!(err instanceof IngestError)) console.error("[jobs] page", job.page_number, err);
-    const daily = err instanceof IngestError && err.dailyLimit;
-    const again = daily || ((!(err instanceof IngestError) || err.retryable) && job.attempts < MAX_ATTEMPTS);
-    const wait = daily ? nextDailyReset() : new Date(Date.now() + (RETRY_AFTER_MINUTES[job.attempts - 1] ?? 30) * 60_000);
-    const { error: failError } = await admin
-      .from("page_jobs")
-      .update({
-        status: again ? "pending" : "failed",
-        error: message,
-        locked_at: null,
-        next_attempt_at: wait.toISOString(),
-        // A daily-limit wait doesn't count as a try.
-        ...(daily ? { attempts: job.attempts - 1 } : {}),
-      })
-      .eq("id", job.id);
-    if (failError) console.error("[jobs] recording a page failure", job.id, failError);
+    await recordPageFailure(job, err);
   }
   await finishBookIfDone(job.document_id);
 }
