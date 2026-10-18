@@ -242,6 +242,26 @@ await test("Ask: a plain calculation is answered by code, with no AI request", a
   if (asked !== 0) throw new Error(`The AI was asked ${asked} time(s) for a plain calculation.`);
 });
 
+await test("Ask: example questions fill the box, and Ctrl+Enter sends", async (page, ctx) => {
+  await baseRoutes(ctx);
+  let asked = 0;
+  await ctx.route("**/api/generate/**", (r) => {
+    asked++;
+    return json(r, answer);
+  });
+  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  const box = page.locator("textarea");
+  const example = page.locator("form button.rounded-full").first();
+  const text = (await example.textContent()).trim();
+  await example.click();
+  if ((await box.inputValue()) !== text) throw new Error("The example did not fill the box.");
+  await page.locator("form button.rounded-full").first().waitFor({ state: "detached", timeout: 3000 });
+  await box.fill("Why is the sky blue?");
+  await box.press("Control+Enter");
+  await page.getByText(/checks|answer/i).first().waitFor({ timeout: 8000 });
+  if (asked < 1) throw new Error("Ctrl+Enter did not send the question.");
+});
+
 await test("Ask: an attached photo shows, can be removed, and goes with the question", async (page, ctx) => {
   await baseRoutes(ctx);
   let sentPhotos = -1;

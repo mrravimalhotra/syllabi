@@ -1,5 +1,6 @@
 import type { DownscaledImage } from "@/lib/downscale-image";
 import type { AnswerLanguage } from "@/lib/generation/language";
+import { pureProblem, solve } from "@/lib/worked/detect";
 import type { GenerationTaskType } from "@/types/database";
 import { MAX_ATTACHED_TEXT_CHARS } from "@/app/dashboard/_ask/constants";
 
@@ -56,4 +57,15 @@ export function blockedReason(state: { overQuota: boolean; noBookSelected: boole
   if (state.noBookSelected) return "Generate is off because no book is selected. Under “Search these books”, tap a book, or tap All.";
   if (state.readingFiles) return "Preparing your attachment. Generate turns on when it's ready.";
   return null;
+}
+
+/**
+ * A question that is only a calculation ("Divide 5255 by 5", "LCM of 12, 18 and 30") is answered by code:
+ * exact, instant, and no AI used. Returns the worked example, or null when the question needs the AI.
+ */
+export function calculationAnswer(q: Question) {
+  if ((q.task !== "solution" && q.task !== "ad_hoc") || q.photos.length > 0 || q.docs.length > 0) return null;
+  const problem = pureProblem(q.prompt, q.language);
+  const example = problem ? solve(problem) : null;
+  return problem && example ? { problem, example } : null;
 }

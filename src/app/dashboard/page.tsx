@@ -1,23 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { pureProblem, solve } from "@/lib/worked/detect";
 import type { AnswerLanguage } from "@/lib/generation/language";
 import { keep, peek } from "@/lib/client-cache";
 import { PACK_WAIT_STEPS, ROUTE_BY_TASK, TABS, WAIT_STEPS, type MeResponse } from "@/app/dashboard/_ask/constants";
 import { AskHeader } from "@/app/dashboard/_ask/AskHeader";
 import { AttachmentList } from "@/app/dashboard/_ask/AttachmentList";
 import { BookPicker } from "@/app/dashboard/_ask/BookPicker";
+import { DropForm } from "@/app/dashboard/_ask/DropForm";
+import { Messages } from "@/app/dashboard/_ask/Messages";
+import { PromptBox } from "@/app/dashboard/_ask/PromptBox";
 import { ComposerToolbar } from "@/app/dashboard/_ask/ComposerToolbar";
 import { GeneratingCard } from "@/app/dashboard/_ask/Parts";
 import { PackChapter } from "@/app/dashboard/_ask/PackChapter";
 import { ResultSection } from "@/app/dashboard/_ask/ResultSection";
 import { TabPicker } from "@/app/dashboard/_ask/TabPicker";
-import { blockedReason, buildRequestBody, questionProblem, type Question } from "@/app/dashboard/_ask/build-request";
+import { blockedReason, buildRequestBody, calculationAnswer, questionProblem, type Question } from "@/app/dashboard/_ask/build-request";
 import { useAttachments } from "@/app/dashboard/_ask/useAttachments";
 import { useBooks } from "@/app/dashboard/_ask/useBooks";
 import { useGeneration } from "@/app/dashboard/_ask/useGeneration";
-import { Alert, cx } from "@/components/ui";
 import type { GenerationTaskType } from "@/types/database";
 
 export default function DashboardPage() {
@@ -26,7 +27,6 @@ export default function DashboardPage() {
   const [prompt, setPrompt] = useState("");
   // Sample papers: total marks to aim for (Indian school papers are often 80).
   const [totalMarks, setTotalMarks] = useState("80");
-  const [dragging, setDragging] = useState(false);
   const [showBooks, setShowBooks] = useState(false);
   // Language for this question; until changed, the Account page's default.
   const [answerLanguage, setAnswerLanguage] = useState<AnswerLanguage | null>(null);
@@ -71,13 +71,10 @@ export default function DashboardPage() {
     };
 
     // A question that is only a calculation ("Divide 5255 by 5", "LCM of 12, 18 and 30") is answered by code: exact, instant, and no AI used.
-    if ((tab === "solution" || tab === "ad_hoc") && photos.length === 0 && docs.length === 0) {
-      const problem = pureProblem(prompt, language);
-      const example = problem ? solve(problem) : null;
-      if (problem && example) {
-        generation.showWorked(example, problem);
-        return;
-      }
+    const calculation = calculationAnswer(question);
+    if (calculation) {
+      generation.showWorked(calculation.example, calculation.problem);
+      return;
     }
 
     const problem = questionProblem(question);
@@ -115,73 +112,17 @@ export default function DashboardPage() {
 
       <TabPicker tab={tab} onChoose={chooseTab} />
 
-      <form
-        onSubmit={submit}
-        onDragOver={(e) => {
-          if (!e.dataTransfer.types.includes("Files")) return;
-          e.preventDefault();
-          setDragging(true);
-        }}
-        onDragLeave={(e) => {
-          if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false);
-        }}
-        onDrop={(e) => {
-          e.preventDefault();
-          setDragging(false);
-          void attachments.add(e.dataTransfer.files);
-        }}
-        className={cx(
-          "relative rounded-2xl border bg-white shadow-xs transition print:hidden",
-          dragging ? "border-brand-500 ring-4 ring-brand-100" : "border-slate-200 focus-within:border-slate-300 focus-within:shadow-sm"
-        )}
-      >
-        {dragging && (
-          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-brand-50/90 text-sm font-medium text-brand-700">
-            Drop photos, a PDF or a Word file to attach
-          </div>
-        )}
-
+      <DropForm onSubmit={submit} onFiles={(files) => void attachments.add(files)}>
         {isPack && <PackChapter books={books.books} value={chosenPackBook} onChange={setPackBookId} />}
 
-        <label htmlFor="prompt" className="sr-only">
-          Your question
-        </label>
-        <textarea
-          id="prompt"
+        <PromptBox
           value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-              e.preventDefault();
-              void submit();
-            }
-          }}
-          onPaste={(e) => {
-            const files = Array.from(e.clipboardData.files).filter((f) => f.type.startsWith("image/"));
-            if (files.length) {
-              e.preventDefault();
-              void attachments.add(files);
-            }
-          }}
+          onChange={setPrompt}
+          onSend={() => void submit()}
+          onPictures={(files) => void attachments.add(files)}
           placeholder={currentTab.placeholder}
-          rows={4}
-          className="block max-h-[50vh] min-h-32 w-full resize-none rounded-t-2xl border-0 bg-transparent px-4 pt-4 pb-2 text-base text-slate-900 placeholder:text-slate-400 [field-sizing:content] focus:ring-0 focus:outline-none focus-visible:outline-none sm:px-5 sm:text-[15px]"
+          examples={hasInput ? [] : currentTab.examples}
         />
-
-        {!hasInput && currentTab.examples.length > 0 && (
-          <div className="flex flex-wrap gap-2 px-4 pb-3 sm:px-5">
-            {currentTab.examples.map((example) => (
-              <button
-                key={example}
-                type="button"
-                onClick={() => setPrompt(example)}
-                className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-600 transition hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
-              >
-                {example}
-              </button>
-            ))}
-          </div>
-        )}
 
         <AttachmentList
           photos={photos}
@@ -220,23 +161,9 @@ export default function DashboardPage() {
           onTotalMarks={setTotalMarks}
           onLanguage={setAnswerLanguage}
         />
-      </form>
+      </DropForm>
 
-      {blocked && !generation.loading && (
-        <p id="generate-blocked" className="text-sm text-slate-600 print:hidden">
-          {blocked}
-        </p>
-      )}
-      {error && (
-        <Alert tone="error" className="print:hidden">
-          {error}
-        </Alert>
-      )}
-      {notice && (
-        <Alert tone="warning" className="print:hidden">
-          {notice}
-        </Alert>
-      )}
+      <Messages blocked={generation.loading ? null : blocked} error={error} notice={notice} />
 
       {generation.loading && (
         <GeneratingCard steps={isPack ? PACK_WAIT_STEPS : WAIT_STEPS} draft={generation.draft} onStop={generation.stop} />
