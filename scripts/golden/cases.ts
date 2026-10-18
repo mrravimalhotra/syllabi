@@ -14,6 +14,7 @@ import { lcmHcf as lcmHcfExample } from "@/lib/worked/lcm-hcf";
 import { checkArithmetic } from "@/lib/checks/arithmetic";
 import { checkCoverage, checkSamplePaper } from "@/lib/checks/rules";
 import { splitQuestions } from "@/lib/rag/split-questions";
+import { ContentBody } from "@/lib/pdf/render";
 import type { Narration } from "@/lib/worked/say";
 
 export const cases: Record<string, string> = {};
@@ -82,6 +83,24 @@ const papers = [
 ];
 for (const p of papers) for (const total of [null, 5, 20, 80, 100]) record(`paper ${total} ${p}`, checkSamplePaper(p, total));
 for (const q of ["Solve all the questions in the exercise", "1. What is 2+2?\n2. Name the capital.", "", "Q1 Q2 Q3"]) for (const a of ["1. 4\n2. Delhi", "Only one answer", "", "Q1 yes Q2 no Q3 maybe"]) record(`coverage ${q} | ${a}`, checkCoverage(q, a));
+
+// ---- The PDF's reading of Markdown (as a tree of blocks) ----
+const plain = (n: unknown): unknown => {
+  if (Array.isArray(n)) return n.map(plain);
+  if (n && typeof n === "object" && "props" in n) {
+    const el = n as { type: unknown; props: Record<string, unknown>; key: unknown };
+    const name = typeof el.type === "string" ? el.type : ((el.type as { displayName?: string; name?: string })?.displayName ?? (el.type as { name?: string })?.name ?? "?");
+    return { name, props: Object.fromEntries(Object.entries(el.props).map(([k, v]) => [k, plain(v)])) };
+  }
+  return n;
+};
+const markdowns = [
+  "# Heading one\n## Two\n### Three\n#### Four", "Plain paragraph with **bold** words.\n\nSecond paragraph.", "- one\n- two\n  - nested\n    - deeper\n* star\n• dot", "1. first\n2) second\na. letter\nB) capital",
+  "| a | b |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |", "```\ncode line\n  indented\n\tTabbed\n```\nafter", "> quoted line\n> second quoted\nnormal", "---\n***\n___", "## Answer Key\nanswers here", "## Answer key\n1. yes",
+  "Text before\n```\nunclosed code", "| only | header |", "", "   \n\n  ", "**all bold**", "Mixed **bold** and 12 × 15 = 180 and √16 ≤ 5", "1.5 is not a list\n2.5 either", "- item with\u2028line break", "|a|b|\n|:--|--:|\n|x|y|",
+  "# Title\n\nSome text\n\n- a\n- b\n\n| h1 | h2 |\n|----|----|\n| c1 | c2 |\n\n> note\n\n```\ncode\n```\n\n---\n\nEnd.",
+];
+for (const m of markdowns) record(`pdf blocks ${m.slice(0, 50)} ${m.length}`, plain(ContentBody({ text: m })));
 
 // ---- Splitting a worksheet into questions ----
 const worksheets = [

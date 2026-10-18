@@ -17,6 +17,8 @@ await build({
   format: "esm",
   outfile: out,
   alias: { "@": join(ROOT, "src") },
+  jsx: "automatic",
+  packages: "external",
   logLevel: "error",
 });
 const { cases } = await import(pathToFileURL(out).href);

@@ -116,117 +116,144 @@ function splitTableRow(line: string): string[] {
   return line.replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
 }
 
+/** One block read from the Markdown: what to draw, and the index of the line to carry on from. */
+interface Read {
+  node: React.ReactNode;
+  next: number;
+}
+
+/** A ``` code block, from the opening fence to the closing one (or the end). */
+function readCode(lines: string[], start: number): Read {
+  const code: string[] = [];
+  let i = start + 1;
+  while (i < lines.length && !lines[i].trim().startsWith("```")) code.push(lines[i++]);
+  const node = (
+    <View key={i} style={styles.codeBlock}>
+      {code.map((codeLine, c) => (
+        <Text key={c} style={styles.codeLine}>
+          {/* Keep indentation: leading spaces/tabs become non-breaking spaces. */}
+          {codeLine.replace(/\t/g, "  ").replace(/^ +/, (spaces) => "\u00a0".repeat(spaces.length)) || "\u00a0"}
+        </Text>
+      ))}
+    </View>
+  );
+  return { node, next: i + 1 };
+}
+
+/** A table: the run of lines starting with "|" (the separator row is skipped). */
+function readTable(lines: string[], start: number): Read {
+  const rows: string[][] = [];
+  let i = start;
+  while (i < lines.length && lines[i].trim().startsWith("|")) {
+    const row = lines[i].trim();
+    if (!/^\|?\s*:?-{2,}/.test(row)) rows.push(splitTableRow(row));
+    i++;
+  }
+  const node = (
+    <View key={i - 1} style={styles.table} wrap={false}>
+      {rows.map((cells, r) => (
+        <View key={r} style={styles.tableRow}>
+          {cells.map((cell, c) => (
+            <View key={c} style={r === 0 ? [styles.tableCell, styles.tableHeader] : styles.tableCell}>
+              <InlineText text={cell} />
+            </View>
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+  return { node, next: i };
+}
+
+function readHeading(line: string, index: number, heading: RegExpExecArray): Read {
+  const level = heading[1].length;
+  const style = level === 1 ? styles.h1 : level === 2 ? styles.h2 : styles.h3;
+  const headingText = tidyMath(heading[2].replace(/\*\*/g, ""));
+  return {
+    node: (
+      // A sample paper's answer key starts on a new page, so the paper prints on its own.
+      <Text key={index} style={style} minPresenceAhead={40} break={ANSWER_KEY_HEADING.test(headingText)}>
+        {headingText}
+      </Text>
+    ),
+    next: index + 1,
+  };
+}
+
+/** A quote: the run of lines starting with ">". */
+function readQuote(lines: string[], start: number): Read {
+  const quote: string[] = [];
+  let i = start;
+  while (i < lines.length && lines[i].trim().startsWith(">")) quote.push(lines[i++].trim().replace(/^>\s?/, ""));
+  return {
+    node: (
+      <View key={i - 1} style={styles.quote} wrap={false}>
+        <InlineText text={quote.join(" ")} />
+      </View>
+    ),
+    next: i,
+  };
+}
+
+/** A bullet or numbered item, indented by how far the line is indented; null for any other line. */
+function readListItem(raw: string, line: string, index: number): Read | null {
+  const indent = Math.min(Math.floor((raw.length - raw.trimStart().length) / 2), 3) * 14;
+  // [^] rather than ".": an item may hold a U+2028 line break, which "." doesn't match.
+  const bullet = /^[-*•]\s+([^]*)$/.exec(line);
+  const numbered = /^(\d+|[a-zA-Z])[.)]\s+([^]*)$/.exec(line);
+  if (!bullet && !numbered) return null;
+  return {
+    node: (
+      <View key={index} style={[styles.listItem, { paddingLeft: 6 + indent }]} wrap={false}>
+        <Text style={styles.listMarker}>{bullet ? "•" : `${numbered![1]}.`}</Text>
+        <View style={styles.listText}>
+          <InlineText text={bullet ? bullet[1] : numbered![2]} />
+        </View>
+      </View>
+    ),
+    next: index + 1,
+  };
+}
+
+/** The block that starts at line `i`. */
+function readBlock(lines: string[], i: number): Read {
+  const raw = lines[i];
+  const line = raw.trim();
+  if (line.startsWith("```")) return readCode(lines, i);
+  if (line.startsWith("|")) return readTable(lines, i);
+  const heading = /^(#{1,6})\s+(.*)$/.exec(line);
+  if (heading) return readHeading(line, i, heading);
+  if (line.startsWith(">")) return readQuote(lines, i);
+  if (/^(-{3,}|\*{3,}|_{3,})$/.test(line)) return { node: <View key={i} style={styles.rule} />, next: i + 1 };
+  const item = readListItem(raw, line, i);
+  if (item) return item;
+  return {
+    node: (
+      <View key={i} style={styles.paragraph}>
+        <InlineText text={line} />
+      </View>
+    ),
+    next: i + 1,
+  };
+}
+
 /**
  * Markdown renderer for the subset the prompts ask for: headings (#, ##, ###),
  * bullet and numbered lists (indented for nesting), tables, ``` code blocks,
  * quotes (>), horizontal rules, paragraphs, and bold.
  */
-function ContentBody({ text }: { text: string }) {
+export function ContentBody({ text }: { text: string }) {
   const lines = text.split("\n");
   const blocks: React.ReactNode[] = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    const raw = lines[i];
-    const line = raw.trim();
-    if (!line) continue;
-
-    if (line.startsWith("```")) {
-      const code: string[] = [];
+  for (let i = 0; i < lines.length; ) {
+    if (!lines[i].trim()) {
       i++;
-      while (i < lines.length && !lines[i].trim().startsWith("```")) code.push(lines[i++]);
-      blocks.push(
-        <View key={i} style={styles.codeBlock}>
-          {code.map((codeLine, c) => (
-            <Text key={c} style={styles.codeLine}>
-              {/* Keep indentation: leading spaces/tabs become non-breaking spaces. */}
-              {codeLine
-                .replace(/\t/g, "  ")
-                .replace(/^ +/, (spaces) => "\u00a0".repeat(spaces.length)) || "\u00a0"}
-            </Text>
-          ))}
-        </View>
-      );
       continue;
     }
-
-    if (line.startsWith("|")) {
-      const rows: string[][] = [];
-      while (i < lines.length && lines[i].trim().startsWith("|")) {
-        const row = lines[i].trim();
-        if (!/^\|?\s*:?-{2,}/.test(row)) rows.push(splitTableRow(row));
-        i++;
-      }
-      i--;
-      blocks.push(
-        <View key={i} style={styles.table} wrap={false}>
-          {rows.map((cells, r) => (
-            <View key={r} style={styles.tableRow}>
-              {cells.map((cell, c) => (
-                <View key={c} style={r === 0 ? [styles.tableCell, styles.tableHeader] : styles.tableCell}>
-                  <InlineText text={cell} />
-                </View>
-              ))}
-            </View>
-          ))}
-        </View>
-      );
-      continue;
-    }
-
-    const heading = /^(#{1,6})\s+(.*)$/.exec(line);
-    if (heading) {
-      const level = heading[1].length;
-      const style = level === 1 ? styles.h1 : level === 2 ? styles.h2 : styles.h3;
-      const headingText = tidyMath(heading[2].replace(/\*\*/g, ""));
-      blocks.push(
-        // A sample paper's answer key starts on a new page, so the paper prints on its own.
-        <Text key={i} style={style} minPresenceAhead={40} break={ANSWER_KEY_HEADING.test(headingText)}>
-          {headingText}
-        </Text>
-      );
-      continue;
-    }
-
-    if (line.startsWith(">")) {
-      const quote: string[] = [];
-      while (i < lines.length && lines[i].trim().startsWith(">")) quote.push(lines[i++].trim().replace(/^>\s?/, ""));
-      i--;
-      blocks.push(
-        <View key={i} style={styles.quote} wrap={false}>
-          <InlineText text={quote.join(" ")} />
-        </View>
-      );
-      continue;
-    }
-
-    if (/^(-{3,}|\*{3,}|_{3,})$/.test(line)) {
-      blocks.push(<View key={i} style={styles.rule} />);
-      continue;
-    }
-
-    const indent = Math.min(Math.floor((raw.length - raw.trimStart().length) / 2), 3) * 14;
-    // [^] rather than ".": an item may hold a U+2028 line break, which "." doesn't match.
-    const bullet = /^[-*•]\s+([^]*)$/.exec(line);
-    const numbered = /^(\d+|[a-zA-Z])[.)]\s+([^]*)$/.exec(line);
-    if (bullet || numbered) {
-      blocks.push(
-        <View key={i} style={[styles.listItem, { paddingLeft: 6 + indent }]} wrap={false}>
-          <Text style={styles.listMarker}>{bullet ? "•" : `${numbered![1]}.`}</Text>
-          <View style={styles.listText}>
-            <InlineText text={bullet ? bullet[1] : numbered![2]} />
-          </View>
-        </View>
-      );
-      continue;
-    }
-
-    blocks.push(
-      <View key={i} style={styles.paragraph}>
-        <InlineText text={line} />
-      </View>
-    );
+    const { node, next } = readBlock(lines, i);
+    blocks.push(node);
+    i = next;
   }
-
   return <>{blocks}</>;
 }
 
