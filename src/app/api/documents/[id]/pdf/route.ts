@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { apiError, authenticate } from "@/lib/api";
 import { findAnswer } from "@/lib/generation/answers";
+import { pdfDisposition } from "@/lib/pdf/disposition";
 import { renderGenerationPdf } from "@/lib/pdf/render";
 import { loadSourceImages } from "@/lib/rag/retrieve";
 import { getSignedUrl } from "@/lib/storage";
@@ -73,17 +74,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       });
       remember(etag, pdf);
     }
-    // Hindi, Marathi and French titles keep their letters (filename*), with a plain fallback.
-    const name = (questionsOnly ? `${answer.title} (questions)` : answer.title)
-      .replace(/[\\/:*?"<>|\r\n]+/g, " ")
-      .trim()
-      .slice(0, 80);
-    const asciiName = name.replace(/[^\w\- ()]+/g, "").trim() || "Syllabi answer";
     return new NextResponse(new Uint8Array(pdf), {
       headers: {
         ...baseHeaders,
         "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="${asciiName}.pdf"; filename*=UTF-8''${encodeURIComponent(name || asciiName)}.pdf`,
+        "Content-Disposition": pdfDisposition(questionsOnly ? `${answer.title} (questions)` : answer.title),
       },
     });
   } catch (err) {

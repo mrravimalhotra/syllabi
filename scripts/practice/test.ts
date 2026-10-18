@@ -6,6 +6,7 @@ import { makeBlendQuiz } from "@/lib/kindergarten/quiz";
 import { blockedReason, buildRequestBody, questionProblem, type Question } from "@/app/dashboard/_ask/build-request";
 import { checkPages } from "@/lib/ingestion/upload-pages";
 import { parsePhotos } from "@/lib/generation/attachments";
+import { pdfDisposition } from "@/lib/pdf/disposition";
 import { signUpProblem, signUpRefusal } from "@/lib/signup-check";
 import { parseGenerationRequest } from "@/lib/generation/request";
 import { parseProfileUpdate } from "@/lib/profile-update";
@@ -393,6 +394,14 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
   check(Array.isArray(ok) && ok.length === 2 && ok[0].text === "  page text ".slice(0, 20_000) && !("text" in ok[1]), "Photos: page text is kept, blank text is dropped");
   check(/too large together/.test(String(parsePhotos([photo({}), { data: "/9j/" + "A".repeat(3_100_000), mimeType: "image/jpeg" }]))), "Photos: a total over the size budget is refused");
   check(/too much text/.test(String(parsePhotos(Array.from({ length: 3 }, () => photo({ text: "a".repeat(15_000) }))))), "Photos: too much attached text in total is refused");
+}
+
+// The PDF's download name.
+{
+  check(pdfDisposition("What is 12 x 15?") === `inline; filename="What is 12 x 15.pdf"; filename*=UTF-8''What%20is%2012%20x%2015.pdf`, `Disposition: ${pdfDisposition("What is 12 x 15?")}`);
+  check(/filename="Syllabi answer\.pdf"/.test(pdfDisposition("पौधे भोजन कैसे बनाते हैं")) && /filename\*=UTF-8''%E0%A4%AA/.test(pdfDisposition("पौधे भोजन कैसे बनाते हैं")), "Disposition: a Hindi title keeps its letters, with a plain fallback");
+  check(!/[/\\:*?"<>|]/.test(pdfDisposition('a/b\\c:d*e?f"g<h>i|j').replace(/^inline; filename="|\.pdf.*$/g, "")), "Disposition: characters not allowed in file names become spaces");
+  check(pdfDisposition("x".repeat(200)).length < 260 && pdfDisposition("   ").includes('filename="Syllabi answer.pdf"'), "Disposition: a long or blank title is cut or replaced");
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
