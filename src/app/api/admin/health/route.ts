@@ -161,7 +161,7 @@ export async function POST(request: Request) {
         prompt: "Say ok.",
         maxOutputTokens: 256,
       });
-      return `${provider} / ${model} replied "${result.text.trim().slice(0, 20)}". If this model's free daily allowance runs out, pages are read with gemini-flash-lite-latest instead.`;
+      return `${provider} / ${model} replied "${result.text.trim().slice(0, 20)}".${model === "gemini-flash-lite-latest" ? " If its free daily allowance runs out, pages wait until it resets (or are read by a backup AI that can read images, if one is set up)." : " If this model's free daily allowance runs out, pages are read with gemini-flash-lite-latest instead."}`;
     })
   );
 
