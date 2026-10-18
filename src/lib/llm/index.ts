@@ -85,4 +85,4 @@ export async function embedMany(texts: string[]): Promise<EmbeddingResult[]> {
   return googleEmbedMany(texts, model);
 }
 
-export type { CompletionRequest, CompletionResult, CompletionImage, NormalizedUsage } from "@/lib/llm/types";
+export type { CompletionRequest, CompletionResult } from "@/lib/llm/types";

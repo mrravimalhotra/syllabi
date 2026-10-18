@@ -3,9 +3,8 @@
 import { useEffect, useState } from "react";
 import { Alert, PageHeader, PageSkeleton, button, card, cx, input } from "@/components/ui";
 import { OFFLINE_MESSAGE, failedRequestMessage } from "@/lib/http-errors";
-import type { LlmSetting, Provider } from "@/types/database";
+import { PROVIDERS, type LlmSetting, type Provider } from "@/types/database";
 
-const PROVIDERS: Provider[] = ["google", "anthropic", "openai", "groq", "openrouter", "mistral", "nvidia"];
 
 // What each task is, in words an admin can act on.
 const TASK_TYPE_LABELS: Record<string, string> = {

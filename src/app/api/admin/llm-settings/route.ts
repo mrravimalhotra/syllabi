@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { apiError, authenticateAdmin, errorResponse } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { invalidateLlmSettingsCache } from "@/lib/llm/config";
-import type { Provider, TaskType } from "@/types/database";
+import { PROVIDERS, TASK_TYPES, type Provider, type TaskType } from "@/types/database";
 
 export async function GET() {
   const auth = await authenticateAdmin();
@@ -13,17 +13,6 @@ export async function GET() {
   if (error) return errorResponse(error, "admin/llm-settings GET", "Couldn't load the AI settings. Reload the page to try again.");
   return NextResponse.json({ settings: data });
 }
-
-const TASK_TYPES = new Set<TaskType>([
-  "ocr_extraction",
-  "embedding",
-  "solution",
-  "notes",
-  "sample_paper",
-  "ad_hoc",
-  "study_pack",
-]);
-const PROVIDERS = new Set<Provider>(["google", "anthropic", "openai", "groq", "openrouter", "mistral", "nvidia"]);
 
 interface PatchBody {
   taskType: TaskType;
@@ -38,7 +27,7 @@ export async function PATCH(request: Request) {
 
   const body = (await request.json().catch(() => null)) as PatchBody | null;
   const model = typeof body?.model === "string" ? body.model.trim() : "";
-  if (!body || !TASK_TYPES.has(body.taskType) || !PROVIDERS.has(body.provider) || !/^[\w.:\-/]{1,100}$/.test(model)) {
+  if (!body || !TASK_TYPES.includes(body.taskType) || !PROVIDERS.includes(body.provider) || !/^[\w.:\-/]{1,100}$/.test(model)) {
     return apiError(400, "Choose a task, a provider and a model name (letters, numbers and . : - _ / only, up to 100 characters).");
   }
   // Embeddings must stay on Google: the search index is built from Google's 768-dimension vectors.

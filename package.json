@@ -13,6 +13,7 @@
     "test:api": "node scripts/api/run.mjs",
     "test:llm": "node scripts/llm/run.mjs",
     "test:e2e": "node scripts/e2e/run.mjs",
+    "check:unused": "knip",
     "backup": "bash scripts/backup/backup.sh"
   },
   "dependencies": {
@@ -42,6 +43,7 @@
     "esbuild": "0.25.12",
     "eslint": "^9",
     "eslint-config-next": "16.4.2",
+    "knip": "^6.41.0",
     "playwright-core": "1.56.1",
     "tailwindcss": "^4",
     "typescript": "^5"

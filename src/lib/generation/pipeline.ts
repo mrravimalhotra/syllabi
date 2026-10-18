@@ -45,7 +45,7 @@ export interface GenerationOutput {
   timings: GenerationTimings;
 }
 
-export interface GenerationTimings {
+interface GenerationTimings {
   /** Reading attached photos (0 when there were none). */
   readingPhotosMs: number;
   /** Finding passages in the books (embedding the question and searching). */

@@ -9,7 +9,7 @@ let windowStart = 0;
 let inWindow = 0;
 
 /** Text with anything that looks like a key or token blanked out, and cut to a sensible length. */
-export function scrub(text: string, max: number): string {
+function scrub(text: string, max: number): string {
   return text
     .replace(/AIza[\w-]{10,}/g, "[key]")
     .replace(/sb_(secret|publishable)_[\w-]+/g, "[key]")
@@ -18,7 +18,7 @@ export function scrub(text: string, max: number): string {
     .slice(0, max);
 }
 
-export function errorSummary(err: unknown): string {
+function errorSummary(err: unknown): string {
   if (err instanceof Error) return err.message || err.name;
   if (typeof err === "string") return err;
   try {

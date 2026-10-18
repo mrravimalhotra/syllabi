@@ -4,7 +4,7 @@
 // divisors (both numbers are first multiplied by 10, 100...) and, when asked,
 // continuing into decimal places.
 
-import type { Cell, Rule, Step, VLine, WorkedExample } from "@/lib/worked/types";
+import type { Cell, Step, WorkedExample } from "@/lib/worked/types";
 import { phrases, savedLanguage, type Narration } from "@/lib/worked/say";
 
 const MAX_DIVIDEND_DIGITS = 12;
@@ -239,4 +239,3 @@ function formatQuotient(digits: { col: number; digit: number }[], pointCol: numb
   return text.replace(/^0+(?=\d)/, "") || "0";
 }
 
-export type { Rule, VLine };

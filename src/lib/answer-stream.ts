@@ -2,7 +2,7 @@
 // "text" pieces while the answer is written, then "done" with the checked
 // answer, or "error" with the message to show.
 
-export class AnswerStreamError extends Error {}
+class AnswerStreamError extends Error {}
 
 export async function readAnswerStream<T>(
   body: ReadableStream<Uint8Array>,

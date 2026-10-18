@@ -7,14 +7,14 @@ export const MAX_PAGES = 60;
 // Pages the AI has to read go one per request, so each request is short, the
 // progress bar moves page by page, and one difficult page can't sink others.
 // Pages that already have text (Word, digital PDFs) need no AI and go together.
-export const MAX_TEXT_PAGES_PER_BATCH = 10;
+const MAX_TEXT_PAGES_PER_BATCH = 10;
 // Requests at once. Two keep the AI free tier's per-minute limit happy while
 // halving the wait.
 export const PARALLEL_REQUESTS = 2;
 
 // Base64 characters per request. Keeps each request under Vercel's ~4.5 MB
 // body limit (JSON overhead included).
-export const MAX_BATCH_BASE64_CHARS = 3 * 1024 * 1024;
+const MAX_BATCH_BASE64_CHARS = 3 * 1024 * 1024;
 
 // A page that fails on the server is tried this many times in all, waiting
 // longer each time (the AI service's busy spells pass within seconds), unless

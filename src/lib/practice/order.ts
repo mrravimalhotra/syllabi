@@ -274,7 +274,7 @@ const PLACE_SHORT = ["O", "T", "H", "Th", "TTh", "L", "TL"];
 const DECIMAL_NAMES = ["tenths", "hundredths", "thousandths", "ten-thousandths"];
 const DECIMAL_SHORT = ["1/10", "1/100", "1/1000", "1/10000"];
 
-export interface PlaceGrid {
+interface PlaceGrid {
   /** Column headings (O, T, H... and 1/10, 1/100...). */
   headings: string[];
   /** Index of the first column after the decimal point, if any. */
@@ -283,7 +283,7 @@ export interface PlaceGrid {
   rows: { text: string; cells: string[]; added: boolean[] }[];
 }
 
-export interface FractionRow {
+interface FractionRow {
   text: string;
   /** The same fraction over the common denominator. */
   top: number;

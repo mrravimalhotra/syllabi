@@ -18,8 +18,8 @@ export function apiError(status: number, message: string, extra: Record<string, 
   return NextResponse.json({ error: message, ...extra }, { status });
 }
 
-export const SIGNED_OUT_MESSAGE = "Your session has ended. Please sign in again.";
-export const NO_ACCESS_MESSAGE = "Your account doesn't have access right now. Contact the person who runs Syllabi for you.";
+const SIGNED_OUT_MESSAGE = "Your session has ended. Please sign in again.";
+const NO_ACCESS_MESSAGE = "Your account doesn't have access right now. Contact the person who runs Syllabi for you.";
 
 /** The HTTP status that fits an error, for messages already chosen by userMessage. */
 function statusFor(err: unknown): number {

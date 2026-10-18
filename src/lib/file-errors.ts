@@ -1,5 +1,5 @@
 /** The kinds of file Syllabi reads, as shown in messages. */
-export const ACCEPTED_FILES = "photos (JPEG, PNG or WebP), a PDF, or a Word (.docx) file";
+const ACCEPTED_FILES = "photos (JPEG, PNG or WebP), a PDF, or a Word (.docx) file";
 
 /**
  * A message for a file that couldn't be read: names the file and says what to

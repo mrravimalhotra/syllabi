@@ -81,7 +81,7 @@ export type SceneBackdrop = (typeof SCENE_BACKDROPS)[number];
 
 /** How a scene's picture moves. Fixed list: the AI picks from it, so nothing it writes is ever run as code. */
 export const SCENE_MOTIONS = ["float", "bounce", "sway", "spin", "pulse", "walk", "fly", "grow"] as const;
-export type SceneMotion = (typeof SCENE_MOTIONS)[number];
+type SceneMotion = (typeof SCENE_MOTIONS)[number];
 
 /** A small animated picture for a walkthrough part: emoji that move over a coloured backdrop. */
 export interface Scene {

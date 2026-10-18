@@ -10,7 +10,7 @@ import type { AnswerCheck } from "@/types/database";
 import { button, card, cx } from "@/components/ui";
 import { hasAnswerKey } from "@/lib/format";
 
-export interface AnswerSource {
+interface AnswerSource {
   id: string;
   section_label: string | null;
   source_type: string;

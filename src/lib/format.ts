@@ -11,7 +11,7 @@ export function formatDate(iso: string): string {
 }
 
 /** Display names for the kinds of saved document. */
-export const TASK_LABELS: Record<string, string> = {
+const TASK_LABELS: Record<string, string> = {
   solution: "Step-by-step solution",
   notes: "Revision notes",
   sample_paper: "Sample paper",

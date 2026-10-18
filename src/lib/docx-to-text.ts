@@ -24,7 +24,7 @@ const IMAGE_TYPES: Record<string, string> = {
   bmp: "image/bmp",
 };
 
-export interface DocxPicture {
+interface DocxPicture {
   imageBase64: string;
   mimeType: string;
   /** Where the picture sits, e.g. "Picture 2, after: Q1. Draw line segments for the following measures:". */
