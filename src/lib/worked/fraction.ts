@@ -87,68 +87,78 @@ function simplifySteps(n: number, d: number, top: number, steps: Step[], t: Phra
   return [n, d];
 }
 
+/** True when every fraction is a whole numerator (0 or more) over a whole denominator (1 or more), within range. */
+function validFractions(fractions: [number, number][]): boolean {
+  return fractions.every(([n, d]) => Number.isInteger(n) && Number.isInteger(d) && n >= 0 && d >= 1 && n <= MAX_VALUE && d <= MAX_VALUE);
+}
+
+/** The steps for adding or subtracting two fractions: write the question, bring to a common denominator if needed, combine, then simplify. Returns the simplified result. */
+function combineSteps(op: "add" | "subtract", [[a, b], [c, d]]: [number, number][], question: string, steps: Step[], t: Phrases): [number, number] {
+  const symbol = op === "add" ? "+" : "−";
+  const first = fraction(a, b, 0, COL.a, "given");
+  const second = fraction(c, d, 0, COL.b, "given");
+  steps.push({
+    say: t.writeQuestion(question),
+    cells: [...first.cells, sign(symbol, 0, COL.op), ...second.cells],
+    rules: [...first.rules, ...second.rules],
+  });
+  let top = 0;
+  let [x, y, bottom] = [a, c, b];
+  if (b !== d) {
+    const L = lcm(b, d);
+    const [k1, k2] = [L / b, L / d];
+    steps.push({
+      say: t.differentDenominators(b, d, L),
+      focus: [
+        { row: 1, col: COL.a },
+        { row: 1, col: COL.b },
+      ],
+    });
+    top = 3;
+    [x, y, bottom] = [a * k1, c * k2, L];
+    const fa = fraction(x, L, top, COL.a, "product");
+    const fb = fraction(y, L, top, COL.b, "product");
+    const changes = [k1 > 1 ? t.multiplyTopAndBottom(`${a}/${b}`, k1) : "", k2 > 1 ? t.multiplyTopAndBottom(`${c}/${d}`, k2) : ""].filter(Boolean);
+    steps.push({
+      say: t.makeSame(L, changes, `${x}/${L} ${symbol} ${y}/${L}`),
+      cells: [
+        ...(k1 > 1 ? note(`×${k1}`, 0, COL.noteA) : []),
+        ...(k2 > 1 ? note(`×${k2}`, 0, COL.noteB) : []),
+        sign("=", top, COL.eq),
+        ...fa.cells,
+        sign(symbol, top, COL.op),
+        ...fb.cells,
+      ],
+      rules: [...fa.rules, ...fb.rules],
+    });
+  }
+  const n = op === "add" ? x + y : x - y;
+  const next = top + 3;
+  const f = fraction(n, bottom, next, COL.a, "result");
+  steps.push({
+    say: t.combineNumerators(b === d, op === "add", bottom, `${x} ${symbol} ${y} = ${num(n)}`) + (n < 0 ? t.negativeBecause(`${c}/${d}`, `${a}/${b}`) : ""),
+    cells: [sign("=", next, COL.eq), ...f.cells],
+    rules: f.rules,
+  });
+  return simplifySteps(n, bottom, next, steps, t);
+}
+
 /** Simplifies one fraction, or adds/subtracts two. Each fraction is [numerator, denominator]. */
 export function fractionExample(op: FractionOp, fractions: [number, number][], language?: Narration): WorkedExample | null {
   const t = phrases(language);
-  const count = op === "simplify" ? 1 : 2;
-  if (fractions.length !== count) return null;
-  if (fractions.some(([n, d]) => !Number.isInteger(n) || !Number.isInteger(d) || n < 0 || d < 1 || n > MAX_VALUE || d > MAX_VALUE)) return null;
+  if (fractions.length !== (op === "simplify" ? 1 : 2) || !validFractions(fractions)) return null;
   const steps: Step[] = [];
   const [[a, b], [c, d] = [0, 1]] = fractions;
   const symbol = op === "add" ? "+" : "−";
   const question = op === "simplify" ? `${a}/${b}` : `${a}/${b} ${symbol} ${c}/${d}`;
 
-  const first = fraction(a, b, 0, COL.a, "given");
   let result: [number, number];
   if (op === "simplify") {
+    const first = fraction(a, b, 0, COL.a, "given");
     steps.push({ say: t.writeFraction(`${a}/${b}`), cells: first.cells, rules: first.rules });
     result = simplifySteps(a, b, 0, steps, t);
   } else {
-    const second = fraction(c, d, 0, COL.b, "given");
-    steps.push({
-      say: t.writeQuestion(question),
-      cells: [...first.cells, sign(symbol, 0, COL.op), ...second.cells],
-      rules: [...first.rules, ...second.rules],
-    });
-    let top = 0;
-    let [x, y, bottom] = [a, c, b];
-    if (b !== d) {
-      const L = lcm(b, d);
-      const [k1, k2] = [L / b, L / d];
-      steps.push({
-        say: t.differentDenominators(b, d, L),
-        focus: [
-          { row: 1, col: COL.a },
-          { row: 1, col: COL.b },
-        ],
-      });
-      top = 3;
-      [x, y, bottom] = [a * k1, c * k2, L];
-      const fa = fraction(x, L, top, COL.a, "product");
-      const fb = fraction(y, L, top, COL.b, "product");
-      const changes = [k1 > 1 ? t.multiplyTopAndBottom(`${a}/${b}`, k1) : "", k2 > 1 ? t.multiplyTopAndBottom(`${c}/${d}`, k2) : ""].filter(Boolean);
-      steps.push({
-        say: t.makeSame(L, changes, `${x}/${L} ${symbol} ${y}/${L}`),
-        cells: [
-          ...(k1 > 1 ? note(`×${k1}`, 0, COL.noteA) : []),
-          ...(k2 > 1 ? note(`×${k2}`, 0, COL.noteB) : []),
-          sign("=", top, COL.eq),
-          ...fa.cells,
-          sign(symbol, top, COL.op),
-          ...fb.cells,
-        ],
-        rules: [...fa.rules, ...fb.rules],
-      });
-    }
-    const n = op === "add" ? x + y : x - y;
-    const next = top + 3;
-    const f = fraction(n, bottom, next, COL.a, "result");
-    steps.push({
-      say: t.combineNumerators(b === d, op === "add", bottom, `${x} ${symbol} ${y} = ${num(n)}`) + (n < 0 ? t.negativeBecause(`${c}/${d}`, `${a}/${b}`) : ""),
-      cells: [sign("=", next, COL.eq), ...f.cells],
-      rules: f.rules,
-    });
-    result = simplifySteps(n, bottom, next, steps, t);
+    result = combineSteps(op, fractions, question, steps, t);
   }
 
   const answer = `${question} = ${written(...result)}`;
