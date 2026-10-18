@@ -303,6 +303,27 @@ await test("Study pack: parts, picture, tabs and questions", async (page, ctx) =
   await page.getByText("Name one thing leaves need.").first().waitFor();
 });
 
+await test("Study pack: hints, answers, the glossary search and Copy", async (page, ctx) => {
+  await ctx.route("**/api/documents/a2", (r) => json(r, { answer: packAnswer }));
+  await page.goto(`${BASE}/dashboard/documents/a2`, { waitUntil: "networkidle" });
+  await tap(page.getByRole("tab", { name: /Textbook Q&A/ }).first());
+  await page.getByText("What does a seed need to grow?").first().waitFor();
+  await tap(page.getByRole("button", { name: /Hint/ }).first());
+  await page.getByText("Look at part 1.").first().waitFor();
+  await tap(page.getByRole("button", { name: "Show all answers" }));
+  await page.locator("text=Water, air and warmth. >> visible=true").first().waitFor();
+  await tap(page.getByRole("button", { name: "Hide all answers" }));
+  await page.locator("text=Water, air and warmth. >> visible=true").first().waitFor({ state: "detached", timeout: 3000 });
+  await tap(page.getByRole("tab", { name: /Glossary/ }).first());
+  await page.getByText("to start growing").first().waitFor();
+  await page.getByLabel("Find a word").fill("zzz");
+  await page.getByText("No matching words.").waitFor();
+  await page.getByLabel("Find a word").fill("germ");
+  await page.getByText("to start growing").first().waitFor();
+  await tap(page.getByRole("tab", { name: /Key ideas/ }).first());
+  await page.getByText("The seed wakes up").first().waitFor();
+});
+
 await test("Study pack: Read aloud asks for the natural voice", async (page, ctx) => {
   let asked = 0;
   await ctx.route("**/api/documents/a2", (r) => json(r, { answer: packAnswer }));
