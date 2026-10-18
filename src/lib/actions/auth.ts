@@ -4,16 +4,9 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { canSignUp } from "@/lib/access";
 import { safeNext } from "@/lib/auth-messages";
 import { looksLikeLoginId, normaliseLoginId } from "@/lib/login-id";
-
-const MIN_PASSWORD_LENGTH = 8;
-// Longer passwords are silently cut off by the sign-in service (bcrypt stops at 72 bytes), so refuse them instead.
-const MAX_PASSWORD_BYTES = 72;
-const MAX_EMAIL_LENGTH = 254;
-
-const tooLong = (password: string) => new TextEncoder().encode(password).length > MAX_PASSWORD_BYTES;
+import { MAX_EMAIL_LENGTH, MIN_PASSWORD_LENGTH, passwordTooLong, signUpProblem, signUpRefusal } from "@/lib/signup-check";
 
 function normaliseEmail(value: FormDataEntryValue | null): string {
   return String(value ?? "").trim().toLowerCase();
@@ -51,22 +44,15 @@ export async function signUp(formData: FormData) {
   const accountType = String(formData.get("account_type") ?? "");
   const adultConfirmed = formData.get("adult_confirmed") === "yes";
 
-  if (email.length > MAX_EMAIL_LENGTH || tooLong(password)) redirect("/signup?error=too-long");
-  if (!canSignUp(email)) redirect("/signup?error=private");
-  if (password !== confirmPassword) redirect("/signup?error=mismatch");
-  if (password.length < MIN_PASSWORD_LENGTH) redirect("/signup?error=weak");
-  if (accountType !== "parent" && accountType !== "tutor") redirect("/signup?error=account-type");
-  // Syllabi is for adults only (parents and tutors); our AI provider's terms
-  // also require that the app is not used by anyone under 18.
-  if (!adultConfirmed) redirect("/signup?error=adult");
+  const problem = signUpProblem({ email, password, confirmPassword, accountType, adultConfirmed });
+  if (problem) redirect(`/signup?error=${problem}`);
 
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signUp({ email, password });
 
   if (error) {
     console.error("[signUp]", error.message);
-    const key = /already/i.test(error.message) ? "exists" : /password/i.test(error.message) ? "weak" : "unknown";
-    redirect(`/signup?error=${key}`);
+    redirect(`/signup?error=${signUpRefusal(error.message)}`);
   }
 
   if (data.user) {
@@ -125,7 +111,7 @@ export async function updatePassword(formData: FormData) {
   const confirmPassword = String(formData.get("confirm_password") ?? "");
   if (password !== confirmPassword) redirect("/reset-password?error=mismatch");
   if (password.length < MIN_PASSWORD_LENGTH) redirect("/reset-password?error=weak");
-  if (tooLong(password)) redirect("/reset-password?error=too-long");
+  if (passwordTooLong(password)) redirect("/reset-password?error=too-long");
 
   const supabase = await createClient();
   const {

@@ -5,6 +5,7 @@ import { IPA, PHONEMES, blendStart, soundText } from "@/lib/kindergarten/phonics
 import { makeBlendQuiz } from "@/lib/kindergarten/quiz";
 import { blockedReason, buildRequestBody, questionProblem, type Question } from "@/app/dashboard/_ask/build-request";
 import { checkPages } from "@/lib/ingestion/upload-pages";
+import { signUpProblem, signUpRefusal } from "@/lib/signup-check";
 import { parseGenerationRequest } from "@/lib/generation/request";
 import { parseProfileUpdate } from "@/lib/profile-update";
 import { parseAccountUpdate } from "@/lib/account-update";
@@ -361,6 +362,23 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
   check(/note that is too long/.test(msg([{ imageBase64: jpeg, mimeType: "image/jpeg", hint: "x".repeat(501) }])), "Pages: a long note is refused");
   const ok = checkPages([{ text: "Chapter 1", sourceType: "textbook" }, { imageBase64: jpeg, mimeType: "image/jpeg", hint: "figure 2" }, { text: "typed", imageBase64: jpeg, mimeType: "image/jpeg" }]);
   check("pages" in ok && ok.pages.length === 3, "Pages: text, picture and picture-with-text pages are accepted");
+}
+
+// Sign-up form checks.
+{
+  process.env.OPEN_SIGNUPS = "true";
+  const form = { email: "a@b.com", password: "longenough", confirmPassword: "longenough", accountType: "parent", adultConfirmed: true };
+  check(signUpProblem(form) === null && signUpProblem({ ...form, accountType: "tutor" }) === null, "Sign-up: a good form is accepted");
+  check(signUpProblem({ ...form, email: "a".repeat(250) + "@b.com" }) === "too-long" && signUpProblem({ ...form, password: "é".repeat(40), confirmPassword: "é".repeat(40) }) === "too-long", "Sign-up: a very long email or password is refused (in bytes)");
+  check(signUpProblem({ ...form, confirmPassword: "different1" }) === "mismatch" && signUpProblem({ ...form, password: "short", confirmPassword: "short" }) === "weak", "Sign-up: mismatch and a short password are refused");
+  check(signUpProblem({ ...form, accountType: "child" }) === "account-type" && signUpProblem({ ...form, accountType: "" }) === "account-type", "Sign-up: only parent or tutor");
+  check(signUpProblem({ ...form, adultConfirmed: false }) === "adult", "Sign-up: the adult box must be ticked");
+  process.env.OPEN_SIGNUPS = "false";
+  process.env.ADMIN_EMAIL = "owner@example.com";
+  check(signUpProblem(form) === "private" && signUpProblem({ ...form, email: " Owner@Example.com " }) === null, "Sign-up: while private, only the owner's email may sign up");
+  check(signUpProblem({ ...form, email: "a".repeat(300), password: "x" }) === "too-long", "Sign-up: length is checked before anything else");
+  process.env.OPEN_SIGNUPS = "true";
+  check(signUpRefusal("User already registered") === "exists" && signUpRefusal("Password should be at least 8") === "weak" && signUpRefusal("boom") === "unknown", "Sign-up: refusals from the sign-in service map to messages");
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
