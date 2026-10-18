@@ -14,6 +14,9 @@ import * as llm from "../../src/app/api/admin/llm-settings/route";
 import * as adhoc from "../../src/app/api/generate/ad-hoc/route";
 import * as jobs from "../../src/app/api/jobs/pages/route";
 import { pipeline } from "./fakes/pipeline";
+import { ssrState } from "./fakes/ssr";
+import { updateSession } from "../../src/lib/supabase/middleware";
+import { NextRequest } from "next/server";
 import * as guests from "../../src/app/api/admin/guests/route";
 import * as speech from "../../src/app/api/speech/route";
 import * as sounds from "../../src/app/api/sounds/route";
@@ -239,6 +242,50 @@ const failLines = (await failed.text()).trim().split("\n").map((l) => JSON.parse
 check("generate: a failure inside a stream arrives as an error line", failLines.at(-1)?.type === "error" && /Couldn't make your answer/.test(String(failLines.at(-1)?.error)));
 await expect("generate: a failure without streaming is a plain error", adhoc.POST, 500, /Couldn't make your answer/i, { prompt: "Yet another question" });
 pipeline.fail = false;
+
+// ---- The request gate (middleware): who may open which address ----
+{
+  let n = 0;
+  const gate = async (path: string, who: { person?: Partial<Student> & { id?: string }; row?: boolean; outage?: boolean } | null) => {
+    resetDb();
+    ssrState.token = null;
+    if (who) {
+      const id = `00000000-0000-4000-8000-9${String(++n).padStart(11, "0")}`;
+      ssrState.token = `token-${id}`;
+      ssrState.sub = id;
+      if (who.row !== false) tables.students = [person({ id, ...who.person }) as unknown as Record<string, unknown>];
+      if (who.outage) failures.push({ table: "students", message: "database down" });
+    }
+    const res = await updateSession(new NextRequest(`http://test${path}`));
+    return { status: res.status, to: res.headers.get("location") ? new URL(res.headers.get("location")!).pathname + new URL(res.headers.get("location")!).search : null, body: res.status === 200 || res.status === 401 || res.status === 503 ? await res.clone().text().catch(() => "") : "" };
+  };
+  process.env.OPEN_SIGNUPS = "true";
+  process.env.NEXT_PUBLIC_SUPABASE_URL = "http://localhost";
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "x";
+  const out = await gate("/dashboard", null);
+  check("gate: signed out, a page goes to sign-in and remembers where", out.status === 307 && out.to === "/login?next=%2Fdashboard", `${out.status} ${out.to}`);
+  const api = await gate("/api/library", null);
+  check("gate: signed out, an API call gets a JSON message, not a redirect", api.status === 401 && /sign in again/i.test(api.body), `${api.status} ${api.body}`);
+  check("gate: sign-in, sign-up and the job runner are open to anyone", (await gate("/login", null)).status === 200 && (await gate("/signup", null)).status === 200 && (await gate("/api/jobs", null)).status === 200 && (await gate("/reset-password", null)).status === 200);
+  check("gate: an approved person gets in", (await gate("/dashboard", { person: { active: true } })).status === 200);
+  const pending = await gate("/dashboard", { person: { active: false } });
+  check("gate: an account without access goes to the waiting page", pending.status === 307 && pending.to === "/pending", `${pending.status} ${pending.to}`);
+  const noRow = await gate("/dashboard", { row: false });
+  check("gate: someone with a login but no account row goes to the waiting page", noRow.status === 307 && noRow.to === "/pending", `${noRow.status} ${noRow.to}`);
+  const down = await gate("/dashboard", { person: {}, outage: true });
+  check("gate: a database outage is a 503 with a plain message, not a refusal", down.status === 503 && /can't reach its database/i.test(down.body), `${down.status} ${down.body}`);
+  const adminPage = await gate("/admin/students", { person: { role: "student" } });
+  check("gate: a normal account is sent away from the admin pages", adminPage.status === 307 && adminPage.to === "/dashboard", `${adminPage.status} ${adminPage.to}`);
+  check("gate: an admin may open them", (await gate("/admin/students", { person: { role: "admin" } })).status === 200);
+  const again = await gate("/login", { person: {} });
+  check("gate: someone already signed in is sent from sign-in to the dashboard", again.status === 307 && again.to === "/dashboard", `${again.status} ${again.to}`);
+  process.env.OPEN_SIGNUPS = "false";
+  const closed = await gate("/dashboard", { person: { role: "student" } });
+  check("gate: with sign-ups closed, only admins get in", closed.status === 307 && closed.to === "/pending" && (await gate("/dashboard", { person: { role: "admin" } })).status === 200, `${closed.status} ${closed.to}`);
+  check("gate: a live guest gets in while sign-ups are closed; an expired guest does not", (await gate("/dashboard", { person: { role: "student", guest_until: new Date(Date.now() + 86_400_000).toISOString() } })).status === 200 && (await gate("/dashboard", { person: { role: "student", guest_until: new Date(Date.now() - 1000).toISOString() } })).to === "/pending");
+  check("gate: API calls leave the account check to each route", (await gate("/api/library", { person: { active: false } })).status === 200);
+  process.env.OPEN_SIGNUPS = "true";
+}
 
 // ---- Background reader and error log ----
 fresh();

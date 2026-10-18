@@ -22,6 +22,7 @@ await build({
     "@/lib/auth": fakes("auth.ts"),
     "@/lib/supabase/server": fakes("server.ts"),
     "@/lib/storage": fakes("storage.ts"),
+    "@supabase/ssr": fakes("ssr.ts"),
     "@/lib/generation/pipeline": fakes("pipeline.ts"),
     "@/lib/llm/config": fakes("llm-config.ts"),
     "@": join(ROOT, "src"),

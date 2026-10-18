@@ -24,6 +24,47 @@ function apiError(status: number, error: string) {
   return NextResponse.json({ error }, { status });
 }
 
+/** A redirect to another address on this site. */
+function redirectTo(request: NextRequest, pathname: string) {
+  const url = request.nextUrl.clone();
+  url.pathname = pathname;
+  return NextResponse.redirect(url);
+}
+
+/** The signed-in person's account row: the remembered copy, or read from the database. */
+async function accountRow(supabase: ReturnType<typeof createServerClient>, userId: string) {
+  const cached = cachedStudent(userId);
+  if (cached) return { student: cached as Pick<Student, "role" | "active" | "guest_until">, error: null };
+  const result = await supabase.from("students").select("*").eq("id", userId).single();
+  if (result.data) rememberStudent(result.data as Student);
+  return { student: (result.data as Student | null) ?? null, error: result.error as { code?: string } | null };
+}
+
+/**
+ * Whether a signed-in person may open this page: null to let them in, or the
+ * response to send instead (a temporary-outage notice, the waiting page, or
+ * the dashboard for someone who isn't an admin).
+ */
+async function pageGate(request: NextRequest, supabase: ReturnType<typeof createServerClient>, userId: string): Promise<NextResponse | null> {
+  const { student, error } = await accountRow(supabase, userId);
+
+  // A database failure is not the same as "no access": say it's temporary,
+  // instead of sending approved people to the "awaiting approval" page.
+  if (error && error.code !== "PGRST116") {
+    console.error("[middleware] couldn't read the account row", error);
+    return new NextResponse("Syllabi can't reach its database right now. Wait a minute, then reload this page. Your books and answers are safe.", {
+      status: 503,
+      headers: { "content-type": "text/plain; charset=utf-8", "retry-after": "30" },
+    });
+  }
+
+  // Revoked/unapproved accounts are blocked here, before any protected route
+  // runs. During private testing only admins get in, even if approved.
+  if (!student || !canUseApp(student)) return redirectTo(request, "/pending");
+  if (request.nextUrl.pathname.startsWith("/admin") && student.role !== "admin") return redirectTo(request, "/dashboard");
+  return null;
+}
+
 export async function updateSession(request: NextRequest) {
   // Browser tests (npm run test:e2e) run the pages without a real sign-in. The
   // switch only works in development mode, never in a production build.
@@ -31,24 +72,18 @@ export async function updateSession(request: NextRequest) {
 
   let supabaseResponse = NextResponse.next({ request });
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-          supabaseResponse = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          );
-        },
+  const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll();
       },
-    }
-  );
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+        supabaseResponse = NextResponse.next({ request });
+        cookiesToSet.forEach(({ name, value, options }) => supabaseResponse.cookies.set(name, value, options));
+      },
+    },
+  });
 
   // getClaims checks the sign-in token on this server (no round trip to the
   // sign-in service when the project uses signing keys), and refreshes it when it
@@ -71,47 +106,10 @@ export async function updateSession(request: NextRequest) {
   // API routes check the account row themselves (authenticate in lib/api.ts),
   // so only pages need the lookup here: it saves a database round trip per request.
   if (userId && !isPublic && !isApi) {
-    let student: Pick<Student, "role" | "active" | "guest_until"> | null = cachedStudent(userId);
-    let studentError: { code?: string } | null = null;
-    if (!student) {
-      const result = await supabase.from("students").select("*").eq("id", userId).single();
-      studentError = result.error;
-      if (result.data) {
-        student = result.data as Student;
-        rememberStudent(result.data as Student);
-      }
-    }
-
-    // A database failure is not the same as "no access": say it's temporary,
-    // instead of sending approved people to the "awaiting approval" page.
-    if (studentError && studentError.code !== "PGRST116") {
-      console.error("[middleware] couldn't read the account row", studentError);
-      return new NextResponse(
-        "Syllabi can't reach its database right now. Wait a minute, then reload this page. Your books and answers are safe.",
-        { status: 503, headers: { "content-type": "text/plain; charset=utf-8", "retry-after": "30" } }
-      );
-    }
-
-    // Revoked/unapproved accounts are blocked here, before any protected route
-    // runs. During private testing only admins get in, even if approved.
-    if (!student || !canUseApp(student)) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/pending";
-      return NextResponse.redirect(url);
-    }
-
-    if (pathname.startsWith("/admin") && student.role !== "admin") {
-      const url = request.nextUrl.clone();
-      url.pathname = "/dashboard";
-      return NextResponse.redirect(url);
-    }
+    const blocked = await pageGate(request, supabase, userId);
+    if (blocked) return blocked;
   }
 
-  if (userId && (pathname === "/login" || pathname === "/signup")) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
-    return NextResponse.redirect(url);
-  }
-
+  if (userId && (pathname === "/login" || pathname === "/signup")) return redirectTo(request, "/dashboard");
   return supabaseResponse;
 }
