@@ -1,7 +1,7 @@
 import { describe, explain, worksheetMarkdown, makeQuiz, markOrder, normaliseSettings, parseSample, settingsProblem, type OrderSettings } from "@/lib/practice/order";
 import type { PracticeNumber } from "@/lib/practice/numbers";
 import { makeCompareQuiz, makeCvcQuiz, makeSightQuiz, type CompareSettings, type SightSettings } from "@/lib/kindergarten/quiz";
-import { BOARD_COLUMNS, BOARD_ROWS, makeBoardGame, makeFamilySheet, makeMatchSheet } from "@/lib/kindergarten/worksheets";
+import { BOARD_COLUMNS, BOARD_ROWS, makeBoardGame, makeFamilySheet, makeMatchSheet, schoolFamilySheet, schoolMatchSheet } from "@/lib/kindergarten/worksheets";
 import { BOARD_WORDS, CVC_WORDS, SIGHT_LEVELS, SIGHT_SETS, VOWELS } from "@/lib/kindergarten/words";
 
 let passed = 0;
@@ -134,10 +134,23 @@ for (const vowel of VOWELS) {
 }
 const allCvc = VOWELS.flatMap((v) => CVC_WORDS[v].map((w) => w.word));
 check(new Set(allCvc).size === allCvc.length, "A CVC word is listed twice");
-const everySight = SIGHT_LEVELS.flatMap((l) => [...SIGHT_SETS[l]]);
-check(SIGHT_LEVELS.length === 5 && SIGHT_LEVELS.every((l) => SIGHT_SETS[l].length === 40), "There should be five sight-word sets of 40 words");
-check(new Set(everySight.map((w) => w.toLowerCase())).size === everySight.length, "A sight word is listed twice");
-check(everySight.every((w) => /^[A-Za-z']+$/.test(w)), "A sight word has an odd character");
+const DOLCH_SETS = SIGHT_LEVELS.filter((l) => l !== "school");
+const everySight = DOLCH_SETS.flatMap((l) => [...SIGHT_SETS[l]]);
+check(DOLCH_SETS.length === 5 && DOLCH_SETS.every((l) => SIGHT_SETS[l].length === 40), "There should be five Dolch sets of 40 words");
+check(new Set(everySight.map((w) => w.toLowerCase())).size === everySight.length, "A Dolch word is listed twice");
+check(SIGHT_LEVELS.flatMap((l) => [...SIGHT_SETS[l]]).every((w) => /^[A-Za-z']+$/.test(w)), "A sight word has an odd character");
+check(new Set(SIGHT_SETS.school).size === SIGHT_SETS.school.length, "The school set repeats a word");
+
+// Every word the school sent home must be in the app (pictures, spelling, board game or sight words).
+const SCHOOL_WORDS = "cat map pod rub jog fit sin sun keg cub dot hut toy fix hit run joy bat pot bed cap dog pig pen bug man top pet hen sit".split(" ");
+const spelling = new Set(VOWELS.flatMap((v) => CVC_WORDS[v].map((w) => w.word)));
+const board = new Set(VOWELS.flatMap((v) => BOARD_WORDS[v]));
+const sight = new Set(SIGHT_SETS.school as readonly string[]);
+for (const w of SCHOOL_WORDS) check(spelling.has(w) || (sight.has(w) && (w === "toy" || w === "joy")), `School word "${w}" is not in the spelling game`);
+for (const w of SCHOOL_WORDS) check(board.has(w) || w === "toy" || w === "joy", `School word "${w}" is not in the board game`);
+for (const w of SCHOOL_WORDS) check(sight.has(w) || spelling.has(w), `School word "${w}" is missing`);
+// The word families on the school's worksheet each have an example word.
+for (const fam of ["at", "an", "ig", "op", "un", "et", "en", "it", "ot", "ub"]) check(spelling.has(["c", "m", "p", "t", "s", "p", "h", "s", "p", "c"][["at", "an", "ig", "op", "un", "et", "en", "it", "ot", "ub"].indexOf(fam)] + fam), `The school word family -${fam} has no example`);
 
 for (let seed = 1; seed <= 400; seed++) {
   for (const questions of [5, 10]) {
@@ -202,6 +215,11 @@ for (let seed = 1; seed <= 400; seed++) {
     if (words.length <= pool) check(new Set(words).size === words.length, `A board word repeats although there are enough words: ${seed}`);
   }
 }
+const schoolFam = schoolFamilySheet();
+check(schoolFam.map((f) => `${f.rime} ${f.example}`).join(",") === "at cat,an man,ig pig,op top,un sun,et pet,en hen,it sit,ot pot,ub cub", "The school word-family sheet differs from the printed one");
+const schoolMatch = schoolMatchSheet();
+check(schoolMatch.pictures.length === 10 && schoolMatch.pictures.every((p) => p.emoji) && schoolMatch.words.join(" ") === "bat sun cat pot bed cap dog pig pen bug", "The school matching sheet differs from the printed one");
+check(schoolMatch.words.every((w) => schoolMatch.pictures.some((p) => p.word === w)), "A school matching word has no picture");
 // The same seed gives the same questions (so a round can be repeated or printed).
 check(JSON.stringify(makeCvcQuiz({ vowels: ["a", "o"], questions: 5 }, 77)) === JSON.stringify(makeCvcQuiz({ vowels: ["a", "o"], questions: 5 }, 77)), "The same seed gave different CVC questions");
 check(JSON.stringify(makeCompareQuiz({ max: 10, questions: 5 }, 77)) === JSON.stringify(makeCompareQuiz({ max: 10, questions: 5 }, 77)), "The same seed gave different compare questions");

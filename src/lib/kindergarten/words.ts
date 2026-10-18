@@ -15,13 +15,14 @@ export interface CvcWord {
 export const CVC_WORDS: Record<Vowel, CvcWord[]> = {
   a: [
     { word: "cat", emoji: "🐱" },
-    { word: "bat", emoji: "🦇" },
+    { word: "bat", emoji: "🏏" },
     { word: "rat", emoji: "🐀" },
     { word: "hat", emoji: "🎩" },
     { word: "bag", emoji: "👜" },
     { word: "cap", emoji: "🧢" },
     { word: "van", emoji: "🚐" },
     { word: "map", emoji: "🗺️" },
+    { word: "man", emoji: "👨" },
   ],
   e: [
     { word: "hen", emoji: "🐔" },
@@ -32,6 +33,7 @@ export const CVC_WORDS: Record<Vowel, CvcWord[]> = {
     { word: "web", emoji: "🕸️" },
     { word: "leg", emoji: "🦵" },
     { word: "keg", emoji: "🛢️" },
+    { word: "pet", emoji: null },
   ],
   i: [
     { word: "pig", emoji: "🐷" },
@@ -44,6 +46,7 @@ export const CVC_WORDS: Record<Vowel, CvcWord[]> = {
     { word: "fix", emoji: "🔧" },
     { word: "hit", emoji: null },
     { word: "sin", emoji: null },
+    { word: "sit", emoji: null },
   ],
   o: [
     { word: "dog", emoji: "🐶" },
@@ -72,8 +75,9 @@ export const CVC_WORDS: Record<Vowel, CvcWord[]> = {
 };
 
 /**
- * The sight words (Dolch words, in the order children usually learn them),
- * as five sets of 40. From the school's printed Dolch lists, pages 1 to 5.
+ * The sight words: the Dolch words in the order children usually learn them,
+ * as five sets of 40 (from the school's printed Dolch lists, pages 1 to 5),
+ * plus the school's CVC list to read at sight.
  */
 export const SIGHT_SETS = {
   set1: [
@@ -106,6 +110,8 @@ export const SIGHT_SETS = {
     "has", "warm", "hurt", "under", "find", "ate", "pull", "read", "only", "full",
     "cut", "why", "us", "those", "kind", "own", "three", "done", "both", "found",
   ],
+  // The CVC and "oy" words on the school's list, to read at sight.
+  school: ["cat", "map", "pod", "rub", "jog", "fit", "sin", "sun", "keg", "cub", "dot", "hut", "toy", "fix", "hit", "run", "joy"],
 } as const;
 
 export type SightLevel = keyof typeof SIGHT_SETS;
@@ -116,6 +122,7 @@ export const SIGHT_LEVEL_LABELS: Record<SightLevel, string> = {
   set3: "Set 3 (from, put, away)",
   set4: "Set 4 (walk, stop, tell)",
   set5: "Set 5 (soon, our, use)",
+  school: "School CVC list (cat, map, pod)",
 };
 
 /** What is counted in "more, less or same" questions. */
@@ -163,8 +170,8 @@ export const isVowelLetter = (letter: string) => (VOWELS as readonly string[]).i
  */
 export const BOARD_WORDS: Record<Vowel, string[]> = {
   a: "bag bat cab can cap cat dad fan gap ham had hat jab jam lap mad man map mat nap pan pat rag ram rat sad sag sat tab tag tan tap van wag yap".split(" "),
-  e: "bed beg den get hen jet leg men met net peg pen pet red set ten vet web wet yes".split(" "),
-  i: "big bin bit dig dip fig fit hid him hip hit kid kit lid lip mix pig pin rip sit six tin wig win zip".split(" "),
-  o: "box cop cot dog dot fox got hop hot job jog lot mop nod pop pot rod rot sob top".split(" "),
+  e: "bed beg den get hen jet keg leg men met net peg pen pet red set ten vet web wet yes".split(" "),
+  i: "big bin bit dig dip fig fit fix hid him hip hit kid kit lid lip mix pig pin rip sin sit six tin wig win zip".split(" "),
+  o: "box cop cot dog dot fox got hop hot job jog lot mop nod pod pop pot rod rot sob top".split(" "),
   u: "bud bug bus but cub cup cut dug fun gum hug hut jug mud mug nut pug rub rug run sun tub tug".split(" "),
 };

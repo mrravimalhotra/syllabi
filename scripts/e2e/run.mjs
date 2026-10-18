@@ -395,6 +395,10 @@ await test("Kindergarten worksheets: both sheets show, and a new sheet changes t
   await page.waitForTimeout(300);
   const after = await page.getByRole("article", { name: "Worksheet" }).innerText();
   if (before === after) throw new Error("Making another sheet gave the same sheet.");
+  await page.getByLabel(/Same words as the school/).check();
+  const school = await page.getByRole("article", { name: "Worksheet" }).innerText();
+  for (const w of ["cat", "man", "pig", "top", "sun", "pet", "hen", "sit", "pot", "cub"]) if (!school.includes(w)) throw new Error(`The school's word family sheet lacks ${w}.`);
+  await page.getByLabel(/Same words as the school/).uncheck();
   await page.getByRole("radio", { name: /Match the picture/ }).click();
   await page.getByRole("article", { name: "Worksheet" }).getByText("Match the picture to the word.").waitFor();
   const pictures = await page.getByRole("article", { name: "Worksheet" }).getByRole("img", { name: "Picture" }).count();

@@ -88,3 +88,21 @@ export function makeBoardGame(seed: number, vowels: readonly Vowel[] = VOWELS): 
   }
   return cells;
 }
+
+/** The word-family sheet the school sent home: -at cat, -an man, -ig pig, -op top, -un sun, -et pet, -en hen, -it sit, -ot pot, -ub cub. */
+export function schoolFamilySheet(): FamilyRow[] {
+  return ["cat", "man", "pig", "top", "sun", "pet", "hen", "sit", "pot", "cub"].map((example) => {
+    const vowel = VOWELS.find((v) => example[1] === v)!;
+    return { rime: rime(example), example, vowel };
+  });
+}
+
+/** The matching sheet the school sent home: ten pictures, with the words in the school's order on the right. */
+export function schoolMatchSheet(): MatchSheet {
+  const pictureOrder = ["cat", "dog", "cap", "bat", "sun", "pig", "pen", "bed", "bug", "pot"];
+  const emojiOf = new Map(ALL.map((w) => [w.word, w.emoji]));
+  return {
+    pictures: pictureOrder.map((word) => ({ emoji: emojiOf.get(word)!, word })),
+    words: ["bat", "sun", "cat", "pot", "bed", "cap", "dog", "pig", "pen", "bug"],
+  };
+}

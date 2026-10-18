@@ -11,6 +11,8 @@ import {
   makeBoardGame,
   makeFamilySheet,
   makeMatchSheet,
+  schoolFamilySheet,
+  schoolMatchSheet,
   type BoardCell,
   type SheetKind,
 } from "@/lib/kindergarten/worksheets";
@@ -31,11 +33,18 @@ export default function KindergartenWorksheetsPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- choosing a random first sheet must wait until the page has loaded
     setSeed(newSeed());
   }, []);
+  const [school, setSchool] = useState(false);
   const [vowels, setVowels] = useState<Vowel[]>([...VOWELS]);
 
-  const family = useMemo(() => (kind === "family" && seed !== null ? makeFamilySheet(seed, vowels) : null), [kind, seed, vowels]);
+  const family = useMemo(
+    () => (kind === "family" && seed !== null ? (school ? schoolFamilySheet() : makeFamilySheet(seed, vowels)) : null),
+    [kind, seed, vowels, school]
+  );
   const board = useMemo(() => (kind === "board" && seed !== null ? makeBoardGame(seed, vowels) : null), [kind, seed, vowels]);
-  const match = useMemo(() => (kind === "match" && seed !== null ? makeMatchSheet(seed, vowels) : null), [kind, seed, vowels]);
+  const match = useMemo(
+    () => (kind === "match" && seed !== null ? (school ? schoolMatchSheet() : makeMatchSheet(seed, vowels)) : null),
+    [kind, seed, vowels, school]
+  );
 
   const toggle = (v: Vowel) =>
     setVowels((cur) =>
@@ -86,6 +95,12 @@ export default function KindergartenWorksheetsPage() {
             </button>
           ))}
         </div>
+        {kind !== "board" && (
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input type="checkbox" checked={school} onChange={(e) => setSchool(e.target.checked)} className="h-5 w-5" />
+            Same words as the school&apos;s sheet
+          </label>
+        )}
         <div className="flex flex-wrap gap-3">
           <button type="button" onClick={() => window.print()} className={button.primary}>
             Print this sheet
