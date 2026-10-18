@@ -47,6 +47,8 @@ export function useSay() {
   const pending = useRef(new Map<string, Promise<string | null>>());
   const audio = useRef<HTMLAudioElement | null>(null);
   const cancel = useRef<(() => void) | null>(null);
+  // Lets `stop` finish a clip that is cut off, so whatever waits for it carries on.
+  const release = useRef<(() => void) | null>(null);
 
   const fetchClip = useCallback((text: string, kind: "phrase" | "sound" = "phrase"): Promise<string | null> => {
     const id = `${kind}|${text}`;
@@ -77,6 +79,8 @@ export function useSay() {
     cancel.current = null;
     audio.current?.pause();
     audio.current = null;
+    release.current?.();
+    release.current = null;
     if ("speechSynthesis" in window) window.speechSynthesis.cancel();
   }, []);
 
@@ -106,6 +110,7 @@ export function useSay() {
       new Promise<void>((resolve) => {
         const a = new Audio(url);
         audio.current = a;
+        release.current = resolve;
         a.onended = () => resolve();
         a.onerror = () => resolve();
         a.play().catch(() => resolve());

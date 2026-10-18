@@ -86,7 +86,8 @@ export function SayItGame({ questions, say, sound, prepare, prepareSounds, onAga
         if (live) send({ type: "BLEND_DONE" });
       } else if (step === "guide") {
         const letter = question.letters[target];
-        await say(`Let's try ${phoneLabel(letter)} once more.`);
+        // A helpful nudge: how to make the sound, then the sound again.
+        await say(`Good try! ${PHONEMES[letter].tip}`);
         if (live) await sound(letter, true);
         if (live) send({ type: "GUIDE_DONE" });
       } else if (step === "celebrate") {

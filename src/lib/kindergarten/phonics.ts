@@ -25,7 +25,7 @@ export interface Phoneme {
 }
 
 export const PHONEMES: Record<string, Phoneme> = {
-  a: { kind: "vowel", say: "aah", hold: "aaah", tip: "Open your mouth wide: a as in apple.", keyword: { word: "apple", emoji: "🍎" } },
+  a: { kind: "vowel", say: "aah", hold: "aaah", tip: "Drop your jaw wide, like taking a bite of an apple: a.", keyword: { word: "apple", emoji: "🍎" } },
   b: {
     kind: "stop",
     say: "buh",
@@ -47,7 +47,7 @@ export const PHONEMES: Record<string, Phoneme> = {
     tip: "Tongue taps behind your top teeth, with voice. Quick: d.",
     keyword: { word: "dog", emoji: "🐶" },
   },
-  e: { kind: "vowel", say: "eh", hold: "eeh", tip: "Mouth half open: e as in egg.", keyword: { word: "egg", emoji: "🥚" } },
+  e: { kind: "vowel", say: "eh", hold: "eeh", tip: "Smile gently, jaw half open, like cracking an egg: e.", keyword: { word: "egg", emoji: "🥚" } },
   f: {
     kind: "continuous",
     say: "fff",
@@ -67,7 +67,7 @@ export const PHONEMES: Record<string, Phoneme> = {
     kind: "vowel",
     say: "ih",
     hold: "iih",
-    tip: "Smile a little, mouth nearly closed: i as in ink.",
+    tip: "Scrunch your nose like an itchy insect, mouth nearly closed: i.",
     keyword: { word: "ink", emoji: "🖋️" },
   },
   j: { kind: "stop", say: "juh", hold: "juh", tip: "Lips round, a quick j.", keyword: { word: "jet", emoji: "✈️" } },
@@ -99,7 +99,7 @@ export const PHONEMES: Record<string, Phoneme> = {
     tip: "Tongue behind your top teeth and hum through your nose: nnn.",
     keyword: { word: "nut", emoji: "🥜" },
   },
-  o: { kind: "vowel", say: "ah", hold: "aah", tip: "Mouth round and open: o as in octopus.", keyword: { word: "octopus", emoji: "🐙" } },
+  o: { kind: "vowel", say: "ah", hold: "aah", tip: "Make an open circle with your lips, like an octopus: o.", keyword: { word: "octopus", emoji: "🐙" } },
   p: {
     kind: "stop",
     say: "puh",
@@ -129,7 +129,7 @@ export const PHONEMES: Record<string, Phoneme> = {
     tip: "Tongue taps behind your top teeth, no voice. Quick: t.",
     keyword: { word: "tiger", emoji: "🐯" },
   },
-  u: { kind: "vowel", say: "uh", hold: "uuh", tip: "Relaxed mouth: u as in umbrella.", keyword: { word: "umbrella", emoji: "☂️" } },
+  u: { kind: "vowel", say: "uh", hold: "uuh", tip: "Relax your mouth and push the sound up, like opening an umbrella: u.", keyword: { word: "umbrella", emoji: "☂️" } },
   v: {
     kind: "continuous",
     say: "vvv",
