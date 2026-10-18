@@ -3,6 +3,7 @@ import type { PracticeNumber } from "@/lib/practice/numbers";
 import { makeCompareQuiz, makeCvcQuiz, makeSightQuiz, type CompareSettings, type SightSettings } from "@/lib/kindergarten/quiz";
 import { IPA, PHONEMES, blendStart, soundText } from "@/lib/kindergarten/phonics";
 import { makeBlendQuiz } from "@/lib/kindergarten/quiz";
+import { blockedReason, buildRequestBody, questionProblem, type Question } from "@/app/dashboard/_ask/build-request";
 import { describeOutcome } from "@/app/dashboard/library/_parts/upload-book";
 import { LOGIN_ID, internalEmail, looksLikeLoginId, normaliseLoginId } from "@/lib/login-id";
 import { BOARD_COLUMNS, BOARD_ROWS, makeBoardGame, makeFamilySheet, makeMatchSheet, schoolFamilySheet, schoolMatchSheet } from "@/lib/kindergarten/worksheets";
@@ -274,6 +275,23 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
   check(/The connection dropped\./.test(part.error ?? "") && (part.error?.match(/Too large\./g) ?? []).length === 1 && /1 page was already sent and is being read/.test(part.error ?? ""), "It names the reason once and what was already sent");
   const stopped = describeOutcome({ saved: new Set(), failures: new Map(), fatal: "ignored" }, 2, "Maths", true);
   check(/Upload stopped\. 2 pages are still below: press Upload to continue\./.test(stopped.error ?? "") && !/ignored/.test(stopped.error ?? ""), "A stopped upload says it was stopped");
+}
+
+// What is sent for a question on the Generate page.
+{
+  const q: Question = { task: "solution", prompt: "  What is 12 x 15?  ", totalMarks: "80", language: "auto", packBookId: "", bookIds: ["b1", "b2"], photos: [], docs: [] };
+  check(questionProblem({ ...q, prompt: "  " }) === "Type a question or attach a photo or file first.", "An empty question is refused");
+  check(questionProblem(q) === null && questionProblem({ ...q, prompt: "", docs: [{ name: "a.docx", text: "hi" }] }) === null, "A question or an attachment is enough");
+  check(questionProblem({ ...q, task: "study_pack" }) !== null && questionProblem({ ...q, task: "study_pack", packBookId: "b1" }) === null, "A study pack needs a chapter or pages");
+  const body = buildRequestBody({ ...q, docs: [{ name: "a.docx", text: "Hello" }] });
+  check(body.prompt === "What is 12 x 15?" && JSON.stringify(body.documentIds) === '["b1","b2"]' && body.attachedText === 'Attached file "a.docx":\nHello', "An answer request carries the trimmed question, the books and the attached text");
+  check(buildRequestBody({ ...q, task: "sample_paper", prompt: "Class 6 maths" }).prompt === "Class 6 maths\n\nTotal marks: 80", "A sample paper asks for the marks");
+  check(buildRequestBody({ ...q, docs: [{ name: "big", text: "x".repeat(50_000) }] }).attachedText?.toString().length === 20_000, "Attached text is cut to the allowed length");
+  const pack = buildRequestBody({ ...q, task: "study_pack", packBookId: "b1", prompt: " focus " });
+  check(pack.documentId === "b1" && pack.focus === "focus" && JSON.stringify(pack.photos) === "[]" && !("documentIds" in pack), "A study pack request names the chapter");
+  check(blockedReason({ overQuota: true, noBookSelected: true, readingFiles: true })?.includes("allowance") === true, "Over the allowance is the first reason given");
+  check(blockedReason({ overQuota: false, noBookSelected: true, readingFiles: true })?.includes("no book is selected") === true && blockedReason({ overQuota: false, noBookSelected: false, readingFiles: true })?.includes("attachment") === true, "Then no book, then still reading a file");
+  check(blockedReason({ overQuota: false, noBookSelected: false, readingFiles: false }) === null, "Nothing blocking means no message");
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

@@ -208,6 +208,52 @@ await test("My Books: lists books with reading progress", async (page, ctx) => {
   await page.getByText("Science Notes").first().waitFor();
 });
 
+await test("Ask: a plain calculation is answered by code, with no AI request", async (page, ctx) => {
+  await baseRoutes(ctx);
+  let asked = 0;
+  await ctx.route("**/api/generate/**", (r) => {
+    asked++;
+    return json(r, answer);
+  });
+  await ctx.route("**/api/worked", (r) => json(r, { id: "w1" }));
+  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.locator("textarea").fill("Divide 5255 by 5");
+  await page.getByRole("button", { name: /^Generate$/ }).click();
+  await page.getByText(/5255 ÷ 5 = 1051/).first().waitFor({ state: "attached", timeout: 10000 });
+  if (asked !== 0) throw new Error(`The AI was asked ${asked} time(s) for a plain calculation.`);
+});
+
+await test("Ask: an attached photo shows, can be removed, and goes with the question", async (page, ctx) => {
+  await baseRoutes(ctx);
+  let sentPhotos = -1;
+  await ctx.route("**/api/generate/**", (r) => {
+    sentPhotos = (r.request().postDataJSON().photos ?? []).length;
+    return json(r, { ...answer, text: "Plants make food from sunlight." });
+  });
+  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.locator("input[type=file]").setInputFiles({ name: "homework.jpg", mimeType: "image/jpeg", buffer: tinyJpeg });
+  await page.getByRole("button", { name: "Remove page 1" }).waitFor({ timeout: 15000 });
+  await page.getByRole("button", { name: "Remove page 1" }).click();
+  await page.getByRole("button", { name: "Remove page 1" }).waitFor({ state: "detached" });
+  await page.locator("input[type=file]").setInputFiles({ name: "homework2.jpg", mimeType: "image/jpeg", buffer: tinyJpeg });
+  await page.getByRole("button", { name: "Remove page 1" }).waitFor({ timeout: 15000 });
+  await page.getByRole("button", { name: /^Generate$/ }).click();
+  await page.getByText("Plants make food from sunlight.").first().waitFor({ timeout: 10000 });
+  if (sentPhotos !== 1) throw new Error(`Expected one photo to be sent, saw ${sentPhotos}.`);
+  await page.getByRole("button", { name: "Remove page 1" }).waitFor({ state: "detached", timeout: 5000 });
+});
+
+await test("Ask: turning every book off explains why Generate is off", async (page, ctx) => {
+  await baseRoutes(ctx);
+  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: /Your 1 book/ }).click();
+  await page.getByRole("button", { name: "None" }).click();
+  await page.getByText(/no book is selected/i).first().waitFor({ timeout: 5000 });
+  if (!(await page.getByRole("button", { name: /^Generate$/ }).isDisabled())) throw new Error("Generate should be off with no book selected.");
+  await page.getByRole("button", { name: "All", exact: true }).click();
+  await page.getByText(/no book is selected/i).first().waitFor({ state: "detached", timeout: 5000 });
+});
+
 await test("Switching screens shows the last list at once while it refreshes", async (page, ctx) => {
   let calls = 0;
   await ctx.route("**/api/me", (r) => json(r, me));
