@@ -67,12 +67,15 @@ for (const text of sentences) for (const l of [undefined, "en", "hi", "mr", "aut
 
 // ---- Checking an answer ----
 const answers = [
+  "8 : 12 = 2 : 3", "8 : 12 = 3 : 2", "5 km = 5000 m", "5 km = 4000 m", "2 hours 15 minutes = 135 minutes", "3 kg = 3000 g and 2 l = 2000 ml", "10 m = 5 kg", "x + 5 = 10", "2x = 6", "Q1 = 5", "Q1 + 2 = 3", "2 x 3 = 6 = 7", "5 = 5", "5 = 6", "-3 + 5 = 2", "(2 + 3) x 4 = 20", "(2 + 3 x 4 = 20", "22/7 = 3.14", "22/7 = 3.1", "2^3 = 8", "2² = 4", "√16 = 4", "√(16) = 5", "25% of 80 = 20", "25% of 80 = 21", "1/0 = 0", "3 x 4 = 12 approximately", "```\n2 + 2 = 5\n```", "about 2 + 2 = 5", "0.1 + 0.2 = 0.30000000000000004", "1 000 + 1 = 1001", "1,000 + 1 = 1001", "7 ÷ 2 = 3.5", "7 / 2 = 3", "3.14159 x 2 = 6.28", "10 - 3 - 2 = 5", "10 - 3 - 2 = 4", "5 + 5 = 10 = 5 x 2", "100 g = 0.1 kg", "1 hour = 60 minutes", "1 hour = 70 minutes", "2 : 4 = 1 : 2 = 3 : 6",
   "12 x 15 = 180", "12 x 15 = 181", "5255 ÷ 5 = 1051", "5255 ÷ 5 = 1050", "345 + 678 = 1023", "345 + 678 = 1024", "1000 - 357 = 643", "1000 - 357 = 644",
   "2/3 + 1/6 = 5/6", "2/3 + 1/6 = 1/2", "Total = 25 + 75 = 100 and 8 x 9 = 72 and 81 / 9 = 9", "10 ÷ 0 = undefined", "0.1 + 0.2 = 0.3", "1.5 x 4 = 6", "7 - 9 = -2", "2 x 3 x 4 = 24", "2 x 3 x 4 = 25",
   "No sums here.", "", "Step 1: 12 x 15 = 180. Step 2: 180 + 20 = 200. Step 3: 200 - 50 = 140.", "99999999 x 99999999 = 9999999800000001", "5 x 5 = 25 (correct) 6 x 6 = 37 (wrong)", "१२ x १५ = १८०",
 ];
 for (const a of answers) record(`arith ${a}`, checkArithmetic(a));
 const papers = [
+  "Section A\n1. a [1]\n2. b [2]\nSection B\n3. c [3] (a) x [1] (b) y [2]\nAnswer Key\n1. x\n2. y\n3. z", "Q1. [5]\nQ2. [5]\nANSWER KEY\nQ1. yes", "१. प्रश्न [२]\n२. प्रश्न [३]\nउत्तर कुंजी\n१. हाँ\n२. नहीं",
+  "1. One [2 marks]\n2. Two [3 marks]\n3. Three [5 marks]\nAnswer Key\n1.\n2.\n3.", "No numbers but an answer key\nAnswer Key\nsomething",
   "Section A\n1. What is 2+2? [1]\n2. Define a noun. [2]\nSection B\n3. Explain. [5]\nAnswer Key\n1. 4\n2. A naming word\n3. ...",
   "1. (a) One (b) Two (2 marks)\n2. Three (3 marks)", "Total marks: 80\nQ1 [40]\nQ2 [40]", "No marks here", "", "Q1. x [10]\nQ2. y [10]\nQ3. z [10]\nQ4. w [10]\nQ5. v [10]\nQ6. u [10]\nQ7. t [10]\nQ8. s [10]",
   "Section A (20 marks)\n1. a [1]\n2. b [1]\n(Answer key follows)\n1. yes\n2. no", "1. [2] 2. [3] 3. [4]",
@@ -86,6 +89,13 @@ const worksheets = [
   "Solve all the questions in the attached exercise", "", "   ", "A single long question with no numbering that goes on for a while and asks the child to explain in detail how plants make food from sunlight.",
   "Q.1 Fill in the blanks:\n(a) The sun is a ____\n(b) The moon is a ____\nQ.2 True or false:\n(a) Earth is flat", "1) one\n2) two\n3) three\n4) four\n5) five\n6) six\n7) seven\n8) eight\n9) nine\n10) ten\n11) eleven\n12) twelve",
   "प्रश्न 1. पौधे भोजन कैसे बनाते हैं?\nप्रश्न 2. जल चक्र क्या है?", "1. a\n\n\n2. b\n\n3. c", "Question 1: x\nQuestion 2: y", "I. Choose the correct answer\n1. a) x b) y\n2. a) p b) q", "1.1 first 1.2 second 1.3 third",
+  "SECTION B\nA. Knowledge & Understanding\nWhat is a noun? Name two verbs? Define an adjective?\nB. Application\nWrite a sentence?",
+  "Chapter 4: Light\nRead the instructions.\nSECTION A\n1. What is light?\n2. Name a source of light.\nSECTION B\nQ.3 Justify why shadows form.\nQ.4 Draw a ray diagram.",
+  "* Question: What do you mean by reflection?\nIt is bouncing.\n* Question: Define refraction?\n- Q: Name a lens?",
+  "```\n1. not a question\n2. also not\n```\n1. Real question one?\n2. Real question two?",
+  "Part 1\nPart 2\nPart 3", "Section A: Objective questions\n1. a)x b)y\n   continues here\n2. next\n   more text", "Exercice 1: Calculer.\n1. 2+2\n2. 3+3\nExercice 2: Écrire.\n1. Un mot\n2. Deux mots",
+  "विभाग अ\n१. सूर्य क्या है?\n२. चंद्रमा क्या है?\nविभाग ब\nप्रश्न ३. जल चक्र समझाइए।",
+  "short\n1. a\n2. b", "1.5 litres is how much?\n2.5 kg of rice?\n3. Real one here please\n4. Another real one here",
   Array.from({ length: 40 }, (_, i) => `${i + 1}. Question number ${i + 1} about the chapter?`).join("\n"),
 ];
 for (const w of worksheets) record(`split ${w.slice(0, 60)} ${w.length}`, splitQuestions(w));

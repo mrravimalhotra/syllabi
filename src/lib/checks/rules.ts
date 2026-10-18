@@ -18,6 +18,58 @@ const DEVANAGARI_DIGITS = "०१२३४५६७८९";
 const toAscii = (digits: string) => digits.replace(/[०-९]/g, (d) => String(DEVANAGARI_DIGITS.indexOf(d)));
 
 /**
+ * The marks shown on the questions add up to the total asked for. Two readings,
+ * because a long question may show its own marks and its sub-parts' marks:
+ * question lines only, and question plus sub-part lines. Null when no marks are shown.
+ */
+function marksCheck(lines: string[], totalMarks: number): AnswerCheck | null {
+  let questionMarks = 0;
+  let allMarks = 0;
+  for (const line of lines) {
+    if (SECTION_LINE.test(line) && !QUESTION_LINE.test(line)) continue;
+    const match = MARKS_AT_END.exec(line);
+    if (!match) continue;
+    const marks = Number(match[1] ?? match[2]);
+    if (QUESTION_LINE.test(line)) questionMarks += marks;
+    if (QUESTION_LINE.test(line) || SUBPART_LINE.test(line)) allMarks += marks;
+  }
+  if (questionMarks === 0 && allMarks === 0) return null;
+  const ok = questionMarks === totalMarks || allMarks === totalMarks;
+  const found = questionMarks || allMarks;
+  return {
+    kind: "marks",
+    ok,
+    message: ok ? `Marks add up to ${totalMarks}` : `Marks shown on the questions add up to ${found}, not ${totalMarks}`,
+  };
+}
+
+/** The question numbers at the start of lines, as plain digits. */
+const questionNumbers = (text: string) =>
+  new Set(
+    text
+      .split("\n")
+      .map((l) => QUESTION_LINE.exec(l)?.[1])
+      .filter((n): n is string => Boolean(n))
+      .map(toAscii)
+  );
+
+/** Every question number in the paper appears in the answer key. Null when the paper has no numbered questions. */
+function keyCoversCheck(paper: string, key: string): AnswerCheck | null {
+  const asked = questionNumbers(paper);
+  const answered = questionNumbers(key);
+  if (asked.size === 0) return null;
+  const missing = [...asked].filter((n) => !answered.has(n)).sort((a, b) => Number(a) - Number(b));
+  return {
+    kind: "answer-key",
+    ok: missing.length === 0,
+    message:
+      missing.length === 0
+        ? `Answer key covers all ${asked.size} questions`
+        : `Answer key is missing question${missing.length > 1 ? "s" : ""} ${missing.join(", ")}`,
+  };
+}
+
+/**
  * Sample paper: the marks shown on its questions add up to the total asked
  * for, the answer key exists, and every question number in the paper appears
  * in the key.
@@ -25,58 +77,16 @@ const toAscii = (digits: string) => digits.replace(/[०-९]/g, (d) => String(D
 export function checkSamplePaper(answer: string, totalMarks: number | null): AnswerCheck[] {
   const checks: AnswerCheck[] = [];
   const paper = withoutAnswerKey(answer);
-  const lines = paper.split("\n");
 
-  if (totalMarks) {
-    // Two readings, because a long question may show its own marks and its
-    // sub-parts' marks: question lines only, and question plus sub-part lines.
-    let questionMarks = 0;
-    let allMarks = 0;
-    for (const line of lines) {
-      if (SECTION_LINE.test(line) && !QUESTION_LINE.test(line)) continue;
-      const match = MARKS_AT_END.exec(line);
-      if (!match) continue;
-      const marks = Number(match[1] ?? match[2]);
-      if (QUESTION_LINE.test(line)) questionMarks += marks;
-      if (QUESTION_LINE.test(line) || SUBPART_LINE.test(line)) allMarks += marks;
-    }
-    if (questionMarks > 0 || allMarks > 0) {
-      const ok = questionMarks === totalMarks || allMarks === totalMarks;
-      const found = questionMarks || allMarks;
-      checks.push({
-        kind: "marks",
-        ok,
-        message: ok ? `Marks add up to ${totalMarks}` : `Marks shown on the questions add up to ${found}, not ${totalMarks}`,
-      });
-    }
-  }
+  const marks = totalMarks ? marksCheck(paper.split("\n"), totalMarks) : null;
+  if (marks) checks.push(marks);
 
   if (!hasAnswerKey(answer)) {
     checks.push({ kind: "answer-key", ok: false, message: "The paper has no answer key" });
     return checks;
   }
-  const key = answer.slice(paper.length);
-  const numbers = (text: string) =>
-    new Set(
-      text
-        .split("\n")
-        .map((l) => QUESTION_LINE.exec(l)?.[1])
-        .filter((n): n is string => Boolean(n))
-        .map(toAscii)
-    );
-  const asked = numbers(paper);
-  const answered = numbers(key);
-  const missing = [...asked].filter((n) => !answered.has(n)).sort((a, b) => Number(a) - Number(b));
-  if (asked.size > 0) {
-    checks.push({
-      kind: "answer-key",
-      ok: missing.length === 0,
-      message:
-        missing.length === 0
-          ? `Answer key covers all ${asked.size} questions`
-          : `Answer key is missing question${missing.length > 1 ? "s" : ""} ${missing.join(", ")}`,
-    });
-  }
+  const covers = keyCoversCheck(paper, answer.slice(paper.length));
+  if (covers) checks.push(covers);
   return checks;
 }
 

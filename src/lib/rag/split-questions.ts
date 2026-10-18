@@ -29,14 +29,8 @@ interface Block {
   body: string[];
 }
 
-/**
- * Splits text into its separate questions. Returns an empty list when there
- * are fewer than two, meaning "search the text as a whole". The text before
- * the first question (chapter name, instructions) and a section heading such
- * as "Q1. Fill in the blanks." are kept with each question as context. Lines
- * inside ``` code blocks never start a question.
- */
-export function splitQuestions(text: string): string[] {
+/** The text sorted into what comes before the first question, section/question blocks with their numbered items, and bullet questions. */
+function sortLines(text: string): { preamble: string[]; blocks: Block[]; bullets: string[][] } {
   const preamble: string[] = [];
   const blocks: Block[] = [];
   const bullets: string[][] = [];
@@ -65,32 +59,43 @@ export function splitQuestions(text: string): string[] {
       preamble.push(line);
     }
   }
+  return { preamble, blocks, bullets };
+}
 
-  const context = preamble.join(" ").slice(0, 200);
+/** The questions in one block, each with the context lines before it. */
+function questionsInBlock(block: Block, context: string): string[] {
   const withContext = (parts: string[]) => parts.filter(Boolean).join("\n");
-
-  const questions: string[] = [];
-  for (const block of blocks) {
-    if (block.items.length === 0) {
-      // A bare section heading ("SECTION B") is not a question.
-      if (SECTION.test(block.heading) && block.body.length === 0) continue;
-      // A section of unnumbered questions ("A. Knowledge & Understanding" then
-      // one question per line): split the section on question marks.
-      const body = block.body.join(" ");
-      if (SECTION.test(block.heading) && (body.match(/\?/g) ?? []).length >= 2) {
-        for (const q of body.split(/(?<=\?)\s+/)) questions.push(withContext([context, block.heading, q]));
-        continue;
-      }
-      // A question on its own ("Q.3 Justify ..."), possibly with its sub-parts.
-      questions.push(withContext([context, [block.heading, ...block.body].join(" ")]));
-    } else {
-      // A section heading over numbered items: each item is a question.
-      const heading = [block.heading, ...block.body].join(" ").slice(0, 200);
-      for (const item of block.items) questions.push(withContext([context, heading, item.join(" ")]));
-    }
+  if (block.items.length > 0) {
+    // A section heading over numbered items: each item is a question.
+    const heading = [block.heading, ...block.body].join(" ").slice(0, 200);
+    return block.items.map((item) => withContext([context, heading, item.join(" ")]));
   }
-  for (const bullet of bullets) questions.push(withContext([context, bullet.join(" ")]));
+  // A bare section heading ("SECTION B") is not a question.
+  if (SECTION.test(block.heading) && block.body.length === 0) return [];
+  // A section of unnumbered questions ("A. Knowledge & Understanding" then
+  // one question per line): split the section on question marks.
+  const body = block.body.join(" ");
+  if (SECTION.test(block.heading) && (body.match(/\?/g) ?? []).length >= 2) {
+    return body.split(/(?<=\?)\s+/).map((q) => withContext([context, block.heading, q]));
+  }
+  // A question on its own ("Q.3 Justify ..."), possibly with its sub-parts.
+  return [withContext([context, [block.heading, ...block.body].join(" ")])];
+}
 
+/**
+ * Splits text into its separate questions. Returns an empty list when there
+ * are fewer than two, meaning "search the text as a whole". The text before
+ * the first question (chapter name, instructions) and a section heading such
+ * as "Q1. Fill in the blanks." are kept with each question as context. Lines
+ * inside ``` code blocks never start a question.
+ */
+export function splitQuestions(text: string): string[] {
+  const { preamble, blocks, bullets } = sortLines(text);
+  const context = preamble.join(" ").slice(0, 200);
+  const questions = [
+    ...blocks.flatMap((block) => questionsInBlock(block, context)),
+    ...bullets.map((bullet) => [context, bullet.join(" ")].filter(Boolean).join("\n")),
+  ];
   const real = questions.filter((q) => q.split("\n").pop()!.length >= MIN_QUESTION_CHARS);
   return real.length >= 2 ? real.slice(0, MAX_QUESTIONS) : [];
 }

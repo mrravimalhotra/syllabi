@@ -93,38 +93,43 @@ function format(value: number): string {
   return Number.isInteger(value) ? String(value) : String(Number(value.toPrecision(10)));
 }
 
-/** Checks one "left = right" pair; null when it isn't a plain calculation. */
-function checkPair(left: string, right: string, inChain: boolean): AnswerCheck | null {
-  // Ratios: 8 : 12 = 2 : 3
+/** The result of a kind-specific check: a check, null (looked like this kind but isn't checkable), or undefined (not this kind at all). */
+type Attempt = AnswerCheck | null | undefined;
+
+/** Ratios: 8 : 12 = 2 : 3 */
+function checkRatio(left: string, right: string): Attempt {
   const ratioL = RATIO_TAIL.exec(left);
   const ratioR = RATIO_HEAD.exec(right);
-  if (ratioL && ratioR) {
-    const a = Number(ratioL[1]) / Number(ratioL[2]);
-    const b = Number(ratioR[1]) / Number(ratioR[2]);
-    if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
-    const ok = Math.abs(a - b) < 1e-9;
-    const shown = `${ratioL[1]} : ${ratioL[2]} = ${ratioR[1]} : ${ratioR[2]}`;
-    return { kind: "calculation", ok, message: ok ? shown : `${shown} is not right: the two ratios are not equal` };
-  }
+  if (!ratioL || !ratioR) return undefined;
+  const a = Number(ratioL[1]) / Number(ratioL[2]);
+  const b = Number(ratioR[1]) / Number(ratioR[2]);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+  const ok = Math.abs(a - b) < 1e-9;
+  const shown = `${ratioL[1]} : ${ratioL[2]} = ${ratioR[1]} : ${ratioR[2]}`;
+  return { kind: "calculation", ok, message: ok ? shown : `${shown} is not right: the two ratios are not equal` };
+}
 
-  // Unit conversions: 5 km = 5000 m, 2 hours 15 minutes = 135 minutes
+/** Unit conversions: 5 km = 5000 m, 2 hours 15 minutes = 135 minutes */
+function checkUnits(left: string, right: string): Attempt {
   const unitL = UNIT_TAIL.exec(left);
   const unitR = UNIT_HEAD.exec(right);
-  if (unitL && unitR) {
-    try {
-      const from = quantity(unitL[1]);
-      const to = quantity(unitR[1]);
-      if (!from || !to) return null;
-      const inTarget = unit(from.value, UNITS[from.unit]).toNumber(UNITS[to.unit]);
-      const written = [...unitR[1].matchAll(ONE_QUANTITY)];
-      const ok = written.length === 1 ? agrees(inTarget, written[0][1], to.value) : Math.abs(inTarget - to.value) < 1e-9;
-      const shown = `${unitL[1].trim()} = ${unitR[1].trim()}`;
-      return { kind: "calculation", ok, message: ok ? shown : `${shown} is not right: it is ${format(inTarget)} ${to.unit}` };
-    } catch {
-      return null; // different kinds of unit (length vs time)
-    }
+  if (!unitL || !unitR) return undefined;
+  try {
+    const from = quantity(unitL[1]);
+    const to = quantity(unitR[1]);
+    if (!from || !to) return null;
+    const inTarget = unit(from.value, UNITS[from.unit]).toNumber(UNITS[to.unit]);
+    const written = [...unitR[1].matchAll(ONE_QUANTITY)];
+    const ok = written.length === 1 ? agrees(inTarget, written[0][1], to.value) : Math.abs(inTarget - to.value) < 1e-9;
+    const shown = `${unitL[1].trim()} = ${unitR[1].trim()}`;
+    return { kind: "calculation", ok, message: ok ? shown : `${shown} is not right: it is ${format(inTarget)} ${to.unit}` };
+  } catch {
+    return null; // different kinds of unit (length vs time)
   }
+}
 
+/** The calculation at the end of the left side and at the start of the right, or null when this isn't plain arithmetic (algebra, labels like "Q1"). */
+function sides(left: string, right: string): { tail: string; head: string } | null {
   const tailMatch = TAIL.exec(left);
   const headMatch = HEAD.exec(right);
   const tail = tailMatch?.[1];
@@ -136,18 +141,33 @@ function checkPair(left: string, right: string, inChain: boolean): AnswerCheck |
   if (/[\p{L}]$/u.test(before) && /^\s*[-+*/^]/.test(tail)) return null;
   if (/[\p{L}]$/u.test(left.slice(0, tailMatch!.index))) return null;
   if (/^[\p{L}]/u.test(right.slice(head.trimEnd().length))) return null;
-  // At least one side must be a calculation (not just "12 = 12"), except in a
-  // chain ("2 × 3 = 6 = 7"), where two different plain numbers can't both be right.
-  const plain = (x: string) => !OPERATOR.test(x.replace(/^\s*-/, ""));
-  if (plain(tail) && plain(head)) {
-    if (!inChain) return null;
-    const a = numeric(tail);
-    const b = numeric(head);
-    if (a === null || b === null || a === b) return null;
-    return { kind: "calculation", ok: false, message: `${tail.trim()} = ${head.trim()} is not right: they are different numbers` };
-  }
-  // Unbalanced brackets mean we caught part of a bigger expression with words in it.
-  const balanced = (s: string) => (s.match(/\(/g) ?? []).length === (s.match(/\)/g) ?? []).length;
+  return { tail, head };
+}
+
+const plain = (x: string) => !OPERATOR.test(x.replace(/^\s*-/, ""));
+// Unbalanced brackets mean we caught part of a bigger expression with words in it.
+const balanced = (s: string) => (s.match(/\(/g) ?? []).length === (s.match(/\)/g) ?? []).length;
+
+/** Two plain numbers in a chain ("2 × 3 = 6 = 7") can't both be right. */
+function checkChainedNumbers(tail: string, head: string): AnswerCheck | null {
+  const a = numeric(tail);
+  const b = numeric(head);
+  if (a === null || b === null || a === b) return null;
+  return { kind: "calculation", ok: false, message: `${tail.trim()} = ${head.trim()} is not right: they are different numbers` };
+}
+
+/** Checks one "left = right" pair; null when it isn't a plain calculation. */
+function checkPair(left: string, right: string, inChain: boolean): AnswerCheck | null {
+  const ratio = checkRatio(left, right);
+  if (ratio !== undefined) return ratio;
+  const units = checkUnits(left, right);
+  if (units !== undefined) return units;
+
+  const found = sides(left, right);
+  if (!found) return null;
+  const { tail, head } = found;
+  // At least one side must be a calculation (not just "12 = 12"), except in a chain.
+  if (plain(tail) && plain(head)) return inChain ? checkChainedNumbers(tail, head) : null;
   if (!balanced(tail) || !balanced(head)) return null;
 
   const leftValue = numeric(tail);
