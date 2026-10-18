@@ -54,6 +54,29 @@ const books = [
 ];
 const answer = { id: "a1", title: "What is 12 x 15?", text: "12 x 15 = 180", sources: [], usedSearchGrounding: false, searchSuggestionsHtml: null, checks: [{ kind: "calculation", ok: true, message: "12 × 15 = 180" }], pdfUrl: "/api/documents/a1/pdf" };
 
+
+const pack = {
+  version: 1, title: "The Plant's Journey", subject: "Science", kind: "information", language: "en",
+  overview: "How a seed becomes a plant.", themes: ["Growth"], characters: [],
+  walkthrough: [
+    { title: "The seed wakes up", summary: "A seed drinks water and starts to grow.", whyItMatters: "It shows how life begins.", feelings: null,
+      vocabulary: [{ word: "germinate", meaning: "to start growing" }], narration: "Hello! Let us see how a seed wakes up. Can you guess what it needs?",
+      scene: { backdrop: "forest", actors: [{ emoji: "🌱", motion: "grow" }, { emoji: "☀️", motion: "pulse" }], caption: "A seedling grows in the sun" } },
+    { title: "Leaves make food", summary: "Leaves use sunlight to make food.", whyItMatters: "Plants feed the world.", feelings: null, vocabulary: [], narration: "Leaves are tiny kitchens.", scene: null },
+  ],
+  textbookQuestions: [{ number: "Q1", question: "What does a seed need to grow?", type: "Short answer", marks: 2, options: [], hint: "Look at part 1.", evidence: "", evidenceFound: null, answer: "Water, air and warmth.", narration: "A seed needs water.", difficulty: null, skill: "" }],
+  textbookQuestionsWritten: false,
+  practiceQuestions: [{ number: "", question: "Name one thing leaves need.", type: "Short answer", marks: 1, options: [], hint: "Think of the sun.", evidence: "", evidenceFound: null, answer: "Sunlight.", narration: "Sunlight.", difficulty: "easy", skill: "Recall" }],
+  glossary: [{ word: "germinate", meaning: "to start growing" }], source: "Science Ch 2", sourceDocumentId: null,
+};
+const packAnswer = { id: "a2", title: "The Plant's Journey", taskType: "study_pack", createdAt: now, text: "# The Plant's Journey", sources: [], usedSearchGrounding: false, searchSuggestionsHtml: null, pack, checks: [], worked: null, pdfUrl: "/api/documents/a2/pdf" };
+// A one-second silent WAV, so the voice button has something to play.
+const silentWav = (() => { const n = 8000; const b = Buffer.alloc(44 + n * 2); b.write("RIFF", 0); b.writeUInt32LE(36 + n * 2, 4); b.write("WAVEfmt ", 8); b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22); b.writeUInt32LE(8000, 24); b.writeUInt32LE(16000, 28); b.writeUInt16LE(2, 32); b.writeUInt16LE(16, 34); b.write("data", 36); b.writeUInt32LE(n * 2, 40); return b; })();
+const sharp = require("sharp");
+const tinyJpeg = await sharp({ create: { width: 300, height: 400, channels: 3, background: "#ffffff" } }).jpeg().toBuffer();
+// Taps by script: buttons inside the animated study pack never count as "still" for a real click.
+const tap = (locator) => locator.evaluate((el) => el.click());
+
 const results = [];
 let browser;
 async function test(name, fn) {
@@ -196,6 +219,89 @@ await test("Switching screens shows the last list at once while it refreshes", a
   await page.locator('a[href="/dashboard/library"]:visible').last().evaluate((el) => el.click());
   await page.waitForURL(/\/dashboard\/library/);
   await page.getByText("Maths Chapter 3").first().waitFor({ timeout: 1500 });
+});
+
+await test("Study pack: parts, picture, tabs and questions", async (page, ctx) => {
+  await ctx.route("**/api/documents/a2", (r) => json(r, { answer: packAnswer }));
+  await page.goto(`${BASE}/dashboard/documents/a2`, { waitUntil: "networkidle" });
+  await page.getByText("The seed wakes up").first().waitFor();
+  await page.getByRole("img", { name: "A seedling grows in the sun" }).waitFor();
+  await tap(page.getByRole("button", { name: /Next/ }).first());
+  await page.getByText("Leaves use sunlight to make food.").first().waitFor();
+  await tap(page.getByRole("tab", { name: /Textbook Q&A/ }).first());
+  await page.getByText("What does a seed need to grow?").first().waitFor();
+  await tap(page.getByRole("tab", { name: /Practice test/ }).first());
+  await page.getByText("Name one thing leaves need.").first().waitFor();
+});
+
+await test("Study pack: Read aloud asks for the natural voice", async (page, ctx) => {
+  let asked = 0;
+  await ctx.route("**/api/documents/a2", (r) => json(r, { answer: packAnswer }));
+  await ctx.route("**/api/speech", (r) => { asked++; return r.fulfill({ status: 200, contentType: "audio/wav", body: silentWav }); });
+  await page.goto(`${BASE}/dashboard/documents/a2`, { waitUntil: "networkidle" });
+  await tap(page.getByRole("button", { name: /Read aloud/ }).first());
+  await page.waitForTimeout(1500);
+  if (asked !== 1) throw new Error(`Expected one request to the voice service, saw ${asked}.`);
+});
+
+await test("Study pack: when the natural voice fails, the phone's voice is used and a note says so", async (page, ctx) => {
+  await ctx.route("**/api/documents/a2", (r) => json(r, { answer: packAnswer }));
+  await ctx.route("**/api/speech", (r) => json(r, { error: "Couldn't make the voice just now." }, 503));
+  await page.goto(`${BASE}/dashboard/documents/a2`, { waitUntil: "networkidle" });
+  await tap(page.getByRole("button", { name: /Read aloud/ }).first());
+  await page.getByText(/natural voice isn.t available/i).first().waitFor({ timeout: 8000 });
+});
+
+await test("My Books: uploading a photo shows it was sent", async (page, ctx) => {
+  let created = 0, sent = 0;
+  await ctx.route("**/api/me", (r) => json(r, me));
+  await ctx.route("**/api/library", (r) => {
+    if (r.request().method() === "GET") return json(r, { documents: [] });
+    created++;
+    return json(r, { documentId: "b9" });
+  });
+  await ctx.route(/\/api\/library\/b9\/pages$/, (r) => { sent++; return json(r, { ok: true }); });
+  await page.goto(`${BASE}/dashboard/library`, { waitUntil: "networkidle" });
+  await page.fill("#book-title", "History Unit 1");
+  await page.locator("input[type=file]").setInputFiles({ name: "page1.jpg", mimeType: "image/jpeg", buffer: tinyJpeg });
+  await page.getByText(/1 page/).first().waitFor({ timeout: 15000 });
+  await page.locator("input[type=checkbox]").check();
+  await page.getByRole("button", { name: /Upload & read/ }).click();
+  await page.getByText(/sent/i).first().waitFor({ timeout: 20000 });
+  if (created !== 1 || sent < 1) throw new Error(`Expected one book and at least one page request, saw ${created} and ${sent}.`);
+});
+
+await test("My Books: a refused upload explains why", async (page, ctx) => {
+  await ctx.route("**/api/me", (r) => json(r, me));
+  await ctx.route("**/api/library", (r) => (r.request().method() === "GET" ? json(r, { documents: [] }) : json(r, { error: "You've used all of this month's allowance, so new answers are paused." }, 429)));
+  await page.goto(`${BASE}/dashboard/library`, { waitUntil: "networkidle" });
+  await page.fill("#book-title", "History Unit 1");
+  await page.locator("input[type=file]").setInputFiles({ name: "page1.jpg", mimeType: "image/jpeg", buffer: tinyJpeg });
+  await page.getByText(/1 page/).first().waitFor({ timeout: 15000 });
+  await page.locator("input[type=checkbox]").check();
+  await page.getByRole("button", { name: /Upload & read/ }).click();
+  await page.getByText(/allowance/i).first().waitFor({ timeout: 15000 });
+});
+
+await test("Admin accounts: lists accounts and explains a refused change", async (page, ctx) => {
+  await ctx.route("**/api/admin/students", (r) => {
+    if (r.request().method() === "GET") return json(r, { students: [{ id: "u2", email: "kid@example.com", full_name: "Meera", role: "student", active: true, token_quota: 200000, monthly_usage: 100, created_at: now, account_type: "parent" }] });
+    return json(r, { error: "You can't turn off or demote your own account. Ask another admin to do it." }, 400);
+  });
+  await page.goto(`${BASE}/admin/students`, { waitUntil: "networkidle" });
+  await page.getByText("Meera").first().waitFor();
+});
+
+await test("Admin health: optional extras are grey, not failures", async (page, ctx) => {
+  await ctx.route("**/api/admin/errors", (r) => json(r, { errors: [] }));
+  await ctx.route("**/api/admin/health", (r) => json(r, { checks: [
+    { name: "Database", ok: true, detail: "Connected.", ms: 100 },
+    { name: "Backup AI: nvidia", ok: true, skipped: true, detail: "Not set up (optional).", ms: 0 },
+  ] }));
+  await page.goto(`${BASE}/admin/health`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: /Run checks/ }).click();
+  await page.getByText(/Everything required works\. 1 optional extra isn.t set up/).first().waitFor({ timeout: 8000 });
+  await page.getByText("Nothing logged in the last 30 days.").first().waitFor();
 });
 
 await test("My Books: a failed list shows a retry message", async (page, ctx) => {

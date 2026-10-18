@@ -18,6 +18,22 @@ export class NotAdminError extends UserError {
   }
 }
 
+const PREVIEW_ADMIN = {
+  id: "00000000-0000-4000-8000-0000000000aa",
+  full_name: "Preview Admin",
+  email: "admin@example.com",
+  role: "admin",
+  account_type: null,
+  class_level: null,
+  board: null,
+  answer_language: null,
+  adult_confirmed_at: null,
+  active: true,
+  token_quota: 200000,
+  created_at: "2026-01-01T00:00:00Z",
+  updated_at: "2026-01-01T00:00:00Z",
+} as Student;
+
 // PostgREST's "no rows" code: the person has no account row (not an outage).
 const NO_ROWS = "PGRST116";
 
@@ -28,6 +44,8 @@ const NO_ROWS = "PGRST116";
  * DatabaseUnavailableError, so an outage is never mistaken for "signed out".
  */
 export const getCurrentStudent = cache(async (): Promise<Student | null> => {
+  // Browser tests (npm run test:e2e) run pages without a real sign-in; development mode only.
+  if (process.env.UI_PREVIEW === "1" && process.env.NODE_ENV !== "production") return PREVIEW_ADMIN;
   const supabase = await createClient();
   const userId = await identify(supabase);
   if (!userId) return null;
