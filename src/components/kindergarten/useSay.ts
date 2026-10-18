@@ -133,22 +133,39 @@ export function useSay() {
   );
 
   /**
-   * A recorded sound for a letter (public/sounds/<letter>.mp3, if the grown-up
-   * has added one), which is always better than a speech voice for a pure
-   * sound. Remembers which letters have a recording.
+   * A recorded sound for a letter: the grown-up's own recording (saved in their
+   * account from the "Record the sounds" page), or a file in public/sounds.
+   * Either is better than a speech voice for a pure sound. Which letters have a
+   * recording is asked once per visit.
    */
   const recorded = useRef(new Map<string, Promise<string | null>>());
+  const mine = useRef<Promise<Set<string>> | null>(null);
   const recording = useCallback((letter: string) => {
     let known = recorded.current.get(letter);
     if (!known) {
-      const url = `/sounds/${letter}.mp3`;
-      known = fetch(url, { method: "HEAD" })
-        .then((res) => (res.ok && (res.headers.get("content-type") ?? "").startsWith("audio") ? url : null))
-        .catch(() => null);
+      mine.current ??= fetch("/api/sounds")
+        .then((res) => (res.ok ? res.json() : { letters: [] }))
+        .then((data) => new Set<string>(Array.isArray(data.letters) ? data.letters : []))
+        .catch(() => new Set<string>());
+      known = mine.current.then(async (letters) => {
+        if (letters.has(letter)) {
+          const res = await fetch(`/api/sounds/${letter}`).catch(() => null);
+          if (res?.ok) {
+            const url = URL.createObjectURL(await res.blob());
+            urls.current.push(url);
+            return url;
+          }
+        }
+        const file = `/sounds/${letter}.mp3`;
+        return fetch(file, { method: "HEAD" })
+          .then((res) => (res.ok && (res.headers.get("content-type") ?? "").startsWith("audio") ? file : null))
+          .catch(() => null);
+      });
       recorded.current.set(letter, known);
     }
     return known;
   }, []);
+  const urls = useRef<string[]>([]);
 
   /** Says the sound a letter makes (not its name); `slow` stretches sounds that can be held. */
   const sound = useCallback(
@@ -174,9 +191,11 @@ export function useSay() {
 
   useEffect(() => {
     const store = clips.current;
+    const mineUrls = urls.current;
     return () => {
       stop();
       for (const url of store.values()) URL.revokeObjectURL(url);
+      for (const url of mineUrls) URL.revokeObjectURL(url);
       store.clear();
     };
   }, [stop]);

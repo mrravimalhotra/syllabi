@@ -80,3 +80,16 @@ export async function deletePrefix(prefix: string): Promise<void> {
     continuationToken = listed.IsTruncated ? listed.NextContinuationToken : undefined;
   } while (continuationToken);
 }
+
+/** The keys of every stored object that starts with `prefix` (small sets only, such as one person's recordings). */
+export async function listKeys(prefix: string): Promise<string[]> {
+  const r2 = client();
+  const keys: string[] = [];
+  let continuationToken: string | undefined;
+  do {
+    const listed = await r2.send(new ListObjectsV2Command({ Bucket: BUCKET, Prefix: prefix, ContinuationToken: continuationToken }), timeout());
+    keys.push(...(listed.Contents ?? []).map((o) => o.Key).filter((k): k is string => Boolean(k)));
+    continuationToken = listed.IsTruncated ? listed.NextContinuationToken : undefined;
+  } while (continuationToken);
+  return keys;
+}

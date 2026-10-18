@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RoundDone, RoundFrame } from "@/components/kindergarten/RoundFrame";
 import { cx } from "@/components/ui";
-import { isVowel, soundText } from "@/lib/kindergarten/phonics";
+import { isVowel, phoneLabel, soundText } from "@/lib/kindergarten/phonics";
 import type { BlendQuestion } from "@/lib/kindergarten/quiz";
 
 interface Props {
@@ -113,7 +113,7 @@ export function BlendGame({ questions, say, sound, prepare, onAgain, onExit }: P
                 right && (isVowel(letter) ? "text-red-600" : "text-brand-700")
               )}
             >
-              {right ? letter : lit === i ? "👆" : "●"}
+              {right ? phoneLabel(letter) : lit === i ? "👆" : "●"}
             </span>
           ))}
         </div>
@@ -145,7 +145,7 @@ export function BlendGame({ questions, say, sound, prepare, onAgain, onExit }: P
           <p className="kg-star text-5xl font-bold tracking-wide text-slate-800">
             {question.letters.map((l, i) => (
               <span key={i} className={isVowel(l) ? "text-red-600" : "text-brand-700"}>
-                {l}
+                {phoneLabel(l)}
                 {i < question.letters.length - 1 ? <span className="px-1 text-slate-300"> · </span> : null}
               </span>
             ))}

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { RoundDone, RoundFrame } from "@/components/kindergarten/RoundFrame";
 import { cx } from "@/components/ui";
 import type { CvcQuestion } from "@/lib/kindergarten/quiz";
-import { isVowel, soundText } from "@/lib/kindergarten/phonics";
+import { isVowel, phoneLabel, soundText } from "@/lib/kindergarten/phonics";
 
 interface Props {
   questions: CvcQuestion[];
@@ -139,7 +139,7 @@ export function CvcGame({ questions, say, sound, prepare, onAgain, onExit }: Pro
           <p className="kg-star text-5xl font-bold tracking-wide text-slate-800" aria-label={`The sounds ${question.letters.join(", ")} make the word ${question.word}`}>
             {question.letters.map((l, i) => (
               <span key={i} className={isVowel(l) ? "text-red-600" : "text-brand-700"}>
-                {l}
+                {phoneLabel(l)}
                 {i < question.letters.length - 1 ? <span className="px-1 text-slate-300"> · </span> : null}
               </span>
             ))}

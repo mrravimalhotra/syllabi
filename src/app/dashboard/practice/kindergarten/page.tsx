@@ -236,6 +236,24 @@ export default function KindergartenPage() {
       </section>
 
       <Link
+        href="/dashboard/practice/kindergarten/sounds"
+        className={cx(card, "flex items-center gap-4 p-4 transition hover:border-brand-300 sm:p-5")}
+      >
+        <span className="text-4xl" aria-hidden>
+          🎤
+        </span>
+        <span>
+          <span className="block text-base font-semibold text-slate-900">Record the sounds</span>
+          <span className="block text-sm text-slate-500">
+            Record each letter sound the way the school teacher says it (m, a, p… k, a, t), and the activities will use your voice.
+          </span>
+        </span>
+        <span className="ml-auto text-slate-400" aria-hidden>
+          →
+        </span>
+      </Link>
+
+      <Link
         href="/dashboard/practice/kindergarten/worksheets"
         className={cx(card, "flex items-center gap-4 p-4 transition hover:border-brand-300 sm:p-5")}
       >

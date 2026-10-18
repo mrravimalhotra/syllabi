@@ -101,7 +101,8 @@ const baseRoutes = async (ctx, extra = {}) => {
 };
 
 await waitForServer();
-browser = await chromium.launch({ executablePath: CHROMIUM });
+// A fake microphone, so the sound recorder can be tried without a real one.
+browser = await chromium.launch({ executablePath: CHROMIUM, args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"] });
 
 await test("Ask: empty question is refused with a clear message", async (page, ctx) => {
   await baseRoutes(ctx);
@@ -355,6 +356,40 @@ await test("Kindergarten: listen and blend - the sounds are heard, then the righ
     if (q < 4) await page.locator(`[data-word]:not([data-word="${word}"])`).waitFor({ timeout: 20000 });
   }
   await page.getByText("Well done!").first().waitFor({ timeout: 20000 });
+});
+
+await test("Kindergarten: recording a letter sound and saving it", async (page, ctx) => {
+  await ctx.grantPermissions(["microphone"]);
+  let saved = 0;
+  await baseRoutes(ctx);
+  await ctx.route("**/api/sounds", (r) => json(r, { letters: ["m"] }));
+  await ctx.route("**/api/sounds/a", (r) => {
+    if (r.request().method() === "PUT") { saved++; return json(r, { ok: true }); }
+    return json(r, { error: "none" }, 404);
+  });
+  await page.goto(`${BASE}/dashboard/practice/kindergarten/sounds`, { waitUntil: "networkidle" });
+  await page.getByText("✓ Your recording is used").first().waitFor();
+  await page.getByRole("button", { name: "Record the sound for a" }).click();
+  await page.getByText(/Recording… say the sound now/).waitFor({ timeout: 5000 });
+  await page.waitForTimeout(800);
+  await page.getByRole("button", { name: "Stop recording a" }).click();
+  await page.getByRole("button", { name: "Save the recording of a" }).waitFor({ timeout: 5000 });
+  await page.getByRole("button", { name: "Save the recording of a" }).click();
+  await page.getByText(/Saved the sound for “a”/).waitFor({ timeout: 5000 });
+  if (saved !== 1) throw new Error(`Expected the recording to be uploaded once, saw ${saved}.`);
+});
+
+await test("Kindergarten: a recorded sound is played instead of the voice", async (page, ctx) => {
+  let fetched = 0;
+  await baseRoutes(ctx);
+  await speechOk(ctx);
+  await ctx.route("**/api/sounds", (r) => json(r, { letters: "abcdefghijklmnopqrstuvwxyz".split("") }));
+  await ctx.route(/\/api\/sounds\/[a-z]$/, (r) => { fetched++; return r.fulfill({ status: 200, contentType: "audio/wav", body: silentWav }); });
+  await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
+  await tap(page.getByRole("button", { name: /Play/ }).first());
+  await page.locator("[data-word]").waitFor({ timeout: 15000 });
+  for (let i = 0; i < 60 && fetched < 3; i++) await page.waitForTimeout(250);
+  if (fetched < 3) throw new Error(`Expected the recorded sounds to be fetched, saw ${fetched}.`);
 });
 
 await test("Kindergarten: the grown-up guide explains how to say the sounds", async (page, ctx) => {

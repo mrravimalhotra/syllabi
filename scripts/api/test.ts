@@ -2,7 +2,7 @@
 // signed-in person, and checks status codes and messages for signed-out,
 // not-allowed, bad input, over-allowance and not-found cases.
 import { session } from "./fakes/auth";
-import { deleted } from "./fakes/storage";
+import { deleted, files } from "./fakes/storage";
 import { resetDb, tables, rpcs, failures } from "./fakes/db";
 import * as me from "../../src/app/api/me/route";
 import * as library from "../../src/app/api/library/route";
@@ -14,6 +14,8 @@ import * as llm from "../../src/app/api/admin/llm-settings/route";
 import * as adhoc from "../../src/app/api/generate/ad-hoc/route";
 import * as jobs from "../../src/app/api/jobs/pages/route";
 import * as guests from "../../src/app/api/admin/guests/route";
+import * as sounds from "../../src/app/api/sounds/route";
+import * as sound from "../../src/app/api/sounds/[letter]/route";
 import * as logError from "../../src/app/api/log-error/route";
 import type { Student } from "@/types/database";
 
@@ -35,14 +37,14 @@ function check(name: string, ok: boolean, detail = "") {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${ok ? "" : `  (${detail})`}`);
 }
 
-type Handler = (req: Request, ctx: { params: Promise<{ id: string }> }) => Promise<Response>;
+type Handler = (req: Request, ctx: { params: Promise<{ id: string; letter?: string }> }) => Promise<Response>;
 async function call(handler: unknown, body?: unknown, opts: { id?: string; raw?: string; headers?: Record<string, string> } = {}) {
   const req = new Request("http://localhost/api/x", {
     method: "POST",
     headers: { "content-type": "application/json", ...(opts.headers ?? {}) },
     body: opts.raw ?? (body === undefined ? undefined : JSON.stringify(body)),
   });
-  const res = await (handler as Handler)(req, { params: Promise.resolve({ id: opts.id ?? "x" }) });
+  const res = await (handler as Handler)(req, { params: Promise.resolve({ id: opts.id ?? "x", letter: opts.id ?? "x" }) });
   const json = await res.clone().json().catch(() => null);
   return { status: res.status, json: json as Record<string, unknown> | null };
 }
@@ -59,6 +61,7 @@ function fresh(user: Student | null = person()) {
   session.user = user;
   session.outage = false;
   deleted.length = 0;
+  files.clear();
   rpcs.student_monthly_usage = () => 0;
   rpcs.page_job_counts = () => [];
   tables.students = user ? [{ ...user }] : [];
@@ -140,6 +143,37 @@ tables.students.push({ id: OTHER, email: "o@example.com", active: true, role: "s
 await expect("admin students PATCH: a good change is saved", students.PATCH, 200, null, { id: OTHER, token_quota: 5000 });
 await expect("admin llm-settings PATCH: embeddings must stay on Google", llm.PATCH, 400, /Google/i, { taskType: "embedding", provider: "groq", model: "x" });
 await expect("admin llm-settings PATCH: a bad model name is refused", llm.PATCH, 400, /model name/i, { taskType: "notes", provider: "google", model: "bad name!" });
+
+// ---- Recorded letter sounds ----
+const audio = (letter: string, body: string, type = "audio/webm") => ({ id: letter, raw: body, headers: { "content-type": type } });
+const putSound = (letter: string, body: string, type = "audio/webm") => call(sound.PUT, undefined, audio(letter, body, type));
+fresh(null);
+await expect("sounds: signed out gets 401", sounds.GET, 401, /sign in again/i, undefined);
+fresh();
+const saved = await putSound("m", "RIFFfakeaudio");
+check("sounds PUT: a recording is saved", saved.status === 200, String(saved.status));
+check("sounds PUT: stored privately under the caller's id", files.has(`sounds/${ME}/m`));
+const notAudio = await putSound("a", "<html>", "text/html");
+check("sounds PUT: something that isn't audio is refused", notAudio.status === 400 && /audio recording/i.test(String(notAudio.json?.error)), String(notAudio.json?.error));
+const empty = await putSound("a", "");
+check("sounds PUT: an empty recording is refused", empty.status === 400 && /empty/i.test(String(empty.json?.error)));
+const long = await putSound("a", "x".repeat(500_000));
+check("sounds PUT: an overlong recording is refused", long.status === 400 && /too long/i.test(String(long.json?.error)));
+const badLetter = await putSound("mm", "RIFFfake");
+check("sounds PUT: only a single letter is accepted", badLetter.status === 400, String(badLetter.status));
+const traversal = await putSound("../x", "RIFFfake");
+check("sounds PUT: a path trick is refused", traversal.status === 400 && ![...files.keys()].some((k) => k.includes("..")));
+const list = await call(sounds.GET);
+check("sounds GET: lists the letters recorded", JSON.stringify(list.json?.letters) === JSON.stringify(["m"]), JSON.stringify(list.json));
+const got = await (sound.GET as unknown as Handler)(new Request("http://localhost/x"), { params: Promise.resolve({ id: "m", letter: "m" } as never) });
+check("sounds GET letter: returns the audio with its type", got.status === 200 && got.headers.get("content-type") === "audio/webm" && (await got.text()) === "RIFFfakeaudio");
+// Someone else's recording is never reachable.
+files.set(`sounds/${OTHER}/p`, { data: Buffer.from("theirs"), contentType: "audio/webm" });
+const theirs = await (sound.GET as unknown as Handler)(new Request("http://localhost/x"), { params: Promise.resolve({ letter: "p" } as never) });
+check("sounds GET letter: another account's recording is not reachable", theirs.status === 404);
+check("sounds GET: only the caller's letters are listed", JSON.stringify((await call(sounds.GET)).json?.letters) === JSON.stringify(["m"]));
+const removed = await (sound.DELETE as unknown as Handler)(new Request("http://localhost/x", { method: "DELETE" }), { params: Promise.resolve({ letter: "m" } as never) });
+check("sounds DELETE: removes the caller's recording", removed.status === 200 && !files.has(`sounds/${ME}/m`) && files.has(`sounds/${OTHER}/p`));
 
 // ---- Guest accounts ----
 fresh(person({ role: "student" }));

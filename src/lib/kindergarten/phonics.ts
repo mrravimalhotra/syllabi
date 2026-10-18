@@ -60,6 +60,12 @@ export function soundText(letter: string, slow = false): string {
   return slow && p.kind !== "stop" ? p.hold : p.say;
 }
 
+/**
+ * How a letter's sound is written when a word is sounded out, as the school
+ * does: k a t = cat. The letter c says /k/ in every CVC word.
+ */
+export const phoneLabel = (letter: string) => (letter === "c" ? "k" : letter);
+
 export const isVowel = (letter: string) => PHONEMES[letter]?.kind === "vowel";
 
 /** The order many schemes teach letters in (s a t p i n first), so the earliest words can be read soonest. */
