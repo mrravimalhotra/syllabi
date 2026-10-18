@@ -513,6 +513,48 @@ await test("Kindergarten worksheets: both sheets show, and a new sheet changes t
   if (lilyPads < 4) throw new Error(`Expected lily pads on the board, saw ${lilyPads}.`);
 });
 
+await test("My Books: deleting a book asks first, then removes it from the list", async (page, ctx) => {
+  let deleted = 0;
+  await ctx.route("**/api/me", (r) => json(r, me));
+  await ctx.route("**/api/library", (r) => json(r, { documents: books }));
+  await ctx.route("**/api/library/b1", (r) => {
+    deleted++;
+    return json(r, { ok: true });
+  });
+  let asked = "";
+  page.on("dialog", (d) => {
+    asked = d.message();
+    void d.accept();
+  });
+  await page.goto(`${BASE}/dashboard/library`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: /Delete "Maths Chapter 3"/ }).click();
+  await page.getByText("Maths Chapter 3").first().waitFor({ state: "detached", timeout: 8000 });
+  if (deleted !== 1 || !/Delete "Maths Chapter 3"\?/.test(asked)) throw new Error(`Expected one delete after asking, saw ${deleted} and "${asked}".`);
+  await page.getByText("Science Notes").first().waitFor();
+});
+
+await test("My Books: the same photo twice is skipped, and a failed page is kept to try again", async (page, ctx) => {
+  let pageCalls = 0;
+  await ctx.route("**/api/me", (r) => json(r, me));
+  await ctx.route("**/api/library", (r) => (r.request().method() === "GET" ? json(r, { documents: [] }) : json(r, { documentId: "b8" })));
+  await ctx.route("**/api/library/b8", (r) => json(r, { ok: true }));
+  await ctx.route(/\/api\/library\/b8\/pages$/, (r) => {
+    pageCalls++;
+    return pageCalls === 1 ? json(r, { error: "That page could not be read.", retryable: false }, 400) : json(r, { ok: true });
+  });
+  await page.goto(`${BASE}/dashboard/library`, { waitUntil: "networkidle" });
+  await page.fill("#book-title", "History Unit 2");
+  const photo = { name: "page1.jpg", mimeType: "image/jpeg", buffer: tinyJpeg };
+  await page.locator("input[type=file]").setInputFiles([photo, { ...photo, name: "copy.jpg" }]);
+  await page.getByText(/1 duplicate page skipped/).first().waitFor({ timeout: 15000 });
+  await page.locator("input[type=checkbox]").check();
+  await page.getByRole("button", { name: /Upload & read/ }).click();
+  await page.getByText(/That page could not be read/).first().waitFor({ timeout: 15000 });
+  await page.getByText(/1 page is still below/).first().waitFor();
+  await page.getByRole("button", { name: /Upload & read 1 page/ }).click();
+  await page.getByText(/sent\. Syllabi is reading them now/i).first().waitFor({ timeout: 20000 });
+});
+
 await test("My Books: a failed list shows a retry message", async (page, ctx) => {
   await ctx.route("**/api/me", (r) => json(r, me));
   await ctx.route("**/api/library*", (r) => json(r, { error: "Couldn't load your books." }, 500));

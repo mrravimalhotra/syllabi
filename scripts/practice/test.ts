@@ -3,6 +3,7 @@ import type { PracticeNumber } from "@/lib/practice/numbers";
 import { makeCompareQuiz, makeCvcQuiz, makeSightQuiz, type CompareSettings, type SightSettings } from "@/lib/kindergarten/quiz";
 import { IPA, PHONEMES, blendStart, soundText } from "@/lib/kindergarten/phonics";
 import { makeBlendQuiz } from "@/lib/kindergarten/quiz";
+import { describeOutcome } from "@/app/dashboard/library/_parts/upload-book";
 import { LOGIN_ID, internalEmail, looksLikeLoginId, normaliseLoginId } from "@/lib/login-id";
 import { BOARD_COLUMNS, BOARD_ROWS, makeBoardGame, makeFamilySheet, makeMatchSheet, schoolFamilySheet, schoolMatchSheet } from "@/lib/kindergarten/worksheets";
 import { BOARD_WORDS, CVC_WORDS, SIGHT_LEVELS, SIGHT_SETS, VOWELS } from "@/lib/kindergarten/words";
@@ -261,6 +262,19 @@ for (const bad of ["ab", "x".repeat(31), "has space", "a@b.com", "-guest", "Gues
 check(normaliseLoginId("  Guest ") === "guest", "A user ID is trimmed and lowercased");
 check(looksLikeLoginId("guest") && !looksLikeLoginId("a@b.com"), "An email is not a user ID");
 check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-in login address");
+
+// The message at the end of a book upload.
+{
+  const done = describeOutcome({ saved: new Set(["a", "b", "c"]), failures: new Map(), fatal: null }, 3, " Maths ", false);
+  check(done.error === null && /All 3 pages of "Maths" sent/.test(done.success ?? "") && /about 1 minute\./.test(done.success ?? ""), "A finished upload says all pages were sent");
+  const one = describeOutcome({ saved: new Set(["a"]), failures: new Map(), fatal: null }, 1, "Maths", false);
+  check(/All 1 page of/.test(one.success ?? "") && !/pages/.test((one.success ?? "").split("sent")[0]), "One page is written in the singular");
+  const part = describeOutcome({ saved: new Set(["a"]), failures: new Map([["b", "Too large."], ["c", "Too large."]]), fatal: "The connection dropped." }, 3, "Maths", false);
+  check(part.success === null && /2 pages are still below: press Upload to try again \(they go into the same book\)/.test(part.error ?? ""), "A partly sent upload says what is left");
+  check(/The connection dropped\./.test(part.error ?? "") && (part.error?.match(/Too large\./g) ?? []).length === 1 && /1 page was already sent and is being read/.test(part.error ?? ""), "It names the reason once and what was already sent");
+  const stopped = describeOutcome({ saved: new Set(), failures: new Map(), fatal: "ignored" }, 2, "Maths", true);
+  check(/Upload stopped\. 2 pages are still below: press Upload to continue\./.test(stopped.error ?? "") && !/ignored/.test(stopped.error ?? ""), "A stopped upload says it was stopped");
+}
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

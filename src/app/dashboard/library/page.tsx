@@ -1,44 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { downscaleImageFile, formatBytes, imageFingerprint } from "@/lib/downscale-image";
 import { keep, peek } from "@/lib/client-cache";
-import { fileReadError } from "@/lib/file-errors";
-import { sourceTypeLabel } from "@/lib/format";
-import {
-  SOURCE_TYPE_OPTIONS,
-  MAX_PAGES,
-  PARALLEL_REQUESTS,
-  UPLOAD_ATTEMPTS,
-  RETRY_WAIT_MS,
-  STALE_UPLOAD_MS,
-  PendingPage,
-  DocumentRowView,
-  groupByBook,
-  toRequests,
-  uploadShape,
-  mainKind,
-  wait,
-  keepScreenOn,
-} from "@/app/dashboard/library/_parts/upload-helpers";
-import { PageCard, StatusBadge } from "@/app/dashboard/library/_parts/BookParts";
+import { STALE_UPLOAD_MS, DocumentRowView, PendingPage, keepScreenOn } from "@/app/dashboard/library/_parts/upload-helpers";
+import { AddBookForm, type BookValues } from "@/app/dashboard/library/_parts/AddBookForm";
+import { BookList } from "@/app/dashboard/library/_parts/BookList";
+import { prepareFiles } from "@/app/dashboard/library/_parts/read-files";
+import { describeOutcome, uploadPages } from "@/app/dashboard/library/_parts/upload-book";
 import type { SourceType } from "@/types/database";
-import { EditableName } from "@/components/EditableName";
-import { BookIcon, CheckIcon, TrashIcon, UploadIcon } from "@/components/icons";
-import {
-  Alert,
-  EmptyState,
-  Field,
-  PageHeader,
-  PageSkeleton,
-  Spinner,
-  button,
-  card,
-  cx,
-  input,
-  label,
-  link,
-} from "@/components/ui";
+import { PageHeader, PageSkeleton } from "@/components/ui";
 
 export default function LibraryPage() {
   const [documents, setDocuments] = useState<DocumentRowView[]>(() => peek<DocumentRowView[]>("library") ?? []);
@@ -46,11 +16,8 @@ export default function LibraryPage() {
   const [loading, setLoading] = useState(() => peek("library") === undefined);
   const [loadFailed, setLoadFailed] = useState(false);
 
-  const [title, setTitle] = useState("");
-  const [subject, setSubject] = useState("");
-  const [grade, setGrade] = useState("");
-  const [rightsConfirmed, setRightsConfirmed] = useState(false);
-  const [defaultSourceType, setDefaultSourceType] = useState<SourceType>("textbook");
+  const [values, setValues] = useState<BookValues>({ title: "", subject: "", grade: "", sourceType: "textbook", rightsConfirmed: false });
+  const change = (patch: Partial<BookValues>) => setValues((v) => ({ ...v, ...patch }));
   const [pages, setPages] = useState<PendingPage[]>([]);
   const [processingFiles, setProcessingFiles] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -65,7 +32,6 @@ export default function LibraryPage() {
   const stopRef = useRef<AbortController | null>(null);
   // When the book list was last loaded, to tell an upload still running from one that stopped.
   const [listedAt, setListedAt] = useState(0);
-  const [dragging, setDragging] = useState(false);
   const [shrinkNote, setShrinkNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -110,106 +76,10 @@ export default function LibraryPage() {
     setError(null);
     setProcessingFiles(true);
     try {
-      const newPages: PendingPage[] = [];
-      // Photo and PDF sizes before and after shrinking, for the note under the drop area.
-      let originalBytes = 0;
-      let shrunkBytes = 0;
-      for (const file of Array.from(fileList)) {
-        try {
-        if (file.name.toLowerCase().endsWith(".docx")) {
-          // Word files: read the text right here (no page reading needed), and
-          // keep each picture as an image page with a note of where it was.
-          const { readDocx } = await import("@/lib/docx-to-text");
-          const { textPages, pictures, skippedPictures } = await readDocx(file);
-          if (skippedPictures.length > 0) {
-            setError(
-              `${file.name}: ${skippedPictures.length} picture(s) are in a format that can't be read. ` +
-                "If they matter, save the file as PDF in Word and upload the PDF instead."
-            );
-          }
-          pictures.forEach((picture, i) =>
-            newPages.push({
-              id: `${file.name}-pic-${i}-${Date.now()}`,
-              imageBase64: picture.imageBase64,
-              mimeType: picture.mimeType,
-              hint: picture.hint,
-              sourceType: defaultSourceType,
-              origin: `${file.name} (picture ${i + 1})`,
-            })
-          );
-          textPages.forEach((text, i) =>
-            newPages.push({
-              id: `${file.name}-${i}-${Date.now()}`,
-              imageBase64: "",
-              mimeType: "",
-              text,
-              sourceType: defaultSourceType,
-              origin: textPages.length > 1 ? `${file.name} (part ${i + 1})` : file.name,
-            })
-          );
-        } else if (file.type === "application/pdf") {
-          // pdf.js is large; load it only when a PDF is actually picked.
-          // Digital PDFs carry their own text: those pages need no AI reading.
-          const { readPdfPages } = await import("@/lib/pdf-to-images");
-          const pdfPages = await readPdfPages(file);
-          originalBytes += file.size;
-          pdfPages.forEach((p) => (shrunkBytes += p.bytes ?? 0));
-          pdfPages.forEach((p, i) =>
-            newPages.push({
-              id: `${file.name}-${i}-${Date.now()}`,
-              imageBase64: p.imageBase64,
-              mimeType: p.mimeType,
-              pdfText: p.text,
-              sourceType: defaultSourceType,
-              origin: pdfPages.length > 1 ? `${file.name} (p.${i + 1})` : file.name,
-            })
-          );
-        } else {
-          const downscaled = await downscaleImageFile(file);
-          originalBytes += file.size;
-          shrunkBytes += downscaled.bytes ?? 0;
-          newPages.push({
-            id: `${file.name}-${Date.now()}`,
-            imageBase64: downscaled.imageBase64,
-            mimeType: downscaled.mimeType,
-            sourceType: defaultSourceType,
-            origin: file.name,
-          });
-        }
-        } catch (err) {
-          throw new Error(fileReadError(file, err));
-        }
-      }
-
-      // The same photo picked twice would be read (and paid for) twice.
-      const seen = new Set(pages.map((p) => imageFingerprint(p.text ?? p.pdfText ?? p.imageBase64)));
-      const unique = newPages.filter((p) => {
-        const fingerprint = imageFingerprint(p.text ?? p.pdfText ?? p.imageBase64);
-        if (seen.has(fingerprint)) return false;
-        seen.add(fingerprint);
-        return true;
-      });
-      const duplicates = newPages.length - unique.length;
-
-      const combined = [...pages, ...unique];
-      if (combined.length > MAX_PAGES) {
-        setError(
-          `You chose ${combined.length} pages, but one upload takes at most ${MAX_PAGES}. The first ${MAX_PAGES} were added; ` +
-            "upload the rest afterwards as a separate book."
-        );
-      }
-      setPages(combined.slice(0, MAX_PAGES));
-
-      const notes: string[] = [];
-      if (originalBytes > 0 && shrunkBytes > 0 && shrunkBytes < originalBytes) {
-        notes.push(`Shrunk from ${formatBytes(originalBytes)} to ${formatBytes(shrunkBytes)} for a faster upload.`);
-      }
-      if (duplicates > 0) notes.push(`${duplicates} duplicate page${duplicates > 1 ? "s" : ""} skipped.`);
-      const codeRead = unique.filter((p) => p.pdfText !== undefined).length;
-      if (codeRead > 0) {
-        notes.push(`${codeRead} PDF page${codeRead > 1 ? "s have" : " has"} typed text, so ${codeRead > 1 ? "they need" : "it needs"} no AI reading: quicker, and it uses none of your monthly allowance.`);
-      }
-      setShrinkNote(notes.length ? notes.join(" ") : null);
+      const prepared = await prepareFiles(Array.from(fileList), values.sourceType, pages);
+      setPages(prepared.pages);
+      setShrinkNote(prepared.note);
+      if (prepared.warning) setError(prepared.warning);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't read the files you chose. Try again, or add fewer files at a time.");
     } finally {
@@ -233,7 +103,12 @@ export default function LibraryPage() {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error ?? "Rename failed");
-    setDocuments((prev) => keep("library", prev.map((d) => (d.id === id ? { ...d, title: data.document.title } : d))));
+    setDocuments((prev) =>
+      keep(
+        "library",
+        prev.map((d) => (d.id === id ? { ...d, title: data.document.title } : d))
+      )
+    );
   }
 
   /** Deletes a book (stopping its upload first, if this tab is uploading it). Returns whether it worked. */
@@ -249,7 +124,12 @@ export default function LibraryPage() {
         setBookErrors((e) => ({ ...e, [id]: data.error ?? "Couldn't delete this book. Try again in a moment." }));
         return false;
       }
-      setDocuments((docs) => keep("library", docs.filter((d) => d.id !== id)));
+      setDocuments((docs) =>
+        keep(
+          "library",
+          docs.filter((d) => d.id !== id)
+        )
+      );
       // Pages waiting to go into this book will start a new one instead.
       setPages((prev) => prev.map((p) => (p.bookId === id ? { ...p, bookId: undefined, pageNumber: undefined } : p)));
       return true;
@@ -262,7 +142,12 @@ export default function LibraryPage() {
   }
 
   async function deleteBook(doc: DocumentRowView) {
-    if (!window.confirm(`Delete "${doc.title}"? Its pages are removed for good, and answers can no longer use this book. Answers you already saved stay in My Documents.`)) return;
+    if (
+      !window.confirm(
+        `Delete "${doc.title}"? Its pages are removed for good, and answers can no longer use this book. Answers you already saved stay in My Documents.`
+      )
+    )
+      return;
     await removeBook(doc.id);
   }
 
@@ -281,37 +166,40 @@ export default function LibraryPage() {
 
   async function removeUnfinished() {
     const list = documents.filter(unfinished);
-    if (!window.confirm(`Delete ${list.length} unfinished upload${list.length === 1 ? "" : "s"}? Pages already read in them are removed too.`)) return;
+    if (
+      !window.confirm(`Delete ${list.length} unfinished upload${list.length === 1 ? "" : "s"}? Pages already read in them are removed too.`)
+    )
+      return;
     for (const d of list) await removeBook(d.id);
+  }
+
+  /** Why the book can't be uploaded yet, or null when it can. */
+  function uploadProblem(): string | null {
+    if (!values.title.trim()) return "Type a title for the book (for example, Science Class 8, Chapter 3), then press Upload again.";
+    if (pages.length === 0) return "Add at least one photo, PDF or Word file with “Choose files”, then press Upload.";
+    if (!values.rightsConfirmed) return "Tick the box that says you own this copy, then press Upload again.";
+    return null;
+  }
+
+  /** Asks before making a second copy of a book by accident. */
+  function confirmSameTitle(): boolean {
+    const sameTitle = documents.find((d) => d.title.trim().toLowerCase() === values.title.trim().toLowerCase());
+    if (!sameTitle || !pages.some((p) => !p.bookId)) return true;
+    return window.confirm(
+      `You already have a book called "${sameTitle.title}". Upload these pages as another copy?\n\nCancel to change the title, or delete the old book first.`
+    );
   }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setSuccess(null);
-    if (!title.trim()) {
-      setError("Type a title for the book (for example, Science Class 8, Chapter 3), then press Upload again.");
+    const problem = uploadProblem();
+    if (problem) {
+      setError(problem);
       return;
     }
-    if (pages.length === 0) {
-      setError("Add at least one photo, PDF or Word file with “Choose files”, then press Upload.");
-      return;
-    }
-    if (!rightsConfirmed) {
-      setError("Tick the box that says you own this copy, then press Upload again.");
-      return;
-    }
-    // Don't make a second copy of a book by accident.
-    const sameTitle = documents.find((d) => d.title.trim().toLowerCase() === title.trim().toLowerCase());
-    if (
-      sameTitle &&
-      pages.some((p) => !p.bookId) &&
-      !window.confirm(
-        `You already have a book called "${sameTitle.title}". Upload these pages as another copy?\n\nCancel to change the title, or delete the old book first.`
-      )
-    ) {
-      return;
-    }
+    if (!confirmSameTitle()) return;
 
     const controller = new AbortController();
     stopRef.current = controller;
@@ -322,135 +210,40 @@ export default function LibraryPage() {
     setUploadTotal(pages.length);
     setPages((prev) => prev.map((p) => ({ ...p, failure: undefined })));
 
-    const failures = new Map<string, string>(); // page id → reason
-    const saved = new Set<string>();
-    let stopReason: string | null = null; // a failure that every later page would hit too
-    let fatal: string | null = null;
-    let sent = 0;
+    const outcome = await uploadPages({
+      title: values.title,
+      subject: values.subject,
+      grade: values.grade,
+      rightsConfirmed: values.rightsConfirmed,
+      pages,
+      signal: controller.signal,
+      progress: setUploadProgress,
+      sent: setPagesSent,
+      numbered: (bookId, numbers) =>
+        setPages((prev) => prev.map((p) => (numbers.has(p.id) ? { ...p, bookId, pageNumber: numbers.get(p.id) } : p))),
+      saved: (ids) => setPages((prev) => prev.filter((p) => !ids.includes(p.id))),
+      active: (id) => setActiveBooks((a) => [...a, id]),
+      reload: () => void load(),
+      removeBook,
+    });
 
-    try {
-      for (let group of groupByBook(pages)) {
-        if (controller.signal.aborted || stopReason) break;
+    setPages((prev) => prev.map((p) => (outcome.failures.has(p.id) ? { ...p, failure: outcome.failures.get(p.id) } : p)));
+    releaseScreen();
+    setActiveBooks([]);
+    setSubmitting(false);
+    setUploadProgress(null);
+    stopRef.current = null;
+    await load();
 
-        // A new book is created first, so a retried page can never start a second copy of it.
-        const createdNow = !group[0].bookId;
-        if (!group[0].bookId) {
-          setUploadProgress(`Starting "${title.trim()}"`);
-          const res = await fetch("/api/library", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            signal: controller.signal,
-            body: JSON.stringify({ title: title.trim(), subject: subject.trim(), grade: grade.trim(), rightsConfirmed, sourceType: mainKind(group) }),
-          });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok || !data.documentId) throw new Error(data.error ?? "Couldn't start the upload. Please try again.");
-          const newId: string = data.documentId;
-          group = group.map((p, i) => ({ ...p, bookId: newId, pageNumber: i + 1 }));
-          const numbered = new Map(group.map((p) => [p.id, p.pageNumber]));
-          setPages((prev) => prev.map((p) => (numbered.has(p.id) ? { ...p, bookId: newId, pageNumber: numbered.get(p.id) } : p)));
-          void load();
-        }
-        const book = { id: group[0].bookId! };
-        setActiveBooks((a) => [...a, book.id]);
-
-        const queue = toRequests(group);
-        const worker = async () => {
-          for (let batch = queue.shift(); batch; batch = queue.shift()) {
-            if (controller.signal.aborted || stopReason) return;
-            const first = batch[0].pageNumber!;
-            const name = batch.length === 1 ? `page ${first}` : `pages ${first}–${first + batch.length - 1}`;
-            for (let attempt = 1; ; attempt++) {
-              let res: Response;
-              let data: { error?: string; retryable?: boolean } = {};
-              try {
-                res = await fetch(`/api/library/${book.id}/pages`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  signal: controller.signal,
-                  body: JSON.stringify({ pages: batch.map(uploadShape), startPageNumber: first }),
-                });
-                data = await res.json().catch(() => ({ error: res.status === 504 ? "The server took too long." : undefined }));
-              } catch {
-                if (controller.signal.aborted) return;
-                res = new Response(null, { status: 503 });
-                data = { error: "The connection dropped." };
-              }
-              if (res.ok) {
-                batch.forEach((p) => saved.add(p.id));
-                sent += batch.length;
-                setPagesSent(sent);
-                setPages((prev) => prev.filter((p) => !saved.has(p.id)));
-                break;
-              }
-              const reason =
-                data.error ??
-                (res.status === 413
-                  ? "This page is too large to send. Add it again as a smaller photo."
-                  : res.status === 401
-                    ? "You were signed out. Sign in again, then press Upload to continue."
-                    : "The page couldn't be sent. Check your connection, then press Upload to try again.");
-              const retry = res.status >= 500 && data.retryable !== false && attempt < UPLOAD_ATTEMPTS;
-              if (!retry) {
-                batch.forEach((p) => failures.set(p.id, reason));
-                if (res.status === 404 || /daily allowance|quota exceeded/i.test(reason)) stopReason = reason;
-                break;
-              }
-              setUploadProgress(`${reason} Trying ${name} again (${attempt + 1} of ${UPLOAD_ATTEMPTS})`);
-              await wait(RETRY_WAIT_MS * attempt);
-              if (controller.signal.aborted) return;
-            }
-            if (!stopReason) setUploadProgress("Sending the pages");
-          }
-        };
-        setUploadProgress("Sending the pages");
-        await Promise.all(Array.from({ length: PARALLEL_REQUESTS }, worker));
-
-        // A book started now that got none of its pages is removed; the pages stay below to try again.
-        if (createdNow && !group.some((p) => saved.has(p.id))) await removeBook(book.id);
-      }
-    } catch (err) {
-      if (!controller.signal.aborted) fatal = err instanceof Error ? err.message : "The upload stopped unexpectedly. Check your connection, then press Upload to try again.";
-    } finally {
-      setPages((prev) => prev.map((p) => (failures.has(p.id) ? { ...p, failure: failures.get(p.id) } : p)));
-      releaseScreen();
-      setActiveBooks([]);
-      setSubmitting(false);
-      setUploadProgress(null);
-      stopRef.current = null;
-      await load();
+    const message = describeOutcome(outcome, pages.length, values.title, controller.signal.aborted);
+    if (message.success) {
+      setSuccess(message.success);
+      change({ title: "" });
     }
-
-    const left = pages.length - saved.size;
-    if (left === 0) {
-      const minutes = Math.max(1, Math.ceil((saved.size * 12) / 60));
-      setSuccess(
-        `All ${saved.size} page${saved.size === 1 ? "" : "s"} of "${title.trim()}" sent. ` +
-          `Syllabi is reading them now, about ${minutes} minute${minutes === 1 ? "" : "s"}. You can close the app: reading carries on, and the book shows Ready when it's done.`
-      );
-      setTitle("");
-      return;
-    }
-    const reasons = [...new Set(failures.values())];
-    const stopped = controller.signal.aborted;
-    setError(
-      [
-        stopped
-          ? `Upload stopped. ${left} page${left === 1 ? " is" : "s are"} still below: press Upload to continue${saved.size > 0 ? " (they go into the same book)" : ""}.`
-          : `${left} page${left === 1 ? " is" : "s are"} still below: press Upload to try again${saved.size > 0 ? " (they go into the same book)" : ""}.`,
-        !stopped && fatal ? fatal : null,
-        reasons.length ? `Why: ${reasons.join(" ")}` : null,
-        saved.size > 0 ? `${saved.size} page${saved.size === 1 ? " was" : "s were"} already sent and ${saved.size === 1 ? "is" : "are"} being read.` : null,
-      ]
-        .filter(Boolean)
-        .join(" ")
-    );
+    if (message.error) setError(message.error);
   }
 
   if (loading) return <PageSkeleton rows={2} />;
-
-  const progressPct = uploadTotal > 0 ? Math.round((pagesSent / uploadTotal) * 100) : 0;
-  const resuming = pages.some((p) => p.bookId);
-  const unfinishedCount = documents.filter(unfinished).length;
 
   return (
     <div className="space-y-8">
@@ -458,275 +251,39 @@ export default function LibraryPage() {
         title="My books"
         description={
           <>
-            Upload photos, a PDF or a Word file of your child&apos;s or student&apos;s books, worksheets and past
-            papers. Syllabi reads every page so answers come from these books. Your books are private: only you can
-            see and search them.
+            Upload photos, a PDF or a Word file of your child&apos;s or student&apos;s books, worksheets and past papers. Syllabi reads
+            every page so answers come from these books. Your books are private: only you can see and search them.
           </>
         }
       />
 
-      <form onSubmit={submit} className={cx(card, "space-y-6 p-5 sm:p-6")}>
-        <div className="flex items-center gap-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
-            <UploadIcon className="h-5 w-5" />
-          </span>
-          <div>
-            <h2 className="text-base font-semibold text-slate-900">Add a book</h2>
-            <p className="text-xs text-slate-500">Reading pages uses part of your monthly allowance.</p>
-          </div>
-        </div>
+      <AddBookForm
+        values={values}
+        onChange={change}
+        pages={pages}
+        upload={{ preparing: processingFiles, running: submitting, progress: uploadProgress, sent: pagesSent, total: uploadTotal }}
+        error={error}
+        success={success}
+        note={shrinkNote}
+        onSubmit={submit}
+        onFiles={addFiles}
+        onRemovePage={removePage}
+        onPageKind={setPageSourceType}
+        onRemoveAll={() => setPages([])}
+        onStop={() => stopRef.current?.abort()}
+      />
 
-        {error && <Alert tone="error">{error}</Alert>}
-        {success && <Alert tone="success">{success}</Alert>}
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <Field label="Title" htmlFor="book-title">
-              <input
-                id="book-title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Science Class 8, Chapter 3: Motion"
-                maxLength={200}
-                className={input}
-              />
-            </Field>
-          </div>
-          <Field label="Subject (optional)" htmlFor="book-subject">
-            <input
-              id="book-subject"
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              placeholder="e.g. Science"
-              maxLength={100}
-              className={input}
-            />
-          </Field>
-          <Field label="Class (optional)" htmlFor="book-grade">
-            <input
-              id="book-grade"
-              value={grade}
-              onChange={(e) => setGrade(e.target.value)}
-              placeholder="e.g. Class 8"
-              maxLength={50}
-              className={input}
-            />
-          </Field>
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-end justify-between gap-2">
-            <p className={label}>Pages</p>
-            <label className="flex items-center gap-2 text-xs text-slate-500">
-              Kind of material
-              <select
-                value={defaultSourceType}
-                onChange={(e) => setDefaultSourceType(e.target.value as SourceType)}
-                className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
-              >
-                {SOURCE_TYPE_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <label
-            onDragOver={(e) => {
-              if (!e.dataTransfer.types.includes("Files")) return;
-              e.preventDefault();
-              setDragging(true);
-            }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={(e) => {
-              e.preventDefault();
-              setDragging(false);
-              addFiles(e.dataTransfer.files);
-            }}
-            className={cx(
-              "flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-4 py-8 text-center transition",
-              dragging ? "border-brand-500 bg-brand-50" : "border-slate-300 bg-slate-50 hover:border-brand-300 hover:bg-brand-50/40",
-              (processingFiles || submitting) && "pointer-events-none opacity-60"
-            )}
-          >
-            <input
-              type="file"
-              accept="image/*,application/pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-              multiple
-              onChange={(e) => {
-                addFiles(e.target.files);
-                e.target.value = "";
-              }}
-              disabled={processingFiles || submitting}
-              className="sr-only"
-            />
-            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-brand-600 shadow-xs ring-1 ring-slate-200">
-              {processingFiles ? <Spinner className="h-5 w-5" /> : <UploadIcon className="h-5 w-5" />}
-            </span>
-            <span className="mt-3 text-sm font-medium text-slate-900">
-              {processingFiles ? "Preparing pages..." : (
-                <>
-                  <span className="text-brand-700">Choose files</span>
-                  <span className="hidden sm:inline"> or drag them here</span>
-                </>
-              )}
-            </span>
-            <span className="mt-1 text-xs text-slate-500">
-              Photos, PDF or Word (.docx), up to {MAX_PAGES} pages. Large photos are shrunk automatically, like in
-              WhatsApp.
-            </span>
-          </label>
-
-          {shrinkNote && pages.length > 0 && (
-            <p className="flex items-center gap-1.5 text-xs text-emerald-700">
-              <CheckIcon className="h-4 w-4" /> {shrinkNote}
-            </p>
-          )}
-
-          {pages.length > 0 && (
-            <div className="space-y-2">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs text-slate-500">
-                  <span className="font-medium text-slate-700">
-                    {pages.length} page{pages.length > 1 ? "s" : ""}
-                  </span>{" "}
-                  · mixing a chapter with its exercises? Set the kind on each page.
-                </p>
-                <button type="button" onClick={() => setPages([])} disabled={submitting} className={cx(link, "text-xs")}>
-                  Remove all
-                </button>
-              </div>
-              <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-                {pages.map((p, i) => (
-                  <PageCard
-                    key={p.id}
-                    page={p}
-                    index={i}
-                    disabled={submitting}
-                    onRemove={removePage}
-                    onTypeChange={setPageSourceType}
-                  />
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-
-        <label className="flex items-start gap-2.5 rounded-xl bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
-          <input
-            type="checkbox"
-            checked={rightsConfirmed}
-            onChange={(e) => setRightsConfirmed(e.target.checked)}
-            className="mt-0.5 h-4 w-4 shrink-0 accent-brand-600"
-          />
-          <span>
-            I own this copy (printed or digital) and will use it only to help my own child or students study. I
-            won&apos;t upload material I don&apos;t have the right to use.
-          </span>
-        </label>
-
-        {submitting && (
-          <div className="space-y-1.5" role="status" aria-live="polite">
-            <div className="flex justify-between gap-3 text-xs text-slate-600">
-              <span>{uploadProgress ?? "Uploading"}... keep this page open (the screen stays on)</span>
-              <span className="shrink-0 tabular-nums">
-                {pagesSent} of {uploadTotal} sent
-              </span>
-            </div>
-            <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-              <div
-                className="h-full rounded-full bg-brand-600 transition-[width] duration-500"
-                style={{ width: `${Math.max(progressPct, 4)}%` }}
-              />
-            </div>
-          </div>
-        )}
-
-        <div className="flex flex-wrap gap-2">
-          <button disabled={submitting || processingFiles || pages.length === 0} className={cx(button.primary, "w-full sm:w-auto")}>
-            {submitting ? <Spinner /> : <UploadIcon className="h-4.5 w-4.5" />}
-            {submitting
-              ? "Sending pages..."
-              : pages.length
-                ? `${resuming ? "Try again: read" : "Upload & read"} ${pages.length} page${pages.length === 1 ? "" : "s"}`
-                : "Upload & read"}
-          </button>
-          {submitting && (
-            <button type="button" onClick={() => stopRef.current?.abort()} className={cx(button.secondary, "w-full sm:w-auto")}>
-              Stop (keep the pages sent so far)
-            </button>
-          )}
-        </div>
-      </form>
-
-      <section className="space-y-3">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-base font-semibold text-slate-900">Your books</h2>
-          <div className="flex items-baseline gap-3">
-            {unfinishedCount > 0 && (
-              <button type="button" onClick={removeUnfinished} className={cx(link, "text-xs text-red-600")}>
-                Delete {unfinishedCount} unfinished upload{unfinishedCount === 1 ? "" : "s"}
-              </button>
-            )}
-            {documents.length > 0 && <span className="text-xs text-slate-400">{documents.length} in total</span>}
-          </div>
-        </div>
-        {loadFailed ? (
-          <Alert tone="error">Couldn&apos;t load your books. Check your connection and reload the page.</Alert>
-        ) : documents.length === 0 ? (
-          <EmptyState
-            icon={<BookIcon className="h-6 w-6" />}
-            title="No books yet"
-            description="Add your first book above. Answers will then come from its pages."
-          />
-        ) : (
-          <ul className="grid gap-3 sm:grid-cols-2">
-            {documents.map((d) => (
-              <li key={d.id} className={cx(card, "flex items-start gap-3 p-4")}>
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
-                  <BookIcon className="h-5 w-5" />
-                </span>
-                <div className="min-w-0 flex-1 space-y-1.5">
-                  <EditableName
-                    value={d.title}
-                    onSave={(title) => renameBook(d.id, title)}
-                    className="text-sm font-medium text-slate-900"
-                  />
-                  <p className="truncate text-xs text-slate-500">
-                    {[d.subject, d.grade, sourceTypeLabel(d.source_type)]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
-                  <StatusBadge status={d.status} unfinished={unfinished(d)} pages={d.pages} />
-                  {d.pages && d.pages.failed > 0 && d.status !== "processing" && (
-                    <p className="text-xs text-red-600">
-                      {d.pages.failed} page{d.pages.failed === 1 ? "" : "s"} couldn&apos;t be read: {d.pages.problems.join(" ")}{" "}
-                      <button type="button" onClick={() => retryPages(d.id)} className={cx(link, "text-xs")}>
-                        Try {d.pages.failed === 1 ? "it" : "them"} again
-                      </button>
-                    </p>
-                  )}
-                  {d.pages && d.status === "processing" && d.pages.problems.length > 0 && !d.pages.waitingUntil && (
-                    <p className="text-xs text-amber-700">Some pages are taking longer and will be tried again shortly. Reason: {d.pages.problems[0]}</p>
-                  )}
-                  {bookErrors[d.id] && <p className="text-xs text-red-600">{bookErrors[d.id]}</p>}
-                </div>
-                <button
-                  onClick={() => deleteBook(d)}
-                  disabled={deleting.includes(d.id)}
-                  className={button.iconDanger}
-                  aria-label={`Delete "${d.title}"`}
-                  title="Delete"
-                >
-                  {deleting.includes(d.id) ? <Spinner className="h-4.5 w-4.5" /> : <TrashIcon className="h-4.5 w-4.5" />}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      <BookList
+        documents={documents}
+        loadFailed={loadFailed}
+        deleting={deleting}
+        errors={bookErrors}
+        isUnfinished={unfinished}
+        onRename={renameBook}
+        onDelete={deleteBook}
+        onRetry={retryPages}
+        onRemoveUnfinished={removeUnfinished}
+      />
     </div>
   );
 }

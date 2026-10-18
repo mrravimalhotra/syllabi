@@ -14,7 +14,7 @@ function readablePassword(): string {
   return Array.from({ length: 12 }, () => chars[randomInt(chars.length)]).join("");
 }
 
-export interface GuestRequest {
+interface GuestRequest {
   loginId: string;
   email: string;
   password: string;
