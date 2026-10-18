@@ -13,6 +13,7 @@ import * as students from "../../src/app/api/admin/students/route";
 import * as llm from "../../src/app/api/admin/llm-settings/route";
 import * as adhoc from "../../src/app/api/generate/ad-hoc/route";
 import * as jobs from "../../src/app/api/jobs/pages/route";
+import { pipeline } from "./fakes/pipeline";
 import * as guests from "../../src/app/api/admin/guests/route";
 import * as speech from "../../src/app/api/speech/route";
 import * as sounds from "../../src/app/api/sounds/route";
@@ -217,6 +218,27 @@ await expect("generate: unreadable body is explained", adhoc.POST, 400, /couldn'
 await expect("generate: nothing to answer is refused", adhoc.POST, 400, /Type a question/i, { prompt: "   " });
 await expect("generate: too many photos are refused", adhoc.POST, 400, /photos/i, { prompt: "x", photos: Array.from({ length: 30 }, () => ({ data: "AAAA", mimeType: "image/jpeg" })) });
 await expect("generate: a photo that isn't an image is refused", adhoc.POST, 400, /picture|image|photo/i, { prompt: "x", photos: [{ data: "bm90IGFuIGltYWdl", mimeType: "image/jpeg" }] });
+
+// ---- Generating: the whole path, with a stand-in for the AI ----
+fresh(person({ role: "student" }));
+tables.generated_documents = [];
+pipeline.calls = 0;
+const made = await expect("generate: a question is answered and saved", adhoc.POST, 200, null, { prompt: "Explain photosynthesis" });
+check("generate: the answer carries its text, an id and a PDF link", made.json?.text === "Plants make food." && typeof made.json?.id === "string" && /\/pdf$/.test(String(made.json?.pdfUrl)));
+check("generate: it is saved with a fingerprint for reuse", (tables.generated_documents ?? []).length === 1 && Boolean((tables.generated_documents ?? [])[0].cache_key) && (tables.generated_documents ?? [])[0].title === "Explain photosynthesis");
+const again = await expect("generate: the same question again returns the saved answer", adhoc.POST, 200, null, { prompt: "Explain photosynthesis" });
+check("generate: no second AI call, and it says it was reused", pipeline.calls === 1 && Boolean(again.json?.reusedFrom));
+await expect("generate: a fresh answer can be asked for", adhoc.POST, 200, null, { prompt: "Explain photosynthesis", fresh: true });
+check("generate: fresh makes a second AI call and a second copy", pipeline.calls === 2 && (tables.generated_documents ?? []).length === 2);
+const streamed = await adhoc.POST(new Request("http://test/api", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ prompt: "A different question", stream: true }) }));
+const lines = (await streamed.text()).trim().split("\n").map((l) => JSON.parse(l));
+check("generate: a streamed answer sends text pieces, then the finished answer", streamed.headers.get("content-type")?.includes("ndjson") === true && lines.filter((l) => l.type === "text").map((l) => l.delta).join("") === "Plants make food." && lines.at(-1)?.type === "done" && lines.at(-1)?.answer?.text === "Plants make food.");
+pipeline.fail = true;
+const failed = await adhoc.POST(new Request("http://test/api", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ prompt: "Another question", stream: true }) }));
+const failLines = (await failed.text()).trim().split("\n").map((l) => JSON.parse(l));
+check("generate: a failure inside a stream arrives as an error line", failLines.at(-1)?.type === "error" && /Couldn't make your answer/.test(String(failLines.at(-1)?.error)));
+await expect("generate: a failure without streaming is a plain error", adhoc.POST, 500, /Couldn't make your answer/i, { prompt: "Yet another question" });
+pipeline.fail = false;
 
 // ---- Background reader and error log ----
 fresh();

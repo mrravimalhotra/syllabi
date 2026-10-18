@@ -1,5 +1,5 @@
 // A tiny in-memory stand-in for Supabase's query builder, enough for the
-// routes under test: from().select/insert/update/delete with eq/neq/in filters,
+// routes under test: from().select/insert/update/delete with eq/neq/in/gte filters,
 // single/maybeSingle, counts, and a few rpc functions.
 
 type Row = Record<string, unknown>;
@@ -45,6 +45,7 @@ class Query implements PromiseLike<Result> {
   eq(col: string, val: unknown) { this.filters.push((r) => r[col] === val); return this; }
   neq(col: string, val: unknown) { this.filters.push((r) => r[col] !== val); return this; }
   in(col: string, vals: unknown[]) { this.filters.push((r) => vals.includes(r[col])); return this; }
+  gte(col: string, val: unknown) { this.filters.push((r) => String(r[col] ?? "") >= String(val)); return this; }
   not(col: string, _op: string, val: unknown) { this.filters.push((r) => r[col] !== val); return this; }
   order() { return this; }
   limit(n: number) { this.max = n; return this; }

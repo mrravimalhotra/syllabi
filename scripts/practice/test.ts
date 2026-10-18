@@ -4,6 +4,7 @@ import { makeCompareQuiz, makeCvcQuiz, makeSightQuiz, type CompareSettings, type
 import { IPA, PHONEMES, blendStart, soundText } from "@/lib/kindergarten/phonics";
 import { makeBlendQuiz } from "@/lib/kindergarten/quiz";
 import { blockedReason, buildRequestBody, questionProblem, type Question } from "@/app/dashboard/_ask/build-request";
+import { parseGenerationRequest } from "@/lib/generation/request";
 import { parseProfileUpdate } from "@/lib/profile-update";
 import { parseAccountUpdate } from "@/lib/account-update";
 import { parseStudyPackRequest } from "@/lib/study-pack/request";
@@ -330,6 +331,20 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
   check(parseProblem({ kind: "convert", value: "2.5", from: "km", to: "m" })?.kind === "convert" && parseProblem({ kind: "convert", value: "2.5", from: "kilometres", to: "m" }) === null, "Worked: unit conversion with short unit names");
   check(parseProblem(null) === null && parseProblem("division") === null && parseProblem({ kind: "toString" }) === null && parseProblem({ kind: "__proto__" }) === null && parseProblem({ kind: "nope" }) === null, "Worked: nothing, text and made-up kinds are refused");
   check(parseProblem({ kind: "multiplication", a: "2", b: "3", language: "hi" }) !== null, "Worked: a narration language is accepted");
+}
+
+// Request for an answer.
+{
+  const bad = (r: { ok: boolean }) => !r.ok;
+  check(bad(parseGenerationRequest(null, "solution", "auto")) && bad(parseGenerationRequest({}, "solution", "auto")) && bad(parseGenerationRequest({ prompt: "   " }, "solution", "auto")), "Answer: unreadable and empty questions are refused");
+  check(bad(parseGenerationRequest({ prompt: "x", photos: "nope" }, "solution", "auto")), "Answer: photos that aren't a list are refused");
+  const UUID = "123e4567-e89b-42d3-a456-426614174000";
+  const a = parseGenerationRequest({ prompt: "  Explain light  ", documentIds: [UUID, "bad", 5], language: "mr", fresh: true, stream: true }, "notes", "hi");
+  check(a.ok && a.value.prompt === "Explain light" && a.value.typedPrompt === "Explain light" && !a.value.hasAttachedText && JSON.stringify(a.value.documentIds) === `["${UUID}"]` && a.value.language === "mr" && a.value.fresh && a.value.stream, "Answer: a typed question with books, language, fresh and stream");
+  const d = parseGenerationRequest({ prompt: "Hi", language: "xx" }, "solution", "hi");
+  check(d.ok && d.value.language === "hi" && d.value.documentIds === undefined && !d.value.fresh && !d.value.stream, "Answer: defaults apply when nothing is chosen");
+  const f = parseGenerationRequest({ attachedText: "Q1. 2+2?" }, "sample_paper", "auto");
+  check(f.ok && f.value.typedPrompt === "" && f.value.hasAttachedText && f.value.prompt.startsWith("Make a sample paper") && f.value.prompt.endsWith("---\nQ1. 2+2?"), "Answer: an attached file alone gets the kind's default instruction");
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
