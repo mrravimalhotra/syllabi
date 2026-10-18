@@ -395,6 +395,35 @@ await test("Admin accounts: making a guest shows the password once", async (page
   await page.getByText(/Guest, signs in until/).first().waitFor();
 });
 
+await test("Admin accounts: role, allowance and access changes are sent, with a check before removing access", async (page, ctx) => {
+  const kid = { id: "11111111-1111-4111-8111-111111111111", email: "kid@example.com", full_name: "Meera", role: "student", active: true, token_quota: 200000, monthly_usage: 100, created_at: now, account_type: "parent" };
+  const sent = [];
+  await ctx.route("**/api/admin/students", (r) => {
+    if (r.request().method() === "GET") return json(r, { students: [kid] });
+    const body = r.request().postDataJSON();
+    sent.push(body);
+    return json(r, { student: { ...kid, ...body } });
+  });
+  let asked = "";
+  page.on("dialog", (d) => { asked = d.message(); void d.accept(); });
+  await page.goto(`${BASE}/admin/students`, { waitUntil: "networkidle" });
+  await page.getByLabel("Role of Meera").selectOption("admin");
+  await page.getByText("Meera: is now an admin.").waitFor({ timeout: 5000 });
+  const quota = page.getByLabel("Monthly limit in tokens for Meera");
+  await quota.fill("-5");
+  await quota.blur();
+  await page.getByText(/must be a whole number from 0 to 10,00,00,000/).waitFor({ timeout: 5000 });
+  await quota.fill("300000");
+  await quota.blur();
+  await page.getByText(/monthly limit set to 3,00,000 tokens/).waitFor({ timeout: 5000 });
+  await page.getByRole("button", { name: "Remove access" }).click();
+  await page.getByText("Meera: access removed.").waitFor({ timeout: 5000 });
+  if (!/Remove access for Meera\?/.test(asked)) throw new Error(`Expected a question first, saw "${asked}".`);
+  const kinds = sent.map((b) => Object.keys(b).filter((k) => k !== "id").join());
+  if (kinds.join("|") !== "role|token_quota|active") throw new Error(`Unexpected changes sent: ${JSON.stringify(sent)}`);
+  if (sent[1].token_quota !== 300000 || sent[2].active !== false) throw new Error(`Unexpected values: ${JSON.stringify(sent)}`);
+});
+
 await test("Admin health: optional extras are grey, not failures", async (page, ctx) => {
   await ctx.route("**/api/admin/errors", (r) => json(r, { errors: [] }));
   await ctx.route("**/api/admin/health", (r) => json(r, { checks: [
