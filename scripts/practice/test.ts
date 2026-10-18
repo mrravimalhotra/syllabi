@@ -4,6 +4,10 @@ import { makeCompareQuiz, makeCvcQuiz, makeSightQuiz, type CompareSettings, type
 import { IPA, PHONEMES, blendStart, soundText } from "@/lib/kindergarten/phonics";
 import { makeBlendQuiz } from "@/lib/kindergarten/quiz";
 import { blockedReason, buildRequestBody, questionProblem, type Question } from "@/app/dashboard/_ask/build-request";
+import { parseProfileUpdate } from "@/lib/profile-update";
+import { parseAccountUpdate } from "@/lib/account-update";
+import { parseStudyPackRequest } from "@/lib/study-pack/request";
+import { parseProblem } from "@/lib/worked/parse";
 import { describeOutcome } from "@/app/dashboard/library/_parts/upload-book";
 import { LOGIN_ID, internalEmail, looksLikeLoginId, normaliseLoginId } from "@/lib/login-id";
 import { BOARD_COLUMNS, BOARD_ROWS, makeBoardGame, makeFamilySheet, makeMatchSheet, schoolFamilySheet, schoolMatchSheet } from "@/lib/kindergarten/worksheets";
@@ -292,6 +296,40 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
   check(blockedReason({ overQuota: true, noBookSelected: true, readingFiles: true })?.includes("allowance") === true, "Over the allowance is the first reason given");
   check(blockedReason({ overQuota: false, noBookSelected: true, readingFiles: true })?.includes("no book is selected") === true && blockedReason({ overQuota: false, noBookSelected: false, readingFiles: true })?.includes("attachment") === true, "Then no book, then still reading a file");
   check(blockedReason({ overQuota: false, noBookSelected: false, readingFiles: false }) === null, "Nothing blocking means no message");
+}
+
+// Request checkers.
+{
+  const UUID = "123e4567-e89b-42d3-a456-426614174000";
+  const bad = (r: { ok: boolean }) => !r.ok;
+  // Profile
+  check(bad(parseProfileUpdate(null)) && bad(parseProfileUpdate({})) && bad(parseProfileUpdate({ fullName: "  " })), "Profile: nothing, empty name and unreadable body are refused");
+  const prof = parseProfileUpdate({ fullName: "  Asha K ", classLevel: "", board: "", answerLanguage: "auto" });
+  check(prof.ok && prof.updates.full_name === "Asha K" && prof.updates.class_level === null && prof.updates.board === null && prof.updates.answer_language === null, "Profile: a name is cleaned, empty choices and auto clear the setting");
+  check(bad(parseProfileUpdate({ classLevel: "Class 99" })) && bad(parseProfileUpdate({ board: "Nope" })) && bad(parseProfileUpdate({ answerLanguage: "xx" })), "Profile: unknown class, board and language are refused");
+  const lang = parseProfileUpdate({ answerLanguage: "hi" });
+  check(lang.ok && lang.updates.answer_language === "hi", "Profile: a listed language is accepted");
+  // Admin account change
+  check(bad(parseAccountUpdate(null)) && bad(parseAccountUpdate({ id: "nope", active: false })) && bad(parseAccountUpdate({ id: UUID })), "Account: no id, a bad id or nothing to change is refused");
+  check(bad(parseAccountUpdate({ id: UUID, role: "owner" })) && bad(parseAccountUpdate({ id: UUID, token_quota: -1 })) && bad(parseAccountUpdate({ id: UUID, token_quota: 1.5 })) && bad(parseAccountUpdate({ id: UUID, token_quota: "5" })), "Account: a bad role or allowance is refused");
+  const acc = parseAccountUpdate({ id: UUID, active: false, role: "admin", token_quota: 0, extra: "ignored" });
+  check(acc.ok && acc.value.id === UUID && JSON.stringify(acc.value.updates) === '{"active":false,"role":"admin","token_quota":0}', "Account: only the editable fields are kept");
+  // Study pack
+  check(bad(parseStudyPackRequest(null, "auto")) && bad(parseStudyPackRequest({ documentId: "nope" }, "auto")) && bad(parseStudyPackRequest({}, "auto")), "Study pack: unreadable, unknown book and no chapter are refused");
+  const pack = parseStudyPackRequest({ documentId: UUID, focus: "  x".repeat(800), language: "xx", fresh: true }, "hi");
+  check(pack.ok && pack.value.documentId === UUID && pack.value.language === "hi" && pack.value.focus?.length === 1000 && pack.value.fresh, "Study pack: chapter, capped focus, default language and fresh flag");
+  const noBook = parseStudyPackRequest({ documentId: "", photos: [{ data: "/9j/4AAQSkZJRgABAQEASABIAAD", mimeType: "image/jpeg" }], language: "mr" }, "auto");
+  check(noBook.ok && noBook.value.documentId === undefined && noBook.value.photos.length === 1 && noBook.value.language === "mr" && !noBook.value.fresh, "Study pack: attached pages stand in for a book");
+  // Worked example
+  check(parseProblem({ kind: "division", dividend: "5255", divisor: "5" })?.kind === "division" && parseProblem({ kind: "division", dividend: "5255", divisor: "5", decimals: true }) !== null, "Worked: a division is read");
+  check(parseProblem({ kind: "division", dividend: "52x5", divisor: "5" }) === null && parseProblem({ kind: "division", dividend: "1".repeat(31), divisor: "5" }) === null, "Worked: bad or oversized numbers are refused");
+  check(parseProblem({ kind: "lcm-hcf", numbers: [12, 18, 30], want: "both" })?.kind === "lcm-hcf" && parseProblem({ kind: "lcm-hcf", numbers: [1, 2, 3, 4, 5, 6, 7], want: "lcm" }) === null && parseProblem({ kind: "lcm-hcf", numbers: [12, 1.5], want: "lcm" }) === null && parseProblem({ kind: "lcm-hcf", numbers: [12], want: "sum" }) === null, "Worked: LCM and HCF need a short list of whole numbers and a known want");
+  check(parseProblem({ kind: "column", op: "add", numbers: ["123", "45.5"] })?.kind === "column" && parseProblem({ kind: "column", op: "times", numbers: ["1"] }) === null, "Worked: column sums");
+  check(parseProblem({ kind: "multiplication", a: "12", b: "15" })?.kind === "multiplication" && parseProblem({ kind: "multiplication", a: "12" }) === null, "Worked: multiplication");
+  check(parseProblem({ kind: "fraction", op: "add", fractions: [[1, 2], [1, 3]] })?.kind === "fraction" && parseProblem({ kind: "fraction", op: "add", fractions: [[1, 2], [1, 3], [1, 4]] }) === null && parseProblem({ kind: "fraction", op: "add", fractions: [[1, 2, 3]] }) === null, "Worked: fractions come in pairs, at most two");
+  check(parseProblem({ kind: "convert", value: "2.5", from: "km", to: "m" })?.kind === "convert" && parseProblem({ kind: "convert", value: "2.5", from: "kilometres", to: "m" }) === null, "Worked: unit conversion with short unit names");
+  check(parseProblem(null) === null && parseProblem("division") === null && parseProblem({ kind: "toString" }) === null && parseProblem({ kind: "__proto__" }) === null && parseProblem({ kind: "nope" }) === null, "Worked: nothing, text and made-up kinds are refused");
+  check(parseProblem({ kind: "multiplication", a: "2", b: "3", language: "hi" }) !== null, "Worked: a narration language is accepted");
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

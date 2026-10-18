@@ -2,10 +2,7 @@ import { NextResponse } from "next/server";
 import { forgetStudent } from "@/lib/supabase/identity";
 import { apiError, authenticateAdmin, errorResponse } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isUuid } from "@/lib/validate";
-
-// Upper bound for a monthly token quota (keeps the value a sane integer).
-const MAX_QUOTA = 1_000_000_000;
+import { parseAccountUpdate } from "@/lib/account-update";
 
 export async function GET() {
   const auth = await authenticateAdmin();
@@ -30,35 +27,13 @@ export async function GET() {
   });
 }
 
-interface PatchBody {
-  id: string;
-  active?: boolean;
-  role?: "student" | "admin";
-  token_quota?: number;
-}
-
 export async function PATCH(request: Request) {
   const auth = await authenticateAdmin();
   if ("response" in auth) return auth.response;
 
-  const body = (await request.json().catch(() => null)) as PatchBody | null;
-  if (!body || !isUuid(body.id)) return apiError(400, "Choose an account to change.");
-
-  // Only these fields are editable here; anything else in the body is ignored.
-  const updates: Omit<PatchBody, "id"> = {};
-  if (typeof body.active === "boolean") updates.active = body.active;
-  if (body.role !== undefined) {
-    if (body.role !== "student" && body.role !== "admin") return apiError(400, "The role must be \"student\" or \"admin\".");
-    updates.role = body.role;
-  }
-  if (body.token_quota !== undefined) {
-    if (!Number.isInteger(body.token_quota) || body.token_quota < 0 || body.token_quota > MAX_QUOTA) {
-      return apiError(400, `The monthly allowance must be a whole number from 0 to ${MAX_QUOTA.toLocaleString("en-IN")}.`);
-    }
-    updates.token_quota = body.token_quota;
-  }
-  if (Object.keys(updates).length === 0) return apiError(400, "There was nothing to change.");
-  const { id } = body;
+  const parsed = parseAccountUpdate(await request.json().catch(() => null));
+  if (!parsed.ok) return apiError(400, parsed.message);
+  const { id, updates } = parsed.value;
   // An admin switching themselves off or down could lock everyone out of this page.
   if (id === auth.account.id && (updates.active === false || updates.role === "student")) {
     return apiError(400, "You can't turn off or demote your own account. Ask another admin to do it.");

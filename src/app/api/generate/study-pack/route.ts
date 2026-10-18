@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server";
 import { apiError, authenticate, errorResponse } from "@/lib/api";
-import { parsePhotos } from "@/lib/generation/attachments";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isUuid } from "@/lib/validate";
-import { isAnswerLanguage } from "@/lib/generation/language";
 import { levelLine } from "@/lib/generation/level";
 import { getLlmSetting } from "@/lib/llm/config";
 import { answerKey, findReusable } from "@/lib/generation/reuse";
 import { QUESTIONS_SYSTEM, WALKTHROUGH_SYSTEM } from "@/lib/study-pack/prompts";
 import { generateStudyPack } from "@/lib/study-pack/generate";
 import { packToMarkdown } from "@/lib/study-pack/markdown";
+import { parseStudyPackRequest } from "@/lib/study-pack/request";
 
 // Two long AI calls (run together) for a whole chapter.
 export const maxDuration = 300;
@@ -21,22 +19,9 @@ export async function POST(request: Request) {
   const student = auth.account;
 
   const body = await request.json().catch(() => null);
-  if (body === null) {
-    return apiError(400, "Your request couldn't be read. It may be too large (try fewer or smaller attachments) or the connection dropped. Try again.");
-  }
-  if (body.documentId !== undefined && body.documentId !== null && body.documentId !== "" && !isUuid(body.documentId)) {
-    return apiError(400, "That book wasn't recognised. Reload the page and choose it again.");
-  }
-  const documentId = typeof body?.documentId === "string" && isUuid(body.documentId) ? body.documentId : undefined;
-  // Capped before it is used to find a saved copy, so what is remembered is what was sent to the AI.
-  const focus = typeof body?.focus === "string" ? body.focus.trim().slice(0, 1_000) : undefined;
-  const language = isAnswerLanguage(body?.language) ? body.language : (student.answer_language ?? "auto");
-
-  const photos = parsePhotos(body?.photos);
-  if (typeof photos === "string") return apiError(400, photos);
-  if (!documentId && photos.length === 0) {
-    return apiError(400, "Choose a book under “Search these books”, or attach photos or a PDF of the chapter, then press Generate.");
-  }
+  const parsed = parseStudyPackRequest(body, student.answer_language ?? "auto");
+  if (!parsed.ok) return apiError(400, parsed.message);
+  const { documentId, focus, language, photos, fresh } = parsed.value;
 
   try {
     // The same chapter, focus, language, class and model again reuses the saved pack.
@@ -53,7 +38,7 @@ export async function POST(request: Request) {
       model,
       instructions: [WALKTHROUGH_SYSTEM, QUESTIONS_SYSTEM],
     });
-    if (body?.fresh !== true) {
+    if (!fresh) {
       const saved = await findReusable(student.id, cacheKey);
       if (saved?.pack) {
         return NextResponse.json({
