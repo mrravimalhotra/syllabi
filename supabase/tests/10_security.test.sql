@@ -191,6 +191,23 @@ begin
     format('update students set token_quota = 300000 where id = %L', p1), '1');
 end $$;
 
+-- Advisor regressions: every function has a fixed search_path, and no table
+-- has two permissive policies for the same action.
+insert into results
+select 'functions have a fixed search_path', count(*) = 0, string_agg(proname, ', ')
+from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'public' and p.prokind = 'f' and p.proconfig is null
+  and p.proname in ('set_updated_at', 'claim_page_job', 'is_admin');
+insert into results
+select 'one permissive policy per table and action', count(*) = 0, string_agg(tablename || ' ' || cmd, ', ')
+from (
+  select tablename, c.cmd
+  from pg_policies pp
+  cross join lateral (values ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE')) c(cmd)
+  where pp.schemaname = 'public' and pp.permissive = 'PERMISSIVE' and (pp.cmd = c.cmd or pp.cmd = 'ALL')
+  group by tablename, c.cmd having count(*) > 1
+) dup;
+
 select case when ok then 'PASS' else 'FAIL' end || '  ' || name || case when ok then '' else '  (' || detail || ')' end
 from results;
 select format('%s passed, %s failed', count(*) filter (where ok), count(*) filter (where not ok)) as summary from results;
