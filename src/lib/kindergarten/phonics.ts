@@ -68,5 +68,15 @@ export const phoneLabel = (letter: string) => (letter === "c" ? "k" : letter);
 
 export const isVowel = (letter: string) => PHONEMES[letter]?.kind === "vowel";
 
+/**
+ * The first two sounds slid together, as in the "slide" step of blending
+ * (/m/ + /a/ → "ma…"): the consonant without its extra vowel, then the vowel.
+ */
+export function blendStart(letters: string[]): string {
+  const [first, second] = letters;
+  const root = soundText(first).replace(/(uh|ih|ah)$/i, "").replace(/(.)\1{2,}$/, "$1") || first;
+  return `${root}${soundText(second)}`;
+}
+
 /** The order many schemes teach letters in (s a t p i n first), so the earliest words can be read soonest. */
 export const TEACHING_ORDER = "satpinmdgockeurhbfljvwxyzq".split("");

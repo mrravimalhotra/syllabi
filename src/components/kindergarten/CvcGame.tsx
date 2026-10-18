@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { RoundDone, RoundFrame } from "@/components/kindergarten/RoundFrame";
 import { cx } from "@/components/ui";
 import type { CvcQuestion } from "@/lib/kindergarten/quiz";
-import { isVowel, phoneLabel, soundText } from "@/lib/kindergarten/phonics";
+import { blendStart, isVowel, phoneLabel, soundText } from "@/lib/kindergarten/phonics";
 
 interface Props {
   questions: CvcQuestion[];
@@ -27,6 +27,8 @@ export function CvcGame({ questions, say, sound, prepare, onAgain, onExit }: Pro
   const [celebrating, setCelebrating] = useState(false);
   // Which sound is being said right now (-1 none), and whether the sounds have been blended into the word.
   const [lit, setLit] = useState(-1);
+  // The first two tiles lit together while their sounds are slid into one ("ma...").
+  const [pair, setPair] = useState(false);
   const [blended, setBlended] = useState(false);
   // The finger sweeping under the word while it is said fast.
   const [sweep, setSweep] = useState(false);
@@ -35,7 +37,7 @@ export function CvcGame({ questions, say, sound, prepare, onAgain, onExit }: Pro
 
   useEffect(() => {
     const next = questions.slice(index, index + 2);
-    prepare([...next.flatMap((q) => [q.word, ...q.letters.flatMap((l) => [soundText(l), soundText(l, true)])]), "Great job!", "Try again!"]);
+    prepare([...next.flatMap((q) => [q.word, blendStart(q.letters), ...q.letters.flatMap((l) => [soundText(l), soundText(l, true)])]), "Great job!", "Try again!"]);
   }, [index, questions, prepare]);
 
   // Say the word when a question appears, so the child hears what to build.
@@ -44,9 +46,10 @@ export function CvcGame({ questions, say, sound, prepare, onAgain, onExit }: Pro
   }, [question, say]);
 
   /**
-   * Sounding a word out the way phonics teaches it: touch each letter and say
-   * its sound slowly (m... a... p...), then slide a finger under the whole word
-   * while saying it faster, until the sounds become the word: map.
+   * Sounding a word out the way phonics teaches it, in three steps:
+   * 1. Segment: touch each letter and say its sound (m… a… p…).
+   * 2. Slide: join the first two sounds (ma…).
+   * 3. Finish: slide a finger under the whole word while saying it: map.
    */
   async function soundOut(q: CvcQuestion, blend: boolean) {
     for (let i = 0; i < q.letters.length; i++) {
@@ -54,6 +57,9 @@ export function CvcGame({ questions, say, sound, prepare, onAgain, onExit }: Pro
       await sound(q.letters[i], true);
     }
     setLit(-1);
+    setPair(true);
+    await say(blendStart(q.letters));
+    setPair(false);
     setSweep(true);
     await say(q.word);
     if (blend) setBlended(true);
@@ -122,8 +128,8 @@ export function CvcGame({ questions, say, sound, prepare, onAgain, onExit }: Pro
               key={i}
               className={cx(
                 "flex h-20 w-16 items-center justify-center rounded-2xl border-4 text-5xl font-bold transition-transform sm:h-24 sm:w-20",
-                lit === i && "scale-110 border-amber-400 bg-amber-100",
-                lit !== i && (i < placed ? "border-emerald-400 bg-emerald-50 text-emerald-700" : "border-dashed border-slate-300 text-transparent"),
+                (lit === i || (pair && i < 2)) && "scale-110 border-amber-400 bg-amber-100",
+                lit !== i && !(pair && i < 2) && (i < placed ? "border-emerald-400 bg-emerald-50 text-emerald-700" : "border-dashed border-slate-300 text-transparent"),
                 i < placed && isVowel(letter) && "text-red-600"
               )}
             >

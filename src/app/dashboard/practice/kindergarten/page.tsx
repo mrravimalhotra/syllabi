@@ -281,8 +281,9 @@ export default function KindergartenPage() {
               g, k, p, t…) can&apos;t be held, so say them short and clipped with no extra “uh”: “b”, not “buh”.
             </li>
             <li>
-              To blend, touch each letter and say its sound slowly, then slide your finger under the whole word and say it faster, until the
-              sounds join into the word: m… a… p… → “map”.
+              To blend, use three steps. <strong>1. Segment:</strong> touch each letter and say its sound (m… a… p…).{" "}
+              <strong>2. Slide:</strong> join the first two sounds (“ma…”). <strong>3. Finish:</strong> add the last sound and slide a
+              finger under the whole word: “map”.
             </li>
             <li>
               The vowels are red. Each has a picture word: a as in apple, e as in egg, i as in ink, o as in octopus, u as in umbrella.
