@@ -3,6 +3,7 @@ import type { PracticeNumber } from "@/lib/practice/numbers";
 import { makeCompareQuiz, makeCvcQuiz, makeSightQuiz, type CompareSettings, type SightSettings } from "@/lib/kindergarten/quiz";
 import { IPA, PHONEMES, blendStart, soundText } from "@/lib/kindergarten/phonics";
 import { makeBlendQuiz } from "@/lib/kindergarten/quiz";
+import { LOGIN_ID, internalEmail, looksLikeLoginId, normaliseLoginId } from "@/lib/login-id";
 import { BOARD_COLUMNS, BOARD_ROWS, makeBoardGame, makeFamilySheet, makeMatchSheet, schoolFamilySheet, schoolMatchSheet } from "@/lib/kindergarten/worksheets";
 import { BOARD_WORDS, CVC_WORDS, SIGHT_LEVELS, SIGHT_SETS, VOWELS } from "@/lib/kindergarten/words";
 
@@ -253,6 +254,13 @@ check(IPA.a === "æ" && IPA.c === "k" && IPA.u === "ʌ", "IPA for a, c and u");
 // The same seed gives the same questions (so a round can be repeated or printed).
 check(JSON.stringify(makeCvcQuiz({ vowels: ["a", "o"], questions: 5 }, 77)) === JSON.stringify(makeCvcQuiz({ vowels: ["a", "o"], questions: 5 }, 77)), "The same seed gave different CVC questions");
 check(JSON.stringify(makeCompareQuiz({ max: 10, questions: 5 }, 77)) === JSON.stringify(makeCompareQuiz({ max: 10, questions: 5 }, 77)), "The same seed gave different compare questions");
+
+// User IDs for sign-in.
+for (const ok of ["guest", "abc", "a1.b_c-d", "x".repeat(30)]) check(LOGIN_ID.test(ok), `${ok} should be a valid user ID`);
+for (const bad of ["ab", "x".repeat(31), "has space", "a@b.com", "-guest", "Guest", ""]) check(!LOGIN_ID.test(bad), `${JSON.stringify(bad)} should not be a valid user ID`);
+check(normaliseLoginId("  Guest ") === "guest", "A user ID is trimmed and lowercased");
+check(looksLikeLoginId("guest") && !looksLikeLoginId("a@b.com"), "An email is not a user ID");
+check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-in login address");
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

@@ -39,6 +39,8 @@ export interface Student {
   active: boolean;
   /** Guest accounts only: when the login stops working. null for everyone else. */
   guest_until: string | null;
+  /** A short user ID that can be typed instead of the email when signing in; null for most accounts. */
+  login_id: string | null;
   token_quota: number;
   created_at: string;
   updated_at: string;

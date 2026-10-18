@@ -189,6 +189,12 @@ begin
     format('update students set role = %L where id = %L', 'student', admin), '1');
   perform pg_temp.check('ordinary account edits still work', 'service_role', null,
     format('update students set token_quota = 300000 where id = %L', p1), '1');
+  perform pg_temp.check('a user ID can be set', 'service_role', null,
+    format('update students set login_id = %L where id = %L', 'guest', p1), '1');
+  perform pg_temp.check('a badly formed user ID is refused', 'service_role', null,
+    format('update students set login_id = %L where id = %L', 'Bad ID', p2), 'error');
+  perform pg_temp.check('a user ID cannot be used twice', 'service_role', null,
+    format('update students set login_id = %L where id = %L', 'guest', p2), 'error');
 end $$;
 
 -- Advisor regressions: every function has a fixed search_path, and no table

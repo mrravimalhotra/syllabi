@@ -297,10 +297,32 @@ await test("Admin accounts: lists accounts and explains a refused change", async
   await page.getByText("Meera").first().waitFor();
 });
 
+await test("Admin accounts: a guest with a user ID and a chosen password needs no email", async (page, ctx) => {
+  await ctx.route("**/api/admin/students", (r) => json(r, { students: [] }));
+  let sent = null;
+  await ctx.route("**/api/admin/guests", (r) => {
+    sent = r.request().postDataJSON();
+    return json(r, { account: { id: "g2", email: "guest@guest.syllabi-study.vercel.app", login_id: "guest", full_name: "Guest", role: "student", active: true, token_quota: 20000, guest_until: new Date(Date.now() + 365 * 86400000).toISOString(), created_at: now }, password: null });
+  });
+  await page.goto(`${BASE}/admin/students`, { waitUntil: "networkidle" });
+  await page.fill("#guest-id", "Guest");
+  await page.fill("#guest-password", "study-2026");
+  await page.getByRole("button", { name: /Make guest login/ }).click();
+  await page.getByText(/signs in with this user ID/).first().waitFor({ timeout: 8000 });
+  if (sent?.loginId !== "Guest" || sent?.password !== "study-2026" || "email" in sent) throw new Error(`Unexpected request: ${JSON.stringify(sent)}`);
+});
+
+await test("Sign-in: the box takes an email or a user ID", async (page) => {
+  await page.goto(`${BASE}/login`, { waitUntil: "networkidle" });
+  await page.getByLabel("Email or user ID").fill("guest");
+  if ((await page.getByLabel("Email or user ID").inputValue()) !== "guest") throw new Error("A user ID could not be typed");
+});
+
 await test("Admin accounts: making a guest shows the password once", async (page, ctx) => {
   await ctx.route("**/api/admin/students", (r) => json(r, { students: [] }));
   await ctx.route("**/api/admin/guests", (r) => json(r, { account: { id: "g1", email: "reviewer@example.com", full_name: "Guest", role: "student", active: true, token_quota: 20000, guest_until: new Date(Date.now() + 14 * 86400000).toISOString(), created_at: now }, password: "Abcd2345Wxyz" }));
   await page.goto(`${BASE}/admin/students`, { waitUntil: "networkidle" });
+  await page.getByLabel(/Email, with a made-up password/).check();
   await page.fill("#guest-email", "reviewer@example.com");
   await page.getByRole("button", { name: /Make guest login/ }).click();
   await page.getByText("Abcd2345Wxyz").first().waitFor({ timeout: 8000 });
@@ -533,7 +555,7 @@ await test("Practice: starts a quiz", async (page, ctx) => {
 
 await test("Sign-in: wrong password message is plain and specific", async (page) => {
   await page.goto(`${BASE}/login?error=invalid`, { waitUntil: "networkidle" });
-  await page.getByText(/Wrong email or password/).first().waitFor();
+  await page.getByText(/Wrong email, user ID or password/).first().waitFor();
 });
 
 await test("Sign-up: private-testing notice", async (page) => {

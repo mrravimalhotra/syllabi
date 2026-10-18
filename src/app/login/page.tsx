@@ -36,8 +36,8 @@ export default async function LoginPage({
 
       <form action={signIn} className="space-y-4">
         <input type="hidden" name="next" value={next} />
-        <Field label="Email" htmlFor="email">
-          <input id="email" name="email" type="email" autoComplete="email" inputMode="email" required className={input} />
+        <Field label="Email or user ID" htmlFor="email">
+          <input id="email" name="email" type="text" autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false} required className={input} />
         </Field>
         <div className="space-y-1.5">
           <PasswordInput name="password" label="Password" autoComplete="current-password" required />

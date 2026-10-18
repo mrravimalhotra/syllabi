@@ -13,7 +13,7 @@ export const LOGIN_MESSAGES: Record<string, string> = {
 export const LOGIN_ERRORS: Record<string, string> = {
   // One message for a wrong password and an unknown email, so the page never
   // reveals which emails have accounts.
-  invalid: "Wrong email or password. Check them and try again, or use “Forgot password?” below.",
+  invalid: "Wrong email, user ID or password. Check them and try again, or use “Forgot password?” below.",
   "link-expired": "That link has expired or was already used. Request a new one from “Forgot password?”.",
   unknown: "We couldn't sign you in just now. Wait a moment and try again.",
 };

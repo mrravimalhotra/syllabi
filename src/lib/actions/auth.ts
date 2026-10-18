@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { canSignUp } from "@/lib/access";
 import { safeNext } from "@/lib/auth-messages";
+import { looksLikeLoginId, normaliseLoginId } from "@/lib/login-id";
 
 const MIN_PASSWORD_LENGTH = 8;
 // Longer passwords are silently cut off by the sign-in service (bcrypt stops at 72 bytes), so refuse them instead.
@@ -19,9 +20,17 @@ function normaliseEmail(value: FormDataEntryValue | null): string {
 }
 
 export async function signIn(formData: FormData) {
-  const email = normaliseEmail(formData.get("email"));
+  const typed = normaliseEmail(formData.get("email"));
   const password = String(formData.get("password") ?? "");
   const next = safeNext(formData.get("next"));
+
+  let email = typed;
+  if (looksLikeLoginId(typed)) {
+    // A user ID (like "guest") stands in for the account's email. An unknown ID gets the same message as a wrong password.
+    const { data } = await createAdminClient().from("students").select("email").eq("login_id", normaliseLoginId(typed)).maybeSingle();
+    if (!data?.email) redirect(`/login?error=invalid&next=${encodeURIComponent(next)}`);
+    email = data.email;
+  }
 
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
