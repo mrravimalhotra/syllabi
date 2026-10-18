@@ -903,6 +903,51 @@ await test("Practice: starts a quiz", async (page, ctx) => {
   await page.getByText(/put .* in order|smallest|largest|order/i).first().waitFor({ timeout: 8000 });
 });
 
+await test("Practice: plays a whole quiz to the results screen", async (page, ctx) => {
+  await baseRoutes(ctx);
+  await page.goto(`${BASE}/dashboard/practice`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: /start/i }).first().click();
+  const dialog = page.getByRole("dialog", { name: "Practice quiz" });
+  await dialog.waitFor({ timeout: 8000 });
+  const heading = await dialog.getByText(/^Question \d+ of \d+$/).textContent();
+  const total = Number(heading.match(/of (\d+)/)[1]);
+  for (let q = 0; q < total; q++) {
+    await dialog.getByText(`Question ${q + 1} of ${total}`).waitFor({ timeout: 5000 });
+    const numbers = dialog.getByRole("region", { name: "Numbers to put in order" }).getByRole("button");
+    const count = await numbers.count();
+    // Tap each number once, in the order shown (right or wrong, the screen must cope with both).
+    for (let i = 0; i < count; i++) await dialog.getByRole("region", { name: "Numbers to put in order" }).getByRole("button").nth(i).click();
+    await dialog.getByRole("button", { name: "Check" }).click();
+    await dialog.getByRole("status").waitFor({ timeout: 5000 });
+    await dialog.getByText("Your order").first().waitFor();
+    const wrong = await dialog.getByText("Right order").count();
+    if (wrong > 0) await dialog.getByText(/^(Smallest|Biggest|Put the numbers|Not quite|Nearly|Good try)/).first().waitFor({ timeout: 3000 }).catch(() => {});
+    await dialog.getByRole("button", { name: q === total - 1 ? "See my score" : "Next question" }).click();
+  }
+  await dialog.getByText("All done").waitFor({ timeout: 5000 });
+  await dialog.getByText(new RegExp(`/ ${total}$`)).waitFor();
+  await dialog.getByRole("button", { name: "New quiz" }).waitFor();
+  await dialog.getByRole("button", { name: "Change settings" }).click();
+  await dialog.waitFor({ state: "detached", timeout: 5000 });
+});
+
+await test("Practice: leaving a quiz midway asks first", async (page, ctx) => {
+  await baseRoutes(ctx);
+  await page.goto(`${BASE}/dashboard/practice`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: /start/i }).first().click();
+  const dialog = page.getByRole("dialog", { name: "Practice quiz" });
+  await dialog.waitFor({ timeout: 8000 });
+  await dialog.getByRole("region", { name: "Numbers to put in order" }).getByRole("button").first().click();
+  let asked = "";
+  page.once("dialog", (d) => {
+    asked = d.message();
+    void d.dismiss();
+  });
+  await dialog.getByRole("button", { name: "Leave the quiz" }).click();
+  if (!/Leave this quiz/.test(asked)) throw new Error("no confirmation: " + asked);
+  await dialog.waitFor({ timeout: 2000 });
+});
+
 await test("Sign-in: wrong password message is plain and specific", async (page) => {
   await page.goto(`${BASE}/login?error=invalid`, { waitUntil: "networkidle" });
   await page.getByText(/Wrong email, user ID or password/).first().waitFor();
