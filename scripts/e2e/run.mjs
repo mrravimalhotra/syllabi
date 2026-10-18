@@ -690,6 +690,34 @@ await test("My Documents: empty and error states", async (page, ctx) => {
   await page.getByText(/can.t reach its database/i).first().waitFor({ timeout: 8000 });
 });
 
+await test("My Documents: search and kind filters narrow the list, and a deleted one goes", async (page, ctx) => {
+  let docs = [
+    { id: "d1", title: "Fractions notes", task_type: "notes", created_at: now },
+    { id: "d2", title: "Plant questions", task_type: "solution", created_at: now },
+    { id: "d3", title: "Light notes", task_type: "notes", created_at: now },
+  ];
+  await ctx.route("**/api/documents", (r) => json(r, { documents: docs }));
+  await ctx.route("**/api/documents/d3", (r) => {
+    docs = docs.filter((d) => d.id !== "d3");
+    return json(r, { ok: true });
+  });
+  page.on("dialog", (d) => d.accept());
+  await page.goto(`${BASE}/dashboard/documents`, { waitUntil: "networkidle" });
+  await page.getByText("3 of 3 answers").waitFor();
+  await page.getByLabel("Search your documents by title").fill("plant");
+  await page.getByText("1 of 3 answers").waitFor();
+  await page.getByText("Fractions notes").waitFor({ state: "detached", timeout: 3000 });
+  await page.getByLabel("Search your documents by title").fill("");
+  await page.getByRole("group", { name: "Filter by kind" }).getByRole("button", { name: /Notes/i }).click();
+  await page.getByText("2 of 3 answers").waitFor();
+  await page.getByLabel("Search your documents by title").fill("zzz");
+  await page.getByText("No answers match your search.").waitFor();
+  await page.getByLabel("Search your documents by title").fill("");
+  await page.getByRole("button", { name: 'Delete "Light notes"' }).click();
+  await page.getByText("Light notes").waitFor({ state: "detached", timeout: 5000 });
+  await page.getByText("1 of 2 answers").waitFor({ timeout: 5000 });
+});
+
 await test("My Documents: deleting while offline shows the connection message", async (page, ctx) => {
   const doc = { id: "d1", title: "Fractions notes", task_type: "notes", created_at: now };
   await ctx.route("**/api/documents", (r) => json(r, { documents: [doc] }));
