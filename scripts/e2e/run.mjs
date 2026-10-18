@@ -694,6 +694,34 @@ await test("My Books: a Word file's text and picture become pages", async (page,
   if (!picture || picture.hint !== "Picture 1 in worksheet.docx, after: Use the figure below." || !picture.mimeType.startsWith("image/")) throw new Error(`The picture page was ${JSON.stringify(picture && { ...picture, imageBase64: "…" })}`);
 });
 
+await test("My Books: failed pages can be tried again, and unfinished uploads can be cleared", async (page, ctx) => {
+  const rows = [
+    { id: "f1", title: "Half uploaded", subject: null, grade: null, source_type: "textbook", status: "failed", created_at: now, pages: null },
+    { id: "f2", title: "Some pages failed", subject: "Maths", grade: "Class 6", source_type: "textbook", status: "ready", created_at: now, pages: { total: 4, done: 3, failed: 1, problems: ["Page 2 was blurry."], waitingUntil: null } },
+  ];
+  let list = rows;
+  const calls = [];
+  await ctx.route("**/api/me", (r) => json(r, me));
+  await ctx.route("**/api/library", (r) => json(r, { documents: list }));
+  await ctx.route("**/api/library/f2/retry", (r) => {
+    calls.push("retry f2");
+    return json(r, { ok: true });
+  });
+  await ctx.route("**/api/library/f1", (r) => {
+    calls.push("delete f1");
+    list = list.filter((d) => d.id !== "f1");
+    return json(r, { ok: true });
+  });
+  page.on("dialog", (d) => d.accept());
+  await page.goto(`${BASE}/dashboard/library`, { waitUntil: "networkidle" });
+  await page.getByText("1 page couldn't be read: Page 2 was blurry.").waitFor({ timeout: 8000 });
+  await page.getByRole("button", { name: "Try it again" }).click();
+  await page.waitForTimeout(500);
+  await page.getByRole("button", { name: "Delete 1 unfinished upload" }).click();
+  await page.getByText("Half uploaded").waitFor({ state: "detached", timeout: 8000 });
+  if (calls.join(",") !== "retry f2,delete f1") throw new Error(`Unexpected calls: ${calls.join(",")}`);
+});
+
 await test("My Books: a failed list shows a retry message", async (page, ctx) => {
   await ctx.route("**/api/me", (r) => json(r, me));
   await ctx.route("**/api/library*", (r) => json(r, { error: "Couldn't load your books." }, 500));

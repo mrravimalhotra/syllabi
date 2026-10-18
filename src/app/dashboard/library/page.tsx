@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { keep, peek } from "@/lib/client-cache";
-import { STALE_UPLOAD_MS, DocumentRowView, PendingPage, keepScreenOn } from "@/app/dashboard/library/_parts/upload-helpers";
+import { useCallback, useRef, useState } from "react";
+import { PendingPage, keepScreenOn } from "@/app/dashboard/library/_parts/upload-helpers";
+import { useBookDeletion } from "@/app/dashboard/library/_parts/useBookDeletion";
+import { useBookList } from "@/app/dashboard/library/_parts/useBookList";
 import { AddBookForm, type BookValues } from "@/app/dashboard/library/_parts/AddBookForm";
 import { BookList } from "@/app/dashboard/library/_parts/BookList";
 import { prepareFiles } from "@/app/dashboard/library/_parts/read-files";
@@ -11,10 +12,8 @@ import type { SourceType } from "@/types/database";
 import { PageHeader, PageSkeleton } from "@/components/ui";
 
 export default function LibraryPage() {
-  const [documents, setDocuments] = useState<DocumentRowView[]>(() => peek<DocumentRowView[]>("library") ?? []);
-  // With the last list on hand there is nothing to wait for: it shows now and refreshes behind.
-  const [loading, setLoading] = useState(() => peek("library") === undefined);
-  const [loadFailed, setLoadFailed] = useState(false);
+  const list = useBookList();
+  const { documents, loading, loadFailed, load } = list;
 
   const [values, setValues] = useState<BookValues>({ title: "", subject: "", grade: "", sourceType: "textbook", rightsConfirmed: false });
   const change = (patch: Partial<BookValues>) => setValues((v) => ({ ...v, ...patch }));
@@ -27,49 +26,22 @@ export default function LibraryPage() {
   const [uploadTotal, setUploadTotal] = useState(0);
   // Books being uploaded by this tab right now (never shown as unfinished).
   const [activeBooks, setActiveBooks] = useState<string[]>([]);
-  const [deleting, setDeleting] = useState<string[]>([]);
-  const [bookErrors, setBookErrors] = useState<Record<string, string>>({});
   const stopRef = useRef<AbortController | null>(null);
-  // When the book list was last loaded, to tell an upload still running from one that stopped.
-  const [listedAt, setListedAt] = useState(0);
   const [shrinkNote, setShrinkNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Shows the page skeleton only on the first load; later refreshes keep the page in place.
-  async function load() {
-    try {
-      const docsRes = await fetch("/api/library");
-      const docs = await docsRes.json();
-      if (!docsRes.ok) throw new Error(docs.error);
-      keep("library", docs.documents);
-      setDocuments(docs.documents);
-      setListedAt(Date.now());
-      setLoadFailed(false);
-    } catch {
-      setLoadFailed(true);
-    }
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch-on-mount is intentional here
-    load();
-  }, []);
-
-  // While the server reads pages in the background, refresh the list to show its progress.
-  const reading = documents.some((d) => d.status === "processing" && d.pages);
-  useEffect(() => {
-    if (!reading) return;
-    // A hidden tab (phone locked, another app open) doesn't need updates; it refreshes when shown again.
-    const refresh = () => !document.hidden && void load();
-    const timer = setInterval(refresh, 10_000);
-    document.addEventListener("visibilitychange", refresh);
-    return () => {
-      clearInterval(timer);
-      document.removeEventListener("visibilitychange", refresh);
-    };
-  }, [reading]);
+  const books = useBookDeletion({
+    documents,
+    setDocuments: list.setDocuments,
+    activeBooks,
+    listedAt: list.listedAt,
+    reload: load,
+    abortUpload: () => stopRef.current?.abort(),
+    // Pages waiting to go into this book will start a new one instead.
+    onRemoved: (id) => setPages((prev) => prev.map((p) => (p.bookId === id ? { ...p, bookId: undefined, pageNumber: undefined } : p))),
+  });
+  const { removeBook } = books;
 
   async function addFiles(fileList: FileList | null) {
     if (!fileList || fileList.length === 0) return;
@@ -94,84 +66,6 @@ export default function LibraryPage() {
   const setPageSourceType = useCallback((id: string, sourceType: SourceType) => {
     setPages((prev) => prev.map((p) => (p.id === id ? { ...p, sourceType } : p)));
   }, []);
-
-  async function renameBook(id: string, title: string) {
-    const res = await fetch(`/api/library/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error ?? "Rename failed");
-    setDocuments((prev) =>
-      keep(
-        "library",
-        prev.map((d) => (d.id === id ? { ...d, title: data.document.title } : d))
-      )
-    );
-  }
-
-  /** Deletes a book (stopping its upload first, if this tab is uploading it). Returns whether it worked. */
-  async function removeBook(id: string): Promise<boolean> {
-    if (activeBooks.includes(id)) stopRef.current?.abort();
-    setDeleting((d) => [...d, id]);
-    setBookErrors((e) => Object.fromEntries(Object.entries(e).filter(([k]) => k !== id)));
-    try {
-      const res = await fetch(`/api/library/${id}`, { method: "DELETE" });
-      const data = await res.json().catch(() => ({}));
-      // Already gone counts as deleted.
-      if (!res.ok && res.status !== 404) {
-        setBookErrors((e) => ({ ...e, [id]: data.error ?? "Couldn't delete this book. Try again in a moment." }));
-        return false;
-      }
-      setDocuments((docs) =>
-        keep(
-          "library",
-          docs.filter((d) => d.id !== id)
-        )
-      );
-      // Pages waiting to go into this book will start a new one instead.
-      setPages((prev) => prev.map((p) => (p.bookId === id ? { ...p, bookId: undefined, pageNumber: undefined } : p)));
-      return true;
-    } catch {
-      setBookErrors((e) => ({ ...e, [id]: "Couldn't reach Syllabi. Check your connection and try again." }));
-      return false;
-    } finally {
-      setDeleting((d) => d.filter((x) => x !== id));
-    }
-  }
-
-  async function deleteBook(doc: DocumentRowView) {
-    if (
-      !window.confirm(
-        `Delete "${doc.title}"? Its pages are removed for good, and answers can no longer use this book. Answers you already saved stay in My Documents.`
-      )
-    )
-      return;
-    await removeBook(doc.id);
-  }
-
-  // Older uploads that stopped part-way, or a book whose pages never arrived.
-  const unfinished = (d: DocumentRowView) =>
-    !activeBooks.includes(d.id) &&
-    !d.pages &&
-    (d.status === "failed" || (d.status === "processing" && listedAt - Date.parse(d.created_at) > STALE_UPLOAD_MS));
-
-  async function retryPages(id: string) {
-    setBookErrors((e) => Object.fromEntries(Object.entries(e).filter(([k]) => k !== id)));
-    const res = await fetch(`/api/library/${id}/retry`, { method: "POST" }).catch(() => null);
-    if (!res?.ok) setBookErrors((e) => ({ ...e, [id]: "Couldn't restart reading. Check your connection and try again." }));
-    await load();
-  }
-
-  async function removeUnfinished() {
-    const list = documents.filter(unfinished);
-    if (
-      !window.confirm(`Delete ${list.length} unfinished upload${list.length === 1 ? "" : "s"}? Pages already read in them are removed too.`)
-    )
-      return;
-    for (const d of list) await removeBook(d.id);
-  }
 
   /** Why the book can't be uploaded yet, or null when it can. */
   function uploadProblem(): string | null {
@@ -276,13 +170,13 @@ export default function LibraryPage() {
       <BookList
         documents={documents}
         loadFailed={loadFailed}
-        deleting={deleting}
-        errors={bookErrors}
-        isUnfinished={unfinished}
-        onRename={renameBook}
-        onDelete={deleteBook}
-        onRetry={retryPages}
-        onRemoveUnfinished={removeUnfinished}
+        deleting={books.deleting}
+        errors={books.errors}
+        isUnfinished={books.unfinished}
+        onRename={list.rename}
+        onDelete={books.deleteBook}
+        onRetry={books.retryPages}
+        onRemoveUnfinished={books.removeUnfinished}
       />
     </div>
   );
