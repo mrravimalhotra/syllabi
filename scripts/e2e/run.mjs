@@ -680,6 +680,42 @@ await test("My Books: a failed list shows a retry message", async (page, ctx) =>
   await page.getByText(/couldn.t load/i).first().waitFor({ timeout: 8000 });
 });
 
+await test("A saved answer: it opens, can be renamed, and deleting it returns to My Documents", async (page, ctx) => {
+  const saved = { ...answer, id: "a1", taskType: "ad_hoc", createdAt: now, pack: null, worked: null };
+  let renamed = null;
+  let deleted = 0;
+  await ctx.route("**/api/documents", (r) => json(r, { documents: [] }));
+  await ctx.route("**/api/documents/a1", (r) => {
+    const method = r.request().method();
+    if (method === "PATCH") {
+      renamed = r.request().postDataJSON();
+      return json(r, { title: renamed.title });
+    }
+    if (method === "DELETE") {
+      deleted++;
+      return json(r, { ok: true });
+    }
+    return json(r, { answer: saved });
+  });
+  page.on("dialog", (d) => d.accept());
+  await page.goto(`${BASE}/dashboard/documents/a1`, { waitUntil: "networkidle" });
+  await page.getByText("12 x 15 = 180").first().waitFor({ timeout: 8000 });
+  await page.getByRole("button", { name: /Rename What is 12 x 15\?/ }).click();
+  await page.getByLabel("New name").fill("Times tables");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByRole("button", { name: "Rename Times tables" }).waitFor({ timeout: 5000 });
+  if (renamed?.title !== "Times tables") throw new Error(`Unexpected rename ${JSON.stringify(renamed)}`);
+  await page.getByRole("button", { name: "Delete this answer" }).click();
+  await page.waitForURL(/\/dashboard\/documents$/, { timeout: 8000 });
+  if (deleted !== 1) throw new Error(`Expected one delete, saw ${deleted}`);
+});
+
+await test("A saved answer that is gone says so", async (page, ctx) => {
+  await ctx.route("**/api/documents/zz", (r) => json(r, { error: "no" }, 404));
+  await page.goto(`${BASE}/dashboard/documents/zz`, { waitUntil: "networkidle" });
+  await page.getByText("Answer not found").waitFor({ timeout: 8000 });
+});
+
 await test("My Documents: empty and error states", async (page, ctx) => {
   await ctx.route("**/api/documents", (r) => json(r, { documents: [] }));
   await page.goto(`${BASE}/dashboard/documents`, { waitUntil: "networkidle" });

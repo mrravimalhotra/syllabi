@@ -3,27 +3,11 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { AnswerView, type Answer } from "@/components/AnswerView";
+import { AnswerBody, type SavedAnswer } from "@/app/dashboard/documents/[id]/_parts/AnswerBody";
 import { EditableName } from "@/components/EditableName";
-import { StudyPackView } from "@/components/study-pack/StudyPackView";
-import { WorkedExampleView } from "@/components/worked/WorkedExampleView";
-import { solve } from "@/lib/worked/detect";
-import type { WorkedProblem } from "@/lib/worked/types";
-import type { StudyPack } from "@/lib/study-pack/types";
 import { ChevronLeftIcon, DocumentIcon, TrashIcon } from "@/components/icons";
 import { OFFLINE_MESSAGE, failedRequestMessage } from "@/lib/http-errors";
-import { PdfButton } from "@/components/PdfButton";
 import { Alert, EmptyState, Skeleton, button, card, cx } from "@/components/ui";
-import { formatDate, taskLabel } from "@/lib/format";
-
-type SavedAnswer = Answer & {
-  id: string;
-  taskType: string;
-  createdAt: string;
-  text: string | null;
-  pack: StudyPack | null;
-  worked: WorkedProblem | null;
-};
 
 /** One saved answer: read, print, download, rename or delete it. */
 export default function AnswerPage() {
@@ -106,54 +90,7 @@ export default function AnswerPage() {
             <span className="text-xs font-medium tracking-wide text-slate-400 uppercase">Name</span>
             <EditableName value={answer.title} onSave={rename} className="min-w-0 max-w-full font-medium text-slate-800" />
           </div>
-          {answer.worked && solve(answer.worked) ? (
-            <WorkedExampleView
-              example={solve(answer.worked)!}
-              pdfUrl={answer.pdfUrl}
-              actions={
-                <button type="button" onClick={remove} className={button.smallDanger} aria-label="Delete this worked example">
-                  <TrashIcon className="h-4 w-4" /> Delete
-                </button>
-              }
-            />
-          ) : answer.pack ? (
-            <StudyPackView
-              pack={answer.pack}
-              answerId={answer.id}
-              pdfUrl={answer.pdfUrl}
-              meta={formatDate(answer.createdAt)}
-              actions={
-                <button type="button" onClick={remove} className={button.smallDanger} aria-label="Delete this study pack">
-                  <TrashIcon className="h-4 w-4" /> Delete
-                </button>
-              }
-            />
-          ) : answer.text === null ? (
-            <Alert tone="info">
-              This older answer was saved as a PDF only.{" "}
-              {answer.pdfUrl && (
-                <PdfButton url={answer.pdfUrl} name={answer.title} className="font-medium underline">
-                  Open the PDF
-                </PdfButton>
-              )}
-              .
-            </Alert>
-          ) : (
-            <AnswerView
-              answer={{ ...answer, text: answer.text }}
-              meta={`${taskLabel(answer.taskType)} · ${formatDate(answer.createdAt)}`}
-              actions={
-                <button
-                  type="button"
-                  onClick={remove}
-                  className={button.smallDanger}
-                  aria-label="Delete this answer"
-                >
-                  <TrashIcon className="h-4 w-4" /> Delete
-                </button>
-              }
-            />
-          )}
+          <AnswerBody answer={answer} onDelete={remove} />
           {answer.text === null && (
             <button type="button" onClick={remove} className={button.dangerGhost}>
               <TrashIcon className="h-4 w-4" /> Delete this answer
