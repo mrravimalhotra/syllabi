@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { Board } from "@/app/dashboard/practice/kindergarten/worksheets/_parts/Board";
+import { FamilySheet } from "@/app/dashboard/practice/kindergarten/worksheets/_parts/FamilySheet";
+import { MatchSheet } from "@/app/dashboard/practice/kindergarten/worksheets/_parts/MatchSheet";
 import { PageHeader, button, cx } from "@/components/ui";
 import {
-  BOARD_COLUMNS,
-  PAD_PENALTY,
   SHEET_KINDS,
   SHEET_LABELS,
   makeBoardGame,
@@ -13,13 +14,10 @@ import {
   makeMatchSheet,
   schoolFamilySheet,
   schoolMatchSheet,
-  type BoardCell,
   type SheetKind,
 } from "@/lib/kindergarten/worksheets";
 import { VOWELS, type Vowel } from "@/lib/kindergarten/words";
 import { newSeed } from "@/lib/practice/random";
-
-const TINTS = ["bg-pink-200", "bg-sky-200", "bg-emerald-200", "bg-amber-200", "bg-violet-200"];
 
 /**
  * Printable kindergarten worksheets. The sheet fills a page; the controls
@@ -132,95 +130,15 @@ export default function KindergartenWorksheetsPage() {
             {kind === "family" ? ":" : kind === "match" ? "." : ""}
           </h2>
 
-          {family && (
-            <ol className="space-y-3">
-              {family.map((row, i) => (
-                <li key={row.rime} className="flex items-center gap-3">
-                  <span className="w-6 text-right text-sm font-semibold text-slate-500">{i + 1}.</span>
-                  <span className={cx("rounded-lg px-3 py-1 text-2xl font-bold", TINTS[i % TINTS.length])}>-{row.rime}</span>
-                  <span className="w-16 text-2xl font-semibold text-slate-800">{row.example}</span>
-                  <span className="flex flex-1 gap-3" aria-hidden>
-                    {[0, 1, 2].map((n) => (
-                      <span key={n} className="flex-1 border-b-2 border-dashed border-slate-400 pt-6" />
-                    ))}
-                  </span>
-                </li>
-              ))}
-            </ol>
-          )}
+          {family && <FamilySheet rows={family} />}
 
-          {match && (
-            <ol className="space-y-2">
-              {match.pictures.map((p, i) => (
-                <li key={i} className="flex items-center gap-3">
-                  <span className="w-6 text-right text-sm font-semibold text-slate-500">{i + 1}.</span>
-                  <span className="w-14 text-4xl leading-none" aria-label="Picture" role="img">
-                    {p.emoji}
-                  </span>
-                  <span className="text-xl text-slate-500" aria-hidden>
-                    ●
-                  </span>
-                  <span className="flex-1" />
-                  <span className="text-xl text-slate-500" aria-hidden>
-                    ●
-                  </span>
-                  <span className="w-24 text-2xl font-semibold text-slate-800">{match.words[i]}</span>
-                </li>
-              ))}
-            </ol>
-          )}
+          {match && <MatchSheet sheet={match} />}
 
           {board && <Board cells={board} />}
 
           <p className="mt-5 text-center text-sm text-slate-500">You can do it! ❤️</p>
         </article>
       )}
-    </div>
-  );
-}
-
-/** The board game: cells in path order, shown in rows that snake back and forth so the path is easy to follow. */
-function Board({ cells }: { cells: BoardCell[] }) {
-  const rows: { cell: BoardCell; step: number }[][] = [];
-  cells.forEach((cell, step) => {
-    const row = Math.floor(step / BOARD_COLUMNS);
-    (rows[row] ??= []).push({ cell, step });
-  });
-  return (
-    <div>
-      <p className="mb-4 text-center text-sm text-slate-600">
-        Roll a die and hop that many spaces. Read the word you land on. If you read it right, hop ahead 1 space. If you land on a lily pad,
-        hop back {PAD_PENALTY}. First frog to the pond wins!
-      </p>
-      <div className="space-y-2" aria-label="Board">
-        {rows.map((row, r) => (
-          <div
-            key={r}
-            className="grid gap-2"
-            style={{ gridTemplateColumns: `repeat(${BOARD_COLUMNS}, minmax(0, 1fr))`, direction: r % 2 === 1 ? "rtl" : "ltr" }}
-          >
-            {row.map(({ cell, step }) => (
-              <div
-                key={step}
-                style={{ direction: "ltr" }}
-                className={cx(
-                  "relative flex aspect-[5/3] items-center justify-center rounded-full border-2 text-center text-xl font-semibold",
-                  cell.kind === "word" && "border-slate-700 bg-white text-slate-900",
-                  cell.kind === "pad" && "border-emerald-600 bg-emerald-200 text-2xl",
-                  cell.kind === "start" && "border-amber-500 bg-amber-100 text-sm font-bold",
-                  cell.kind === "pond" && "border-sky-600 bg-sky-200 text-sm font-bold"
-                )}
-              >
-                {cell.kind === "word" && cell.word}
-                {cell.kind === "pad" && <span aria-label="Lily pad">🌿</span>}
-                {cell.kind === "start" && <span>🐸 START</span>}
-                {cell.kind === "pond" && <span>🏞️ POND</span>}
-                <span className="absolute top-0.5 left-2.5 text-[9px] font-normal text-slate-400">{step}</span>
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
     </div>
   );
 }

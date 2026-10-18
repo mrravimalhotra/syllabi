@@ -764,6 +764,19 @@ await test("My Documents: deleting while offline shows the connection message", 
   await page.getByText(/check your internet connection/i).first().waitFor({ timeout: 8000 });
 });
 
+await test("Kindergarten worksheets: the board game has a start, a pond, lily pads and rows that snake", async (page, ctx) => {
+  await baseRoutes(ctx);
+  await page.goto(`${BASE}/dashboard/practice/kindergarten/worksheets`, { waitUntil: "networkidle" });
+  await page.getByRole("radiogroup", { name: "Kind of worksheet" }).getByRole("radio", { name: /pond/i }).click();
+  await page.getByText("🐸 START").waitFor({ timeout: 5000 });
+  await page.getByText("🏞️ POND").waitFor();
+  if ((await page.getByLabel("Lily pad").count()) < 3) throw new Error("Expected several lily pads.");
+  const rows = page.getByLabel("Board").locator("> div");
+  if ((await rows.count()) < 3) throw new Error("Expected several board rows.");
+  const directions = await rows.evaluateAll((els) => els.map((el) => getComputedStyle(el).direction));
+  if (directions[0] !== "ltr" || directions[1] !== "rtl" || directions[2] !== "ltr") throw new Error(`Rows should snake, saw ${directions}`);
+});
+
 await test("Account: choosing a class saves at once, and deleting the account needs DELETE typed", async (page, ctx) => {
   await baseRoutes(ctx);
   const patches = [];
