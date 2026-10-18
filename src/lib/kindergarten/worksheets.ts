@@ -2,11 +2,15 @@
 // "Complete each word family" and "Match the picture to the CVC words".
 
 import { seeded } from "@/lib/practice/random";
-import { CVC_WORDS, VOWELS, type Vowel } from "@/lib/kindergarten/words";
+import { BOARD_WORDS, CVC_WORDS, VOWELS, type Vowel } from "@/lib/kindergarten/words";
 
-export const SHEET_KINDS = ["family", "match"] as const;
+export const SHEET_KINDS = ["family", "match", "board"] as const;
 export type SheetKind = (typeof SHEET_KINDS)[number];
-export const SHEET_LABELS: Record<SheetKind, string> = { family: "Complete each word family", match: "Match the picture to the word" };
+export const SHEET_LABELS: Record<SheetKind, string> = {
+  family: "Complete each word family",
+  match: "Match the picture to the word",
+  board: "Hop to the pond (board game)",
+};
 
 const ALL = VOWELS.flatMap((v) => CVC_WORDS[v].map((w) => ({ ...w, vowel: v })));
 
@@ -50,4 +54,37 @@ export function makeMatchSheet(seed: number, vowels: readonly Vowel[] = VOWELS):
   // Never leave a word opposite its own picture, so every line has to be drawn.
   for (let attempt = 0; attempt < 20 && words.some((w, i) => w === pictures[i].word); attempt++) words = r.shuffle(words);
   return { pictures, words };
+}
+
+export type BoardCell = { kind: "start" } | { kind: "pond" } | { kind: "pad" } | { kind: "word"; word: string };
+
+export const BOARD_COLUMNS = 6;
+export const BOARD_ROWS = 7;
+/** How many spaces a player goes back when they land on a lily pad. */
+export const PAD_PENALTY = 2;
+
+/**
+ * A path board game for reading CVC words: roll a die, move along the path,
+ * read the word you land on (right: move ahead 1; stuck: stay), and a lily
+ * pad sends you back. Cells are in path order, start first, pond last.
+ */
+export function makeBoardGame(seed: number, vowels: readonly Vowel[] = VOWELS): BoardCell[] {
+  const r = seeded(seed);
+  const total = BOARD_COLUMNS * BOARD_ROWS;
+  const pool = r.shuffle(vowels.flatMap((v) => BOARD_WORDS[v]));
+  const cells: BoardCell[] = [];
+  // Lily pads: some way along the path, never next to each other.
+  const pads = new Set<number>();
+  for (let tries = 0; pads.size < 6 && tries < 200; tries++) {
+    const i = r.int(4, total - 4);
+    if (!pads.has(i - 1) && !pads.has(i) && !pads.has(i + 1)) pads.add(i);
+  }
+  let next = 0;
+  for (let i = 0; i < total; i++) {
+    if (i === 0) cells.push({ kind: "start" });
+    else if (i === total - 1) cells.push({ kind: "pond" });
+    else if (pads.has(i)) cells.push({ kind: "pad" });
+    else cells.push({ kind: "word", word: pool[next++ % pool.length] });
+  }
+  return cells;
 }

@@ -399,6 +399,12 @@ await test("Kindergarten worksheets: both sheets show, and a new sheet changes t
   await page.getByRole("article", { name: "Worksheet" }).getByText("Match the picture to the word.").waitFor();
   const pictures = await page.getByRole("article", { name: "Worksheet" }).getByRole("img", { name: "Picture" }).count();
   if (pictures < 8) throw new Error(`Expected pictures on the matching sheet, saw ${pictures}.`);
+  await page.getByRole("radio", { name: /board game/ }).click();
+  await page.getByText(/First frog to the pond wins/).first().waitFor();
+  await page.getByText("START").first().waitFor();
+  await page.getByText("POND").first().waitFor();
+  const lilyPads = await page.getByLabel("Lily pad").count();
+  if (lilyPads < 4) throw new Error(`Expected lily pads on the board, saw ${lilyPads}.`);
 });
 
 await test("My Books: a failed list shows a retry message", async (page, ctx) => {

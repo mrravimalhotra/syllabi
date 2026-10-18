@@ -3,7 +3,17 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader, button, cx } from "@/components/ui";
-import { SHEET_KINDS, SHEET_LABELS, makeFamilySheet, makeMatchSheet, type SheetKind } from "@/lib/kindergarten/worksheets";
+import {
+  BOARD_COLUMNS,
+  PAD_PENALTY,
+  SHEET_KINDS,
+  SHEET_LABELS,
+  makeBoardGame,
+  makeFamilySheet,
+  makeMatchSheet,
+  type BoardCell,
+  type SheetKind,
+} from "@/lib/kindergarten/worksheets";
 import { VOWELS, type Vowel } from "@/lib/kindergarten/words";
 import { newSeed } from "@/lib/practice/random";
 
@@ -24,6 +34,7 @@ export default function KindergartenWorksheetsPage() {
   const [vowels, setVowels] = useState<Vowel[]>([...VOWELS]);
 
   const family = useMemo(() => (kind === "family" && seed !== null ? makeFamilySheet(seed, vowels) : null), [kind, seed, vowels]);
+  const board = useMemo(() => (kind === "board" && seed !== null ? makeBoardGame(seed, vowels) : null), [kind, seed, vowels]);
   const match = useMemo(() => (kind === "match" && seed !== null ? makeMatchSheet(seed, vowels) : null), [kind, seed, vowels]);
 
   const toggle = (v: Vowel) =>
@@ -90,16 +101,20 @@ export default function KindergartenWorksheetsPage() {
 
       {seed !== null && (
         <article
-          className="mx-auto max-w-2xl rounded-3xl border-4 border-dashed border-pink-300 bg-white p-6 print:max-w-none print:border-pink-300 print:p-8"
+          className={cx(
+            "mx-auto rounded-3xl border-4 border-dashed border-pink-300 bg-white p-6 print:max-w-none print:border-pink-300 print:p-8",
+            kind === "board" ? "max-w-3xl" : "max-w-2xl"
+          )}
           aria-label="Worksheet"
         >
+          {kind === "board" && <style>{"@media print { @page { size: landscape; } }"}</style>}
           <div className="mb-4 flex justify-between text-sm text-slate-700">
             <span>Name: ______________________</span>
             <span>Date: ______________</span>
           </div>
           <h2 className="mb-5 rounded-full bg-pink-100 px-4 py-2 text-center text-2xl font-bold text-slate-800">
             {SHEET_LABELS[kind]}
-            {kind === "family" ? ":" : "."}
+            {kind === "family" ? ":" : kind === "match" ? "." : ""}
           </h2>
 
           {family && (
@@ -140,9 +155,57 @@ export default function KindergartenWorksheetsPage() {
             </ol>
           )}
 
+          {board && <Board cells={board} />}
+
           <p className="mt-5 text-center text-sm text-slate-500">You can do it! ❤️</p>
         </article>
       )}
+    </div>
+  );
+}
+
+/** The board game: cells in path order, shown in rows that snake back and forth so the path is easy to follow. */
+function Board({ cells }: { cells: BoardCell[] }) {
+  const rows: { cell: BoardCell; step: number }[][] = [];
+  cells.forEach((cell, step) => {
+    const row = Math.floor(step / BOARD_COLUMNS);
+    (rows[row] ??= []).push({ cell, step });
+  });
+  return (
+    <div>
+      <p className="mb-4 text-center text-sm text-slate-600">
+        Roll a die and hop that many spaces. Read the word you land on. If you read it right, hop ahead 1 space. If you land on a lily pad,
+        hop back {PAD_PENALTY}. First frog to the pond wins!
+      </p>
+      <div className="space-y-2" aria-label="Board">
+        {rows.map((row, r) => (
+          <div
+            key={r}
+            className="grid gap-2"
+            style={{ gridTemplateColumns: `repeat(${BOARD_COLUMNS}, minmax(0, 1fr))`, direction: r % 2 === 1 ? "rtl" : "ltr" }}
+          >
+            {row.map(({ cell, step }) => (
+              <div
+                key={step}
+                style={{ direction: "ltr" }}
+                className={cx(
+                  "relative flex aspect-[5/3] items-center justify-center rounded-full border-2 text-center text-xl font-semibold",
+                  cell.kind === "word" && "border-slate-700 bg-white text-slate-900",
+                  cell.kind === "pad" && "border-emerald-600 bg-emerald-200 text-2xl",
+                  cell.kind === "start" && "border-amber-500 bg-amber-100 text-sm font-bold",
+                  cell.kind === "pond" && "border-sky-600 bg-sky-200 text-sm font-bold"
+                )}
+              >
+                {cell.kind === "word" && cell.word}
+                {cell.kind === "pad" && <span aria-label="Lily pad">🌿</span>}
+                {cell.kind === "start" && <span>🐸 START</span>}
+                {cell.kind === "pond" && <span>🏞️ POND</span>}
+                <span className="absolute top-0.5 left-2.5 text-[9px] font-normal text-slate-400">{step}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

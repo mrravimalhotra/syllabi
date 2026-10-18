@@ -156,3 +156,15 @@ export const LETTER_SOUNDS: Record<string, string> = {
 };
 
 export const isVowelLetter = (letter: string) => (VOWELS as readonly string[]).includes(letter);
+
+/**
+ * More real CVC words per vowel, for games that need many words and no
+ * pictures (the board game). All three letters, consonant-vowel-consonant.
+ */
+export const BOARD_WORDS: Record<Vowel, string[]> = {
+  a: "bag bat cab can cap cat dad fan gap ham had hat jab jam lap mad man map mat nap pan pat rag ram rat sad sag sat tab tag tan tap van wag yap".split(" "),
+  e: "bed beg den get hen jet leg men met net peg pen pet red set ten vet web wet yes".split(" "),
+  i: "big bin bit dig dip fig fit hid him hip hit kid kit lid lip mix pig pin rip sit six tin wig win zip".split(" "),
+  o: "box cop cot dog dot fox got hop hot job jog lot mop nod pop pot rod rot sob top".split(" "),
+  u: "bud bug bus but cub cup cut dug fun gum hug hut jug mud mug nut pug rub rug run sun tub tug".split(" "),
+};

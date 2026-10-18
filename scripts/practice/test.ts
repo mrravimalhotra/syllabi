@@ -1,8 +1,8 @@
 import { describe, explain, worksheetMarkdown, makeQuiz, markOrder, normaliseSettings, parseSample, settingsProblem, type OrderSettings } from "@/lib/practice/order";
 import type { PracticeNumber } from "@/lib/practice/numbers";
 import { makeCompareQuiz, makeCvcQuiz, makeSightQuiz, type CompareSettings, type SightSettings } from "@/lib/kindergarten/quiz";
-import { makeFamilySheet, makeMatchSheet } from "@/lib/kindergarten/worksheets";
-import { CVC_WORDS, SIGHT_LEVELS, SIGHT_SETS, VOWELS } from "@/lib/kindergarten/words";
+import { BOARD_COLUMNS, BOARD_ROWS, makeBoardGame, makeFamilySheet, makeMatchSheet } from "@/lib/kindergarten/worksheets";
+import { BOARD_WORDS, CVC_WORDS, SIGHT_LEVELS, SIGHT_SETS, VOWELS } from "@/lib/kindergarten/words";
 
 let passed = 0;
 let failed = 0;
@@ -183,6 +183,23 @@ for (let seed = 1; seed <= 400; seed++) {
     check(m.pictures.length === Math.min(10, m.pictures.length) && wordSet.size === m.pictures.length, `Match sheet repeats a picture`);
     check(m.words.length === m.pictures.length && m.words.every((w) => wordSet.has(w)) && new Set(m.words).size === m.words.length, `Match sheet words don't match its pictures`);
     check(m.pictures.length < 2 || m.words.some((w, i) => w !== m.pictures[i].word), `Match sheet leaves every word opposite its own picture`);
+  }
+}
+for (const vowel of VOWELS) {
+  for (const w of BOARD_WORDS[vowel]) check(/^[bcdfghjklmnpqrstvwxyz][aeiou][bcdfghjklmnpqrstvwxyz]$/.test(w) && w[1] === vowel, `Board word ${w} isn't CVC with vowel ${vowel}`);
+  check(new Set(BOARD_WORDS[vowel]).size === BOARD_WORDS[vowel].length && BOARD_WORDS[vowel].length >= 19, `Board words for ${vowel}: duplicates or too few`);
+}
+for (let seed = 1; seed <= 400; seed++) {
+  for (const vowels of [["a"], ["e"], ["i", "o"], [...VOWELS]] as const) {
+    const cells = makeBoardGame(seed, [...vowels]);
+    check(cells.length === BOARD_COLUMNS * BOARD_ROWS, `Board has ${cells.length} cells`);
+    check(cells[0].kind === "start" && cells[cells.length - 1].kind === "pond", "Board must start at the start and end at the pond");
+    const pads = cells.map((c, i) => (c.kind === "pad" ? i : -1)).filter((i) => i >= 0);
+    check(pads.length >= 4 && pads.every((p, i) => p >= 4 && p <= cells.length - 4 && (i === 0 || p - pads[i - 1] >= 2)), `Lily pads badly placed: ${pads}`);
+    const words = cells.flatMap((c) => (c.kind === "word" ? [c.word] : []));
+    check(words.every((w) => vowels.some((v) => w[1] === v)), "A board word is outside the chosen vowels");
+    const pool = vowels.reduce((n, v) => n + BOARD_WORDS[v as keyof typeof BOARD_WORDS].length, 0);
+    if (words.length <= pool) check(new Set(words).size === words.length, `A board word repeats although there are enough words: ${seed}`);
   }
 }
 // The same seed gives the same questions (so a round can be repeated or printed).
