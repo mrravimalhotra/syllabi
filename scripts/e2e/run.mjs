@@ -508,6 +508,16 @@ await test("My Documents: empty and error states", async (page, ctx) => {
   await page.getByText(/can.t reach its database/i).first().waitFor({ timeout: 8000 });
 });
 
+await test("My Documents: deleting while offline shows the connection message", async (page, ctx) => {
+  const doc = { id: "d1", title: "Fractions notes", task_type: "notes", created_at: now };
+  await ctx.route("**/api/documents", (r) => json(r, { documents: [doc] }));
+  await ctx.route("**/api/documents/d1", (r) => r.abort("connectionrefused"));
+  page.on("dialog", (d) => d.accept());
+  await page.goto(`${BASE}/dashboard/documents`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: /delete/i }).first().click();
+  await page.getByText(/check your internet connection/i).first().waitFor({ timeout: 8000 });
+});
+
 await test("Account: shows the signed-in details", async (page, ctx) => {
   await baseRoutes(ctx);
   await page.goto(`${BASE}/dashboard/account`, { waitUntil: "networkidle" });

@@ -50,7 +50,11 @@ export default function MyDocumentsPage() {
   async function remove(doc: Row) {
     if (!window.confirm(`Delete "${doc.title}"? This can't be undone.`)) return;
     setError(null);
-    const res = await fetch(`/api/documents/${doc.id}`, { method: "DELETE" });
+    const res = await fetch(`/api/documents/${doc.id}`, { method: "DELETE" }).catch(() => null);
+    if (!res) {
+      setError(OFFLINE_MESSAGE);
+      return;
+    }
     if (!res.ok) {
       setError("Couldn't delete that answer. Please try again.");
       return;
