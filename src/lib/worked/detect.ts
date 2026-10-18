@@ -94,6 +94,105 @@ export interface FoundProblem {
   match: string;
 }
 
+type Add = (bare: WorkedProblem, match: string) => void;
+
+/** Every match of a pattern in a line (the pattern's own flags, plus "g"). */
+const matchesOf = (pattern: RegExp, line: string) => line.matchAll(new RegExp(pattern.source, pattern.flags + "g"));
+
+function findDivisions(line: string, add: Add) {
+  for (const pattern of DIVISION) {
+    for (const m of matchesOf(pattern, line)) {
+      const dividend = cleanNumber(m[1]);
+      const divisor = cleanNumber(m[2]);
+      if (dividend && divisor && Number(divisor) !== 0 && !partOfLongerExpression(line, m)) {
+        add({ kind: "division", dividend, divisor, decimals: DECIMALS.test(line) }, m[0]);
+      }
+    }
+  }
+}
+
+function findAdditions(line: string, add: Add) {
+  for (const pattern of ADDITION) {
+    for (const m of matchesOf(pattern, line)) {
+      if (partOfLongerExpression(line, m)) continue;
+      // "add 12, 5 and 3" / "12 + 5 + 3": every number in the match.
+      const numbers = numbersIn(m[0]);
+      if (numbers.length >= 2) add({ kind: "column", op: "add", numbers: numbers.slice(0, 4) }, m[0]);
+    }
+  }
+}
+
+function findSubtractions(line: string, add: Add) {
+  for (const [pattern, from, take] of SUBTRACTION) {
+    for (const m of matchesOf(pattern, line)) {
+      if (partOfLongerExpression(line, m)) continue;
+      const a = cleanNumber(m[from]);
+      const b = cleanNumber(m[take]);
+      if (a && b) add({ kind: "column", op: "subtract", numbers: [a, b] }, m[0]);
+    }
+  }
+  for (const m of line.matchAll(new RegExp(DIFFERENCE.source, "gi"))) {
+    const [a, b] = [cleanNumber(m[1]), cleanNumber(m[2])];
+    if (a && b) add({ kind: "column", op: "subtract", numbers: Number(a) >= Number(b) ? [a, b] : [b, a] }, m[0]);
+  }
+}
+
+function findMultiplications(line: string, add: Add) {
+  for (const pattern of MULTIPLICATION) {
+    for (const m of matchesOf(pattern, line)) {
+      if (partOfLongerExpression(line, m)) continue;
+      const [a, b] = numbersIn(m[0]);
+      if (a && b) add({ kind: "multiplication", a, b }, m[0]);
+    }
+  }
+}
+
+function findFractions(line: string, add: Add) {
+  for (const m of line.matchAll(new RegExp(FRACTION_SUM.source, "g"))) {
+    if (partOfLongerExpression(line, m)) continue;
+    const op = m[3] === "+" ? "add" : "subtract";
+    add({ kind: "fraction", op, fractions: [[Number(m[1]), Number(m[2])], [Number(m[4]), Number(m[5])]] }, m[0]);
+  }
+  for (const pattern of SIMPLIFY) {
+    for (const m of matchesOf(pattern, line)) add({ kind: "fraction", op: "simplify", fractions: [[Number(m[1]), Number(m[2])]] }, m[0]);
+  }
+}
+
+function findConversions(line: string, add: Add) {
+  for (const [pattern, v, f, t] of CONVERT) {
+    for (const m of matchesOf(pattern, line)) {
+      const value = cleanNumber(m[v]);
+      const from = unitSymbol(m[f]);
+      const to = unitSymbol(m[t]);
+      // "28 m 68 cm in metres" mixes two units, which this chart method doesn't show.
+      const mixed = new RegExp(String.raw`\d\s*${U}\s*$`, "iu").test(line.slice(0, m.index));
+      if (value && from && to && !mixed) add({ kind: "convert", value, from, to }, m[0]);
+    }
+  }
+}
+
+/** The whole numbers in a piece of an LCM or HCF question. */
+const wholeNumbersIn = (s: string) => [...s.matchAll(/\d[\d,]*/g)].map((x) => Number(x[0].replace(/,/g, ""))).filter((n) => n > 0);
+
+function findLcmHcf(line: string, add: Add) {
+  const wantsLcm = LCM_RE.test(line);
+  const wantsHcf = HCF_RE.test(line);
+  if (!wantsLcm && !wantsHcf) return;
+  const keyword = (wantsLcm ? LCM_RE : HCF_RE).exec(line)!;
+  // Numbers after the keyword ("LCM of 12, 18 and 30"), else before it ("12 और 18 का ल.स.प.").
+  // Stop at "is"/"=" ("the LCM of 4 and 6 is 12" asks about 4 and 6 only).
+  const after = line.slice(keyword.index + keyword[0].length).split(/\b(?:is|are|was|equals)\b|=|है|आहे/)[0];
+  let numbers = wholeNumbersIn(after);
+  if (numbers.length < 2) numbers = wholeNumbersIn(line.slice(0, keyword.index));
+  if (numbers.length >= 2) {
+    const want = wantsLcm && wantsHcf ? "both" : wantsLcm ? "lcm" : "hcf";
+    add({ kind: "lcm-hcf", numbers: numbers.slice(0, 6), want }, line.trim());
+  }
+}
+
+// In this order: a line's calculations are listed in the order the kinds are tried.
+const FINDERS = [findDivisions, findAdditions, findSubtractions, findMultiplications, findFractions, findConversions, findLcmHcf];
+
 /**
  * Every calculation in the text that a worked example can show, in order,
  * without repeats, narrated in the answer language (`setting`, as on the
@@ -105,7 +204,7 @@ export function findProblems(textIn: string, setting?: string): FoundProblem[] {
   const text = asciiDigits(textIn).replace(/=\s*\?/g, "= _");
   const found: FoundProblem[] = [];
   const seen = new Set<string>();
-  const add = (bare: WorkedProblem, match: string) => {
+  const add: Add = (bare, match) => {
     const problem = { ...bare, ...language };
     const key = JSON.stringify(problem);
     if (!seen.has(key) && solve(problem)) {
@@ -113,84 +212,7 @@ export function findProblems(textIn: string, setting?: string): FoundProblem[] {
       found.push({ problem, match });
     }
   };
-
-  for (const line of text.split(/\n|[?।]/)) {
-    for (const pattern of DIVISION) {
-      for (const m of line.matchAll(new RegExp(pattern.source, pattern.flags + "g"))) {
-        const dividend = cleanNumber(m[1]);
-        const divisor = cleanNumber(m[2]);
-        if (dividend && divisor && Number(divisor) !== 0 && !partOfLongerExpression(line, m)) {
-          add({ kind: "division", dividend, divisor, decimals: DECIMALS.test(line) }, m[0]);
-        }
-      }
-    }
-
-    for (const pattern of ADDITION) {
-      for (const m of line.matchAll(new RegExp(pattern.source, pattern.flags + "g"))) {
-        if (partOfLongerExpression(line, m)) continue;
-        // "add 12, 5 and 3" / "12 + 5 + 3": every number in the match.
-        const numbers = numbersIn(m[0]);
-        if (numbers.length >= 2) add({ kind: "column", op: "add", numbers: numbers.slice(0, 4) }, m[0]);
-      }
-    }
-    for (const [pattern, from, take] of SUBTRACTION) {
-      for (const m of line.matchAll(new RegExp(pattern.source, pattern.flags + "g"))) {
-        if (partOfLongerExpression(line, m)) continue;
-        const a = cleanNumber(m[from]);
-        const b = cleanNumber(m[take]);
-        if (a && b) add({ kind: "column", op: "subtract", numbers: [a, b] }, m[0]);
-      }
-    }
-    for (const m of line.matchAll(new RegExp(DIFFERENCE.source, "gi"))) {
-      const [a, b] = [cleanNumber(m[1]), cleanNumber(m[2])];
-      if (a && b) add({ kind: "column", op: "subtract", numbers: Number(a) >= Number(b) ? [a, b] : [b, a] }, m[0]);
-    }
-    for (const pattern of MULTIPLICATION) {
-      for (const m of line.matchAll(new RegExp(pattern.source, pattern.flags + "g"))) {
-        if (partOfLongerExpression(line, m)) continue;
-        const [a, b] = numbersIn(m[0]);
-        if (a && b) add({ kind: "multiplication", a, b }, m[0]);
-      }
-    }
-
-    for (const m of line.matchAll(new RegExp(FRACTION_SUM.source, "g"))) {
-      if (partOfLongerExpression(line, m)) continue;
-      const op = m[3] === "+" ? "add" : "subtract";
-      add({ kind: "fraction", op, fractions: [[Number(m[1]), Number(m[2])], [Number(m[4]), Number(m[5])]] }, m[0]);
-    }
-    for (const pattern of SIMPLIFY) {
-      for (const m of line.matchAll(new RegExp(pattern.source, pattern.flags + "g"))) {
-        add({ kind: "fraction", op: "simplify", fractions: [[Number(m[1]), Number(m[2])]] }, m[0]);
-      }
-    }
-    for (const [pattern, v, f, t] of CONVERT) {
-      for (const m of line.matchAll(new RegExp(pattern.source, pattern.flags + "g"))) {
-        const value = cleanNumber(m[v]);
-        const from = unitSymbol(m[f]);
-        const to = unitSymbol(m[t]);
-        // "28 m 68 cm in metres" mixes two units, which this chart method doesn't show.
-        const mixed = new RegExp(String.raw`\d\s*${U}\s*$`, "iu").test(line.slice(0, m.index));
-        if (value && from && to && !mixed) add({ kind: "convert", value, from, to }, m[0]);
-      }
-    }
-
-    const wantsLcm = LCM_RE.test(line);
-    const wantsHcf = HCF_RE.test(line);
-    if (wantsLcm || wantsHcf) {
-      const keyword = (wantsLcm ? LCM_RE : HCF_RE).exec(line)!;
-      // Numbers after the keyword ("LCM of 12, 18 and 30"), else before it ("12 और 18 का ल.स.प.").
-      // Stop at "is"/"=" ("the LCM of 4 and 6 is 12" asks about 4 and 6 only).
-      const after = line.slice(keyword.index + keyword[0].length).split(/\b(?:is|are|was|equals)\b|=|है|आहे/)[0];
-      const before = line.slice(0, keyword.index);
-      const numbersIn = (s: string) => [...s.matchAll(/\d[\d,]*/g)].map((x) => Number(x[0].replace(/,/g, ""))).filter((n) => n > 0);
-      let numbers = numbersIn(after);
-      if (numbers.length < 2) numbers = numbersIn(before);
-      if (numbers.length >= 2) {
-        const want = wantsLcm && wantsHcf ? "both" : wantsLcm ? "lcm" : "hcf";
-        add({ kind: "lcm-hcf", numbers: numbers.slice(0, 6), want }, line.trim());
-      }
-    }
-  }
+  for (const line of text.split(/\n|[?।]/)) for (const find of FINDERS) find(line, add);
   return found;
 }
 
