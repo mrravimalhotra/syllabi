@@ -91,6 +91,8 @@ export function CvcGame({ questions, say, sound, prepare, prepareSounds, onAgain
       setCelebrating(true);
       setStars((s) => s + 1);
       if (mistakeMade.current) setHelped((h) => [...h, question.word]);
+      // The last letter is heard at once, like the others, before the whole word is sounded out.
+      await sound(letter);
       await soundOut(question, true);
       // Let the child see the whole equation (k · a · t = cat) before moving on.
       await new Promise((r) => setTimeout(r, 900));
