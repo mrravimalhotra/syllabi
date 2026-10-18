@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { SayItGame } from "@/components/kindergarten/SayItGame";
 import { BlendGame } from "@/components/kindergarten/BlendGame";
 import { CompareGame } from "@/components/kindergarten/CompareGame";
 import { CvcGame } from "@/components/kindergarten/CvcGame";
@@ -27,7 +26,7 @@ import { SIGHT_LEVELS, SIGHT_LEVEL_LABELS, VOWELS, type Vowel } from "@/lib/kind
 import { newSeed } from "@/lib/practice/random";
 import { usePref } from "@/lib/use-pref";
 
-type Activity = "say" | "blend" | "cvc" | "sight" | "compare";
+type Activity = "blend" | "cvc" | "sight" | "compare";
 
 const isCvc = (v: unknown): v is CvcSettings => {
   const s = v as CvcSettings;
@@ -83,25 +82,11 @@ export default function KindergartenPage() {
   };
   const again = () => setActivity((a) => (a ? { ...a, seed: newSeed() } : a));
 
-  const sayQuiz = useMemo(() => (activity?.kind === "say" ? makeBlendQuiz(cvc, activity.seed) : null), [activity, cvc]);
   const blendQuiz = useMemo(() => (activity?.kind === "blend" ? makeBlendQuiz(cvc, activity.seed) : null), [activity, cvc]);
   const cvcQuiz = useMemo(() => (activity?.kind === "cvc" ? makeCvcQuiz(cvc, activity.seed) : null), [activity, cvc]);
   const sightQuiz = useMemo(() => (activity?.kind === "sight" ? makeSightQuiz(sight, activity.seed) : null), [activity, sight]);
   const compareQuiz = useMemo(() => (activity?.kind === "compare" ? makeCompareQuiz(compare, activity.seed) : null), [activity, compare]);
 
-  if (activity && sayQuiz)
-    return (
-      <SayItGame
-        key={activity.seed}
-        questions={sayQuiz}
-        say={say}
-        sound={sound}
-        prepare={prepare}
-        prepareSounds={prepareSounds}
-        onAgain={again}
-        onExit={exit}
-      />
-    );
   if (activity && blendQuiz)
     return (
       <BlendGame
@@ -165,28 +150,6 @@ export default function KindergartenPage() {
         <button
           type="button"
           onClick={() => start("blend")}
-          className="min-h-14 w-full rounded-2xl bg-brand-600 px-6 text-xl font-semibold text-white shadow-sm active:scale-95"
-        >
-          ▶ Play
-        </button>
-      </section>
-
-      <section className={cx(card, "space-y-4 p-4 sm:p-6")}>
-        <div className="flex items-start gap-4">
-          <span className="text-5xl" aria-hidden>
-            🎤
-          </span>
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900">Say it back</h2>
-            <p className="text-sm text-slate-500">
-              Hear each sound and say it back, then say the whole word. The phone records your child; you listen and tap Good or Again.
-              Needs the microphone.
-            </p>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => start("say")}
           className="min-h-14 w-full rounded-2xl bg-brand-600 px-6 text-xl font-semibold text-white shadow-sm active:scale-95"
         >
           ▶ Play

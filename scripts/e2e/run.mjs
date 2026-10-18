@@ -326,7 +326,7 @@ await test("Kindergarten: spelling a word with letters, a full round ends in sta
   await baseRoutes(ctx);
   await speechOk(ctx);
   await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
-  await tap(page.getByRole("button", { name: /Play/ }).nth(2));
+  await tap(page.getByRole("button", { name: /Play/ }).nth(1));
   for (let q = 0; q < 5; q++) {
     const box = page.locator("[data-word]");
     await box.waitFor();
@@ -359,24 +359,6 @@ await test("Kindergarten: listen and blend - the sounds are heard, then the righ
     if (q < 4) await page.locator(`[data-word]:not([data-word="${word}"])`).waitFor({ timeout: 20000 });
   }
   await page.getByText("Well done!").first().waitFor({ timeout: 20000 });
-});
-
-await test("Kindergarten: say it back - the child's voice is recorded and the grown-up judges each sound", async (page, ctx) => {
-  await ctx.grantPermissions(["microphone"]);
-  await baseRoutes(ctx);
-  await speechOk(ctx);
-  await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
-  await tap(page.getByRole("button", { name: /Play/ }).nth(1));
-  // Three sounds (one told to try again once), then the whole word.
-  await page.getByText("Your turn! Say it now.").waitFor({ timeout: 30000 });
-  await page.getByText("Well said!").waitFor({ timeout: 30000 });
-  await tap(page.getByRole("button", { name: /Again/ }));
-  await page.getByText("Your turn! Say it now.").waitFor({ timeout: 30000 });
-  for (let i = 0; i < 4; i++) {
-    await page.getByText("Well said!").waitFor({ timeout: 30000 });
-    await tap(page.getByRole("button", { name: /Good/ }));
-    await page.getByText("Your turn! Say it now.").waitFor({ timeout: 30000 }).catch(() => {});
-  }
 });
 
 await test("Kindergarten: recording a letter sound and saving it", async (page, ctx) => {
@@ -440,7 +422,7 @@ await test("Kindergarten: a wrong letter says try again and does not place it", 
   await baseRoutes(ctx);
   await speechOk(ctx);
   await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
-  await tap(page.getByRole("button", { name: /Play/ }).nth(2));
+  await tap(page.getByRole("button", { name: /Play/ }).nth(1));
   const box = page.locator("[data-word]");
   await box.waitFor();
   const word = await box.getAttribute("data-word");
@@ -456,7 +438,7 @@ await test("Kindergarten: sight words round works when the natural voice is unav
   await baseRoutes(ctx);
   await ctx.route("**/api/speech", (r) => json(r, { error: "no voice" }, 503));
   await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
-  await tap(page.getByRole("button", { name: /Play/ }).nth(3));
+  await tap(page.getByRole("button", { name: /Play/ }).nth(2));
   for (let q = 0; q < 5; q++) {
     const box = page.locator("[data-word]");
     await box.waitFor({ timeout: 15000 });
@@ -471,7 +453,7 @@ await test("Kindergarten: more, fewer or same - tapping the right group earns a 
   await baseRoutes(ctx);
   await speechOk(ctx);
   await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
-  await tap(page.getByRole("button", { name: /Play/ }).nth(4));
+  await tap(page.getByRole("button", { name: /Play/ }).nth(3));
   for (let q = 0; q < 5; q++) {
     const box = page.locator("[data-answer]");
     await box.waitFor({ timeout: 8000 });

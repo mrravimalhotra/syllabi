@@ -3,8 +3,6 @@ import type { PracticeNumber } from "@/lib/practice/numbers";
 import { makeCompareQuiz, makeCvcQuiz, makeSightQuiz, type CompareSettings, type SightSettings } from "@/lib/kindergarten/quiz";
 import { IPA, PHONEMES, blendStart, soundText } from "@/lib/kindergarten/phonics";
 import { makeBlendQuiz } from "@/lib/kindergarten/quiz";
-import { Endpointer, encodeWav, rms, toSixteenK } from "@/lib/kindergarten/listen";
-import { initialFlow, nextFlow, type FlowEvent, type FlowState } from "@/lib/kindergarten/flow";
 import { BOARD_COLUMNS, BOARD_ROWS, makeBoardGame, makeFamilySheet, makeMatchSheet, schoolFamilySheet, schoolMatchSheet } from "@/lib/kindergarten/worksheets";
 import { BOARD_WORDS, CVC_WORDS, SIGHT_LEVELS, SIGHT_SETS, VOWELS } from "@/lib/kindergarten/words";
 
@@ -255,50 +253,6 @@ check(IPA.a === "æ" && IPA.c === "k" && IPA.u === "ʌ", "IPA for a, c and u");
 // The same seed gives the same questions (so a round can be repeated or printed).
 check(JSON.stringify(makeCvcQuiz({ vowels: ["a", "o"], questions: 5 }, 77)) === JSON.stringify(makeCvcQuiz({ vowels: ["a", "o"], questions: 5 }, 77)), "The same seed gave different CVC questions");
 check(JSON.stringify(makeCompareQuiz({ max: 10, questions: 5 }, 77)) === JSON.stringify(makeCompareQuiz({ max: 10, questions: 5 }, 77)), "The same seed gave different compare questions");
-
-// "Say it back" lesson flow: a pure state machine.
-{
-  const run = (events: FlowEvent[]): FlowState => events.reduce((s, e) => nextFlow(s, e), initialFlow);
-  const good = (n: number): FlowEvent[] =>
-    Array.from({ length: n }, () => [{ type: "MODEL_DONE" }, { type: "HEARD", heard: true }, { type: "SCORED", score: 90 }] as FlowEvent[]).flat();
-  const perfect = run([{ type: "START" }, ...good(3), { type: "BLEND_DONE" }, { type: "HEARD", heard: true }, { type: "SCORED", score: 80 }]);
-  check(perfect.step === "celebrate" && perfect.step === "celebrate" && perfect.blendScore === 80, "A good word should end in celebration");
-  const retry = run([{ type: "START" }, { type: "MODEL_DONE" }, { type: "HEARD", heard: true }, { type: "SCORED", score: 30 }]);
-  check(retry.step === "model" && "sound" in retry && retry.sound === 0 && "tries" in retry && retry.tries === 1, "A weak sound should be modelled again");
-  const edge = run([{ type: "START" }, { type: "MODEL_DONE" }, { type: "HEARD", heard: true }, { type: "SCORED", score: 60 }]);
-  check(edge.step === "model" && "sound" in edge && edge.sound === 1, "A score of 60 passes the sound");
-  const silent = run([{ type: "START" }, ...Array.from({ length: 3 }, () => [{ type: "MODEL_DONE" }, { type: "HEARD", heard: false }] as FlowEvent[]).flat()]);
-  check(silent.step === "model" && "sound" in silent && silent.sound === 1 && silent.tries === 0, "After two retries the lesson moves on to the next sound");
-  const stuck = run([{ type: "START" }, ...Array.from({ length: 9 }, () => [{ type: "MODEL_DONE" }, { type: "HEARD", heard: false }] as FlowEvent[]).flat(), { type: "BLEND_DONE" }, { type: "HEARD", heard: false }]);
-  check(stuck.step === "guide", "Hearing nothing at all must still reach the gentle guide, never loop for ever");
-  const weak = run([{ type: "START" }, ...good(2), { type: "MODEL_DONE" }, { type: "HEARD", heard: true }, { type: "SCORED", score: 61 }, { type: "BLEND_DONE" }, { type: "HEARD", heard: true }, { type: "SCORED", score: 64 }]);
-  check(weak.step === "guide" && weak.target === 2, "A blend under 65 should guide on the weakest sound");
-  check(nextFlow(weak, { type: "GUIDE_DONE" }).step === "celebrate", "The guide leads to the end");
-  check(nextFlow({ step: "init" }, { type: "MODEL_DONE" }).step === "init", "Events out of order are ignored");
-}
-
-// Voice capture helpers.
-{
-  const e = new Endpointer();
-  check(e.push(0.001, 0) === "none" && !e.heard, "Silence at the start keeps waiting");
-  check(e.push(0.001, 5000) === "nobody", "Nobody speaking for 5 seconds ends the wait");
-  const f = new Endpointer();
-  f.push(0.001, 0);
-  f.push(0.2, 500);
-  check(f.heard && f.push(0.001, 1000) === "none" && f.push(0.001, 2200) === "silence", "1.2 s of quiet after speech ends it");
-  const g = new Endpointer();
-  g.push(0.2, 0);
-  check(g.push(0.2, 3400) === "none" && g.push(0.2, 3500) === "max", "Speech is cut off at 3.5 seconds");
-  const h = new Endpointer();
-  h.push(0.2, 0);
-  h.push(0.001, 500);
-  check(h.push(0.2, 1500) === "none" && h.push(0.001, 2000) === "none", "A pause shorter than 1.2 s does not end it");
-  check(rms(new Float32Array([0.5, -0.5])) === 0.5 && rms(new Float32Array(0)) === 0, "Loudness of a signal");
-  check(toSixteenK(new Float32Array(48000), 48000).length === 16000 && toSixteenK(new Float32Array(100), 16000).length === 100, "Resampling to 16 kHz");
-  const wav = new DataView(encodeWav(new Float32Array([0, 1, -1])));
-  check(wav.getUint32(24, true) === 16000 && wav.getUint16(22, true) === 1 && wav.getUint16(34, true) === 16 && wav.byteLength === 50, "WAV is 16 kHz mono 16-bit");
-  check(wav.getInt16(46, true) === 32767 && wav.getInt16(48, true) === -32768, "WAV samples are scaled to 16 bits");
-}
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);
