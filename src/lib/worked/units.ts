@@ -25,12 +25,21 @@ function place(unit: string): { family: string; index: number } | null {
 const label = (index: number, family: string) => (index >= 0 && index < PREFIXES.length ? PREFIXES[index] + family : "");
 const POWERS = ["1", "10", "100", "1000", "10000", "100000", "1000000"];
 
-export function convertUnits(valueIn: string, from: string, to: string, language?: Narration): WorkedExample | null {
-  const t = phrases(language);
-  const value = cleanNumber(valueIn);
-  const a = place(from);
-  const b = place(to);
-  if (!value || !a || !b || a.family !== b.family || a.index === b.index) return null;
+/** Where the digits of a number sit on the chart, which places are filled with zeros, and the converted number. */
+interface Plot {
+  digits: { d: string; at: number }[];
+  fracLength: number;
+  lo: number;
+  hi: number;
+  zeros: number[];
+  filled: Map<number, string>;
+  result: string;
+}
+
+type Place = { family: string; index: number };
+
+/** Puts the number's digits on the chart (the ones digit under `from`) and reads it off with the ones digit under `to`. Null when it doesn't fit. */
+function plotValue(value: string, a: Place, b: Place): Plot | null {
   const [intPart, fracPart = ""] = value.split(".");
   const int = intPart.replace(/^0+(?=\d)/, "") || "0";
   if (int.length + fracPart.length > MAX_DIGITS) return null;
@@ -40,16 +49,14 @@ export function convertUnits(valueIn: string, from: string, to: string, language
     ...int.split("").map((d, i) => ({ d, at: a.index - (int.length - 1 - i) })),
     ...fracPart.split("").map((d, j) => ({ d, at: a.index + 1 + j })),
   ];
-  const written = digits;
-  const lo = Math.min(0, b.index, ...written.map((x) => x.at));
-  const hi = Math.max(PREFIXES.length - 1, b.index, ...written.map((x) => x.at));
+  const lo = Math.min(0, b.index, ...digits.map((x) => x.at));
+  const hi = Math.max(PREFIXES.length - 1, b.index, ...digits.map((x) => x.at));
   if (hi - lo + 1 > MAX_COLUMNS) return null;
-  const col = (at: number) => at - lo;
 
   // Empty places between the digits and the new ones place are filled with 0.
-  const filled = new Map(written.map((x) => [x.at, x.d]));
-  const first = Math.min(...written.map((x) => x.at), b.index);
-  const last = Math.max(...written.map((x) => x.at), b.index);
+  const filled = new Map(digits.map((x) => [x.at, x.d]));
+  const first = Math.min(...digits.map((x) => x.at), b.index);
+  const last = Math.max(...digits.map((x) => x.at), b.index);
   const zeros: number[] = [];
   for (let at = first; at <= last; at++) if (!filled.has(at)) zeros.push(at);
   for (const at of zeros) filled.set(at, "0");
@@ -63,7 +70,20 @@ export function convertUnits(valueIn: string, from: string, to: string, language
   }
   resultInt = resultInt.replace(/^0+(?=\d)/, "") || "0";
   resultFrac = resultFrac.replace(/0+$/, "");
-  const result = resultFrac ? `${resultInt}.${resultFrac}` : resultInt;
+  return { digits, fracLength: fracPart.length, lo, hi, zeros, filled, result: resultFrac ? `${resultInt}.${resultFrac}` : resultInt };
+}
+
+export function convertUnits(valueIn: string, from: string, to: string, language?: Narration): WorkedExample | null {
+  const t = phrases(language);
+  const value = cleanNumber(valueIn);
+  const a = place(from);
+  const b = place(to);
+  if (!value || !a || !b || a.family !== b.family || a.index === b.index) return null;
+  const plot = plotValue(value, a, b);
+  if (!plot) return null;
+  const { digits, lo, hi, zeros, filled, result } = plot;
+  const written = digits;
+  const col = (at: number) => at - lo;
 
   const steps: Step[] = [];
   const labels: Cell[] = [];
@@ -81,7 +101,7 @@ export function convertUnits(valueIn: string, from: string, to: string, language
 
   const onesDigit = digits.find((x) => x.at === a.index)!.d;
   steps.push({
-    say: t.writeOnChart(value, onesDigit, from, fracPart.length > 0),
+    say: t.writeOnChart(value, onesDigit, from, plot.fracLength > 0),
     cells: written.map((x) => ({ row: 1, col: col(x.at), text: x.d, tone: "given" as const })),
     focus: [{ row: 1, col: col(a.index) }],
   });
