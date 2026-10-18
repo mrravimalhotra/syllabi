@@ -1,4 +1,4 @@
-import { taskLabel } from "@/lib/format";
+import { sourceLabel, taskLabel } from "@/lib/format";
 import path from "node:path";
 import { Document, Page, Text, View, Image, StyleSheet, Font, renderToBuffer } from "@react-pdf/renderer";
 import { tidyMath } from "@/lib/tidy-math";
@@ -274,8 +274,7 @@ export async function renderGenerationPdf(input: RenderPdfInput): Promise<Buffer
               return (
                 <View key={s.id} style={styles.sourceBlock} wrap={false}>
                   <Text style={styles.source}>
-                    [{i + 1}] {s.section_label ?? s.source_type}
-                    {s.page_number ? `, p.${s.page_number}` : ""}
+                    [{i + 1}] {sourceLabel(s)}
                   </Text>
                   {image && (
                     // eslint-disable-next-line jsx-a11y/alt-text -- this is @react-pdf/renderer's Image (no alt concept), not an HTML img

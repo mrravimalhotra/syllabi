@@ -48,3 +48,13 @@ export function withoutAnswerKey(text: string): string {
   const match = ANSWER_KEY_START.exec(text);
   return match ? text.slice(0, match.index).trimEnd() : text;
 }
+
+/** "Heading, p.4" for a cited source; a heading that is just "Page 9" isn't repeated as "Page 9, p.9". */
+export function sourceLabel(s: { section_label: string | null; source_type: string; page_number: number | null }): string {
+  const heading = s.section_label?.trim() ?? "";
+  const generic = /^page\s*\d+$/i.test(heading);
+  const name = heading && !generic ? heading : "";
+  if (name) return s.page_number ? `${name}, p.${s.page_number}` : name;
+  if (s.page_number) return `${sourceTypeLabel(s.source_type)}, p.${s.page_number}`;
+  return sourceTypeLabel(s.source_type);
+}

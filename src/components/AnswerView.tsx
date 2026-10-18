@@ -1,6 +1,6 @@
 "use client";
 
-import { sourceTypeLabel } from "@/lib/format";
+import { sourceLabel } from "@/lib/format";
 import { useEffect, useState } from "react";
 import { Markdown } from "@/components/Markdown";
 import { AlertIcon, CheckIcon, CopyIcon, DownloadIcon } from "@/components/icons";
@@ -82,10 +82,7 @@ export function AnswerView({ answer, actions, meta }: { answer: Answer; actions?
             {answer.sources.map((s, i) => (
               <li key={s.id} className="flex gap-2">
                 <span className="w-6 shrink-0 text-slate-400">[{i + 1}]</span>
-                <span>
-                  {s.section_label ?? sourceTypeLabel(s.source_type)}
-                  {s.page_number ? `, p.${s.page_number}` : ""}
-                </span>
+                <span>{sourceLabel(s)}</span>
               </li>
             ))}
           </ol>
