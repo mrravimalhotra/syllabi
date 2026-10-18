@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
+import { soundText } from "@/lib/kindergarten/phonics";
 
 // A saved choice per device (which voice the child hears), kept in the browser.
 const VOICE_KEY = "syllabi-kg-voice";
@@ -99,6 +100,18 @@ export function useSay() {
     []
   );
 
+  const playUrl = useCallback(
+    (url: string) =>
+      new Promise<void>((resolve) => {
+        const a = new Audio(url);
+        audio.current = a;
+        a.onended = () => resolve();
+        a.onerror = () => resolve();
+        a.play().catch(() => resolve());
+      }),
+    []
+  );
+
   const say = useCallback(
     async (text: string): Promise<void> => {
       stop();
@@ -110,19 +123,45 @@ export function useSay() {
         const url = await Promise.race([fetchClip(text), new Promise<null>((r) => setTimeout(() => r(null), NATURAL_WAIT_MS))]);
         if (cancelled) return;
         if (url) {
-          await new Promise<void>((resolve) => {
-            const a = new Audio(url);
-            audio.current = a;
-            a.onended = () => resolve();
-            a.onerror = () => resolve();
-            a.play().catch(() => resolve());
-          });
+          await playUrl(url);
           return;
         }
       }
       if (!cancelled) await speakWithPhone(text);
     },
-    [voice, stop, fetchClip, speakWithPhone]
+    [voice, stop, fetchClip, speakWithPhone, playUrl]
+  );
+
+  /**
+   * A recorded sound for a letter (public/sounds/<letter>.mp3, if the grown-up
+   * has added one), which is always better than a speech voice for a pure
+   * sound. Remembers which letters have a recording.
+   */
+  const recorded = useRef(new Map<string, Promise<string | null>>());
+  const recording = useCallback((letter: string) => {
+    let known = recorded.current.get(letter);
+    if (!known) {
+      const url = `/sounds/${letter}.mp3`;
+      known = fetch(url, { method: "HEAD" })
+        .then((res) => (res.ok && (res.headers.get("content-type") ?? "").startsWith("audio") ? url : null))
+        .catch(() => null);
+      recorded.current.set(letter, known);
+    }
+    return known;
+  }, []);
+
+  /** Says the sound a letter makes (not its name); `slow` stretches sounds that can be held. */
+  const sound = useCallback(
+    async (letter: string, slow = false): Promise<void> => {
+      const url = await recording(letter);
+      if (url) {
+        stop();
+        await playUrl(url);
+        return;
+      }
+      await say(soundText(letter, slow));
+    },
+    [recording, stop, playUrl, say]
   );
 
   /** Gets phrases ready in the background, so they play at once when needed. */
@@ -142,5 +181,5 @@ export function useSay() {
     };
   }, [stop]);
 
-  return { say, prepare, stop };
+  return { say, sound, prepare, stop };
 }

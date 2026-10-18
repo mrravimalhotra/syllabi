@@ -1,6 +1,8 @@
 import { describe, explain, worksheetMarkdown, makeQuiz, markOrder, normaliseSettings, parseSample, settingsProblem, type OrderSettings } from "@/lib/practice/order";
 import type { PracticeNumber } from "@/lib/practice/numbers";
 import { makeCompareQuiz, makeCvcQuiz, makeSightQuiz, type CompareSettings, type SightSettings } from "@/lib/kindergarten/quiz";
+import { PHONEMES, soundText } from "@/lib/kindergarten/phonics";
+import { makeBlendQuiz } from "@/lib/kindergarten/quiz";
 import { BOARD_COLUMNS, BOARD_ROWS, makeBoardGame, makeFamilySheet, makeMatchSheet, schoolFamilySheet, schoolMatchSheet } from "@/lib/kindergarten/worksheets";
 import { BOARD_WORDS, CVC_WORDS, SIGHT_LEVELS, SIGHT_SETS, VOWELS } from "@/lib/kindergarten/words";
 
@@ -220,6 +222,27 @@ check(schoolFam.map((f) => `${f.rime} ${f.example}`).join(",") === "at cat,an ma
 const schoolMatch = schoolMatchSheet();
 check(schoolMatch.pictures.length === 10 && schoolMatch.pictures.every((p) => p.emoji) && schoolMatch.words.join(" ") === "bat sun cat pot bed cap dog pig pen bug", "The school matching sheet differs from the printed one");
 check(schoolMatch.words.every((w) => schoolMatch.pictures.some((p) => p.word === w)), "A school matching word has no picture");
+// ---- Phonics: every letter has a sound, a tip and a keyword ----
+const LETTERS = "abcdefghijklmnopqrstuvwxyz".split("");
+for (const l of LETTERS) {
+  const p = PHONEMES[l];
+  check(Boolean(p) && p.say.length > 0 && p.hold.length > 0 && p.tip.length > 10 && Boolean(p.keyword.emoji) && p.keyword.word.length > 1, `Letter ${l} lacks a sound, tip or keyword`);
+  check(p?.say !== l && p?.say.toLowerCase() !== `${l}ee` && p?.say.toLowerCase() !== `${l}ay`, `Letter ${l} would be said as its name`);
+}
+check(LETTERS.filter((l) => PHONEMES[l].kind === "vowel").join("") === "aeiou", "Only a, e, i, o, u are vowels");
+check(LETTERS.filter((l) => PHONEMES[l].kind === "continuous").join("") === "flmnrsvz", "The sounds you can hold should be f l m n r s v z");
+check(soundText("m", true) === "mmmm" && soundText("p", true) === "puh" && soundText("m") === "mmm", "Stretching applies only to sounds that can be held");
+const usedLetters = new Set([...VOWELS.flatMap((v) => CVC_WORDS[v].map((w) => w.word)), ...VOWELS.flatMap((v) => BOARD_WORDS[v])].join("").split(""));
+for (const l of usedLetters) check(Boolean(PHONEMES[l]), `Letter ${l} is used in a word but has no sound`);
+for (let seed = 1; seed <= 400; seed++) {
+  for (const vowels of [["a"], ["e", "i"], [...VOWELS]] as const) {
+    for (const q of makeBlendQuiz({ vowels: [...vowels], questions: 10 }, seed)) {
+      check(q.choices.length === 3 && new Set(q.choices.map((c) => c.word)).size === 3, `Blend choices not 3 different pictures: ${q.choices.map((c) => c.word)}`);
+      check(q.choices.some((c) => c.word === q.word && c.emoji === q.emoji) && q.choices.every((c) => c.emoji.length > 0), `Blend question ${q.word} has a wrong or empty choice`);
+      check(q.letters.join("") === q.word && (vowels as readonly string[]).includes(q.word[1]), `Blend word ${q.word} outside the chosen vowels`);
+    }
+  }
+}
 // The same seed gives the same questions (so a round can be repeated or printed).
 check(JSON.stringify(makeCvcQuiz({ vowels: ["a", "o"], questions: 5 }, 77)) === JSON.stringify(makeCvcQuiz({ vowels: ["a", "o"], questions: 5 }, 77)), "The same seed gave different CVC questions");
 check(JSON.stringify(makeCompareQuiz({ max: 10, questions: 5 }, 77)) === JSON.stringify(makeCompareQuiz({ max: 10, questions: 5 }, 77)), "The same seed gave different compare questions");

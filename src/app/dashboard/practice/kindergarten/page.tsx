@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { BlendGame } from "@/components/kindergarten/BlendGame";
 import { CompareGame } from "@/components/kindergarten/CompareGame";
 import { CvcGame } from "@/components/kindergarten/CvcGame";
 import { SightGame } from "@/components/kindergarten/SightGame";
@@ -12,6 +13,7 @@ import {
   DEFAULT_CVC,
   DEFAULT_SIGHT,
   ROUND_SIZES,
+  makeBlendQuiz,
   makeCompareQuiz,
   makeCvcQuiz,
   makeSightQuiz,
@@ -19,15 +21,21 @@ import {
   type CvcSettings,
   type SightSettings,
 } from "@/lib/kindergarten/quiz";
+import { PHONEMES, TEACHING_ORDER } from "@/lib/kindergarten/phonics";
 import { SIGHT_LEVELS, SIGHT_LEVEL_LABELS, VOWELS, type Vowel } from "@/lib/kindergarten/words";
 import { newSeed } from "@/lib/practice/random";
 import { usePref } from "@/lib/use-pref";
 
-type Activity = "cvc" | "sight" | "compare";
+type Activity = "blend" | "cvc" | "sight" | "compare";
 
 const isCvc = (v: unknown): v is CvcSettings => {
   const s = v as CvcSettings;
-  return Boolean(s) && Array.isArray(s.vowels) && s.vowels.every((x) => (VOWELS as readonly string[]).includes(x)) && ROUND_SIZES.includes(s.questions as 5 | 10);
+  return (
+    Boolean(s) &&
+    Array.isArray(s.vowels) &&
+    s.vowels.every((x) => (VOWELS as readonly string[]).includes(x)) &&
+    ROUND_SIZES.includes(s.questions as 5 | 10)
+  );
 };
 const isSight = (v: unknown): v is SightSettings => {
   const s = v as SightSettings;
@@ -65,7 +73,7 @@ export default function KindergartenPage() {
   const [sight, setSight] = usePref("syllabi-kg-sight", DEFAULT_SIGHT, isSight);
   const [compare, setCompare] = usePref("syllabi-kg-compare", DEFAULT_COMPARE, isCompare);
   const { voice, choose } = useVoiceChoice();
-  const { say, prepare, stop } = useSay();
+  const { say, sound, prepare, stop } = useSay();
 
   const start = (kind: Activity) => setActivity({ kind, seed: newSeed() });
   const exit = () => {
@@ -74,13 +82,19 @@ export default function KindergartenPage() {
   };
   const again = () => setActivity((a) => (a ? { ...a, seed: newSeed() } : a));
 
+  const blendQuiz = useMemo(() => (activity?.kind === "blend" ? makeBlendQuiz(cvc, activity.seed) : null), [activity, cvc]);
   const cvcQuiz = useMemo(() => (activity?.kind === "cvc" ? makeCvcQuiz(cvc, activity.seed) : null), [activity, cvc]);
   const sightQuiz = useMemo(() => (activity?.kind === "sight" ? makeSightQuiz(sight, activity.seed) : null), [activity, sight]);
   const compareQuiz = useMemo(() => (activity?.kind === "compare" ? makeCompareQuiz(compare, activity.seed) : null), [activity, compare]);
 
-  if (activity && cvcQuiz) return <CvcGame key={activity.seed} questions={cvcQuiz} say={say} prepare={prepare} onAgain={again} onExit={exit} />;
-  if (activity && sightQuiz) return <SightGame key={activity.seed} questions={sightQuiz} say={say} prepare={prepare} onAgain={again} onExit={exit} />;
-  if (activity && compareQuiz) return <CompareGame key={activity.seed} questions={compareQuiz} say={say} prepare={prepare} onAgain={again} onExit={exit} />;
+  if (activity && blendQuiz)
+    return <BlendGame key={activity.seed} questions={blendQuiz} say={say} sound={sound} prepare={prepare} onAgain={again} onExit={exit} />;
+  if (activity && cvcQuiz)
+    return <CvcGame key={activity.seed} questions={cvcQuiz} say={say} sound={sound} prepare={prepare} onAgain={again} onExit={exit} />;
+  if (activity && sightQuiz)
+    return <SightGame key={activity.seed} questions={sightQuiz} say={say} prepare={prepare} onAgain={again} onExit={exit} />;
+  if (activity && compareQuiz)
+    return <CompareGame key={activity.seed} questions={compareQuiz} say={say} prepare={prepare} onAgain={again} onExit={exit} />;
 
   const toggleVowel = (v: Vowel) => {
     const has = cvc.vowels.includes(v);
@@ -101,6 +115,28 @@ export default function KindergartenPage() {
       <section className={cx(card, "space-y-4 p-4 sm:p-6")}>
         <div className="flex items-start gap-4">
           <span className="text-5xl" aria-hidden>
+            👂
+          </span>
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">Listen and blend</h2>
+            <p className="text-sm text-slate-500">
+              Start here. Hear the sounds of a word one at a time (m… a… p…), put them together, and tap the picture. Uses the same vowels
+              as Spell the word below.
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => start("blend")}
+          className="min-h-14 w-full rounded-2xl bg-brand-600 px-6 text-xl font-semibold text-white shadow-sm active:scale-95"
+        >
+          ▶ Play
+        </button>
+      </section>
+
+      <section className={cx(card, "space-y-4 p-4 sm:p-6")}>
+        <div className="flex items-start gap-4">
+          <span className="text-5xl" aria-hidden>
             🐱
           </span>
           <div>
@@ -113,7 +149,10 @@ export default function KindergartenPage() {
           <div className="flex flex-wrap gap-2" role="group" aria-label="Vowel sounds to practise">
             {VOWELS.map((v) => (
               <Chip key={v} on={cvc.vowels.includes(v)} onClick={() => toggleVowel(v)}>
-                {v} <span className="text-slate-400">as in {v === "a" ? "cat" : v === "e" ? "hen" : v === "i" ? "pig" : v === "o" ? "dog" : "sun"}</span>
+                {v}{" "}
+                <span className="text-slate-400">
+                  as in {v === "a" ? "cat" : v === "e" ? "hen" : v === "i" ? "pig" : v === "o" ? "dog" : "sun"}
+                </span>
               </Chip>
             ))}
           </div>
@@ -125,7 +164,11 @@ export default function KindergartenPage() {
             ))}
           </div>
         </div>
-        <button type="button" onClick={() => start("cvc")} className="min-h-14 w-full rounded-2xl bg-brand-600 px-6 text-xl font-semibold text-white shadow-sm active:scale-95">
+        <button
+          type="button"
+          onClick={() => start("cvc")}
+          className="min-h-14 w-full rounded-2xl bg-brand-600 px-6 text-xl font-semibold text-white shadow-sm active:scale-95"
+        >
           ▶ Play
         </button>
       </section>
@@ -152,7 +195,11 @@ export default function KindergartenPage() {
             </Chip>
           ))}
         </div>
-        <button type="button" onClick={() => start("sight")} className="min-h-14 w-full rounded-2xl bg-brand-600 px-6 text-xl font-semibold text-white shadow-sm active:scale-95">
+        <button
+          type="button"
+          onClick={() => start("sight")}
+          className="min-h-14 w-full rounded-2xl bg-brand-600 px-6 text-xl font-semibold text-white shadow-sm active:scale-95"
+        >
           ▶ Play
         </button>
       </section>
@@ -179,12 +226,19 @@ export default function KindergartenPage() {
             </Chip>
           ))}
         </div>
-        <button type="button" onClick={() => start("compare")} className="min-h-14 w-full rounded-2xl bg-brand-600 px-6 text-xl font-semibold text-white shadow-sm active:scale-95">
+        <button
+          type="button"
+          onClick={() => start("compare")}
+          className="min-h-14 w-full rounded-2xl bg-brand-600 px-6 text-xl font-semibold text-white shadow-sm active:scale-95"
+        >
           ▶ Play
         </button>
       </section>
 
-      <Link href="/dashboard/practice/kindergarten/worksheets" className={cx(card, "flex items-center gap-4 p-4 transition hover:border-brand-300 sm:p-5")}>
+      <Link
+        href="/dashboard/practice/kindergarten/worksheets"
+        className={cx(card, "flex items-center gap-4 p-4 transition hover:border-brand-300 sm:p-5")}
+      >
         <span className="text-4xl" aria-hidden>
           🖨️
         </span>
@@ -197,6 +251,46 @@ export default function KindergartenPage() {
         </span>
       </Link>
 
+      <details className={cx(card, "p-4 text-sm text-slate-600 sm:p-5")}>
+        <summary className="cursor-pointer text-base font-semibold text-slate-900">How to say the sounds (for grown-ups)</summary>
+        <div className="mt-3 space-y-4">
+          <ul className="list-disc space-y-1.5 pl-5">
+            <li>
+              Say the <strong>sound</strong> a letter makes, not its name: <strong>m</strong> says “mmm”, not “em”.
+            </li>
+            <li>
+              <strong>Sounds you can hold</strong> (m, s, f, n, l, r, v, z) can be stretched: “mmmm”. <strong>Quick sounds</strong> (b, d,
+              g, k, p, t…) can&apos;t be held, so say them short and clipped with no extra “uh”: “b”, not “buh”.
+            </li>
+            <li>
+              To blend, touch each letter and say its sound slowly, then slide your finger under the whole word and say it faster, until the
+              sounds join into the word: m… a… p… → “map”.
+            </li>
+            <li>
+              The vowels are red. Each has a picture word: a as in apple, e as in egg, i as in ink, o as in octopus, u as in umbrella.
+            </li>
+          </ul>
+          <div className="grid grid-cols-1 gap-x-6 gap-y-1.5 sm:grid-cols-2">
+            {Object.entries(PHONEMES)
+              .filter(([letter]) => TEACHING_ORDER.indexOf(letter) < 20)
+              .map(([letter, p]) => (
+                <p key={letter}>
+                  <span className="mr-1 inline-block w-5 text-base font-bold text-slate-900">{letter}</span>
+                  <span aria-hidden>{p.keyword.emoji}</span>{" "}
+                  <span className="text-xs text-slate-500">
+                    {p.keyword.word}: {p.tip}
+                  </span>
+                </p>
+              ))}
+          </div>
+          <p className="text-xs text-slate-500">
+            The app&apos;s voice can only approximate a pure sound. For the clearest sounds, record your own voice saying each one (or use a
+            recording you have) and add the files as <code>/sounds/m.mp3</code>, <code>/sounds/a.mp3</code> and so on. The app plays a
+            recording whenever one exists. See <code>public/sounds/README.md</code>.
+          </p>
+        </div>
+      </details>
+
       <section className={cx(card, "space-y-2 p-4 text-sm text-slate-600")}>
         <p className="font-medium text-slate-900">Voice</p>
         <div className="flex flex-wrap gap-2" role="group" aria-label="Voice">
@@ -208,7 +302,8 @@ export default function KindergartenPage() {
           </Chip>
         </div>
         <p className="text-xs text-slate-500">
-          The friendly voice is made by the app and may take a few seconds the first time a word is heard. If it isn&apos;t available, the phone&apos;s voice reads instead.
+          The friendly voice is made by the app and may take a few seconds the first time a word is heard. If it isn&apos;t available, the
+          phone&apos;s voice reads instead.
         </p>
       </section>
     </div>

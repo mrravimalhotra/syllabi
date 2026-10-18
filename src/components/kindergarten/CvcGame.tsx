@@ -4,18 +4,19 @@ import { useEffect, useRef, useState } from "react";
 import { RoundDone, RoundFrame } from "@/components/kindergarten/RoundFrame";
 import { cx } from "@/components/ui";
 import type { CvcQuestion } from "@/lib/kindergarten/quiz";
-import { LETTER_SOUNDS, isVowelLetter } from "@/lib/kindergarten/words";
+import { isVowel, soundText } from "@/lib/kindergarten/phonics";
 
 interface Props {
   questions: CvcQuestion[];
   say: (text: string) => Promise<void>;
+  sound: (letter: string, slow?: boolean) => Promise<void>;
   prepare: (texts: string[]) => void;
   onAgain: () => void;
   onExit: () => void;
 }
 
 /** Build the word shown in the picture by tapping its letters in order. */
-export function CvcGame({ questions, say, prepare, onAgain, onExit }: Props) {
+export function CvcGame({ questions, say, sound, prepare, onAgain, onExit }: Props) {
   const [index, setIndex] = useState(0);
   const [placed, setPlaced] = useState(0);
   const [used, setUsed] = useState<number[]>([]);
@@ -27,12 +28,14 @@ export function CvcGame({ questions, say, prepare, onAgain, onExit }: Props) {
   // Which sound is being said right now (-1 none), and whether the sounds have been blended into the word.
   const [lit, setLit] = useState(-1);
   const [blended, setBlended] = useState(false);
+  // The finger sweeping under the word while it is said fast.
+  const [sweep, setSweep] = useState(false);
   const mistakeMade = useRef(false);
   const question = questions[index];
 
   useEffect(() => {
     const next = questions.slice(index, index + 2);
-    prepare([...next.flatMap((q) => [q.word, ...q.letters.map((l) => LETTER_SOUNDS[l])]), "Great job!", "Try again!"]);
+    prepare([...next.flatMap((q) => [q.word, ...q.letters.flatMap((l) => [soundText(l), soundText(l, true)])]), "Great job!", "Try again!"]);
   }, [index, questions, prepare]);
 
   // Say the word when a question appears, so the child hears what to build.
@@ -40,15 +43,21 @@ export function CvcGame({ questions, say, prepare, onAgain, onExit }: Props) {
     if (question) void say(question.word);
   }, [question, say]);
 
-  /** Says each sound in turn while its box lights up, then the whole word: m, a, p, map. */
+  /**
+   * Sounding a word out the way phonics teaches it: touch each letter and say
+   * its sound slowly (m... a... p...), then slide a finger under the whole word
+   * while saying it faster, until the sounds become the word: map.
+   */
   async function soundOut(q: CvcQuestion, blend: boolean) {
     for (let i = 0; i < q.letters.length; i++) {
       setLit(i);
-      await say(LETTER_SOUNDS[q.letters[i]]);
+      await sound(q.letters[i], true);
     }
     setLit(-1);
-    if (blend) setBlended(true);
+    setSweep(true);
     await say(q.word);
+    if (blend) setBlended(true);
+    setSweep(false);
   }
 
   if (finished) return <RoundDone stars={stars} helped={helped} onAgain={onAgain} onExit={onExit} />;
@@ -68,7 +77,7 @@ export function CvcGame({ questions, say, prepare, onAgain, onExit }: Props) {
     setPlaced(next);
     if (next < question.letters.length) {
       // Each right letter says its sound, so the child learns what it sounds like.
-      void say(LETTER_SOUNDS[letter]);
+      void sound(letter);
     } else {
       setCelebrating(true);
       setStars((s) => s + 1);
@@ -115,7 +124,7 @@ export function CvcGame({ questions, say, prepare, onAgain, onExit }: Props) {
                 "flex h-20 w-16 items-center justify-center rounded-2xl border-4 text-5xl font-bold transition-transform sm:h-24 sm:w-20",
                 lit === i && "scale-110 border-amber-400 bg-amber-100",
                 lit !== i && (i < placed ? "border-emerald-400 bg-emerald-50 text-emerald-700" : "border-dashed border-slate-300 text-transparent"),
-                i < placed && isVowelLetter(letter) && "text-red-600"
+                i < placed && isVowel(letter) && "text-red-600"
               )}
             >
               {i < placed ? letter : "_"}
@@ -123,10 +132,13 @@ export function CvcGame({ questions, say, prepare, onAgain, onExit }: Props) {
           ))}
         </div>
 
+        <div className="mx-auto h-2 w-56 overflow-hidden rounded-full bg-slate-100" aria-hidden>
+          <div className={cx("h-full rounded-full bg-amber-400 transition-[width] ease-linear", sweep ? "w-full duration-1000" : "w-0 duration-0")} />
+        </div>
         {blended && (
           <p className="kg-star text-5xl font-bold tracking-wide text-slate-800" aria-label={`The sounds ${question.letters.join(", ")} make the word ${question.word}`}>
             {question.letters.map((l, i) => (
-              <span key={i} className={isVowelLetter(l) ? "text-red-600" : "text-brand-700"}>
+              <span key={i} className={isVowel(l) ? "text-red-600" : "text-brand-700"}>
                 {l}
                 {i < question.letters.length - 1 ? <span className="px-1 text-slate-300"> · </span> : null}
               </span>

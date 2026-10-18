@@ -106,3 +106,6 @@ Tick each one and note anything odd. Use your phone for the starred (★) checks
 | T-79 | Kindergarten → Find the word: try each of Set 1 to Set 5 | Words come only from that set (Set 3 includes "don't"); the spoken word matches one of three written words |
 | T-80 ★ | Practice → Kindergarten → Printable worksheets: print "Complete each word family" and "Match the picture to the word" (Safari or Chrome, then Save as PDF) | Name/date line, ten rows, pictures visible, a new sheet each time; the controls don't print; fits one page |
 | T-81 | Printable worksheets → "Hop to the pond (board game)": print on landscape paper and play with a die and a counter each | 42 spaces in snaking rows, numbers small in each corner, START and POND clear, about 6 lily pads, only words of the vowels chosen; rules read correctly |
+| T-82 ★ | Kindergarten → Listen and blend (vowel a): listen, then tap pictures | "Listen." then each sound in turn with a finger on its dot; "What word is it?"; a wrong picture shakes and says try again; the right one shows "m · a · p = map" and says the word |
+| T-83 | Kindergarten → open "How to say the sounds (for grown-ups)" | Plain tips for each sound; note on recordings |
+| T-84 | Add `public/sounds/m.mp3` (a short "mmm") and redeploy; play Spell the word with "map" | The recorded "mmm" is played for m (other letters still use the voice) |

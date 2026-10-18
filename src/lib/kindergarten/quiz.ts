@@ -114,3 +114,40 @@ export function makeCompareQuiz(settings: CompareSettings, seed: number): Compar
 export function compareSpeech(q: CompareQuestion): string {
   return q.ask === "more" ? "Which group has more?" : "Which group has fewer?";
 }
+
+// ---- Listen to the sounds, then pick the picture ----
+
+export interface BlendQuestion {
+  word: string;
+  emoji: string;
+  letters: string[];
+  /** Three pictures to choose from, shuffled; one is the word. */
+  choices: { word: string; emoji: string }[];
+}
+
+/**
+ * Oral blending: the child hears the sounds of a word one at a time (m... a...
+ * p) and picks the picture they make. Only words with a clear picture are used.
+ */
+export function makeBlendQuiz(settings: CvcSettings, seed: number): BlendQuestion[] {
+  const r = seeded(seed);
+  const vowels = settings.vowels.length ? settings.vowels : VOWELS.slice();
+  const picture = (w: { word: string; emoji: string | null }): w is { word: string; emoji: string } => w.emoji !== null;
+  const pool = vowels.flatMap((v) => CVC_WORDS[v]).filter(picture);
+  const everything = VOWELS.flatMap((v) => CVC_WORDS[v]).filter(picture);
+  const order = r.shuffle(pool);
+  const quiz: BlendQuestion[] = [];
+  for (let i = 0; i < settings.questions; i++) {
+    const target = order[i % order.length];
+    // Wrong pictures come from the same vowel when there are enough, so the child must listen to the whole word.
+    const sameVowel = r.shuffle(everything.filter((w) => w.word[1] === target.word[1] && w.word !== target.word));
+    const others = sameVowel.length >= 2 ? sameVowel : r.shuffle(everything.filter((w) => w.word !== target.word));
+    quiz.push({
+      word: target.word,
+      emoji: target.emoji,
+      letters: target.word.split(""),
+      choices: r.shuffle([target, others[0], others[1]]).map((w) => ({ word: w.word, emoji: w.emoji })),
+    });
+  }
+  return quiz;
+}
