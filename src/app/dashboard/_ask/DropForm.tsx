@@ -23,8 +23,7 @@ export function DropForm({
         setDragging(true);
       }}
       onDragLeave={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node))
-          setDragging(false);
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false);
       }}
       onDrop={(e) => {
         e.preventDefault();
@@ -33,9 +32,7 @@ export function DropForm({
       }}
       className={cx(
         "relative rounded-2xl border bg-white shadow-xs transition print:hidden",
-        dragging
-          ? "border-brand-500 ring-4 ring-brand-100"
-          : "border-slate-200 focus-within:border-slate-300 focus-within:shadow-sm",
+        dragging ? "border-brand-500 ring-4 ring-brand-100" : "border-slate-200 focus-within:border-slate-300 focus-within:shadow-sm",
       )}
     >
       {dragging && (

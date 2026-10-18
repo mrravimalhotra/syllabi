@@ -33,9 +33,7 @@ export function PromptBox({
           }
         }}
         onPaste={(e) => {
-          const files = Array.from(e.clipboardData.files).filter((f) =>
-            f.type.startsWith("image/"),
-          );
+          const files = Array.from(e.clipboardData.files).filter((f) => f.type.startsWith("image/"));
           if (files.length) {
             e.preventDefault();
             onPictures(files);

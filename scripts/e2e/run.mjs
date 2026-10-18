@@ -344,6 +344,53 @@ await test("Study pack: hints, answers, the glossary search and Copy", async (pa
   await page.getByText("The seed wakes up").first().waitFor();
 });
 
+await test("Study pack: a practice test is marked, scored and can be retried", async (page, ctx) => {
+  const base = pack.practiceQuestions[0];
+  const q = (over) => ({ ...base, hint: "", ...over });
+  const testPack = {
+    ...pack,
+    practiceQuestions: [
+      q({ question: "Name one thing leaves need.", hint: "Think of the sun." }),
+      q({ question: "Which gas do plants take in?", type: "MCQ", options: ["Oxygen", "Carbon dioxide", "Helium", "Neon"], answer: "Carbon dioxide", autoKey: { kind: "option", index: 1 } }),
+      q({ question: "Seeds need water to start growing.", type: "True or false", answer: "True", autoKey: { kind: "truefalse", value: true } }),
+      q({ question: "Plants make food by ____.", type: "Fill in the blank", answer: "photosynthesis", autoKey: { kind: "blank", answers: ["photosynthesis"] } }),
+    ],
+  };
+  await ctx.route("**/api/documents/a2", (r) => json(r, { answer: { ...packAnswer, pack: testPack } }));
+  await page.goto(`${BASE}/dashboard/documents/a2`, { waitUntil: "networkidle" });
+  await tap(page.getByRole("tab", { name: /Practice test/ }).first());
+  await page.getByText("Question 1 of 4").waitFor();
+  // 1: a written answer; the hint shows, then the child marks themselves.
+  await tap(page.getByRole("button", { name: /Hint/ }));
+  await page.getByText("Think of the sun.").first().waitFor();
+  await tap(page.getByRole("button", { name: "Show the answer" }));
+  await tap(page.getByRole("button", { name: /Not yet/ }));
+  // 2: a wrong choice is marked at once.
+  await page.getByText("Question 2 of 4").waitFor();
+  await tap(page.getByRole("button", { name: "Helium" }));
+  await page.getByText("Not quite. See the answer below.").waitFor();
+  await tap(page.getByRole("button", { name: /^Next/ }));
+  // 3: True.
+  await page.getByText("Question 3 of 4").waitFor();
+  await tap(page.getByRole("button", { name: "True", exact: true }));
+  await page.getByText("Correct!").waitFor();
+  await tap(page.getByRole("button", { name: /^Next/ }));
+  // 4: a typed word (capital letters and spaces don't matter).
+  await page.getByText("Question 4 of 4").waitFor();
+  await page.getByLabel("Your answer").fill("  Photosynthesis ");
+  await tap(page.getByRole("button", { name: "Check" }));
+  await page.getByText("Correct!").waitFor();
+  await tap(page.getByRole("button", { name: /^Next/ }));
+  // Results: 2 of 4, the two missed ones listed.
+  await page.getByText("Practice test finished").waitFor();
+  await page.getByText("/4").first().waitFor();
+  await page.locator("li", { hasText: /^P1\. Name one thing leaves need\./ }).waitFor();
+  await page.locator("li", { hasText: /^P2\. Which gas do plants take in\?/ }).waitFor();
+  await tap(page.getByRole("button", { name: "Try again the ones marked Not yet" }));
+  await page.getByText("Question 1 of 4").waitFor();
+  await page.getByText("Score so far: 2").waitFor();
+});
+
 await test("Study pack: Read aloud asks for the natural voice", async (page, ctx) => {
   let asked = 0;
   await ctx.route("**/api/documents/a2", (r) => json(r, { answer: packAnswer }));
