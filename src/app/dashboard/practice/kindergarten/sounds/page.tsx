@@ -2,13 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { Alert, PageHeader, button, card, cx } from "@/components/ui";
+import { LetterRow } from "@/app/dashboard/practice/kindergarten/sounds/_parts/LetterRow";
+import { useSoundRecorder } from "@/app/dashboard/practice/kindergarten/sounds/_parts/useSoundRecorder";
+import { Alert, PageHeader } from "@/components/ui";
 import { OFFLINE_MESSAGE } from "@/lib/http-errors";
-import { IPA, PHONEMES, TEACHING_ORDER } from "@/lib/kindergarten/phonics";
-
-const MAX_SECONDS = 3;
-
-type Draft = { letter: string; blob: Blob; url: string };
+import { TEACHING_ORDER } from "@/lib/kindergarten/phonics";
 
 /**
  * Record the letter sounds in the voice the child's school uses (m, a, p...),
@@ -18,12 +16,13 @@ type Draft = { letter: string; blob: Blob; url: string };
 export default function RecordSoundsPage() {
   const [have, setHave] = useState<Set<string>>(new Set());
   const [loadError, setLoadError] = useState(false);
-  const [recording, setRecording] = useState<string | null>(null);
-  const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const recorder = useRef<MediaRecorder | null>(null);
+  const { recording, draft, start, stop, discardDraft } = useSoundRecorder((message) => {
+    setError(message);
+    if (message === null) setNotice(null);
+  });
   const player = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
@@ -42,41 +41,6 @@ export default function RecordSoundsPage() {
     void player.current.play().catch(() => setError("Your phone didn't start the sound. Press Play again."));
   };
 
-  async function startRecording(letter: string) {
-    setError(null);
-    setNotice(null);
-    if (draft) URL.revokeObjectURL(draft.url);
-    setDraft(null);
-    if (typeof MediaRecorder === "undefined" || !navigator.mediaDevices?.getUserMedia) {
-      setError("This browser can't record sound. Try Safari or Chrome on your phone.");
-      return;
-    }
-    let stream: MediaStream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch {
-      setError("Syllabi can't use the microphone. Allow microphone access for this site in your browser settings, then try again.");
-      return;
-    }
-    const type = ["audio/webm;codecs=opus", "audio/mp4", "audio/webm"].find((t) => MediaRecorder.isTypeSupported(t));
-    const rec = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
-    const chunks: Blob[] = [];
-    rec.ondataavailable = (e) => e.data.size > 0 && chunks.push(e.data);
-    rec.onstop = () => {
-      stream.getTracks().forEach((t) => t.stop());
-      const blob = new Blob(chunks, { type: rec.mimeType || type || "audio/webm" });
-      setRecording(null);
-      if (blob.size === 0) return setError("Nothing was recorded. Check the microphone and try again.");
-      setDraft({ letter, blob, url: URL.createObjectURL(blob) });
-    };
-    recorder.current = rec;
-    rec.start();
-    setRecording(letter);
-    setTimeout(() => rec.state === "recording" && rec.stop(), MAX_SECONDS * 1000);
-  }
-
-  const stopRecording = () => recorder.current?.state === "recording" && recorder.current.stop();
-
   async function save() {
     if (!draft) return;
     setBusy(draft.letter);
@@ -91,8 +55,7 @@ export default function RecordSoundsPage() {
       if (!res.ok) throw new Error(data.error ?? "Couldn't save the recording. Try again.");
       setHave((h) => new Set(h).add(draft.letter));
       setNotice(`Saved the sound for “${draft.letter}”. The activities will use it from now on.`);
-      URL.revokeObjectURL(draft.url);
-      setDraft(null);
+      discardDraft();
     } catch (err) {
       setError(err instanceof TypeError ? OFFLINE_MESSAGE : err instanceof Error ? err.message : "Couldn't save the recording. Try again.");
     } finally {
@@ -141,99 +104,23 @@ export default function RecordSoundsPage() {
       <ul className="space-y-3">
         {TEACHING_ORDER.slice()
           .sort()
-          .map((letter) => {
-            const p = PHONEMES[letter];
-            const isDraft = draft?.letter === letter;
-            const isRecording = recording === letter;
-            return (
-              <li key={letter} className={cx(card, "flex flex-wrap items-center gap-3 p-3 sm:p-4")}>
-                <span
-                  className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-4xl font-bold text-brand-800"
-                  aria-hidden
-                >
-                  {letter}
-                </span>
-                <div className="min-w-0 flex-1 basis-48">
-                  <p className="text-sm font-semibold text-slate-900">
-                    {letter === "c" ? "c says “k”" : `Letter ${letter}`} <span className="text-brand-700">/{IPA[letter]}/</span>{" "}
-                    <span aria-hidden>{p.keyword.emoji}</span> <span className="font-normal text-slate-500">{p.keyword.word}</span>
-                  </p>
-                  <p className="text-xs text-slate-500">{p.tip}</p>
-                  <p className="text-xs font-medium">
-                    {have.has(letter) ? (
-                      <span className="text-emerald-700">✓ Your recording is used</span>
-                    ) : (
-                      <span className="text-slate-400">Using the built-in voice</span>
-                    )}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {isRecording ? (
-                    <button type="button" onClick={stopRecording} className={button.smallDanger} aria-label={`Stop recording ${letter}`}>
-                      ■ Stop
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => void startRecording(letter)}
-                      disabled={recording !== null || busy !== null}
-                      className={button.small}
-                      aria-label={`Record the sound for ${letter}`}
-                    >
-                      ● Record
-                    </button>
-                  )}
-                  {isDraft && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => play(draft.url)}
-                        className={button.small}
-                        aria-label={`Listen to the new recording of ${letter}`}
-                      >
-                        ▶ Listen
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void save()}
-                        disabled={busy !== null}
-                        className={button.smallPrimary}
-                        aria-label={`Save the recording of ${letter}`}
-                      >
-                        Save
-                      </button>
-                    </>
-                  )}
-                  {!isDraft && have.has(letter) && !isRecording && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => void playSaved(letter)}
-                        className={button.small}
-                        aria-label={`Play the saved sound for ${letter}`}
-                      >
-                        ▶ Play
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void remove(letter)}
-                        disabled={busy !== null}
-                        className={button.small}
-                        aria-label={`Remove the recording of ${letter}`}
-                      >
-                        Remove
-                      </button>
-                    </>
-                  )}
-                </div>
-                {isRecording && (
-                  <p className="basis-full text-sm font-medium text-red-700" role="status">
-                    Recording… say the sound now.
-                  </p>
-                )}
-              </li>
-            );
-          })}
+          .map((letter) => (
+            <LetterRow
+              key={letter}
+              letter={letter}
+              saved={have.has(letter)}
+              hasDraft={draft?.letter === letter}
+              recording={recording === letter}
+              otherRecording={recording !== null}
+              busy={busy !== null}
+              onRecord={() => void start(letter)}
+              onStop={stop}
+              onListenDraft={() => draft && play(draft.url)}
+              onSave={() => void save()}
+              onPlaySaved={() => void playSaved(letter)}
+              onRemove={() => void remove(letter)}
+            />
+          ))}
       </ul>
     </div>
   );
