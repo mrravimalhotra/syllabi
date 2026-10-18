@@ -700,6 +700,38 @@ await test("My Documents: deleting while offline shows the connection message", 
   await page.getByText(/check your internet connection/i).first().waitFor({ timeout: 8000 });
 });
 
+await test("Account: choosing a class saves at once, and deleting the account needs DELETE typed", async (page, ctx) => {
+  await baseRoutes(ctx);
+  const patches = [];
+  let deleted = null;
+  await ctx.route("**/api/me", (r) => {
+    const method = r.request().method();
+    if (method === "PATCH") {
+      patches.push(r.request().postDataJSON());
+      return json(r, { ok: true, fullName: "Asha" });
+    }
+    if (method === "DELETE") {
+      deleted = r.request().postDataJSON();
+      return json(r, { ok: true });
+    }
+    return json(r, me);
+  });
+  await page.goto(`${BASE}/dashboard/account`, { waitUntil: "networkidle" });
+  await page.getByLabel("Child's class").selectOption("Class 7");
+  await page.getByText("Saved").first().waitFor({ timeout: 5000 });
+  await page.getByLabel("Answer language").selectOption("hi");
+  await page.getByText("Saved").first().waitFor({ timeout: 5000 });
+  if (JSON.stringify(patches) !== JSON.stringify([{ classLevel: "Class 7" }, { answerLanguage: "hi" }])) throw new Error(`Unexpected saves: ${JSON.stringify(patches)}`);
+  const button = page.getByRole("button", { name: "Delete my account" });
+  if (!(await button.isDisabled())) throw new Error("Delete should be off until DELETE is typed.");
+  await page.getByLabel("Type DELETE to confirm").fill("delete");
+  if (!(await button.isDisabled())) throw new Error("Lower-case delete should not count.");
+  await page.getByLabel("Type DELETE to confirm").fill("DELETE");
+  await button.click();
+  await page.waitForURL(/\/login/, { timeout: 10000 });
+  if (deleted?.confirm !== "DELETE") throw new Error(`Unexpected delete body ${JSON.stringify(deleted)}`);
+});
+
 await test("Account: shows the signed-in details", async (page, ctx) => {
   await baseRoutes(ctx);
   await page.goto(`${BASE}/dashboard/account`, { waitUntil: "networkidle" });
