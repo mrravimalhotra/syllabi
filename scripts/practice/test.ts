@@ -5,6 +5,7 @@ import { IPA, PHONEMES, blendStart, soundText } from "@/lib/kindergarten/phonics
 import { makeBlendQuiz } from "@/lib/kindergarten/quiz";
 import { blockedReason, buildRequestBody, questionProblem, type Question } from "@/app/dashboard/_ask/build-request";
 import { checkPages } from "@/lib/ingestion/upload-pages";
+import { parsePhotos } from "@/lib/generation/attachments";
 import { signUpProblem, signUpRefusal } from "@/lib/signup-check";
 import { parseGenerationRequest } from "@/lib/generation/request";
 import { parseProfileUpdate } from "@/lib/profile-update";
@@ -379,6 +380,19 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
   check(signUpProblem({ ...form, email: "a".repeat(300), password: "x" }) === "too-long", "Sign-up: length is checked before anything else");
   process.env.OPEN_SIGNUPS = "true";
   check(signUpRefusal("User already registered") === "exists" && signUpRefusal("Password should be at least 8") === "weak" && signUpRefusal("boom") === "unknown", "Sign-up: refusals from the sign-in service map to messages");
+}
+
+// Attached photos on a question.
+{
+  const jpeg = "/9j/4AAQSkZJRgABAQEASABIAAD";
+  const photo = (extra: object = {}) => ({ data: jpeg, mimeType: "image/jpeg", ...extra });
+  check(Array.isArray(parsePhotos(undefined)) && Array.isArray(parsePhotos(null)) && parsePhotos(null).length === 0, "Photos: none is fine");
+  check(typeof parsePhotos("x") === "string" && typeof parsePhotos(Array.from({ length: 13 }, () => photo())) === "string", "Photos: not a list, or too many, is refused");
+  check(/JPEG, PNG or WebP/.test(String(parsePhotos([{ data: jpeg, mimeType: "image/gif" }]))) && /JPEG, PNG or WebP/.test(String(parsePhotos([null]))) && /damaged/.test(String(parsePhotos([{ data: "AAAAAAAA", mimeType: "image/jpeg" }]))), "Photos: wrong type, empty entry and fake pictures are refused");
+  const ok = parsePhotos([photo({ text: "  page text " }), photo({ text: "   " })]);
+  check(Array.isArray(ok) && ok.length === 2 && ok[0].text === "  page text ".slice(0, 20_000) && !("text" in ok[1]), "Photos: page text is kept, blank text is dropped");
+  check(/too large together/.test(String(parsePhotos([photo({}), { data: "/9j/" + "A".repeat(3_100_000), mimeType: "image/jpeg" }]))), "Photos: a total over the size budget is refused");
+  check(/too much text/.test(String(parsePhotos(Array.from({ length: 3 }, () => photo({ text: "a".repeat(15_000) }))))), "Photos: too much attached text in total is refused");
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

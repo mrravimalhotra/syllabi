@@ -16,6 +16,15 @@ export const MAX_PROMPT_CHARS = 8_000;
 const MAX_ATTACHED_TEXT_CHARS = 20_000;
 const MAX_TOTAL_ATTACHED_TEXT_CHARS = 40_000;
 
+/** What is wrong with one attached photo, or null if it is fine. */
+function photoProblem(p: { data?: unknown; mimeType?: unknown } | null | undefined): string | null {
+  if (typeof p?.data !== "string" || typeof p?.mimeType !== "string" || !IMAGE_MIME_TYPES.has(p.mimeType)) {
+    return "Each attachment must be a JPEG, PNG or WebP image. Remove the file that isn't, or attach it as a PDF or Word file.";
+  }
+  if (!looksLikeImage(p.data, p.mimeType)) return "One of the attached pictures is damaged or isn't really a picture. Attach it again.";
+  return null;
+}
+
 /** The attached photos, or a message saying what is wrong with them (to show the person). */
 export function parsePhotos(raw: unknown): CompletionImage[] | string {
   if (raw === undefined || raw === null) return [];
@@ -26,12 +35,8 @@ export function parsePhotos(raw: unknown): CompletionImage[] | string {
   let totalText = 0;
   const photos: CompletionImage[] = [];
   for (const p of raw) {
-    if (typeof p?.data !== "string" || typeof p?.mimeType !== "string" || !IMAGE_MIME_TYPES.has(p.mimeType)) {
-      return "Each attachment must be a JPEG, PNG or WebP image. Remove the file that isn't, or attach it as a PDF or Word file.";
-    }
-    if (!looksLikeImage(p.data, p.mimeType)) {
-      return "One of the attached pictures is damaged or isn't really a picture. Attach it again.";
-    }
+    const problem = photoProblem(p);
+    if (problem) return problem;
     totalChars += p.data.length;
     const text = typeof p.text === "string" && p.text.trim() ? p.text.slice(0, MAX_ATTACHED_TEXT_CHARS) : undefined;
     totalText += text?.length ?? 0;
