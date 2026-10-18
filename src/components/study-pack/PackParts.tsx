@@ -40,7 +40,7 @@ export function QuestionMeta({ q }: { q: PackQuestion }) {
   );
 }
 
-export function Evidence({ q }: { q: PackQuestion }) {
+function Evidence({ q }: { q: PackQuestion }) {
   if (!q.evidence) return null;
   return (
     <figure className="rounded-xl border-l-4 border-brand-300 bg-brand-50/50 px-4 py-3">
