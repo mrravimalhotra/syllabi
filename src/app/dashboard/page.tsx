@@ -2,20 +2,15 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { downscaleImageFile, imageFingerprint, type DownscaledImage } from "@/lib/downscale-image";
-import { AnswerView } from "@/components/AnswerView";
-import { StudyPackView } from "@/components/study-pack/StudyPackView";
-import { WorkedExampleView } from "@/components/worked/WorkedExampleView";
+import type { DownscaledImage } from "@/lib/downscale-image";
 import { findProblems, pureProblem, solve } from "@/lib/worked/detect";
 import type { WorkedExample } from "@/lib/worked/types";
 import { LANGUAGE_NAMES, type AnswerLanguage } from "@/lib/generation/language";
-import { fileReadError } from "@/lib/file-errors";
 import { keep, peek } from "@/lib/client-cache";
 import { readAnswerStream } from "@/lib/answer-stream";
 import {
   ACCEPTED_FILES,
   MAX_ATTACHED_TEXT_CHARS,
-  MAX_ATTACHMENT_BASE64_CHARS,
   MAX_PHOTOS,
   PACK_WAIT_STEPS,
   ROUTE_BY_TASK,
@@ -25,11 +20,11 @@ import {
   type GenerationResult,
   type MeResponse,
 } from "@/app/dashboard/_ask/constants";
-import { GeneratingCard, Thumb, TimingNote } from "@/app/dashboard/_ask/Parts";
+import { GeneratingCard, Thumb } from "@/app/dashboard/_ask/Parts";
+import { readAttachments } from "@/app/dashboard/_ask/attachments";
+import { ResultSection } from "@/app/dashboard/_ask/ResultSection";
 import { OFFLINE_MESSAGE, failedRequestMessage } from "@/lib/http-errors";
-import { formatDate } from "@/lib/format";
 import {
-  ArrowRightIcon,
   BookIcon,
   DocumentIcon,
   PaperclipIcon,
@@ -139,61 +134,14 @@ export default function DashboardPage() {
     setError(null);
     setNotice(null);
     setReadingFiles(true);
-    const images: DownscaledImage[] = [];
-    const docs: { name: string; text: string }[] = [];
-    const notes: string[] = [];
-    let failingFile: File = files[0];
-    let failure: unknown;
-    try {
-      for (const file of Array.from(files)) {
-        failingFile = file;
-        const name = file.name.toLowerCase();
-        if (name.endsWith(".docx")) {
-          const { readDocx } = await import("@/lib/docx-to-text");
-          const content = await readDocx(file);
-          docs.push({ name: file.name, text: content.textPages.join("\n\n") });
-          images.push(...content.pictures);
-          if (content.skippedPictures.length) notes.push(`${file.name}: some pictures can't be read; save it as PDF if they matter.`);
-        } else if (file.type === "application/pdf") {
-          const { readPdfPages } = await import("@/lib/pdf-to-images");
-          images.push(...(await readPdfPages(file, MAX_PHOTOS)));
-        } else if (file.type.startsWith("image/")) {
-          images.push(await downscaleImageFile(file));
-        } else {
-          notes.push(`${file.name}: not a photo, PDF or Word file, so it was skipped.`);
-        }
-      }
-    } catch (err) {
-      failure = err;
-      setError(fileReadError(failingFile, failure));
-      setReadingFiles(false);
-      return;
+    const read = await readAttachments(Array.from(files), photos);
+    if ("error" in read) {
+      setError(read.error);
+    } else {
+      setPhotos(read.photos);
+      setAttachedDocs((prev) => [...prev, ...read.docs]);
+      if (read.notes.length) setNotice(read.notes.join(" "));
     }
-
-    // Keep within the image count and the request size budget.
-    const kept: DownscaledImage[] = [...photos];
-    let size = kept.reduce((sum, p) => sum + p.imageBase64.length, 0);
-    let dropped = 0;
-    // Skip a photo or page that is already attached.
-    const seen = new Set(kept.map((p) => imageFingerprint(p.imageBase64)));
-    for (const image of images) {
-      const fingerprint = imageFingerprint(image.imageBase64);
-      if (seen.has(fingerprint)) continue;
-      seen.add(fingerprint);
-      if (kept.length < MAX_PHOTOS && size + image.imageBase64.length <= MAX_ATTACHMENT_BASE64_CHARS) {
-        kept.push(image);
-        size += image.imageBase64.length;
-      } else dropped++;
-    }
-    if (dropped) {
-      notes.push(
-        `${dropped} ${dropped === 1 ? "page or photo was" : "pages or photos were"} not attached: a question takes up to ${MAX_PHOTOS} photos or pages, and a limited total size. ` +
-          "Ask the rest in a second question."
-      );
-    }
-    setPhotos(kept);
-    setAttachedDocs((prev) => [...prev, ...docs]);
-    if (notes.length) setNotice(notes.join(" "));
     setReadingFiles(false);
   }
 
@@ -743,74 +691,15 @@ export default function DashboardPage() {
         <GeneratingCard steps={tab === "study_pack" ? PACK_WAIT_STEPS : WAIT_STEPS} draft={draft} onStop={() => abortRef.current?.abort()} />
       )}
 
-      {worked && (
-        <div className="space-y-3">
-          <WorkedExampleView key={worked.example.title} example={worked.example} pdfUrl={worked.id ? `/api/documents/${worked.id}/pdf` : null} />
-          {worked.id && (
-            <p className="text-center text-xs text-slate-500 print:hidden">
-              Saved to{" "}
-              <Link href={`/dashboard/documents/${worked.id}`} className={link}>
-                My Documents <ArrowRightIcon className="inline h-3 w-3" />
-              </Link>
-            </p>
-          )}
-        </div>
-      )}
-
-      {result && (
-        <div ref={resultRef} className="space-y-3">
-          {result.reusedFrom && (
-            <Alert tone="info" className="print:hidden">
-              <span>
-                You asked this before ({formatDate(result.reusedFrom)}), so your saved answer is shown instantly. No AI
-                was used.
-              </span>{" "}
-              <button type="button" onClick={makeNewAnswer} className="font-medium underline">
-                Generate a fresh answer instead
-              </button>{" "}
-              <span className="text-xs">(uses your monthly allowance)</span>
-            </Alert>
-          )}
-          {result.pack ? (
-            <StudyPackView pack={result.pack} answerId={result.id} pdfUrl={result.pdfUrl} />
-          ) : (
-            <AnswerView answer={result} />
-          )}
-          {result.timings && <TimingNote timings={result.timings} />}
-          {!result.pack && workedInQuestion.length > 0 && (
-            <div className="space-y-3 print:hidden">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-medium text-slate-700">See it worked out:</span>
-                {workedInQuestion.map((w, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    aria-pressed={openWorked === i}
-                    onClick={() => setOpenWorked(openWorked === i ? null : i)}
-                    className={cx(
-                      "rounded-full border px-3 py-1.5 text-xs font-medium transition",
-                      openWorked === i
-                        ? "border-brand-600 bg-brand-600 text-white"
-                        : "border-brand-200 bg-brand-50 text-brand-800 hover:border-brand-300"
-                    )}
-                  >
-                    {w.title}
-                  </button>
-                ))}
-              </div>
-              {openWorked !== null && workedInQuestion[openWorked] && <WorkedExampleView key={workedInQuestion[openWorked].title} example={workedInQuestion[openWorked]} />}
-            </div>
-          )}
-          {result.id && (
-            <p className="text-center text-xs text-slate-500 print:hidden">
-              Saved to{" "}
-              <Link href={`/dashboard/documents/${result.id}`} className={link}>
-                My Documents <ArrowRightIcon className="inline h-3 w-3" />
-              </Link>
-            </p>
-          )}
-        </div>
-      )}
+      <ResultSection
+        worked={worked}
+        result={result}
+        resultRef={resultRef}
+        workedInQuestion={workedInQuestion}
+        openWorked={openWorked}
+        onOpenWorked={setOpenWorked}
+        onMakeNewAnswer={makeNewAnswer}
+      />
     </div>
   );
 }
