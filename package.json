@@ -12,6 +12,7 @@
     "test:practice": "node scripts/practice/run.mjs",
     "test:api": "node scripts/api/run.mjs",
     "test:llm": "node scripts/llm/run.mjs",
+    "test:golden": "node scripts/golden/run.mjs",
     "test:e2e": "node scripts/e2e/run.mjs",
     "check:unused": "knip",
     "backup": "bash scripts/backup/backup.sh"
