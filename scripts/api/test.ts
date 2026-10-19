@@ -229,6 +229,8 @@ fresh();
 await expect("generate: unreadable body is explained", adhoc.POST, 400, /couldn't be read/i, undefined, { raw: "{broken" });
 await expect("generate: nothing to answer is refused", adhoc.POST, 400, /Type a question/i, { prompt: "   " });
 await expect("generate: too many photos are refused", adhoc.POST, 400, /photos/i, { prompt: "x", photos: Array.from({ length: 30 }, () => ({ data: "AAAA", mimeType: "image/jpeg" })) });
+await expect("generate: a too-long question is refused, not cut off", adhoc.POST, 400, /too long/i, { prompt: "x".repeat(8_001) });
+await expect("generate: too much attached text is refused, not cut off", adhoc.POST, 400, /too much text/i, { prompt: "Solve", attachedText: "y".repeat(60_001) });
 await expect("generate: a photo that isn't an image is refused", adhoc.POST, 400, /picture|image|photo/i, { prompt: "x", photos: [{ data: "bm90IGFuIGltYWdl", mimeType: "image/jpeg" }] });
 
 // ---- Generating: the whole path, with a stand-in for the AI ----

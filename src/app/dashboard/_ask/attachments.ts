@@ -27,8 +27,16 @@ export async function readAttachments(files: File[], current: DownscaledImage[])
         images.push(...content.pictures);
         if (content.skippedPictures.length) notes.push(`${file.name}: some pictures can't be read; save it as PDF if they matter.`);
       } else if (file.type === "application/pdf") {
-        const { readPdfPages } = await import("@/lib/pdf-to-images");
+        const { countPdfPages, readPdfPages } = await import("@/lib/pdf-to-images");
+        const total = await countPdfPages(file);
         images.push(...(await readPdfPages(file, MAX_PHOTOS)));
+        // Say so plainly: the pages after the limit would otherwise just be missing from the answer.
+        if (total > MAX_PHOTOS) {
+          notes.push(
+            `${file.name} has ${total} pages, but a question takes up to ${MAX_PHOTOS}: pages ${MAX_PHOTOS + 1} to ${total} were left out. ` +
+              "Ask for those in a second question."
+          );
+        }
       } else if (file.type.startsWith("image/")) {
         images.push(await downscaleImageFile(file));
       } else {

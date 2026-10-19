@@ -2,7 +2,7 @@ import type { DownscaledImage } from "@/lib/downscale-image";
 import type { AnswerLanguage } from "@/lib/generation/language";
 import { pureProblem, solve } from "@/lib/worked/detect";
 import type { GenerationTaskType } from "@/types/database";
-import { MAX_ATTACHED_TEXT_CHARS } from "@/app/dashboard/_ask/constants";
+import { textTooLong } from "@/lib/generation/attachments";
 
 /** Everything typed, chosen and attached for one question. */
 export interface Question {
@@ -19,12 +19,16 @@ export interface Question {
   docs: { name: string; text: string }[];
 }
 
+const attachedText = (q: Question) => q.docs.map((d) => `Attached file "${d.name}":\n${d.text}`).join("\n\n");
+
 /** Why the question can't be sent yet (a plain sentence), or null when it can. */
 export function questionProblem(q: Question): string | null {
   if (q.task === "study_pack") {
     return !q.packBookId && q.photos.length === 0 ? "Choose the chapter from My books, or attach photos or a PDF of it." : null;
   }
-  return !q.prompt.trim() && q.photos.length === 0 && q.docs.length === 0 ? "Type a question or attach a photo or file first." : null;
+  if (!q.prompt.trim() && q.photos.length === 0 && q.docs.length === 0) return "Type a question or attach a photo or file first.";
+  // Too much is refused with a reason, never cut off quietly (the last pages would be missed).
+  return textTooLong(q.prompt.trim(), attachedText(q));
 }
 
 const toPhotos = (photos: DownscaledImage[]) => photos.map((p) => ({ data: p.imageBase64, mimeType: p.mimeType, text: p.text }));
@@ -44,10 +48,7 @@ export function buildRequestBody(q: Question): Record<string, unknown> {
     documentIds: q.bookIds,
     language: q.language,
     photos: toPhotos(q.photos),
-    attachedText: q.docs
-      .map((d) => `Attached file "${d.name}":\n${d.text}`)
-      .join("\n\n")
-      .slice(0, MAX_ATTACHED_TEXT_CHARS),
+    attachedText: attachedText(q),
   };
 }
 

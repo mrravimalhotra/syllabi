@@ -1,4 +1,4 @@
-import { MAX_PROMPT_CHARS, parseAttachedText, parsePhotos } from "@/lib/generation/attachments";
+import { parseAttachedText, parsePhotos, textTooLong } from "@/lib/generation/attachments";
 import { isAnswerLanguage, type AnswerLanguage } from "@/lib/generation/language";
 import { isUuid } from "@/lib/validate";
 import type { CompletionImage } from "@/lib/llm/types";
@@ -44,10 +44,12 @@ export function parseGenerationRequest(
     };
   }
   const b = body as Record<string, unknown>;
-  const typedPrompt = typeof b.prompt === "string" ? b.prompt.trim().slice(0, MAX_PROMPT_CHARS) : "";
+  const typedPrompt = typeof b.prompt === "string" ? b.prompt.trim() : "";
   const photos = parsePhotos(b.photos);
   if (typeof photos === "string") return { ok: false, message: photos };
   const attachedText = parseAttachedText(b.attachedText);
+  const tooLong = textTooLong(typedPrompt, attachedText);
+  if (tooLong) return { ok: false, message: tooLong };
   if (!typedPrompt && photos.length === 0 && !attachedText) {
     return { ok: false, message: "Type a question, or attach a photo, PDF or Word file, then press Generate." };
   }

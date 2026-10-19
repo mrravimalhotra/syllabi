@@ -12,8 +12,10 @@ const MAX_PHOTO_BASE64_CHARS = 3_000_000;
 // Typed question, text of an attached Word file, and text found in PDF pages:
 // each capped, and the text of all attachments together capped too, so one
 // request can't carry a huge amount of text to be paid for.
-export const MAX_PROMPT_CHARS = 8_000;
+const MAX_PROMPT_CHARS = 8_000;
+// Text of one PDF page or the attached Word files (about 15,000 words in all).
 const MAX_ATTACHED_TEXT_CHARS = 20_000;
+const MAX_DOC_TEXT_CHARS = 60_000;
 const MAX_TOTAL_ATTACHED_TEXT_CHARS = 40_000;
 
 /** What is wrong with one attached photo, or null if it is fine. */
@@ -47,7 +49,18 @@ export function parsePhotos(raw: unknown): CompletionImage[] | string {
   return photos;
 }
 
-/** Text of attached Word files, trimmed to the limit. */
+/** Text of attached Word files. */
 export function parseAttachedText(raw: unknown): string {
-  return typeof raw === "string" ? raw.trim().slice(0, MAX_ATTACHED_TEXT_CHARS) : "";
+  return typeof raw === "string" ? raw.trim() : "";
+}
+
+/** Why the typed question or the attached file text is too long, or null. Never cut quietly: a cut would drop the last pages. */
+export function textTooLong(prompt: string, attached: string): string | null {
+  if (prompt.length > MAX_PROMPT_CHARS) {
+    return `The question is too long (over ${MAX_PROMPT_CHARS.toLocaleString("en-IN")} characters). Shorten it, or ask in two parts.`;
+  }
+  if (attached.length > MAX_DOC_TEXT_CHARS) {
+    return `The attached files have too much text for one question (over ${MAX_DOC_TEXT_CHARS.toLocaleString("en-IN")} characters, about 10 pages of text). Attach fewer pages, or ask in two parts.`;
+  }
+  return null;
 }

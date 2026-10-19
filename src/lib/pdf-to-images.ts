@@ -98,6 +98,11 @@ function usableText(text: string, fontNames: string[]): boolean {
  * they need no AI reading; scanned pages are left for the AI to read. Every
  * page also comes with its image.
  */
+/** How many pages a PDF has. */
+export async function countPdfPages(file: File): Promise<number> {
+  return (await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise).numPages;
+}
+
 export async function readPdfPages(file: File, maxPages = Infinity): Promise<PdfPage[]> {
   const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
   const count = Math.min(pdf.numPages, maxPages);

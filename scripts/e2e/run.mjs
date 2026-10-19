@@ -282,6 +282,38 @@ await test("Ask: an attached photo shows, can be removed, and goes with the ques
   await page.getByRole("button", { name: "Remove page 1" }).waitFor({ state: "detached", timeout: 5000 });
 });
 
+
+// A plain PDF with `count` simple pages, written by hand (with its own cross-reference table).
+function blankPdf(count) {
+  // Each page draws a rectangle of its own width, so no two pages look the same.
+  const kids = Array.from({ length: count }, (_, i) => `${3 + i} 0 R`).join(" ");
+  const objects = ["<< /Type /Catalog /Pages 2 0 R >>", `<< /Type /Pages /Kids [${kids}] /Count ${count} >>`];
+  for (let i = 0; i < count; i++) objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents ${3 + count + i} 0 R >>`);
+  for (let i = 0; i < count; i++) {
+    const stream = `0 0 ${20 + i * 10} 100 re f`;
+    objects.push(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
+  }
+  let out = "%PDF-1.4\n";
+  const offsets = [];
+  objects.forEach((o, i) => {
+    offsets.push(out.length);
+    out += `${i + 1} 0 obj\n${o}\nendobj\n`;
+  });
+  const xref = out.length;
+  out += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n` + offsets.map((o) => `${String(o).padStart(10, "0")} 00000 n \n`).join("");
+  out += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  return Buffer.from(out);
+}
+
+await test("Ask: a PDF longer than the limit says which pages were left out", async (page, ctx) => {
+  await baseRoutes(ctx);
+  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.locator("input[type=file]").setInputFiles({ name: "exercise.pdf", mimeType: "application/pdf", buffer: blankPdf(15) });
+  await page.getByText(/exercise\.pdf has 15 pages.*pages 13 to 15 were left out/).waitFor({ timeout: 30000 });
+  await page.getByRole("button", { name: "Remove page 12" }).waitFor();
+  if ((await page.getByRole("button", { name: "Remove page 13" }).count()) !== 0) throw new Error("More than 12 pages were attached.");
+});
+
 await test("Ask: turning every book off explains why Generate is off", async (page, ctx) => {
   await baseRoutes(ctx);
   await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });

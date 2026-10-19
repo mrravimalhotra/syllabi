@@ -7,7 +7,6 @@ import type { GenerationTaskType, Student } from "@/types/database";
 // pictures) within the request size budget, plus the text of Word files.
 export const MAX_PHOTOS = 12;
 export const MAX_ATTACHMENT_BASE64_CHARS = 3_000_000;
-export const MAX_ATTACHED_TEXT_CHARS = 20_000;
 export const ACCEPTED_FILES =
   "image/jpeg,image/png,image/webp,application/pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
