@@ -27,6 +27,8 @@ const COVERAGE_THRESHOLD = 0.55;
 // Caps how many source page images get sent to the model per request — request
 // size/cost scale with image count, and a handful of the top matches is enough.
 const MAX_SOURCE_IMAGES = 4;
+// A whole exercise: its questions often point at a figure, so each of its pages (up to this many) is sent.
+const MAX_SECTION_IMAGES = 8;
 
 /**
  * The reusable RAG retrieval core: embed the query, then run a vector search
@@ -93,9 +95,12 @@ async function search(embedding: number[], scope: RetrievalScope, count: number)
 export async function loadSourceImages(
   chunks: MatchedChunk[]
 ): Promise<{ images: CompletionImage[]; byPath: Map<string, CompletionImage> }> {
-  const uniquePaths = [...new Set(chunks.map((c) => c.image_path).filter((p): p is string => Boolean(p)))].slice(
+  // Pages added for a whole exercise (similarity 0) come first and get more room: its questions refer to their figures.
+  const wholeSection = chunks.some((c) => c.similarity === 0);
+  const ordered = wholeSection ? [...chunks.filter((c) => c.similarity === 0), ...chunks.filter((c) => c.similarity !== 0)] : chunks;
+  const uniquePaths = [...new Set(ordered.map((c) => c.image_path).filter((p): p is string => Boolean(p)))].slice(
     0,
-    MAX_SOURCE_IMAGES
+    wholeSection ? MAX_SECTION_IMAGES : MAX_SOURCE_IMAGES
   );
 
   const byPath = new Map<string, CompletionImage>();

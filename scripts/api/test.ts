@@ -24,7 +24,7 @@ import * as health from "../../src/app/api/admin/health/route";
 import * as bookDownload from "../../src/app/api/library/[id]/download/route";
 import { made as madePdfs } from "./fakes/book-pdf";
 import { arrangeBookPages } from "../../src/lib/pdf/book-pages";
-import { retrieveContext } from "../../src/lib/rag/retrieve";
+import { loadSourceImages, retrieveContext } from "../../src/lib/rag/retrieve";
 import { namedPages, wantsWholeSection } from "../../src/lib/rag/whole-pages";
 import * as guests from "../../src/app/api/admin/guests/route";
 import * as speech from "../../src/app/api/speech/route";
@@ -420,6 +420,14 @@ fresh();
   check("whole exercise: pages marked Exercise (11 to 16) all come, and no textbook page is added", (await pagesOf("Solve the exercise")) === "11,12,13,14,15,16", await pagesOf("Solve the exercise"));
   check("whole exercise: a named stretch (pages 12 to 14) still wins over the marking", (await pagesOf("Do pages 12 to 14")) === "12,13,14", await pagesOf("Do pages 12 to 14"));
   delete rpcs.match_owner_chunks;
+
+  // Pictures: a whole exercise sends the pictures of its pages first, and has room for more of them.
+  const withPicture = (n: number, sim: number) => ({ id: `i${n}`, document_id: BOOK, content: "t", section_label: null, page_number: n, source_type: "exercise", image_path: `sources/${BOOK}/page-${n}.jpg`, similarity: sim });
+  for (let n = 1; n <= 16; n++) files.set(`sources/${BOOK}/page-${n}.jpg`, { data: Buffer.from(String(n)), contentType: "image/jpeg" });
+  const plain = await loadSourceImages([1, 2, 3, 4, 5, 6].map((n) => withPicture(n, 0.8)));
+  check("pictures: an ordinary answer gets at most 4 page pictures", plain.images.length === 4, String(plain.images.length));
+  const section = await loadSourceImages([...[1, 2].map((n) => withPicture(n, 0.8)), ...[11, 12, 13, 14, 15, 16].map((n) => withPicture(n, 0))]);
+  check("pictures: a whole exercise sends all its pages' pictures first (6 pages + 2 best matches)", section.images.length === 8 && [11, 12, 13, 14, 15, 16].every((n) => section.byPath.has(`sources/${BOOK}/page-${n}.jpg`)), [...section.byPath.keys()].join());
 }
 
 // ---- Background reader and error log ----
