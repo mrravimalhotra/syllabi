@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { PendingPage, keepScreenOn } from "@/app/dashboard/library/_parts/upload-helpers";
 import { useBookDeletion } from "@/app/dashboard/library/_parts/useBookDeletion";
+import { useBookDownload } from "@/app/dashboard/library/_parts/useBookDownload";
 import { useBookList } from "@/app/dashboard/library/_parts/useBookList";
 import { AddBookForm, type BookValues } from "@/app/dashboard/library/_parts/AddBookForm";
 import { BookList } from "@/app/dashboard/library/_parts/BookList";
@@ -42,6 +43,7 @@ export default function LibraryPage() {
     onRemoved: (id) => setPages((prev) => prev.map((p) => (p.bookId === id ? { ...p, bookId: undefined, pageNumber: undefined } : p))),
   });
   const { removeBook } = books;
+  const downloads = useBookDownload();
 
   async function addFiles(fileList: FileList | null) {
     if (!fileList || fileList.length === 0) return;
@@ -171,10 +173,12 @@ export default function LibraryPage() {
         documents={documents}
         loadFailed={loadFailed}
         deleting={books.deleting}
-        errors={books.errors}
+        downloading={downloads.downloading}
+        errors={{ ...books.errors, ...downloads.errors }}
         isUnfinished={books.unfinished}
         onRename={list.rename}
         onDelete={books.deleteBook}
+        onDownload={(d) => void downloads.download(d.id, d.title)}
         onRetry={books.retryPages}
         onRemoveUnfinished={books.removeUnfinished}
       />

@@ -3,7 +3,7 @@
 import { StatusBadge } from "@/app/dashboard/library/_parts/BookParts";
 import type { DocumentRowView } from "@/app/dashboard/library/_parts/upload-helpers";
 import { EditableName } from "@/components/EditableName";
-import { BookIcon, TrashIcon } from "@/components/icons";
+import { BookIcon, DownloadIcon, TrashIcon } from "@/components/icons";
 import { Alert, EmptyState, Spinner, button, card, cx, link } from "@/components/ui";
 import { sourceTypeLabel } from "@/lib/format";
 
@@ -12,12 +12,15 @@ interface Props {
   loadFailed: boolean;
   /** Books being deleted right now. */
   deleting: string[];
+  /** Books being made into a PDF to download right now. */
+  downloading: string[];
   /** Book id → why the last action on it failed. */
   errors: Record<string, string>;
   /** An upload that stopped part-way, or a book whose pages never arrived. */
   isUnfinished: (d: DocumentRowView) => boolean;
   onRename: (id: string, title: string) => Promise<void>;
   onDelete: (d: DocumentRowView) => void;
+  onDownload: (d: DocumentRowView) => void;
   onRetry: (id: string) => void;
   onRemoveUnfinished: () => void;
 }
@@ -27,10 +30,12 @@ export function BookList({
   documents,
   loadFailed,
   deleting,
+  downloading,
   errors,
   isUnfinished,
   onRename,
   onDelete,
+  onDownload,
   onRetry,
   onRemoveUnfinished,
 }: Props) {
@@ -84,6 +89,15 @@ export function BookList({
                 )}
                 {errors[d.id] && <p className="text-xs text-red-600">{errors[d.id]}</p>}
               </div>
+              <button
+                onClick={() => onDownload(d)}
+                disabled={downloading.includes(d.id) || d.status === "failed"}
+                className={button.icon}
+                aria-label={`Download "${d.title}" as a PDF`}
+                title="Download as PDF"
+              >
+                {downloading.includes(d.id) ? <Spinner className="h-4.5 w-4.5" /> : <DownloadIcon className="h-4.5 w-4.5" />}
+              </button>
               <button
                 onClick={() => onDelete(d)}
                 disabled={deleting.includes(d.id)}

@@ -715,6 +715,27 @@ await test("My Books: deleting a book asks first, then removes it from the list"
   await page.getByText("Science Notes").first().waitFor();
 });
 
+await test("My Books: a book can be downloaded as a PDF, and a refusal is explained", async (page, ctx) => {
+  await ctx.route("**/api/me", (r) => json(r, me));
+  await ctx.route("**/api/library", (r) => json(r, { documents: books }));
+  let asked = [];
+  await ctx.route("**/api/library/*/download", (r) => {
+    const id = r.request().url().split("/").slice(-2)[0];
+    asked.push(id);
+    if (id === "b2") return json(r, { error: "This book has no saved pages to download yet." }, 404);
+    return r.fulfill({ status: 200, contentType: "application/pdf", body: "%PDF-1.4 test" });
+  });
+  await page.goto(`${BASE}/dashboard/library`, { waitUntil: "networkidle" });
+  const [file] = await Promise.all([
+    page.waitForEvent("download", { timeout: 8000 }),
+    page.getByRole("button", { name: /Download "Maths Chapter 3" as a PDF/ }).click(),
+  ]);
+  if (file.suggestedFilename() !== "Maths Chapter 3.pdf") throw new Error(`Saved as "${file.suggestedFilename()}".`);
+  await page.getByRole("button", { name: /Download "Science Notes" as a PDF/ }).click();
+  await page.getByText("This book has no saved pages to download yet.").waitFor({ timeout: 8000 });
+  if (asked.join() !== "b1,b2") throw new Error(`Asked for ${asked.join()}.`);
+});
+
 await test("My Books: the same photo twice is skipped, and a failed page is kept to try again", async (page, ctx) => {
   let pageCalls = 0;
   await ctx.route("**/api/me", (r) => json(r, me));

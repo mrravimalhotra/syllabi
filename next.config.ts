@@ -37,6 +37,7 @@ const nextConfig: NextConfig = {
   // they ship with the routes that render PDFs.
   outputFileTracingIncludes: {
     "/api/documents/**": ["src/lib/pdf/fonts/**/*"],
+    "/api/library/**": ["src/lib/pdf/fonts/**/*"],
   },
   async headers() {
     return [

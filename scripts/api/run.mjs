@@ -22,6 +22,7 @@ await build({
     "@/lib/auth": fakes("auth.ts"),
     "@/lib/supabase/server": fakes("server.ts"),
     "@/lib/storage": fakes("storage.ts"),
+    "@/lib/pdf/book": fakes("book-pdf.ts"),
     "@supabase/ssr": fakes("ssr.ts"),
     "@/lib/generation/pipeline": fakes("pipeline.ts"),
     "@/lib/llm/usage": fakes("llm-usage.ts"),

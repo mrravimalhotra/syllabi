@@ -21,6 +21,9 @@ import { ssrState } from "./fakes/ssr";
 import { updateSession } from "../../src/lib/supabase/middleware";
 import { NextRequest } from "next/server";
 import * as health from "../../src/app/api/admin/health/route";
+import * as bookDownload from "../../src/app/api/library/[id]/download/route";
+import { made as madePdfs } from "./fakes/book-pdf";
+import { arrangeBookPages } from "../../src/lib/pdf/book-pages";
 import * as guests from "../../src/app/api/admin/guests/route";
 import * as speech from "../../src/app/api/speech/route";
 import * as sounds from "../../src/app/api/sounds/route";
@@ -350,6 +353,37 @@ session.user = person({ role: "admin" });
   const res = await call(health.POST, {});
   const checks = (res.json?.checks ?? []) as { name: string; ok: boolean; skipped?: boolean; detail: string }[];
   check("health: every service is checked in order", checks.map((c) => c.name).join("|").startsWith("Settings (environment variables)|Database|AI answers (Gemini)|AI with Google Search|Book search (embeddings)|File storage (Cloudflare R2)|Reading book pages (AI)|Background page reading"), checks.map((c) => c.name).join("|"));
+}
+
+// ---- Downloading a book ----
+fresh();
+session.user = person();
+{
+  const dl = (id: string) => call(bookDownload.GET, undefined, { id });
+  const raw = async (id: string) => (bookDownload.GET as unknown as Handler)(new Request("http://localhost/x"), { params: Promise.resolve({ id }) });
+  check("download: a signed-out person is refused", await (async () => { session.user = null; const r = await dl(BOOK); session.user = person(); return r.status === 401; })());
+  check("download: a book id that isn't one is not found", (await dl("nope")).status === 404);
+  check("download: someone else's book is not found", await (async () => { tables.documents = [{ id: BOOK, owner_id: OTHER, title: "Theirs" }]; return (await dl(BOOK)).status === 404; })());
+  tables.documents = [{ id: BOOK, owner_id: ME, title: "Science Class 8" }];
+  tables.chunks = [];
+  files.clear();
+  const empty = await dl(BOOK);
+  check("download: a book with no saved pages says so", empty.status === 404 && /no saved pages/i.test(String(empty.json?.error)), JSON.stringify(empty));
+  files.set(`sources/${BOOK}/page-2.jpg`, { data: Buffer.from("two"), contentType: "image/jpeg" });
+  files.set(`sources/${BOOK}/page-1.png`, { data: Buffer.from("one"), contentType: "image/png" });
+  tables.chunks = [
+    { document_id: BOOK, page_number: 1, chunk_index: 0, content: "words already on picture 1" },
+    { document_id: BOOK, page_number: 3, chunk_index: 1, content: "second part" },
+    { document_id: BOOK, page_number: 3, chunk_index: 0, content: "first part" },
+  ];
+  madePdfs.length = 0;
+  const res = await raw(BOOK);
+  check("download: a PDF is sent as a file with the book's name", res.status === 200 && res.headers.get("content-type") === "application/pdf" && /attachment; filename="Science Class 8\.pdf"/.test(res.headers.get("content-disposition") ?? ""), String(res.status));
+  const pages = madePdfs[0]?.pages ?? [];
+  check("download: pages are in order, pictures for photos and text for Word pages", pages.map((p) => p.number).join() === "1,2,3" && Boolean(pages[0].image) && Boolean(pages[1].image) && pages[2].text === "first part\n\nsecond part", JSON.stringify(pages.map((p) => [p.number, Boolean(p.image), p.text])));
+  check("download: a page with a picture doesn't repeat its words", !pages.some((p) => p.number === 1 && p.text));
+  const order = arrangeBookPages(["sources/b/page-10.jpg", "sources/b/page-9.webp"], []);
+  check("download: page 10 comes after page 9", order.map((p) => p.number).join() === "9,10");
 }
 
 // ---- Background reader and error log ----
