@@ -12,6 +12,7 @@ import { Messages } from "@/app/dashboard/_ask/Messages";
 import { PromptBox } from "@/app/dashboard/_ask/PromptBox";
 import { ComposerToolbar } from "@/app/dashboard/_ask/ComposerToolbar";
 import { GeneratingCard } from "@/app/dashboard/_ask/Parts";
+import { PdfPagePicker } from "@/app/dashboard/_ask/PdfPagePicker";
 import { PackChapter } from "@/app/dashboard/_ask/PackChapter";
 import { ResultSection } from "@/app/dashboard/_ask/ResultSection";
 import { TabPicker } from "@/app/dashboard/_ask/TabPicker";
@@ -103,7 +104,7 @@ export default function DashboardPage() {
 
   const noBookSelected = !isPack && books.books.length > 0 && books.activeIds.length === 0;
   const overQuota = me?.quota.overQuota ?? false;
-  const blocked = blockedReason({ overQuota, noBookSelected, readingFiles });
+  const blocked = blockedReason({ overQuota, noBookSelected, readingFiles, choosingPages: attachments.longPdfs.length > 0 });
   const hasInput = Boolean(prompt.trim()) || photos.length > 0 || docs.length > 0;
 
   return (
@@ -131,6 +132,17 @@ export default function DashboardPage() {
           onRemovePhoto={attachments.removePhoto}
           onRemoveDoc={attachments.removeDoc}
         />
+
+        {attachments.longPdfs.map((pdf, i) => (
+          <PdfPagePicker
+            key={pdf.file.name + i}
+            pdf={pdf}
+            room={attachments.pagesLeft}
+            busy={readingFiles}
+            onAttach={(first, last) => void attachments.attachPages(i, first, last)}
+            onSkip={() => attachments.skipPdf(i)}
+          />
+        ))}
 
         {books.books.length > 0 && showBooks && !isPack && (
           <BookPicker

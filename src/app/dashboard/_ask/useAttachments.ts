@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { DownscaledImage } from "@/lib/downscale-image";
-import { readAttachments } from "@/app/dashboard/_ask/attachments";
+import { pagesLeft, readAttachments, readPdfRange, type LongPdf } from "@/app/dashboard/_ask/attachments";
 
 /**
  * The photos, PDF pages and Word files attached to a question. `add` reads the
@@ -15,6 +15,8 @@ export function useAttachments(onError: (message: string | null) => void, onNoti
   // Word files: their text goes with the question.
   const [docs, setDocs] = useState<{ name: string; text: string }[]>([]);
   const [reading, setReading] = useState(false);
+  // PDFs too long for one question, waiting for the person to choose their pages.
+  const [longPdfs, setLongPdfs] = useState<LongPdf[]>([]);
 
   async function add(files: FileList | File[] | null) {
     if (!files || files.length === 0) return;
@@ -27,12 +29,35 @@ export function useAttachments(onError: (message: string | null) => void, onNoti
     } else {
       setPhotos(read.photos);
       setDocs((prev) => [...prev, ...read.docs]);
+      setLongPdfs((prev) => [...prev, ...read.longPdfs]);
+      if (read.notes.length) onNotice(read.notes.join(" "));
+    }
+    setReading(false);
+  }
+
+  /** Attaches the chosen pages of the long PDF at `index`. */
+  async function attachPages(index: number, first: number, last: number) {
+    const pdf = longPdfs[index];
+    if (!pdf) return;
+    onError(null);
+    onNotice(null);
+    setReading(true);
+    const read = await readPdfRange(pdf.file, first, last, photos);
+    if ("error" in read) {
+      onError(read.error);
+    } else {
+      setPhotos(read.photos);
+      setLongPdfs((prev) => prev.filter((_, j) => j !== index));
       if (read.notes.length) onNotice(read.notes.join(" "));
     }
     setReading(false);
   }
 
   return {
+    longPdfs,
+    pagesLeft: pagesLeft(photos),
+    attachPages,
+    skipPdf: (index: number) => setLongPdfs((prev) => prev.filter((_, j) => j !== index)),
     photos,
     docs,
     reading,
@@ -42,6 +67,7 @@ export function useAttachments(onError: (message: string | null) => void, onNoti
     clear: () => {
       setPhotos([]);
       setDocs([]);
+      setLongPdfs([]);
     },
   };
 }

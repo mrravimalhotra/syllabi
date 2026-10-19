@@ -305,13 +305,41 @@ function blankPdf(count) {
   return Buffer.from(out);
 }
 
-await test("Ask: a PDF longer than the limit says which pages were left out", async (page, ctx) => {
+await test("Ask: a long PDF lets you choose its pages (say 11 to 16), and Generate waits for the choice", async (page, ctx) => {
+  await baseRoutes(ctx);
+  let sentPhotos = -1;
+  await ctx.route("**/api/generate/**", (r) => {
+    sentPhotos = (r.request().postDataJSON().photos ?? []).length;
+    return json(r, { ...answer, text: "Exercise answered." });
+  });
+  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.locator("input[type=file]").setInputFiles({ name: "exercise.pdf", mimeType: "application/pdf", buffer: blankPdf(30) });
+  const picker = page.getByRole("group", { name: "Choose pages of exercise.pdf" });
+  await picker.getByText(/has 30 pages/).waitFor({ timeout: 30000 });
+  await page.getByText(/Choose which pages of the long PDF/).waitFor();
+  // A bad choice is explained and can't be sent.
+  await picker.getByLabel("From page").fill("11");
+  await picker.getByLabel("to page").fill("40");
+  await picker.getByText(/Type page numbers from 1 to 30/).waitFor();
+  await picker.getByLabel("to page").fill("16");
+  await picker.getByRole("button", { name: "Attach these pages" }).click();
+  await picker.waitFor({ state: "detached", timeout: 30000 });
+  await page.getByRole("button", { name: "Remove page 6" }).waitFor();
+  if ((await page.getByRole("button", { name: "Remove page 7" }).count()) !== 0) throw new Error("More than the six chosen pages were attached.");
+  await page.getByRole("button", { name: /^Generate$/ }).click();
+  await page.getByText("Exercise answered.").first().waitFor({ timeout: 10000 });
+  if (sentPhotos !== 6) throw new Error(`Expected 6 pages to be sent, saw ${sentPhotos}.`);
+});
+
+await test("Ask: a long PDF can be skipped", async (page, ctx) => {
   await baseRoutes(ctx);
   await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
-  await page.locator("input[type=file]").setInputFiles({ name: "exercise.pdf", mimeType: "application/pdf", buffer: blankPdf(15) });
-  await page.getByText(/exercise\.pdf has 15 pages.*pages 13 to 15 were left out/).waitFor({ timeout: 30000 });
-  await page.getByRole("button", { name: "Remove page 12" }).waitFor();
-  if ((await page.getByRole("button", { name: "Remove page 13" }).count()) !== 0) throw new Error("More than 12 pages were attached.");
+  await page.locator("input[type=file]").setInputFiles({ name: "big.pdf", mimeType: "application/pdf", buffer: blankPdf(14) });
+  const picker = page.getByRole("group", { name: "Choose pages of big.pdf" });
+  await picker.waitFor({ timeout: 30000 });
+  await picker.getByRole("button", { name: "Skip this PDF" }).click();
+  await picker.waitFor({ state: "detached" });
+  await page.getByText(/Choose which pages of the long PDF/).waitFor({ state: "detached", timeout: 3000 });
 });
 
 await test("Ask: turning every book off explains why Generate is off", async (page, ctx) => {

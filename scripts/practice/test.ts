@@ -295,12 +295,15 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
   const body = buildRequestBody({ ...q, docs: [{ name: "a.docx", text: "Hello" }] });
   check(body.prompt === "What is 12 x 15?" && JSON.stringify(body.documentIds) === '["b1","b2"]' && body.attachedText === 'Attached file "a.docx":\nHello', "An answer request carries the trimmed question, the books and the attached text");
   check(buildRequestBody({ ...q, task: "sample_paper", prompt: "Class 6 maths" }).prompt === "Class 6 maths\n\nTotal marks: 80", "A sample paper asks for the marks");
-  check(buildRequestBody({ ...q, docs: [{ name: "big", text: "x".repeat(50_000) }] }).attachedText?.toString().length === 20_000, "Attached text is cut to the allowed length");
+  const big = { ...q, docs: [{ name: "big", text: "x".repeat(70_000) }] };
+  check(String(buildRequestBody(big).attachedText).length > 70_000 && /too much text/.test(questionProblem(big) ?? ""), "Too much attached text is refused with a reason, not cut off");
+  check(questionProblem({ ...q, prompt: "y".repeat(9_000) })?.includes("too long") === true, "A too-long question is refused with a reason");
   const pack = buildRequestBody({ ...q, task: "study_pack", packBookId: "b1", prompt: " focus " });
   check(pack.documentId === "b1" && pack.focus === "focus" && JSON.stringify(pack.photos) === "[]" && !("documentIds" in pack), "A study pack request names the chapter");
-  check(blockedReason({ overQuota: true, noBookSelected: true, readingFiles: true })?.includes("allowance") === true, "Over the allowance is the first reason given");
-  check(blockedReason({ overQuota: false, noBookSelected: true, readingFiles: true })?.includes("no book is selected") === true && blockedReason({ overQuota: false, noBookSelected: false, readingFiles: true })?.includes("attachment") === true, "Then no book, then still reading a file");
-  check(blockedReason({ overQuota: false, noBookSelected: false, readingFiles: false }) === null, "Nothing blocking means no message");
+  check(blockedReason({ overQuota: true, noBookSelected: true, readingFiles: true, choosingPages: false })?.includes("allowance") === true, "Over the allowance is the first reason given");
+  check(blockedReason({ overQuota: false, noBookSelected: true, readingFiles: true, choosingPages: false })?.includes("no book is selected") === true && blockedReason({ overQuota: false, noBookSelected: false, readingFiles: true, choosingPages: false })?.includes("attachment") === true, "Then no book, then still reading a file");
+  check(blockedReason({ overQuota: false, noBookSelected: false, readingFiles: false, choosingPages: false }) === null, "Nothing blocking means no message");
+  check(blockedReason({ overQuota: false, noBookSelected: false, readingFiles: false, choosingPages: true })?.includes("Choose which pages") === true, "A long PDF waiting for its pages blocks Generate and says what to do");
 }
 
 // Request checkers.

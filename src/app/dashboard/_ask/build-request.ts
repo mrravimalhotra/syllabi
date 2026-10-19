@@ -53,10 +53,11 @@ export function buildRequestBody(q: Question): Record<string, unknown> {
 }
 
 /** Why the Generate button is off, so a disabled button is never a mystery; null when it is on. */
-export function blockedReason(state: { overQuota: boolean; noBookSelected: boolean; readingFiles: boolean }): string | null {
+export function blockedReason(state: { overQuota: boolean; noBookSelected: boolean; readingFiles: boolean; choosingPages: boolean }): string | null {
   if (state.overQuota) return "Generate is paused: you've used this month's allowance (see the message above).";
   if (state.noBookSelected) return "Generate is off because no book is selected. Under “Search these books”, tap a book, or tap All.";
   if (state.readingFiles) return "Preparing your attachment. Generate turns on when it's ready.";
+  if (state.choosingPages) return "Choose which pages of the long PDF to attach (or skip it), then press Generate.";
   return null;
 }
 

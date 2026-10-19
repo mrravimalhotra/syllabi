@@ -103,12 +103,12 @@ export async function countPdfPages(file: File): Promise<number> {
   return (await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise).numPages;
 }
 
-export async function readPdfPages(file: File, maxPages = Infinity): Promise<PdfPage[]> {
+export async function readPdfPages(file: File, maxPages = Infinity, firstPage = 1): Promise<PdfPage[]> {
   const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
-  const count = Math.min(pdf.numPages, maxPages);
+  const lastPage = Math.min(pdf.numPages, firstPage + maxPages - 1);
   const pages: PdfPage[] = [];
 
-  for (let pageNumber = 1; pageNumber <= count; pageNumber++) {
+  for (let pageNumber = firstPage; pageNumber <= lastPage; pageNumber++) {
     const page = await pdf.getPage(pageNumber);
     const content = await page.getTextContent();
     const items = content.items.filter(
