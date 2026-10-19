@@ -34,7 +34,7 @@ const MAX_EXERCISE_PAGES = 12;
 const PAGES_AFTER_MATCH = 5;
 
 /** The pages of the unbroken stretch of exercise pages that holds `anchor` (or the nearest exercise page to it). */
-export function exerciseRun(exercisePages: number[], anchor: number): number[] {
+function exerciseRun(exercisePages: number[], anchor: number): number[] {
   const pages = [...new Set(exercisePages)].sort((x, y) => x - y);
   if (pages.length === 0) return [];
   const nearest = pages.reduce((best, p) => (Math.abs(p - anchor) < Math.abs(best - anchor) ? p : best));
