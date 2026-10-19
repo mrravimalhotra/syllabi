@@ -11,12 +11,17 @@
 // French papers use "Exercice" and "Partie".
 const DIGIT = "[0-9०-९]";
 
-/** "Q1.", "Q.1", "Q 1)", "Question 3:", "प्रश्न १.", "प्र. 2", "Exercice 4" — a top-level question or a section of questions. */
-const Q_HEADING = new RegExp(`^\\s*(?:Q(?:uestion)?|Exercice|प्रश्न|प्र)\\.?\\s*${DIGIT}{1,2}\\s*[.):\\-।]?\\s*\\S`, "i");
+/** "Q1.", "Q.1", "Q 1)", "Question 3:", "प्रश्न १.", "प्र. 2", "Exercice 4", "Q.I.", "Q.II)" — a top-level question or a section of questions. */
+const Q_HEADING = new RegExp(
+  `^\\s*(?:Q(?:uestion)?|Exercice|प्रश्न|प्र)\\.?\\s*(?:${DIGIT}{1,2}\\s*[.):\\-।]?|[IVX]{1,5}\\s*[.):\\-])\\s*\\S`,
+  "i"
+);
 /** "1.", "1)", "1.What", "१." — a numbered item. A digit may not follow, so "1.5" isn't one. */
 const NUMBERED = new RegExp(`^\\s*${DIGIT}{1,2}[.)।](?!${DIGIT})\\s*\\S`);
 /** "SECTION B", "Section A: Objective questions", "Part 2", "A. Fill in the blanks", "विभाग अ", "Partie B" — a section heading. */
 const SECTION = /^\s*(?:(?:SECTION|Part|Partie)\s+[A-Z0-9]+\b|[A-H]\.\s+[A-Z]|(?:विभाग|खंड|भाग)\s+\S)/i;
+/** "a.", "B)", "(c)" at the start of a line: an answer option, when it carries on from the one before. */
+const LETTER_OPTION = /^\s*\(?([a-h])[.)]\s*\S/i;
 /** "* Question: ...", "- Question: ...", "• Q: ..." — an unnumbered question bullet. */
 const BULLET_QUESTION = /^\s*[*\-•]\s*(?:Question|Q)\s*[:.]/i;
 
@@ -29,6 +34,16 @@ interface Block {
   body: string[];
 }
 
+/** A numbered question, a question heading or a section heading. */
+const startsNewQuestion = (line: string) => NUMBERED.test(line) || Q_HEADING.test(line) || SECTION.test(line);
+
+/** The letter of the answer option on this line when it carries on from the last one (a, then b...), else null. */
+function nextOption(line: string, last: string | null): string | null {
+  const letter = LETTER_OPTION.exec(line)?.[1].toLowerCase();
+  const expected = last === null ? "a" : String.fromCharCode(last.charCodeAt(0) + 1);
+  return letter === expected ? letter : null;
+}
+
 /** The text sorted into what comes before the first question, section/question blocks with their numbered items, and bullet questions. */
 function sortLines(text: string): { preamble: string[]; blocks: Block[]; bullets: string[][] } {
   const preamble: string[] = [];
@@ -36,11 +51,24 @@ function sortLines(text: string): { preamble: string[]; blocks: Block[]; bullets
   const bullets: string[][] = [];
   let inCode = false;
 
+  // The letter of the last answer option (a, b, c...) seen under the current numbered item.
+  let lastOption: string | null = null;
+
   const current = () => blocks[blocks.length - 1];
   for (const raw of text.split("\n")) {
     const line = raw.trim();
     if (line.startsWith("```")) inCode = !inCode;
     if (!line) continue;
+
+    // "a. i-iii-ii-iv" or "B. Society became more just" under a numbered question are its options, not a new section.
+    const option: string | null = !inCode && current()?.items.length ? nextOption(line, lastOption) : null;
+    if (option !== null) {
+      lastOption = option;
+      const items = current().items;
+      items[items.length - 1].push(line);
+      continue;
+    }
+    if (!inCode && startsNewQuestion(line)) lastOption = null;
 
     if (!inCode && BULLET_QUESTION.test(line)) {
       bullets.push([line.replace(BULLET_QUESTION, "").trim()]);

@@ -6,6 +6,9 @@ import { makeBlendQuiz } from "@/lib/kindergarten/quiz";
 import { blockedReason, buildRequestBody, questionProblem, type Question } from "@/app/dashboard/_ask/build-request";
 import { checkPages } from "@/lib/ingestion/upload-pages";
 import { parsePhotos } from "@/lib/generation/attachments";
+import { PAGES as BHAKTI_PAGES } from "../fixtures/bhakti-exercise-pages";
+import { splitQuestions } from "@/lib/rag/split-questions";
+import { chunkPageText } from "@/lib/ingestion/chunk";
 import { pdfDisposition } from "@/lib/pdf/disposition";
 import { signUpProblem, signUpRefusal } from "@/lib/signup-check";
 import { parseGenerationRequest } from "@/lib/generation/request";
@@ -405,6 +408,31 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
   check(/filename="Syllabi answer\.pdf"/.test(pdfDisposition("पौधे भोजन कैसे बनाते हैं")) && /filename\*=UTF-8''%E0%A4%AA/.test(pdfDisposition("पौधे भोजन कैसे बनाते हैं")), "Disposition: a Hindi title keeps its letters, with a plain fallback");
   check(!/[/\\:*?"<>|]/.test(pdfDisposition('a/b\\c:d*e?f"g<h>i|j').replace(/^inline; filename="|\.pdf.*$/g, "")), "Disposition: characters not allowed in file names become spaces");
   check(pdfDisposition("x".repeat(200)).length < 260 && pdfDisposition("   ").includes('filename="Syllabi answer.pdf"'), "Disposition: a long or blank title is cut or replaced");
+}
+
+// The owner's sample chapter: pages 11 to 15 are a textual exercise and a worksheet. Every question must be found, under its own heading.
+{
+  const found = splitQuestions(BHAKTI_PAGES.join("\n\n"));
+  const headed = (heading: string) => found.filter((q) => q.includes(heading)).length;
+  check(found.length === 28, `Sample chapter: 20 exercise questions and 8 worksheet questions are found (${found.length})`);
+  check([["Q1. Fill in the blanks.", 4], ["Q2. State whether", 4], ["Q3. Multiple Choice", 4], ["Q4. Answer the following questions in short.", 4], ["Q5. Answer the following questions in detail.", 4], ["Q.I. Multiple Choice Question.", 4], ["Q.II. Answer the following in detail.", 4]].every(([h, n]) => headed(h as string) === n), "Sample chapter: each heading (including Q.I. and Q.II.) owns its four questions");
+  check(found.every((q) => !/^.*\n[a-d]\. [ivx]+-/m.test(q.split("\n")[1] ?? "")), "Sample chapter: no answer option such as 'd. ii-i-iv-iii' is taken for a heading");
+  const pranali = found.find((q) => q.includes("Pranali")) ?? "";
+  check(pranali.includes("Q3. Multiple Choice") && !pranali.includes("Q5."), "Sample chapter: a question whose options run onto the next page keeps its own heading");
+  check((found.find((q) => q.includes("Bhanu")) ?? "").includes("Q.I."), "Sample chapter: a worksheet question is not filed under the exercise's last heading");
+  check((found.find((q) => q.includes("Read the passage")) ?? "").includes("Bhakta Kulam"), "Sample chapter: a passage stays with its question");
+  const labels = BHAKTI_PAGES.flatMap((p, i) => chunkPageText(p, 11 + i).map((c) => c.sectionLabel));
+  check(labels.includes("Q.I. Multiple Choice Question.") && labels.includes("Q.II. Answer the following in detail."), "Sample chapter: the worksheet's Q.I. and Q.II. become section labels when pages are indexed");
+
+  // Other layouts of the same kind of paper.
+  const upper = splitQuestions("Q1. Choose the right answer.\n1. Which is a prime?\nA. 4\nB. 6\nC. 7\nD. 9\n2. Which is even?\nA. 3\nB. 5\nC. 8\nD. 9");
+  check(upper.length === 2 && upper.every((q) => q.includes("Q1.")), "Layouts: capital-letter options (A. B. C. D.) stay with their question");
+  const sections = splitQuestions("A. Fill in the blanks\n1. The sun rises in the ____ .\n2. Water boils at ____ degrees.\nB. Match the following\n1. Cat - meows\n2. Dog - barks");
+  check(sections.length === 4 && sections[2].includes("B. Match"), "Layouts: lettered section headings still start a new section");
+  const three = splitQuestions("Q.I. Fill in the blanks.\n1. The sky is ____ .\n2. Grass is ____ .\nQ.II. True or false.\n1. Fish can fly always.\n2. Birds have feathers.\nQ.III. Short answers.\n1. What is a noun in a sentence?\n2. What is a verb in a sentence?");
+  check(three.length === 6 && three[5].includes("Q.III."), "Layouts: Roman-numeral headings Q.I., Q.II., Q.III. each start a section");
+  const word = splitQuestions("Question is this chapter about nouns?\nQuestion II: Name three nouns in a sentence.\n1. Write a noun here.\n2. Write another noun here.");
+  check(word.length === 2, "Layouts: the word 'is' after Question is not a Roman numeral");
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

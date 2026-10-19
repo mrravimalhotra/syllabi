@@ -68,9 +68,25 @@ const ANSWER_STYLE = `Answer layout, for questions to be answered (an exercise, 
 - Every question and every sub-part starts on its own line, in bold with its number, e.g.
   **Q1 (a). Photosynthesis occurs in the ______ of a plant cell.** The answer starts on the
   next line with **Ans:** followed by plain text.
+- Exercises and worksheets restart the numbering under every heading (1 to 4 under Q1,
+  again under Q2, then Q.I and Q.II on a worksheet). Always give the heading with the
+  number, **Q3.2** or **Q.II.4 (b)**, so no two answers look alike. Answer every question
+  of every section, in order, up to the last one on the last page: never stop early,
+  skip a section, or merge questions. If the material shows N questions, write N answers.
 - Fill in the blanks: the missing word or phrase in bold. True or false: **True** or
   **False**, then a one-line reason (the corrected statement when false). Multiple choice:
   the option letter and its text.
+- Other objective kinds: Assertion (A) and Reason (R): the option letter and its text, then
+  one line on why. Verbal analogy ("A : B :: C : ____"): the missing word and the
+  relationship in a few words. Arrange in order: the option letter and the events written
+  out in that order. A passage followed by questions: answer each from the passage. A
+  question about a picture or figure: say in a few words what the picture shows, then
+  answer; if the picture is not available, say which figure is needed.
+- How long to write: follow the section's own words. "In short", "one word" or "name":
+  one line. "In detail", "justify", "explain", "do you think": a short paragraph of 4 to
+  6 sentences with the reason and an example from the book. An "[Answer space: N lines]"
+  note shows how much room the school left: about one sentence per two lines, at least
+  N lines when marks are not shown.
 - Earn full marks with the fewest words: lead with the textbook's key terms and phrasing,
   no filler ("The answer to this question is..."), and don't copy the whole question back.
 - Analytical questions ("analyse how...", "what factors..."): a one-line opening, a bold

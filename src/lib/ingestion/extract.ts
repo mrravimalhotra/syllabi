@@ -20,6 +20,22 @@ edges. Transcribe only the main page.
   with English meanings) keeps each part in its own language.
 - Mark headings with Markdown: "# " for the chapter title, "## " for section headings,
   "### " for sub-headings. Keep question numbers, sub-parts (a, b, c) and marks.
+- Exercises and worksheets: keep every question number and section label exactly as
+  printed ("Q1.", "Q.I.", "Q.II.", "Section B") on its own line, each numbered question
+  as its own paragraph (a blank line between questions), and each answer option on its
+  own line with its label as printed (a), a., (i), iv.), never run into the question.
+  Numbering often restarts under each heading (1 to 4 under Q1, again under Q2), so the
+  heading line matters. Copy "Assertion (A): ... Reason (R): ..." pairs, verbal analogies
+  ("Alvars : Vishnu :: Guru Nanak : ____"), ordering tasks with their numbered
+  statements, and passages followed by their questions exactly, in that order.
+- A page may start in the middle of a question (its options or sub-parts continue from
+  the page before): transcribe what is there, starting with those lines, and never
+  invent the missing start.
+- Ruled or dotted lines left to write answers on: one line per question, "[Answer space:
+  N lines]" (N = how many lines), not a row of ____ . Use ____ only for a blank inside
+  a sentence. The space is the school's hint of how long the answer should be.
+- A worksheet's title strip (name or code, class, unit, date) is kept as one line:
+  [Worksheet: RW – 1.1, Grade 7, Unit 1: Bhakti Movement].
 - Side boxes and call-outs (e.g. "Fact File", "Let's Know More", "Learning Outcomes")
   go where they appear, as: [Box: <box title>] followed by its text.
 - Code, tags and commands (HTML, Python, Scratch, spreadsheet formulas, keyboard
@@ -27,7 +43,9 @@ edges. Transcribe only the main page.
   blocks for multi-line code or backticks for inline tags such as \`<title>\`.
 - Figures, screenshots, diagrams and maps: one line, [Figure <number if shown>: <caption
   or a short description of what it shows>]. Transcribe any text that is part of the
-  figure's meaning (labels, code in a screenshot).
+  figure's meaning (labels, code in a screenshot). A picture a question refers to ("the
+  painting in Fig. 1.17", "the image below") is placed just before that question, and
+  described well enough (who or what, what they are doing, mood, labels) to answer from.
 - Handwriting is not the book: never merge it into the printed text. Wrap anything
   handwritten (filled-in blanks, answers, margin notes, dates, "HW", corrections) as
   [Handwritten: ...] where it appears, e.g. "Vajji is an example of a ____ [Handwritten:
