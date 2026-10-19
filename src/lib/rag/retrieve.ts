@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { embed, embedMany } from "@/lib/llm";
 import { splitQuestions } from "@/lib/rag/split-questions";
+import { withWholePages } from "@/lib/rag/whole-pages";
 import { downloadFile } from "@/lib/storage";
 import type { CompletionImage } from "@/lib/llm/types";
 import type { MatchedChunk } from "@/types/database";
@@ -37,9 +38,12 @@ export async function retrieveContext(query: string, scope: RetrievalScope): Pro
   const questions = splitQuestions(query);
   if (questions.length === 0) {
     const { embedding } = await embed(query);
-    const chunks = await search(embedding, scope, MATCH_COUNT);
-    const topSimilarity = chunks[0]?.similarity ?? 0;
-    return { chunks, coverageLow: chunks.length === 0 || topSimilarity < COVERAGE_THRESHOLD };
+    const found = await search(embedding, scope, MATCH_COUNT);
+    const topSimilarity = found[0]?.similarity ?? 0;
+    return {
+      chunks: await withWholePages(found, query, scope.ownerId),
+      coverageLow: found.length === 0 || topSimilarity < COVERAGE_THRESHOLD,
+    };
   }
 
   const embeddings = await embedMany(questions);
@@ -61,7 +65,10 @@ export async function retrieveContext(query: string, scope: RetrievalScope): Pro
 
   // Coverage is low when at least half the questions found nothing close.
   const weak = perQuestion.filter((m) => (m[0]?.similarity ?? 0) < COVERAGE_THRESHOLD).length;
-  return { chunks, coverageLow: chunks.length === 0 || weak * 2 >= perQuestion.length };
+  return {
+    chunks: await withWholePages(chunks, query, scope.ownerId),
+    coverageLow: chunks.length === 0 || weak * 2 >= perQuestion.length,
+  };
 }
 
 async function search(embedding: number[], scope: RetrievalScope, count: number): Promise<MatchedChunk[]> {

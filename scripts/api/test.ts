@@ -24,6 +24,8 @@ import * as health from "../../src/app/api/admin/health/route";
 import * as bookDownload from "../../src/app/api/library/[id]/download/route";
 import { made as madePdfs } from "./fakes/book-pdf";
 import { arrangeBookPages } from "../../src/lib/pdf/book-pages";
+import { retrieveContext } from "../../src/lib/rag/retrieve";
+import { namedPages, wantsWholeSection } from "../../src/lib/rag/whole-pages";
 import * as guests from "../../src/app/api/admin/guests/route";
 import * as speech from "../../src/app/api/speech/route";
 import * as sounds from "../../src/app/api/sounds/route";
@@ -384,6 +386,30 @@ session.user = person();
   check("download: a page with a picture doesn't repeat its words", !pages.some((p) => p.number === 1 && p.text));
   const order = arrangeBookPages(["sources/b/page-10.jpg", "sources/b/page-9.webp"], []);
   check("download: page 10 comes after page 9", order.map((p) => p.number).join() === "9,10");
+}
+
+// ---- Finding a whole exercise ----
+fresh();
+{
+  check("pages: 'page 45' names one page", namedPages("Solve the sums on page 45").join() === "45");
+  check("pages: 'pages 12 to 14' is a range", namedPages("answer pages 12 to 14").join() === "12,13,14");
+  check("pages: 'pages 3 and 5' is two pages, not a range", namedPages("pages 3 and 5 please").join() === "3,5");
+  check("pages: a huge range is cut short", namedPages("pages 1-500").length === 12);
+  check("pages: no page named", namedPages("What is photosynthesis?").length === 0);
+  check("exercise: asking for an exercise wants the whole section", wantsWholeSection("Solve Exercise 3.2") && !wantsWholeSection("What is a prime number?"));
+
+  const row = (id: string, doc: string, page: number, index: number, owner = ME) => ({ id, document_id: doc, owner_id: owner, page_number: page, chunk_index: index, content: `${id} text`, section_label: `Page ${page}`, source_type: "textbook", image_path: null });
+  tables.chunks = [
+    row("p4a", BOOK, 4, 0), row("p4b", BOOK, 4, 1), row("p4c", BOOK, 4, 2),
+    row("p5a", BOOK, 5, 0), row("p5b", BOOK, 5, 1), row("p6a", BOOK, 6, 0),
+    row("other", OTHER, 4, 0, OTHER), row("theirs", BOOK, 4, 3, OTHER),
+  ];
+  rpcs.match_owner_chunks = () => [{ ...tables.chunks[0], similarity: 0.8 }];
+  const ids = async (q: string) => (await retrieveContext(q, { ownerId: ME })).chunks.map((c) => c.id).join();
+  check("whole exercise: a plain question gets only the closest passage", (await ids("What is a prime number?")) === "p4a");
+  check("whole exercise: 'Exercise' adds the rest of that page and the next, in order, none of anyone else's", (await ids("Solve Exercise 4.1")) === "p4a,p4b,p4c,p5a,p5b", await ids("Solve Exercise 4.1"));
+  check("whole exercise: a named page is fetched whole", (await ids("Do page 6")) === "p4a,p6a", await ids("Do page 6"));
+  delete rpcs.match_owner_chunks;
 }
 
 // ---- Background reader and error log ----
