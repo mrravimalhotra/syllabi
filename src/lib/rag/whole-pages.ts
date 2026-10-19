@@ -2,7 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { MatchedChunk } from "@/types/database";
 
 /** The most extra passages added for a "whole exercise" or "page 45" request. */
-const MAX_EXTRA = 40;
+const MAX_EXTRA = 60;
 /** The most pages one request can name ("pages 40 to 60" stops here). */
 const MAX_NAMED_PAGES = 12;
 
@@ -28,11 +28,34 @@ export function wantsWholeSection(query: string): boolean {
   return WANTS_A_SECTION.test(query);
 }
 
+/** The most pages of one exercise that are added. */
+const MAX_EXERCISE_PAGES = 12;
+/** When no pages are marked as exercise, this many pages after the best match are added. */
+const PAGES_AFTER_MATCH = 5;
+
+/** The pages of the unbroken stretch of exercise pages that holds `anchor` (or the nearest exercise page to it). */
+export function exerciseRun(exercisePages: number[], anchor: number): number[] {
+  const pages = [...new Set(exercisePages)].sort((x, y) => x - y);
+  if (pages.length === 0) return [];
+  const nearest = pages.reduce((best, p) => (Math.abs(p - anchor) < Math.abs(best - anchor) ? p : best));
+  const run = [nearest];
+  for (let p = nearest - 1; pages.includes(p); p--) run.unshift(p);
+  for (let p = nearest + 1; pages.includes(p); p++) run.push(p);
+  return run.slice(0, MAX_EXERCISE_PAGES);
+}
+
+type Row = Omit<MatchedChunk, "similarity">;
+const COLUMNS = "id, document_id, content, section_label, page_number, source_type, image_path";
+
 /**
- * An exercise is many questions on one or two pages, but the search finds only
+ * An exercise is many questions over several pages, but the search finds only
  * the closest few passages. So when the request names pages, or asks for a whole
- * exercise, every passage of those pages (and of the page after the best match,
- * where an exercise often carries on) is added, so no question is left out.
+ * exercise, every passage of those pages is added, so no question is left out:
+ *  - named pages ("page 45"): exactly those;
+ *  - "the exercise": the unbroken run of pages marked Exercise (when the book was
+ *    uploaded) around the best match, so pages 11 to 16 of a book whose first ten
+ *    pages are the textbook come whole; with no pages marked, the best match's
+ *    page and the next five.
  */
 export async function withWholePages(chunks: MatchedChunk[], query: string, ownerId: string): Promise<MatchedChunk[]> {
   const named = namedPages(query);
@@ -40,13 +63,32 @@ export async function withWholePages(chunks: MatchedChunk[], query: string, owne
 
   // The book is the best match's: page 45 of a different book would be a guess.
   const documentId = chunks[0].document_id;
-  const best = chunks.filter((c) => c.document_id === documentId && c.page_number !== null).slice(0, 3);
-  const pages = named.length > 0 ? named : [...new Set(best.flatMap((c) => [c.page_number!, c.page_number! + 1]))];
+  const inBook = chunks.filter((c) => c.document_id === documentId && c.page_number !== null);
+  const admin = createAdminClient();
+
+  let pages = named;
+  if (pages.length === 0) {
+    const { data: marked, error } = await admin
+      .from("chunks")
+      .select("page_number")
+      .eq("owner_id", ownerId)
+      .eq("document_id", documentId)
+      .eq("source_type", "exercise")
+      .limit(500);
+    if (error) console.error("[retrieve] exercise pages", error);
+    const exercisePages = ((marked ?? []) as { page_number: number | null }[]).flatMap((r) => (r.page_number === null ? [] : [r.page_number]));
+    const anchorChunk = inBook.find((c) => c.source_type === "exercise") ?? inBook[0];
+    if (anchorChunk) pages = exerciseRun(exercisePages, anchorChunk.page_number!);
+    if (pages.length === 0) {
+      const first = Math.min(...inBook.slice(0, 3).map((c) => c.page_number!));
+      pages = Number.isFinite(first) ? Array.from({ length: PAGES_AFTER_MATCH + 1 }, (_, i) => first + i) : [];
+    }
+  }
   if (pages.length === 0) return chunks;
 
-  const { data, error } = await createAdminClient()
+  const { data, error } = await admin
     .from("chunks")
-    .select("id, document_id, content, section_label, page_number, source_type, image_path")
+    .select(COLUMNS)
     .eq("owner_id", ownerId)
     .eq("document_id", documentId)
     .in("page_number", pages)
@@ -60,6 +102,6 @@ export async function withWholePages(chunks: MatchedChunk[], query: string, owne
   }
 
   const seen = new Set(chunks.map((c) => c.id));
-  const extra = ((data ?? []) as Omit<MatchedChunk, "similarity">[]).filter((c) => !seen.has(c.id)).map((c) => ({ ...c, similarity: 0 }));
+  const extra = ((data ?? []) as Row[]).filter((c) => !seen.has(c.id)).map((c) => ({ ...c, similarity: 0 }));
   return [...chunks, ...extra];
 }

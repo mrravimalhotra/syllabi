@@ -409,8 +409,16 @@ fresh();
   rpcs.match_owner_chunks = () => [{ ...tables.chunks[0], similarity: 0.8 }];
   const ids = async (q: string) => (await retrieveContext(q, { ownerId: ME })).chunks.map((c) => c.id).join();
   check("whole exercise: a plain question gets only the closest passage", (await ids("What is a prime number?")) === "p4a");
-  check("whole exercise: 'Exercise' adds the rest of that page and the next, in order, none of anyone else's", (await ids("Solve Exercise 4.1")) === "p4a,p4b,p4c,p5a,p5b", await ids("Solve Exercise 4.1"));
+  check("whole exercise: with no pages marked as Exercise, the match's page and the next five are added, in order, none of anyone else's", (await ids("Solve Exercise 4.1")) === "p4a,p4b,p4c,p5a,p5b,p6a", await ids("Solve Exercise 4.1"));
   check("whole exercise: a named page is fetched whole", (await ids("Do page 6")) === "p4a,p6a", await ids("Do page 6"));
+
+  // A 16-page book: pages 1 to 10 are the textbook, 11 to 16 the exercise (marked when it was uploaded).
+  const page = (n: number, type: string) => [0, 1].map((k) => ({ ...row(`b${n}-${k}`, BOOK, n, k), source_type: type }));
+  tables.chunks = Array.from({ length: 16 }, (_, i) => page(i + 1, i < 10 ? "textbook" : "exercise")).flat();
+  rpcs.match_owner_chunks = () => [{ ...tables.chunks.find((c) => c.id === "b13-0")!, similarity: 0.7 }];
+  const pagesOf = async (q: string) => [...new Set((await retrieveContext(q, { ownerId: ME })).chunks.map((c) => Number(c.page_number)))].sort((a, b) => a - b).join();
+  check("whole exercise: pages marked Exercise (11 to 16) all come, and no textbook page is added", (await pagesOf("Solve the exercise")) === "11,12,13,14,15,16", await pagesOf("Solve the exercise"));
+  check("whole exercise: a named stretch (pages 12 to 14) still wins over the marking", (await pagesOf("Do pages 12 to 14")) === "12,13,14", await pagesOf("Do pages 12 to 14"));
   delete rpcs.match_owner_chunks;
 }
 
