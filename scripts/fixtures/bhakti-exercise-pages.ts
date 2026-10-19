@@ -153,3 +153,55 @@ ____
 
 Page: 3`,
 ];
+
+// Pages 2 to 4 of the same chapter: question boxes inside the lesson (Warm-up, 21st Century Skills, Source Analysis), as the page reader writes them.
+export const LESSON_PAGES: string[] = [
+`[Questions: Warm-up – Beyond External Identities]
+
+Given below is a doha or a two-line poem by the poet-saint Kabir. Read it carefully and answer the questions that follow.
+
+जाति न पूछे साधु की, पूछ लीजिये ज्ञान।
+मोल करो तरवार का, पड़ा रहन दो म्यान॥
+
+(Do not ask the caste of a saint; instead, seek their wisdom. Value the sword for its sharpness, not the sheath in which it is kept.)
+
+1. What does the poem urge us not to ask?
+2. What comparison does the second line use? Why?
+3. What is the broad message of this poem?
+
+## Introduction
+
+Religion is a beautiful path through which people connect with God.
+
+Page: 2`,
+`[Questions: 21st Century Skills: Information Literacy – Mirabai: The Lady Poet Saint of the North]
+
+[Figure 1.6: A painting of Mirabai playing a stringed instrument]
+
+Just like Karaikkal Ammaiyar, Mirabai was a prominent woman saint from northern India. Research more about her remarkable life to answer the questions given below:
+
+1. What were the main events of Mirabai's life?
+2. What were the similarities and differences in the lives of Mirabai and Karaikkal Ammaiyar?
+3. Why is Mirabai remembered as a symbol of devotion and courage? Give two reasons based on your research.
+
+## Basavanna and the Virashaivas
+
+The Virashaiva tradition emerged in northern Karnataka in the 12th century.
+
+Page: 3`,
+`[Questions: Source Analysis – A Temple Within]
+
+Given below is a Vachana composed by Basavanna. Read it carefully and answer the questions that follow.
+
+The rich will make temples for Shiva. What shall I, a poor man, do? My legs are pillars, the body the shrine, the head a cupola of gold.
+
+1. How does the poet compare his body to a temple?
+2. Why is the poet comparing his body to a temple?
+3. What do you think the poet is trying to teach us?
+
+## The Saints of the North
+
+A number of poet-saints emerged in north and central India around the 14th century.
+
+Page: 4`,
+];

@@ -68,6 +68,12 @@ const ANSWER_STYLE = `Answer layout, for questions to be answered (an exercise, 
 - Every question and every sub-part starts on its own line, in bold with its number, e.g.
   **Q1 (a). Photosynthesis occurs in the ______ of a plant cell.** The answer starts on the
   next line with **Ans:** followed by plain text.
+- Questions inside a lesson count too: a Warm-up, Source Analysis, Think and Answer, Check
+  your understanding or "21st Century Skills" box ([Questions: ...] in the material) is
+  answered like an exercise, labelled with its box (**Warm-up Q1**, **Source Analysis Q2**),
+  in the book's page order, before the exercise at the end. For a poem, doha or passage in
+  the box, answer from that text (give its meaning when it is not in English). "Research" or
+  "find out" questions follow the opinion rule below.
 - Exercises and worksheets restart the numbering under every heading (1 to 4 under Q1,
   again under Q2, then Q.I and Q.II on a worksheet). Always give the heading with the
   number, **Q3.2** or **Q.II.4 (b)**, so no two answers look alike. Answer every question

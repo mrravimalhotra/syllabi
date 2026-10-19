@@ -6,7 +6,7 @@ import { makeBlendQuiz } from "@/lib/kindergarten/quiz";
 import { blockedReason, buildRequestBody, questionProblem, type Question } from "@/app/dashboard/_ask/build-request";
 import { checkPages } from "@/lib/ingestion/upload-pages";
 import { parsePhotos } from "@/lib/generation/attachments";
-import { PAGES as BHAKTI_PAGES } from "../fixtures/bhakti-exercise-pages";
+import { LESSON_PAGES, PAGES as BHAKTI_PAGES } from "../fixtures/bhakti-exercise-pages";
 import { splitQuestions } from "@/lib/rag/split-questions";
 import { chunkPageText } from "@/lib/ingestion/chunk";
 import { pdfDisposition } from "@/lib/pdf/disposition";
@@ -423,6 +423,14 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
   check((found.find((q) => q.includes("Read the passage")) ?? "").includes("Bhakta Kulam"), "Sample chapter: a passage stays with its question");
   const labels = BHAKTI_PAGES.flatMap((p, i) => chunkPageText(p, 11 + i).map((c) => c.sectionLabel));
   check(labels.includes("Q.I. Multiple Choice Question.") && labels.includes("Q.II. Answer the following in detail."), "Sample chapter: the worksheet's Q.I. and Q.II. become section labels when pages are indexed");
+
+  // Question boxes inside the lesson (Warm-up, 21st Century Skills, Source Analysis) are questions to answer too.
+  const lesson = splitQuestions(LESSON_PAGES.join("\n\n"));
+  check(lesson.length === 9, `Lesson boxes: 3 + 3 + 3 questions are found (${lesson.length})`);
+  check(["Warm-up", "21st Century Skills", "Source Analysis"].every((box) => lesson.filter((q) => q.includes(box)).length === 3), "Lesson boxes: each box owns its three questions");
+  const lessonLabels = LESSON_PAGES.flatMap((p, i) => chunkPageText(p, 2 + i).map((c) => c.sectionLabel));
+  check(lessonLabels.filter((l) => l?.startsWith("[Questions:")).length === 3, "Lesson boxes: each box starts its own chunk, labelled with its title");
+  check(splitQuestions([...LESSON_PAGES, ...BHAKTI_PAGES].join("\n\n")).length === 37, "Lesson boxes and the exercise together: 9 + 28 questions");
 
   // Other layouts of the same kind of paper.
   const upper = splitQuestions("Q1. Choose the right answer.\n1. Which is a prime?\nA. 4\nB. 6\nC. 7\nD. 9\n2. Which is even?\nA. 3\nB. 5\nC. 8\nD. 9");

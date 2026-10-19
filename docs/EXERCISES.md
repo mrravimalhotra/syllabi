@@ -30,9 +30,12 @@ Worked out from the owner's sample chapter (History, Unit 1: Bhakti Movement, Gr
 - The page reader is now told to keep section headings, numbers and options on their own lines, how to write "answer space" lines (a length hint), to place a referred-to figure just before its question, and to keep the worksheet's title line.
 - Answers are asked to carry the section with the number (**Q3.2**, **Q.II.4 (b)**), because numbering restarts under every heading, and to cover every question to the last page.
 
+## Questions inside the lesson
+
+Warm-up, Source Analysis, 21st Century Skills (research questions), Think and Answer, Check your understanding and similar boxes are questions to answer too, even though no exercise is marked. The page reader writes each box as `[Questions: <box title>]` followed by its passage, poem or picture and its numbered questions. A whole-exercise request ("solve the exercise", "all questions in the chapter", "warm-up") brings in every such box of the book, in page order ahead of the exercise, and answers are labelled with the box (**Warm-up Q1**). They are not added to a plain question or to named pages. Research questions ("research more about Mirabai") are answered from general knowledge and marked as not from the book. Books uploaded before this change keep their old page text: re-upload (or retry) a book to get the box markers.
+
 ## Known limits
 
 - Printed page numbers can restart (the worksheet's pages print as 2 and 3). "Page 2" in a request means the 2nd page *uploaded*, not the printed number.
-- Questions inside the lesson (Warm-up, Source Analysis, 21st Century Skills) are not treated as the exercise unless asked for by name.
 - When asking from My books, the app cannot count how many questions the exercise has, so it cannot warn if one is skipped; attach the pages in Generate to get that check.
 - Page pictures, not text, carry figures: the answer depends on the page reader describing them well.

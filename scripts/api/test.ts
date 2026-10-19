@@ -421,6 +421,21 @@ fresh();
   check("whole exercise: a named stretch (pages 12 to 14) still wins over the marking", (await pagesOf("Do pages 12 to 14")) === "12,13,14", await pagesOf("Do pages 12 to 14"));
   delete rpcs.match_owner_chunks;
 
+  // Question boxes in the lesson are fetched too, ahead of the exercise, but only for a whole-exercise request.
+  const box = (id: string, page: number, label: string) => ({ ...row(id, BOOK, page, 0), source_type: "textbook", section_label: label, content: `${label} questions` });
+  tables.chunks = [
+    box("warm", 2, "[Questions: Warm-up]"), box("lesson-text", 2, "Introduction"), box("mirabai", 3, "[Questions: 21st Century Skills]"),
+    box("source", 4, "[Questions: Source Analysis]"), { ...row("ex1", BOOK, 11, 0), source_type: "exercise" }, { ...row("ex2", BOOK, 12, 0), source_type: "exercise" },
+  ];
+  rpcs.match_owner_chunks = () => [{ ...tables.chunks[5], similarity: 0.7 }];
+  const withBoxes = (await retrieveContext("Answer all questions in the chapter", { ownerId: ME })).chunks.map((c) => c.id).join();
+  check("lesson questions: Warm-up, 21st Century Skills and Source Analysis boxes come with the exercise, not the plain lesson text", withBoxes === "ex2,warm,mirabai,source,ex1", withBoxes);
+  const plainAsk = (await retrieveContext("What is Bhakti?", { ownerId: ME })).chunks.map((c) => c.id).join();
+  check("lesson questions: an ordinary question doesn't pull them in", plainAsk === "ex2", plainAsk);
+  const named2 = (await retrieveContext("Do page 12", { ownerId: ME })).chunks.map((c) => c.id).join();
+  check("lesson questions: a named page doesn't either", named2 === "ex2", named2);
+  delete rpcs.match_owner_chunks;
+
   // Pictures: a whole exercise sends the pictures of its pages first, and has room for more of them.
   const withPicture = (n: number, sim: number) => ({ id: `i${n}`, document_id: BOOK, content: "t", section_label: null, page_number: n, source_type: "exercise", image_path: `sources/${BOOK}/page-${n}.jpg`, similarity: sim });
   for (let n = 1; n <= 16; n++) files.set(`sources/${BOOK}/page-${n}.jpg`, { data: Buffer.from(String(n)), contentType: "image/jpeg" });

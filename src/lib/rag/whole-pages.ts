@@ -7,7 +7,7 @@ const MAX_EXTRA = 60;
 const MAX_NAMED_PAGES = 12;
 
 const NAMES_A_PAGE = /\bpages?\s+(\d{1,4})(?:\s*(-|–|to|and)\s*(\d{1,4}))?/gi;
-const WANTS_A_SECTION = /\b(exercises?|practice set|worksheet|revision|all (?:the )?questions|every question|whole (?:exercise|chapter|page))\b/i;
+const WANTS_A_SECTION = /\b(exercises?|practice set|worksheet|revision|warm-?up|source analysis|all (?:the )?questions|every question|whole (?:exercise|chapter|page))\b/i;
 
 /** Page numbers a request names ("page 45", "pages 12-14", "pages 3 and 5"), at most 12. */
 export function namedPages(query: string): number[] {
@@ -45,6 +45,9 @@ function exerciseRun(exercisePages: number[], anchor: number): number[] {
 }
 
 type Row = Omit<MatchedChunk, "similarity">;
+/** The most chunks of in-lesson question boxes added to a whole-exercise request. */
+const MAX_LESSON_QUESTION_CHUNKS = 30;
+
 const COLUMNS = "id, document_id, content, section_label, page_number, source_type, image_path";
 
 /**
@@ -101,7 +104,28 @@ export async function withWholePages(chunks: MatchedChunk[], query: string, owne
     return chunks;
   }
 
+  // Question boxes inside the lesson (Warm-up, Source Analysis...) are questions to answer too, in the book's order before the exercise.
+  const lesson = named.length > 0 ? [] : await lessonQuestions(documentId, ownerId, MAX_LESSON_QUESTION_CHUNKS);
+
   const seen = new Set(chunks.map((c) => c.id));
-  const extra = ((data ?? []) as Row[]).filter((c) => !seen.has(c.id)).map((c) => ({ ...c, similarity: 0 }));
+  const extra = [...lesson, ...((data ?? []) as Row[])].filter((c) => !seen.has(c.id) && seen.add(c.id)).map((c) => ({ ...c, similarity: 0 }));
   return [...chunks, ...extra];
+}
+
+/** The chunks of one book that begin a question box inside the lesson ("[Questions: Warm-up]"), in page order. */
+async function lessonQuestions(documentId: string, ownerId: string, limit: number): Promise<Row[]> {
+  const { data, error } = await createAdminClient()
+    .from("chunks")
+    .select(COLUMNS)
+    .eq("owner_id", ownerId)
+    .eq("document_id", documentId)
+    .ilike("section_label", "[Questions%")
+    .order("page_number")
+    .order("chunk_index")
+    .limit(limit);
+  if (error) {
+    console.error("[retrieve] lesson questions", error);
+    return [];
+  }
+  return (data ?? []) as Row[];
 }

@@ -28,6 +28,11 @@ edges. Transcribe only the main page.
   heading line matters. Copy "Assertion (A): ... Reason (R): ..." pairs, verbal analogies
   ("Alvars : Vishnu :: Guru Nanak : ____"), ordering tasks with their numbered
   statements, and passages followed by their questions exactly, in that order.
+- Questions inside a lesson (Warm-up, Source Analysis, Think and Answer, Check your
+  understanding, Activity, "21st Century Skills" research questions, a poem or passage
+  followed by questions): put [Questions: <the box title>] on its own line, then the
+  passage, poem or picture it is about, then its numbered questions, one per paragraph.
+  These count as questions to answer even though they are not in an exercise.
 - A page may start in the middle of a question (its options or sub-parts continue from
   the page before): transcribe what is there, starting with those lines, and never
   invent the missing start.

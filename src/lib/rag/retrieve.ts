@@ -28,7 +28,7 @@ const COVERAGE_THRESHOLD = 0.55;
 // size/cost scale with image count, and a handful of the top matches is enough.
 const MAX_SOURCE_IMAGES = 4;
 // A whole exercise: its questions often point at a figure, so each of its pages (up to this many) is sent.
-const MAX_SECTION_IMAGES = 8;
+const MAX_SECTION_IMAGES = 10;
 
 /**
  * The reusable RAG retrieval core: embed the query, then run a vector search

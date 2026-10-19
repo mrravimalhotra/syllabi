@@ -47,6 +47,11 @@ class Query implements PromiseLike<Result> {
   in(col: string, vals: unknown[]) { this.filters.push((r) => vals.includes(r[col])); return this; }
   gte(col: string, val: unknown) { this.filters.push((r) => String(r[col] ?? "") >= String(val)); return this; }
   not(col: string, _op: string, val: unknown) { this.filters.push((r) => r[col] !== val); return this; }
+  ilike(col: string, pattern: string) {
+    const re = new RegExp("^" + pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/%/g, ".*") + "$", "i");
+    this.filters.push((r) => re.test(String(r[col] ?? "")));
+    return this;
+  }
   order() { return this; }
   limit(n: number) { this.max = n; return this; }
   single() { this.mode = "single"; return this; }

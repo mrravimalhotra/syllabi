@@ -18,8 +18,8 @@ const Q_HEADING = new RegExp(
 );
 /** "1.", "1)", "1.What", "१." — a numbered item. A digit may not follow, so "1.5" isn't one. */
 const NUMBERED = new RegExp(`^\\s*${DIGIT}{1,2}[.)।](?!${DIGIT})\\s*\\S`);
-/** "SECTION B", "Section A: Objective questions", "Part 2", "A. Fill in the blanks", "विभाग अ", "Partie B" — a section heading. */
-const SECTION = /^\s*(?:(?:SECTION|Part|Partie)\s+[A-Z0-9]+\b|[A-H]\.\s+[A-Z]|(?:विभाग|खंड|भाग)\s+\S)/i;
+/** "[Questions: Warm-up]" (a box of questions inside a lesson), "SECTION B", "Section A: Objective questions", "Part 2", "A. Fill in the blanks", "विभाग अ", "Partie B" — a section heading. */
+const SECTION = /^\s*(?:\[Questions?:|(?:SECTION|Part|Partie)\s+[A-Z0-9]+\b|[A-H]\.\s+[A-Z]|(?:विभाग|खंड|भाग)\s+\S)/i;
 /** "a.", "B)", "(c)" at the start of a line: an answer option, when it carries on from the one before. */
 const LETTER_OPTION = /^\s*\(?([a-h])[.)]\s*\S/i;
 /** "* Question: ...", "- Question: ...", "• Q: ..." — an unnumbered question bullet. */
