@@ -100,6 +100,26 @@ begin
     format('delete from documents where id = %L; select 1 from page_reads where document_id = %L', book, book), '0');
 end $$;
 
+-- Problem reports: server only; numbered; a person's reports go with the person.
+create function pg_temp.check_bug_reports() returns void language plpgsql as $$
+declare
+  p1 uuid := '00000000-0000-0000-0000-0000000000b1';
+begin
+  insert into bug_reports (student_id, title) values (p1, 'First'), (p1, 'Second');
+  perform pg_temp.check('user cannot read problem reports', 'authenticated', p1, 'select * from bug_reports', 'error');
+  perform pg_temp.check('anon cannot read problem reports', 'anon', null, 'select * from bug_reports', 'error');
+  perform pg_temp.check('user cannot write problem reports', 'authenticated', p1,
+    format('insert into bug_reports (student_id, title) values (%L, %L)', p1, 'sneaky'), 'error');
+  perform pg_temp.check('server saves a report and it is numbered', 'service_role', null,
+    format('insert into bug_reports (student_id, title) values (%L, %L); select 1 from bug_reports where title = %L and number > 0', p1, 'Third', 'Third'), '1');
+  perform pg_temp.check('numbers go up', 'service_role', null,
+    'select 1 from bug_reports a, bug_reports b where a.title = ''First'' and b.title = ''Second'' and b.number > a.number', '1');
+  perform pg_temp.check('a report needs a title', 'service_role', null, format('insert into bug_reports (student_id, title) values (%L, %L)', p1, ''), 'error');
+  perform pg_temp.check('a status must be a known one', 'service_role', null, format('insert into bug_reports (student_id, title, status) values (%L, %L, %L)', p1, 'x', 'banana'), 'error');
+  perform pg_temp.check('server can resolve a report', 'service_role', null,
+    'update bug_reports set status = ''fixed'', resolution = ''done'', resolved_at = now() where title = ''First''; select 1 from bug_reports where status = ''fixed''', '1');
+end $$;
+
 -- Seed (as table owner): two parents/tutors, one admin, one book each.
 insert into auth.users values
   ('00000000-0000-0000-0000-00000000000a', 'admin@example.com'),
@@ -192,6 +212,7 @@ begin
   perform pg_temp.check_answer_row();
   perform pg_temp.check_page_jobs();
   perform pg_temp.check_page_reads();
+  perform pg_temp.check_bug_reports();
   perform pg_temp.check('user cannot read the error log', 'authenticated', p1, 'select * from error_log', 'error');
   perform pg_temp.check('user cannot write the error log', 'authenticated', p1,
     'insert into error_log (source, context, message) values (''browser'', ''x'', ''x'')', 'error');

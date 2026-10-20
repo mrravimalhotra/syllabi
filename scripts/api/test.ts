@@ -27,6 +27,8 @@ import { arrangeBookPages } from "../../src/lib/pdf/book-pages";
 import { formatContext, loadSourceImages, retrieveContext } from "../../src/lib/rag/retrieve";
 import { namedPages, wantsWholeSection } from "../../src/lib/rag/whole-pages";
 import * as scanCheck from "../../src/app/api/library/[id]/scan/route";
+import * as reports from "../../src/app/api/bug-reports/route";
+import * as report from "../../src/app/api/bug-reports/[id]/route";
 import sharp from "sharp";
 import { measureImage } from "../../src/lib/ingestion/image-quality";
 import { HANDWRITTEN_PAGE } from "../fixtures/bhakti-exercise-pages";
@@ -539,6 +541,58 @@ fresh();
   check("handwriting: the printed questions reach the AI without the student's answers inside them", printed.includes("Which type of soil do you think it will be?") && !/Black Soil|Red Soil|Cotton/.test(printed), printed.slice(0, 300));
   check("handwriting: the answers are given apart, labelled reference-only and never-copy", attempt1 !== undefined && /for reference only/.test(attempt1) && /Never copy it/.test(attempt1) && /Black Soil/.test(attempt1));
   check("handwriting: a chunk with none is passed on as it was", formatContext([{ id: "h2", document_id: BOOK, content: "Plain printed text.", section_label: null, page_number: 1, source_type: "textbook", image_path: null, similarity: 0.9 }]).endsWith("Plain printed text."));
+}
+
+// ---- Problem reports ----
+fresh();
+{
+  const REPORT = "55555555-5555-4555-8555-555555555555";
+  session.user = null;
+  await expect("reports: signed out is refused", reports.POST, 401, null, { title: "x" });
+  session.user = person();
+  await expect("reports: a missing title is explained", reports.POST, 400, /short title/i, { title: " ", context: {} });
+  await expect("reports: an over-long description is refused", reports.POST, 400, /too long/i, { title: "x", description: "y".repeat(5001) });
+  const made = await expect("reports: a report is saved and numbered", reports.POST, 200, null, {
+    title: "Answer skipped Q4",
+    description: "Expected 8 answers",
+    path: "/dashboard",
+    build: "abc",
+    context: { requests: [{ method: "POST", path: "/api/generate/solution", sent: "{}", password: "hunter2" }], steps: [{ at: "t", kind: "click", text: "Clicked Generate" }] },
+  });
+  const saved = ((tables.bug_reports ?? []) as { id: string; student_id: string; title: string; context: { requests: { password: string }[] } }[])[0];
+  check("reports: it belongs to the person who raised it, and a password sent inside is hidden", saved?.student_id === ME && saved.title === "Answer skipped Q4" && saved.context.requests[0].password === "[hidden]", JSON.stringify(saved));
+  check("reports: the number comes back for the person", typeof made.json?.id === "string");
+
+  // 20 a day.
+  tables.bug_reports = Array.from({ length: 20 }, (_, i) => ({ id: `r${i}`, student_id: ME, created_at: new Date().toISOString(), title: "t" }));
+  await expect("reports: the 21st in a day is refused", reports.POST, 429, /most for one day/i, { title: "one more", context: {} });
+  tables.bug_reports = [
+    { id: REPORT, number: 7, student_id: ME, title: "Mine", description: "d", path: "/x", app_build: "b", status: "open", created_at: "2026-10-20T10:00:00Z", resolution: null, context: { userAgent: "UA", steps: [], requests: [] } },
+    { id: "66666666-6666-4666-8666-666666666666", number: 8, student_id: OTHER, title: "Theirs", description: "", path: "/y", app_build: "b", status: "open", created_at: "2026-10-20T11:00:00Z", resolution: null, context: {} },
+  ];
+  const list = await (reports.GET as unknown as (r: Request) => Promise<Response>)(new Request("http://localhost/api/bug-reports"));
+  const mine = ((await list.json()) as { reports: { title: string }[] }).reports;
+  check("reports: a person sees only their own reports", mine.length === 1 && mine[0].title === "Mine", JSON.stringify(mine));
+  const forbidden = await (reports.GET as unknown as (r: Request) => Promise<Response>)(new Request("http://localhost/api/bug-reports?all=1"));
+  check("reports: asking for everyone's is for admins only", forbidden.status === 403);
+  const one = await call(report.GET, undefined, { id: REPORT });
+  check("reports: a person can open their own report, with its ticket text", one.status === 200 && String(one.json?.markdown).includes("# Bug #7: Mine"));
+  check("reports: not someone else's", (await call(report.GET, undefined, { id: "66666666-6666-4666-8666-666666666666" })).status === 404);
+  await expect("reports: a person cannot change a status", report.PATCH, 403, /admin/i, { status: "fixed" }, { id: REPORT });
+
+  session.user = person({ role: "admin" });
+  const all = await (reports.GET as unknown as (r: Request) => Promise<Response>)(new Request("http://localhost/api/bug-reports?all=1"));
+  check("reports: an admin sees everyone's", ((await all.json()) as { reports: unknown[] }).reports.length === 2);
+  check("reports: an admin can open anyone's", (await call(report.GET, undefined, { id: "66666666-6666-4666-8666-666666666666" })).status === 200);
+  await expect("reports: a bad status is refused", report.PATCH, 400, /Choose Open/i, { status: "banana" }, { id: REPORT });
+  await expect("reports: an empty change is refused", report.PATCH, 400, /nothing to change/i, {}, { id: REPORT });
+  await expect("reports: an unknown report is not found", report.PATCH, 404, null, { status: "fixed" }, { id: "77777777-7777-4777-8777-777777777777" });
+  await expect("reports: an admin sets fixed with a note", report.PATCH, 200, null, { status: "fixed", resolution: "Raised the limit." }, { id: REPORT });
+  const after = (tables.bug_reports as { id: string; status: string; resolution: string; resolved_at: string }[]).find((r) => r.id === REPORT)!;
+  check("reports: the status, the note and the time it was resolved are saved", after.status === "fixed" && after.resolution === "Raised the limit." && typeof after.resolved_at === "string");
+  await call(report.PATCH, { status: "open" }, { id: REPORT });
+  check("reports: reopening clears the resolved time", (tables.bug_reports as { id: string; resolved_at: string | null }[]).find((r) => r.id === REPORT)!.resolved_at === null);
+  session.user = person();
 }
 
 // ---- Background reader and error log ----

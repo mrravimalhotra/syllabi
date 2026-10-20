@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
 import { signOut } from "@/lib/actions/auth";
 import { AdminTabs } from "@/components/AdminTabs";
+import { ReportProblem } from "@/components/ReportProblem";
 import { ChevronLeftIcon, LogoutIcon } from "@/components/icons";
 import { Badge, Logo, button } from "@/components/ui";
 
@@ -35,6 +36,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <main id="main" className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
         {children}
       </main>
+      <ReportProblem />
     </div>
   );
 }

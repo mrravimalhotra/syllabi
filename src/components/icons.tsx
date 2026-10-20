@@ -137,6 +137,12 @@ export const AlertIcon = (p: IconProps) => (
   </Icon>
 );
 
+export const BugIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M9 7.5a3 3 0 0 1 6 0M8 10h8v4a4 4 0 0 1-8 0v-4zM12 10v8M5 11l3 1M19 11l-3 1M5 17l3-1M19 17l-3-1" />
+  </Icon>
+);
+
 export const InfoIcon = (p: IconProps) => (
   <Icon {...p}>
     <circle cx="12" cy="12" r="9" />

@@ -1,5 +1,6 @@
 import { getCurrentStudent } from "@/lib/auth";
 import { AppNav } from "@/components/AppNav";
+import { ReportProblem } from "@/components/ReportProblem";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const student = await getCurrentStudent();
@@ -14,6 +15,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       >
         {children}
       </main>
+      <ReportProblem />
     </div>
   );
 }

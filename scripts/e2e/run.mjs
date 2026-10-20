@@ -1236,6 +1236,123 @@ await test("Install as an app: an open window says when a newer version is live,
   if (loads < 1) throw new Error("Reload did not reload the page.");
 });
 
+await test("Report a problem: the button is on every screen", async (page, ctx) => {
+  await baseRoutes(ctx);
+  await ctx.route("**/api/admin/**", (r) => json(r, { students: [], reports: [], checks: [], settings: [] }));
+  for (const path of ["/dashboard", "/dashboard/library", "/dashboard/documents", "/dashboard/practice", "/dashboard/account", "/admin/reports"]) {
+    await page.goto(`${BASE}${path}`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: "Report a problem" }).waitFor({ timeout: 15000 }).catch(() => {
+      throw new Error(`No Report a problem button on ${path}.`);
+    });
+  }
+});
+
+await test("Report a problem: it captures what was typed, sent and received, shows it, and sends a clean ticket", async (page, ctx) => {
+  await baseRoutes(ctx);
+  await ctx.route("**/api/generate/**", (r) => json(r, { ...answer, text: "The answer is forty two." }));
+  let posted = null;
+  await ctx.route("**/api/bug-reports", (r) => {
+    if (r.request().method() === "POST") {
+      posted = r.request().postDataJSON();
+      return json(r, { id: "11111111-1111-4111-8111-111111111111", number: 12 });
+    }
+    return json(r, { reports: [{ id: "x1", number: 3, title: "An older report", status: "fixed" }] });
+  });
+  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.locator("textarea").fill("What is six times seven? password=hunter2");
+  await page.getByRole("button", { name: /^Generate$/ }).click();
+  await page.getByText("The answer is forty two.").first().waitFor({ timeout: 10000 });
+
+  await page.getByRole("button", { name: "Report a problem" }).click();
+  const dialog = page.getByRole("dialog", { name: "Report a problem" });
+  await dialog.getByText("#3 An older report").waitFor();
+  await dialog.getByText(/See exactly what will be sent/).click();
+  const preview = await dialog.locator("pre").textContent();
+  for (const need of ["/api/generate/solution", "What is six times seven?", "The answer is forty two."]) if (!preview.includes(need)) throw new Error(`The preview lacks "${need}".`);
+
+  // Nothing to send without a title.
+  await dialog.getByRole("button", { name: "Send report" }).click();
+  await dialog.getByText(/Write a short title first/).waitFor();
+  await dialog.getByLabel("What went wrong?").fill("Answer skipped a question");
+  await dialog.getByLabel(/What did you expect instead/).fill("All five answers");
+  await dialog.getByRole("button", { name: "Send report" }).click();
+  await dialog.getByText("Report #12 sent.").waitFor({ timeout: 8000 });
+
+  const c = posted.context;
+  const gen = c.requests.find((q) => q.path === "/api/generate/solution");
+  if (!gen || gen.method !== "POST" || gen.status !== 200) throw new Error(`The request was not captured: ${JSON.stringify(c.requests)}`);
+  if (!gen.sent.includes("What is six times seven?")) throw new Error("What was sent (the input) is missing.");
+  if (!gen.received.includes("The answer is forty two.")) throw new Error("What came back (the output) is missing.");
+  if (!c.steps.some((s) => s.kind === "click" && /Generate/.test(s.text)) || !c.steps.some((s) => s.kind === "page" && /\/dashboard/.test(s.text))) throw new Error("The steps are missing the click or the page.");
+  if (!c.onScreen.fields.some((f) => f.value.includes("What is six times seven?"))) throw new Error("The typed question is missing.");
+  if (!c.onScreen.text.includes("The answer is forty two.")) throw new Error("The answer shown is missing.");
+  if (posted.title !== "Answer skipped a question" || posted.description !== "All five answers" || posted.path !== "/dashboard") throw new Error(`Wrong fields: ${JSON.stringify({ t: posted.title, d: posted.description, p: posted.path })}`);
+  if (/"cookie"|authorization/i.test(JSON.stringify(c))) throw new Error("Something private was sent.");
+  if (!/Chrom/.test(c.userAgent) || !/\d+x\d+/.test(c.viewport)) throw new Error("The browser details are missing.");
+});
+
+await test("Report a problem: leaving out what is on the screen is respected, and an offline or refused send is explained", async (page, ctx) => {
+  await baseRoutes(ctx);
+  let posted = null;
+  let refuse = true;
+  await ctx.route("**/api/bug-reports", (r) => {
+    if (r.request().method() === "GET") return json(r, { reports: [] });
+    posted = r.request().postDataJSON();
+    return refuse ? json(r, { error: "You have raised 20 reports today, which is the most for one day. Try again tomorrow." }, 429) : json(r, { id: "x", number: 1 });
+  });
+  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.locator("textarea").fill("a private question");
+  await page.getByRole("button", { name: "Report a problem" }).click();
+  const dialog = page.getByRole("dialog", { name: "Report a problem" });
+  await dialog.getByLabel(/Include what is on my screen/).uncheck();
+  await dialog.getByLabel("What went wrong?").fill("Something odd");
+  await dialog.getByRole("button", { name: "Send report" }).click();
+  await dialog.getByText(/most for one day/).waitFor();
+  if (posted.context.onScreen !== undefined || JSON.stringify(posted).includes("a private question")) throw new Error("The screen was sent although it was switched off.");
+  refuse = false;
+  await dialog.getByRole("button", { name: "Send report" }).click();
+  await dialog.getByText("Report #1 sent.").waitFor();
+  // (The dev server's own round badge sits over the button's corner here, so press it from the keyboard.)
+  await dialog.getByRole("button", { name: "Done" }).press("Enter");
+  await dialog.waitFor({ state: "detached" });
+});
+
+await test("Admin reports: the list, a ticket to copy, and setting its status", async (page, ctx) => {
+  await ctx.route("**/api/me", (r) => json(r, me));
+  const rows = [
+    { id: "11111111-1111-4111-8111-111111111111", number: 12, title: "Answer skipped a question", status: "open", created_at: now, path: "/dashboard", students: { email: "ravi@example.com", full_name: "Ravi" } },
+    { id: "22222222-2222-4222-8222-222222222222", number: 11, title: "Download did nothing", status: "fixed", created_at: now, path: "/dashboard/library", students: { email: "ravi@example.com", full_name: "Ravi" } },
+  ];
+  let patched = null;
+  await ctx.route("**/api/bug-reports?all=1", (r) => json(r, { reports: rows }));
+  await ctx.route("**/api/bug-reports/11111111-1111-4111-8111-111111111111", (r) => {
+    if (r.request().method() === "PATCH") {
+      patched = r.request().postDataJSON();
+      return json(r, { report: { id: "1", number: 12, status: patched.status, resolution: patched.resolution } });
+    }
+    return json(r, { report: { id: "1", number: 12, status: "open", resolution: null }, markdown: "# Bug #12: Answer skipped a question\n\n## Requests the screen made\n### POST /api/generate/solution → 200" });
+  });
+  await ctx.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.goto(`${BASE}/admin/reports`, { waitUntil: "networkidle" });
+  await page.getByText("#12 Answer skipped a question").waitFor();
+  await page.getByText("1 open", { exact: false }).first().waitFor();
+  await page.getByRole("button", { name: "Fixed", exact: true }).click();
+  await page.getByText("#12 Answer skipped a question").waitFor({ state: "detached", timeout: 3000 });
+  await page.getByText("#11 Download did nothing").waitFor();
+  await page.getByRole("button", { name: "All", exact: true }).click();
+  await page.getByText("#12 Answer skipped a question").click();
+  await page.getByLabel("Ticket").getByText(/Bug #12/).waitFor();
+  await page.getByRole("button", { name: "Copy ticket for Claude" }).click();
+  await page.getByText(/Copied/).waitFor();
+  const clip = await page.evaluate(() => navigator.clipboard.readText());
+  if (!clip.startsWith("# Bug #12") || !clip.includes("POST /api/generate/solution")) throw new Error(`Copied the wrong text: ${clip}`);
+  await page.getByLabel("Status", { exact: true }).selectOption("fixed");
+  await page.getByLabel(/What was done/).fill("Raised the page limit.");
+  await page.getByRole("button", { name: "Save status and note" }).click();
+  await page.getByText("Saved.").waitFor();
+  if (patched.status !== "fixed" || patched.resolution !== "Raised the page limit.") throw new Error(`Saved ${JSON.stringify(patched)}.`);
+});
+
 await test("Sign-in: wrong password message is plain and specific", async (page) => {
   await page.goto(`${BASE}/login?error=invalid`, { waitUntil: "networkidle" });
   await page.getByText(/Wrong email, user ID or password/).first().waitFor();

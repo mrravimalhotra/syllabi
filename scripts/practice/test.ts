@@ -11,6 +11,8 @@ import { splitQuestions } from "@/lib/rag/split-questions";
 import { handwritingIn, withoutHandwriting } from "@/lib/rag/handwriting";
 import { chunkPageText } from "@/lib/ingestion/chunk";
 import { COMMANDS, booksOfKinds, commandsInView, noBooksMessage, planCommand } from "@/app/dashboard/_ask/commands";
+import { scrub, scrubText } from "@/lib/debug/scrub";
+import { parseBugReport, reportMarkdown, statusLabel } from "@/lib/bug-report";
 import { pdfDisposition } from "@/lib/pdf/disposition";
 import { signUpProblem, signUpRefusal } from "@/lib/signup-check";
 import { parseGenerationRequest } from "@/lib/generation/request";
@@ -472,6 +474,27 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
   check(Object.entries(COMMANDS).filter(([k]) => k !== "solution").every(([, v]) => v.length === 0), "Commands: the other kinds of answer have none yet");
   check(commandsInView("solution", "", false) && commandsInView("solution", prompt, false) && !commandsInView("solution", "my own question", false) && !commandsInView("solution", "", true), "Commands: they stay in view for an empty box or one of them, not for typed text or an attachment");
   check(planCommand(solve[0], books).books?.join() === "t1,e1,e2" && planCommand(solve[0], [lib("p1", "past_paper")]).notice?.includes("exercise books") === true && planCommand({ label: "x", prompt: "y" }, books).books === null, "Commands: a plan picks the books, warns when there are none of that kind, or leaves the choice alone");
+}
+
+// Problem reports: private things come out, bulky things shrink, the ticket reads clearly.
+{
+  const photo = "A".repeat(5000);
+  const cleaned = scrub({ prompt: "Solve", password: "hunter2", nested: { api_key: "k", Authorization: "Bearer x", token: "t" }, photos: [{ data: photo, mimeType: "image/jpeg" }], note: "ok" }) as { password: string; nested: Record<string, string>; photos: { data: string; mimeType: string }[]; prompt: string };
+  check(cleaned.password === "[hidden]" && cleaned.nested.api_key === "[hidden]" && cleaned.nested.Authorization === "[hidden]" && cleaned.nested.token === "[hidden]", "Report: passwords, keys, tokens and authorization are hidden");
+  check(/^\[file or image data, about \d+ KB\]$/.test(cleaned.photos[0].data) && cleaned.photos[0].mimeType === "image/jpeg" && cleaned.prompt === "Solve", "Report: image data is replaced by its size, the rest is kept");
+  check(JSON.stringify(scrub("word ".repeat(2000))).length < 2700 && String(scrub("word ".repeat(2000))).includes("more characters"), "Report: long text is cut, saying how much");
+  check((scrub(Array.from({ length: 50 }, (_, i) => i)) as unknown[]).length === 21, "Report: a long list is cut to 20 with a count");
+  check(!JSON.stringify(scrubText(JSON.stringify({ photos: [{ data: photo }], password: "p" }))).includes("AAAAAAAAAA") && scrubText('{"password":"p1"}').includes("[hidden]"), "Report: sent text has file data and passwords taken out");
+  check(!scrubText('{"type":"delta","text":"hello","token":"abc123"}\n{"type":"delta","text":"wor').includes("abc123") && scrubText('{"type":"delta","text":"hello","token":"abc123"}\n{"type":"delta","text":"wor').includes("hello"), "Report: a cut-off stream keeps its words but not its tokens");
+
+  const ok = parseBugReport({ title: "  Answer skipped Q4  ", description: "I expected 8", path: "/dashboard", build: "abc", context: { steps: Array.from({ length: 60 }, (_, i) => ({ at: "2026-10-20T10:00:00Z", kind: "click", text: `c${i}` })), requests: [{ path: "/api/x", sent: "{}", password: "p" }], userAgent: "UA" } });
+  check(ok.ok && ok.value.title === "Answer skipped Q4" && (ok.value.context.steps as unknown[]).length === 60 && JSON.stringify(ok.value.context).includes("[hidden]"), "Report: a good report is cleaned, keeps its 60 steps and hides secrets sent in the context");
+  check(!parseBugReport({ title: "   " }).ok && !parseBugReport(null).ok && !parseBugReport({ title: "x", description: "y".repeat(5001) }).ok, "Report: a missing title, a missing body or an over-long description is refused");
+  check(!parseBugReport({ title: "x", context: { big: "z".repeat(600_000) } }).ok, "Report: a huge report is refused");
+
+  const md = reportMarkdown({ number: 7, title: "Answer skipped Q4", description: "I expected 8", path: "/dashboard", app_build: "abc123", status: "open", created_at: "2026-10-20T10:00:00Z", who: "ravi@example.com", resolution: null, context: { userAgent: "Chrome", viewport: "390x844", url: "https://x/dashboard", steps: [{ at: "2026-10-20T10:00:01Z", kind: "click", text: 'Clicked button "Generate"' }], requests: [{ at: "2026-10-20T10:00:02Z", method: "POST", path: "/api/generate/solution", status: 200, ms: 4100, sent: '{"prompt":"Solve"}', received: "```x```" }], onScreen: { fields: [{ label: "Your question", value: "Solve" }], text: "Answer text" } } });
+  check(["# Bug #7: Answer skipped Q4", "by ravi@example.com", "## What the person wrote", "I expected 8", "## Typed on the screen (input)", "- Your question: Solve", "## What the screen showed (output)", "Answer text", 'Clicked button "Generate"', "POST /api/generate/solution → 200 (4100 ms)", "Sent:", '{"prompt":"Solve"}', "Received:"].every((t) => md.includes(t)), "Report: the ticket text has the person's words, input, output, steps and requests");
+  check(!md.includes("```x```") && statusLabel("working") === "Being fixed" && statusLabel("wontfix") === "Won't fix", "Report: code fences inside captured text can't break the ticket, and statuses read in plain words");
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
