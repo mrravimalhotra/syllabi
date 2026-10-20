@@ -1134,6 +1134,35 @@ await test("Practice: leaving a quiz midway asks first", async (page, ctx) => {
   await dialog.waitFor({ timeout: 2000 });
 });
 
+await test("Install as an app: the manifest, icons, service worker and offline page are public and complete", async (page) => {
+  const get = (path) => page.request.get(`${BASE}${path}`);
+  const manifest = await (await get("/manifest.webmanifest")).json();
+  if (manifest.display !== "standalone" || manifest.scope !== "/" || manifest.id !== "/" || !manifest.start_url) throw new Error(`Manifest is incomplete: ${JSON.stringify(manifest)}`);
+  const sizes = manifest.icons.map((i) => `${i.sizes}${i.purpose ? ":" + i.purpose : ""}`);
+  for (const need of ["192x192", "512x512", "512x512:maskable"]) if (!sizes.includes(need)) throw new Error(`Missing icon ${need} in ${sizes.join()}`);
+  for (const icon of manifest.icons) if (!(await get(icon.src)).ok()) throw new Error(`${icon.src} can't be fetched without signing in.`);
+  if (manifest.shortcuts.length < 2) throw new Error("No shortcuts.");
+  const sw = await get("/sw.js");
+  if (!sw.ok() || !(await sw.text()).includes("addEventListener(\"fetch\"")) throw new Error("The service worker isn't served.");
+  if (!/no-cache/.test(sw.headers()["cache-control"] ?? "")) throw new Error("The service worker must never be cached: " + sw.headers()["cache-control"]);
+  const offline = await get("/offline.html");
+  if (!offline.ok() || !(await offline.text()).includes("You're offline")) throw new Error("The offline page isn't served without signing in.");
+  const version = await get("/api/version");
+  if (!version.ok() || typeof (await version.json()).build !== "string") throw new Error("/api/version isn't public or has no build.");
+});
+
+await test("Install as an app: an open window says when a newer version is live, and Reload loads it", async (page, ctx) => {
+  await baseRoutes(ctx);
+  await ctx.route("**/api/version", (r) => json(r, { build: "a-newer-build" }));
+  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.getByText("A new version of Syllabi is ready.").waitFor({ timeout: 8000 });
+  let loads = 0;
+  page.on("load", () => loads++);
+  await page.getByRole("button", { name: "Reload" }).click();
+  await page.waitForEvent("load", { timeout: 8000 });
+  if (loads < 1) throw new Error("Reload did not reload the page.");
+});
+
 await test("Sign-in: wrong password message is plain and specific", async (page) => {
   await page.goto(`${BASE}/login?error=invalid`, { waitUntil: "networkidle" });
   await page.getByText(/Wrong email, user ID or password/).first().waitFor();

@@ -33,6 +33,8 @@ const SECURITY_HEADERS = [
 ];
 
 const nextConfig: NextConfig = {
+  // Which version of the app this is, so an open window can tell when a newer one has been deployed.
+  env: { NEXT_PUBLIC_BUILD_ID: process.env.VERCEL_GIT_COMMIT_SHA ?? `dev-${Date.now()}` },
   // The PDF renderer reads its embedded fonts from disk at runtime; make sure
   // they ship with the routes that render PDFs.
   outputFileTracingIncludes: {
@@ -42,6 +44,8 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       { source: "/:path*", headers: SECURITY_HEADERS },
+      // The service worker file must always be fetched fresh, or an update could take a day to reach installed apps.
+      { source: "/sw.js", headers: [{ key: "Cache-Control", value: "no-cache, no-store, must-revalidate" }, { key: "Service-Worker-Allowed", value: "/" }] },
       // The PDF reading worker is large and rarely changes: keep it on the phone for a day.
       { source: "/pdf.worker.min.mjs", headers: [{ key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" }] },
     ];

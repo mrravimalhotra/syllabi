@@ -17,6 +17,9 @@ const PUBLIC_PATHS = [
   // Background page reading: called by the database's timer, checks its own token.
   "/api/jobs",
   "/manifest.webmanifest",
+  // The installed app shows this when there is no connection, and asks which version is live (both without a session).
+  "/offline.html",
+  "/api/version",
 ];
 
 /** API callers get a JSON error they can show, not an HTML redirect. */
