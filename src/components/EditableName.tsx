@@ -87,7 +87,8 @@ export function EditableName({ value, onSave, className, emptyText = "Not set" }
 
   return (
     <div className={cx("group flex min-w-0 items-center gap-1", className)}>
-      <span className={cx("truncate", !value && "text-slate-400")}>{value || emptyText}</span>
+      {/* A long name wraps onto more lines, so it is read in full on a phone and never pushes the card wider than the screen. */}
+      <span className={cx("min-w-0 [overflow-wrap:anywhere]", !value && "text-slate-400")}>{value || emptyText}</span>
       <button
         type="button"
         onClick={() => setEditing(true)}

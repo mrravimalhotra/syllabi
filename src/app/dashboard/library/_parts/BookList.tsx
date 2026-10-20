@@ -68,9 +68,9 @@ export function BookList({
           description="Add your first book above. Answers will then come from its pages."
         />
       ) : (
-        <ul className="grid gap-3 sm:grid-cols-2">
+        <ul className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2">
           {documents.map((d) => (
-            <li key={d.id} className={cx(card, "flex items-start gap-3 p-4")}>
+            <li key={d.id} className={cx(card, "flex min-w-0 items-start gap-3 p-4")}>
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
                 <BookIcon className="h-5 w-5" />
               </span>

@@ -813,6 +813,30 @@ await test("My Books: an older book can be checked, and its score then appears",
   if ((await page.getByRole("button", { name: "Check scan quality" }).count()) !== 0) throw new Error("The check button should go once there is a score.");
 });
 
+await test("My Books: on a phone every button stays on screen, even with long titles and a score", async (page, ctx) => {
+  const scan = { score: 96, level: "high", pages: 15, weakPages: [], failedPages: 0, problems: [], advice: null };
+  const list = [
+    { ...books[0], id: "m1", title: "Geography Unit 2 Lithosphere Exercises", subject: "Geography", grade: "Class 7", source_type: "exercise", status: "ready", pages: null, scan },
+    { ...books[0], id: "m2", title: "Geography Unit 2 Lethosphere Textbook", subject: "Geography", grade: "Class 7", source_type: "textbook", status: "ready", pages: null },
+    { ...books[0], id: "m3", title: "A very long title without any natural place to break it: History_Uni_1_Bhakti_Movement_Chapter_Notes", status: "ready", pages: null, scan: { ...scan, level: "low", score: 52, weakPages: [2, 4], advice: "Low confidence: some of this book may be missing or wrong in answers. Re-scan pages 2, 4 and upload a new copy." } },
+  ];
+  await ctx.route("**/api/me", (r) => json(r, me));
+  await ctx.route("**/api/library", (r) => json(r, { documents: list }));
+  await page.goto(`${BASE}/dashboard/library`, { waitUntil: "networkidle" });
+  await page.getByText("Geography Unit 2 Lithosphere Exercises").waitFor();
+  const width = page.viewportSize().width;
+  const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  if (wide > 1) throw new Error(`The page scrolls sideways by ${wide}px.`);
+  for (const label of [/Download "Geography Unit 2 Lithosphere Exercises"/, /Delete "Geography Unit 2 Lithosphere Exercises"/, /Download "A very long title/, /Delete "A very long title/]) {
+    const box = await page.getByRole("button", { name: label }).boundingBox();
+    if (!box || box.x < 0 || box.x + box.width > width) throw new Error(`${label} is off screen: ${JSON.stringify(box)}.`);
+  }
+  for (const card of await page.locator("ul.grid > li").all()) {
+    const box = await card.boundingBox();
+    if (!box || box.x + box.width > width) throw new Error(`A book card runs off the screen: ${JSON.stringify(box)}.`);
+  }
+});
+
 await test("My Books: a book can be downloaded as a PDF, and a refusal is explained", async (page, ctx) => {
   await ctx.route("**/api/me", (r) => json(r, me));
   await ctx.route("**/api/library", (r) => json(r, { documents: books }));
