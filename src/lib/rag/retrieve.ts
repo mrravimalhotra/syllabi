@@ -14,7 +14,22 @@ export interface RetrievalScope {
   documentIds?: string[];
 }
 
+/** How the passages were found, for finding out why an answer scored low. */
+export interface RetrievalStats {
+  /** "exercise": whole exercise pages were fetched and lessons searched for each question; "search": the closest passages only. */
+  mode: "search" | "exercise";
+  /** Exercise (or named-page) passages added whole. */
+  sectionChunks: number;
+  /** Questions of the exercise that were searched for in the books. */
+  questions: number;
+  /** Lesson passages added to support them. */
+  supportChunks: number;
+  /** Closest match of the first search, 0 to 1. */
+  topSimilarity: number | null;
+}
+
 export interface RetrievalResult {
+  stats: RetrievalStats;
   chunks: MatchedChunk[];
   /** True when the top match's similarity is below the confidence threshold — a signal to allow search grounding. */
   coverageLow: boolean;
@@ -45,10 +60,7 @@ export async function retrieveContext(typed: string, scope: RetrievalScope): Pro
     const { embedding } = await embed(query);
     const found = await search(embedding, scope, MATCH_COUNT);
     const topSimilarity = found[0]?.similarity ?? 0;
-    return {
-      chunks: await withWholePages(found, query, scope.ownerId),
-      coverageLow: found.length === 0 || topSimilarity < COVERAGE_THRESHOLD,
-    };
+    return withSupport(await withWholePages(found, query, scope.ownerId), found.length === 0 || topSimilarity < COVERAGE_THRESHOLD, scope, found[0]?.similarity ?? null);
   }
 
   const embeddings = await embedMany(questions);
@@ -70,9 +82,54 @@ export async function retrieveContext(typed: string, scope: RetrievalScope): Pro
 
   // Coverage is low when at least half the questions found nothing close.
   const weak = perQuestion.filter((m) => (m[0]?.similarity ?? 0) < COVERAGE_THRESHOLD).length;
+  return withSupport(await withWholePages(chunks, query, scope.ownerId), chunks.length === 0 || weak * 2 >= perQuestion.length, scope, chunks[0]?.similarity ?? null);
+}
+
+// Whole-exercise requests: how many of the exercise's questions are searched for support, how many passages each
+// search looks at, how many it keeps, and the most supporting passages added in all.
+const MAX_SUPPORT_QUESTIONS = 40;
+const SUPPORT_SEARCH = 8;
+const SUPPORT_PER_QUESTION = 3;
+const MAX_SUPPORT_CHUNKS = 36;
+
+/**
+ * A whole-exercise request ("solve all exercise questions") has the exercise pages themselves, but the answers
+ * come from the lessons: the request is generic, so its own search finds nothing for them. So each question of
+ * the exercise is searched for in the books, and the best lesson passages are added (the exercise pages are
+ * already there). Without this the AI answers from its own knowledge. Other requests pass through unchanged.
+ * Whether the books cover the exercise is then judged by how well those passages match its questions.
+ */
+async function withSupport(chunks: MatchedChunk[], coverageLow: boolean, scope: RetrievalScope, topSimilarity: number | null): Promise<RetrievalResult> {
+  // Passages added whole mark a whole-exercise request; then every exercise passage counts, including one the search found itself.
+  const whole = chunks.some((c) => c.similarity === 0);
+  const section = whole ? chunks.filter((c) => c.similarity === 0 || c.source_type === "exercise") : [];
+  const questions = splitQuestions(section.map((c) => withoutHandwriting(c.content)).join("\n\n")).slice(0, MAX_SUPPORT_QUESTIONS);
+  const stats: RetrievalStats = { mode: "search", sectionChunks: section.length, questions: 0, supportChunks: 0, topSimilarity };
+  if (questions.length === 0) return { chunks, coverageLow, stats };
+
+  const embeddings = await embedMany(questions);
+  const have = new Set(chunks.map((c) => c.id));
+  // Exercise passages are already there whole: only lessons and notes can support an answer.
+  const perQuestion = (await Promise.all(embeddings.map((e) => search(e.embedding, scope, SUPPORT_SEARCH)))).map((found) =>
+    found.filter((c) => c.source_type !== "exercise" && !have.has(c.id)).slice(0, SUPPORT_PER_QUESTION)
+  );
+
+  const added: MatchedChunk[] = [];
+  for (let rank = 0; rank < SUPPORT_PER_QUESTION; rank++) {
+    for (const matches of perQuestion) {
+      const chunk = matches[rank];
+      if (chunk && !have.has(chunk.id) && added.length < MAX_SUPPORT_CHUNKS) {
+        have.add(chunk.id);
+        added.push(chunk);
+      }
+    }
+  }
+  // The books cover the exercise when most of its questions found a close lesson passage.
+  const weak = perQuestion.filter((m) => (m[0]?.similarity ?? 0) < COVERAGE_THRESHOLD).length;
   return {
-    chunks: await withWholePages(chunks, query, scope.ownerId),
-    coverageLow: chunks.length === 0 || weak * 2 >= perQuestion.length,
+    chunks: [...chunks, ...added],
+    coverageLow: weak * 2 >= perQuestion.length,
+    stats: { ...stats, mode: "exercise", questions: questions.length, supportChunks: added.length },
   };
 }
 

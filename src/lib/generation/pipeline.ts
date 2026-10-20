@@ -219,6 +219,7 @@ export async function runGeneration({
   const confidence = scoreAnswer({
     text: result.text,
     context: retrieval.chunks,
+    retrieval: retrieval.stats,
     checks,
     coverageLow: retrieval.coverageLow,
     usedSearchGrounding: Boolean(result.usedSearchGrounding),

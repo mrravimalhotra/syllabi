@@ -8,6 +8,36 @@ import type { AnswerCheck } from "@/types/database";
 
 export type Level = "green" | "amber" | "red";
 
+/** A statement of the answer that was not found in the book passages, for finding out why. */
+export interface OutsideStatement {
+  text: string;
+  /** Percent of its meaningful words found in the book passages. */
+  found: number;
+  /** Some of the words that were not found. */
+  missing: string[];
+}
+
+/** What the numbers were worked out from: kept with the answer so a low score can be traced to its cause. */
+export interface ConfidenceDetails {
+  /** Statements of the answer judged, and how many were found in the books. */
+  statements: number;
+  grounded: number;
+  /** The book passages the answer was written from. */
+  passages: number;
+  passageChars: number;
+  /** Where they came from: "exercise p1-p10 (10), textbook p1 (1)". */
+  pages: string;
+  /** How they were found. */
+  retrieval: string;
+  topSimilarity: number | null;
+  coverageLow: boolean;
+  usedSearchGrounding: boolean;
+  weakPages: number;
+  failedChecks: number;
+  /** The statements furthest from the books (at most 6). */
+  outside: OutsideStatement[];
+}
+
 export interface AnswerConfidence {
   /** 0 to 99: how sure we are the answers are correct and grounded in the books. */
   correct: number;
@@ -15,12 +45,31 @@ export interface AnswerConfidence {
   fromBook: number;
   /** Why the numbers are what they are, most important first. */
   reasons: string[];
+  /** The facts behind the numbers (answers made before these were kept have none). */
+  details?: ConfidenceDetails;
+}
+
+export interface ConfidencePassage {
+  content: string;
+  source_type?: string;
+  page_number?: number | null;
+  similarity?: number;
+}
+
+/** How the passages were found (see RetrievalStats). */
+export interface RetrievalNote {
+  mode: "search" | "exercise";
+  sectionChunks: number;
+  questions: number;
+  supportChunks: number;
+  topSimilarity: number | null;
 }
 
 export interface ConfidenceInput {
   text: string;
   /** The passages of the books the answer was written from. */
-  context: { content: string }[];
+  context: ConfidencePassage[];
+  retrieval?: RetrievalNote;
   checks: AnswerCheck[];
   /** The best passage matched the question only weakly. */
   coverageLow: boolean;
@@ -73,31 +122,80 @@ const OUTSIDE_NOTE = /not from the book|general knowledge|outside the book|not i
 const GROUNDED_SHARE = 0.55;
 const MIN_WORDS = 4;
 
-/** The percentage (0 to 100) of the answer's content found in the book passages, or null when there is too little to judge. */
-export function bookShare(text: string, context: { content: string }[]): number | null {
+interface Analysis {
+  /** Percent of the answer's words that are in statements found in the book, or null when there is too little to judge. */
+  share: number | null;
+  statements: number;
+  grounded: number;
+  outside: OutsideStatement[];
+}
+
+/** Judges each statement of the answer against the book passages. */
+function analyse(text: string, context: { content: string }[]): Analysis {
   const known = new Set(contentWords(context.map((c) => withoutHandwriting(c.content)).join("\n")));
-  let grounded = 0;
-  let total = 0;
+  let groundedWords = 0;
+  let totalWords = 0;
+  let statementCount = 0;
+  let groundedCount = 0;
+  const outside: OutsideStatement[] = [];
   for (const statement of statements(text)) {
     const words = [...new Set(contentWords(statement))];
     if (words.length < MIN_WORDS) continue;
-    total += words.length;
-    const found = words.filter((w) => known.has(w)).length / words.length;
-    if (found >= GROUNDED_SHARE && !OUTSIDE_NOTE.test(statement)) grounded += words.length;
+    totalWords += words.length;
+    statementCount++;
+    const missing = words.filter((w) => !known.has(w));
+    const found = (words.length - missing.length) / words.length;
+    if (found >= GROUNDED_SHARE && !OUTSIDE_NOTE.test(statement)) {
+      groundedWords += words.length;
+      groundedCount++;
+    } else {
+      outside.push({ text: statement.slice(0, 160), found: Math.round(found * 100), missing: missing.slice(0, 8) });
+    }
   }
-  return total === 0 ? null : Math.round((grounded / total) * 100);
+  outside.sort((a, b) => a.found - b.found);
+  return { share: totalWords === 0 ? null : Math.round((groundedWords / totalWords) * 100), statements: statementCount, grounded: groundedCount, outside: outside.slice(0, 6) };
+}
+
+/** The percentage (0 to 100) of the answer's content found in the book passages, or null when there is too little to judge. */
+export function bookShare(text: string, context: { content: string }[]): number | null {
+  return analyse(text, context).share;
+}
+
+/** "exercise p1-p10 (10), textbook p1 (1)": which kinds of page the passages came from. */
+function pagesSummary(context: ConfidencePassage[]): string {
+  const groups = new Map<string, { pages: Set<number>; count: number }>();
+  for (const c of context) {
+    const g = groups.get(c.source_type ?? "unknown") ?? { pages: new Set<number>(), count: 0 };
+    g.count++;
+    if (c.page_number) g.pages.add(c.page_number);
+    groups.set(c.source_type ?? "unknown", g);
+  }
+  return [...groups]
+    .map(([kind, g]) => {
+      const pages = [...g.pages].sort((a, b) => a - b);
+      const list = pages.length === 0 ? "" : pages.length > 3 ? ` p${pages[0]}-p${pages[pages.length - 1]}` : ` ${pages.map((p) => `p${p}`).join(", ")}`;
+      return `${kind}${list} (${g.count})`;
+    })
+    .join(", ");
+}
+
+function retrievalSummary(r: RetrievalNote | undefined): string {
+  if (!r) return "not recorded";
+  if (r.mode === "exercise") return `whole exercise: ${r.sectionChunks} exercise passages added; ${r.questions} questions searched in the books, ${r.supportChunks} lesson passages added`;
+  return `closest passages only${r.sectionChunks > 0 ? `, ${r.sectionChunks} added whole` : ""}`;
 }
 
 /** Works out both numbers for an answer. */
 export function scoreAnswer(input: ConfidenceInput): AnswerConfidence {
   const reasons: string[] = [];
+  const analysis = analyse(input.text, input.context);
   let fromBook: number;
   if (input.context.length === 0) {
     fromBook = 0;
     reasons.push("No matching pages were found in your books, so this answer is from outside them.");
   } else {
     // Too little in the answer to judge by words (a True, a one-word answer): go by how well the pages matched.
-    fromBook = bookShare(input.text, input.context) ?? (input.coverageLow ? 40 : 85);
+    fromBook = analysis.share ?? (input.coverageLow ? 40 : 85);
   }
   if (fromBook < 80 && input.context.length > 0) reasons.push(`About ${100 - fromBook}% of the answer is not found in the pages of your books.`);
 
@@ -127,5 +225,37 @@ export function scoreAnswer(input: ConfidenceInput): AnswerConfidence {
   // An answer mostly from outside the books can't be called well grounded.
   if (fromBook < 40) correct = Math.min(correct, 65);
   if (reasons.length === 0) reasons.push("The answer follows the pages of your books, and the automatic checks found nothing wrong.");
-  return { correct: Math.max(5, Math.min(99, Math.round(correct))), fromBook, reasons };
+  const details: ConfidenceDetails = {
+    statements: analysis.statements,
+    grounded: analysis.grounded,
+    passages: input.context.length,
+    passageChars: input.context.reduce((sum, c) => sum + c.content.length, 0),
+    pages: pagesSummary(input.context),
+    retrieval: retrievalSummary(input.retrieval),
+    topSimilarity: input.retrieval?.topSimilarity ?? null,
+    coverageLow: input.coverageLow,
+    usedSearchGrounding: input.usedSearchGrounding,
+    weakPages: input.weakPages,
+    failedChecks: failed.length,
+    outside: analysis.outside,
+  };
+  return { correct: Math.max(5, Math.min(99, Math.round(correct))), fromBook, reasons, details };
+}
+
+/** The facts behind the two numbers as plain text, to read on screen or paste into a problem report. Empty for answers made before these were kept. */
+export function describeDetails(c: AnswerConfidence): string {
+  const d = c.details;
+  if (!d) return "";
+  return [
+    `Confidence ${c.correct} : ${c.fromBook} (correct and grounded : from the books)`,
+    `Statements judged: ${d.statements}; found in the books: ${d.grounded}; not found: ${d.statements - d.grounded}`,
+    `Book passages the answer was written from: ${d.passages} (${d.passageChars.toLocaleString("en-IN")} characters)`,
+    `Where they came from: ${d.pages || "none"}`,
+    `How they were found: ${d.retrieval}`,
+    `Closest match to the request: ${d.topSimilarity === null ? "n/a" : d.topSimilarity.toFixed(2)}${d.coverageLow ? " (weak: the books matched the request only weakly)" : ""}`,
+    `Web search used: ${d.usedSearchGrounding ? "yes" : "no"}; hard-to-read pages relied on: ${d.weakPages}; automatic checks failed: ${d.failedChecks}`,
+    ...(d.outside.length > 0
+      ? ["Statements furthest from the books (percent of their words found in the books, and words not found):", ...d.outside.map((o) => `- ${o.found}%: ${o.text}  [not found: ${o.missing.join(", ")}]`)]
+      : ["Every statement judged was found in the books."]),
+  ].join("\n");
 }

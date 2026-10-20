@@ -598,6 +598,38 @@ fresh();
   session.user = person();
 }
 
+// ---- Whole exercise: lesson passages to answer it from ----
+fresh();
+{
+  const row = (id: string, page: number, type: string, content: string) => ({ id, document_id: BOOK, owner_id: ME, page_number: page, chunk_index: 0, source_type: type, section_label: `Page ${page}`, image_path: null, content });
+  tables.chunks = [
+    row("ex1", 11, "exercise", "Q1. Fill in the blanks.\n1. The ____ worshipped Shiva in the linga form.\n2. The ____ were the most prominent Sufi silsila in India."),
+    row("ex2", 12, "exercise", "Q2. Answer in short.\n1. Who was Basavanna?\n2. How did Guru Nanak simplify spirituality?"),
+    row("t1", 3, "textbook", "Basavanna, a Virashaiva teacher, composed vachanas in Kannada."),
+    row("t2", 6, "textbook", "Guru Nanak taught that devotion to one formless God was enough."),
+  ];
+  let call = 0;
+  rpcs.match_owner_chunks = () => {
+    call++;
+    const sim = (id: string, similarity: number) => ({ ...tables.chunks.find((c) => c.id === id)!, similarity });
+    // The request itself is generic: its own search matches only an exercise page, weakly. Each question's search finds its lesson passage (and the exercise page, which is not added twice).
+    return call === 1 ? [sim("ex1", 0.3)] : [sim("ex1", 0.9), sim("t1", 0.8), sim("t2", 0.7)];
+  };
+  const result = await retrieveContext("Solve all exercise questions", { ownerId: ME });
+  const ids = result.chunks.map((c) => c.id).join();
+  check("exercise support: the exercise pages come whole and the lesson passages that answer them are added after", ids === "ex1,ex2,t1,t2", ids);
+  check("exercise support: how it was found is recorded", result.stats.mode === "exercise" && result.stats.sectionChunks === 2 && result.stats.questions === 4 && result.stats.supportChunks === 2 && result.stats.topSimilarity === 0.3, JSON.stringify(result.stats));
+  check("exercise support: the books cover the exercise when its questions found close passages", result.coverageLow === false);
+  call = 0;
+  rpcs.match_owner_chunks = () => (++call === 1 ? [{ ...tables.chunks[0], similarity: 0.3 }] : [{ ...tables.chunks[0], similarity: 0.9 }]);
+  const none = await retrieveContext("Solve all exercise questions", { ownerId: ME });
+  check("exercise support: with no lesson passage to be found, it says the books don't cover it", none.coverageLow === true && none.stats.supportChunks === 0 && none.chunks.length === 2, JSON.stringify(none.stats));
+  rpcs.match_owner_chunks = () => [{ ...tables.chunks[2], similarity: 0.8 }];
+  const plain = await retrieveContext("What is Bhakti?", { ownerId: ME });
+  check("exercise support: an ordinary question is untouched", plain.stats.mode === "search" && plain.chunks.length === 1 && plain.stats.questions === 0, JSON.stringify(plain.stats));
+  delete rpcs.match_owner_chunks;
+}
+
 // ---- Weak pages behind an answer ----
 {
   tables.page_reads = [

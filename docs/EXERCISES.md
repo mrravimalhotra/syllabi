@@ -57,3 +57,9 @@ Every generated answer shows two numbers, each red, amber or green (green 80 and
 2. **From the books (second number).** The answer is split into statements; a statement counts as from the book when at least 55% of its meaningful words (roots, without filler words) are found in the book pages it was written from (a student's handwriting on those pages is not counted as the book; a statement that says it is general knowledge or from the web never counts). The rest is "from outside". An answer too short to judge by words (True, one word) goes by how well the pages matched.
 
 Click the numbers for the meaning and the reasons. These are estimates: a good paraphrase can look less grounded than it is, and a copied wrong passage looks fully grounded. Answers made before this have none; study packs and worked examples have none yet.
+
+### Finding why a score is low
+
+Open the numbers under an answer, then **Details for finding the cause** (it can be copied): how many statements were judged and how many were found in the books; how many passages the answer was written from and which pages (for example `exercise p1-p10 (10), textbook p1 (1)`); how they were found; the closest match; whether a web search was used; hard-to-read pages; and the statements furthest from the books, each with the words that were not found. It is saved with the answer. Typical causes: only exercise pages and one lesson passage in the list (the lessons were not searched), a weak match, or an answer written in different words from the book.
+
+A whole-exercise request ("Solve all exercise questions") now searches the books for each question of the exercise and adds the best lesson passages (up to 3 per question, 36 in all, never exercise pages again), so the answers can come from the lessons. Before this the exercise pages came whole but the lessons were not searched, which is why a first real answer scored 57 : 5.

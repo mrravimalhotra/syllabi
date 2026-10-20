@@ -1032,10 +1032,12 @@ await test("A saved answer: the reference pages show on screen but never in a pr
 
 await test("Answer confidence: two numbers like 95 : 89 in red, amber or green, with the reasons, not in a print", async (page, ctx) => {
   const rated = (id, title, confidence) => ({ ...answer, taskType: "ad_hoc", createdAt: now, pack: null, worked: null, id, title, text: "Black soil suits cotton.", sources: [], confidence });
+  const details = { statements: 34, grounded: 2, passages: 11, passageChars: 18200, pages: "exercise p1-p10 (10), textbook p1 (1)", retrieval: "whole exercise: 10 exercise passages added; 12 questions searched in the books, 0 lesson passages added", topSimilarity: 0.31, coverageLow: true, usedSearchGrounding: false, weakPages: 0, failedChecks: 0, outside: [{ text: "Black soil is also called regur soil.", found: 25, missing: ["regur", "also"] }] };
   const green = rated("c1", "Green answer", { correct: 95, fromBook: 89, reasons: ["Every calculation was checked by an exact calculator."] });
+  const detailed = rated("c4", "Detailed answer", { correct: 57, fromBook: 5, reasons: ["About 95% of the answer is not found in the pages of your books."], details });
   const mixed = rated("c2", "Mixed answer", { correct: 66, fromBook: 31, reasons: ["About 69% of the answer is not found in the pages of your books.", "A web search was used: its facts were not checked against your books."] });
   const unrated = rated("c3", "Older answer", null);
-  for (const a of [green, mixed, unrated]) await ctx.route(`**/api/documents/${a.id}`, (r) => json(r, { answer: a }));
+  for (const a of [green, mixed, unrated, detailed]) await ctx.route(`**/api/documents/${a.id}`, (r) => json(r, { answer: a }));
 
   await page.goto(`${BASE}/dashboard/documents/c1`, { waitUntil: "networkidle" });
   const badge = page.getByTestId("confidence");
@@ -1058,6 +1060,21 @@ await test("Answer confidence: two numbers like 95 : 89 in red, amber or green, 
   await page.getByTestId("confidence").locator("summary").click();
   await page.getByText(/About 69% of the answer is not found/).waitFor();
   await page.getByText(/A web search was used/).waitFor();
+
+  // The details for finding the cause of a low score.
+  await page.goto(`${BASE}/dashboard/documents/c4`, { waitUntil: "networkidle" });
+  await page.getByTestId("confidence").locator("summary").first().click();
+  await page.getByText("Details for finding the cause").click();
+  for (const need of ["34 judged: 2 found in the books, 32 not found", "exercise p1-p10 (10), textbook p1 (1)", "whole exercise: 10 exercise passages added; 12 questions searched", "closest 0.31, weak", "web search not used", "Black soil is also called regur soil.", "not found in the books: regur, also"]) {
+    await page.getByTestId("confidence-details").getByText(need, { exact: false }).first().waitFor({ timeout: 3000 }).catch(() => {
+      throw new Error(`The details lack "${need}".`);
+    });
+  }
+  await ctx.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.getByRole("button", { name: "Copy these details" }).click();
+  await page.getByRole("button", { name: "Copied" }).waitFor();
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  if (!copied.includes("Confidence 57 : 5") || !copied.includes("Statements judged: 34") || !copied.includes("[not found: regur, also]")) throw new Error(`Copied the wrong text: ${copied}`);
 
   await page.goto(`${BASE}/dashboard/documents/c3`, { waitUntil: "networkidle" });
   await page.getByText("Black soil suits cotton.").first().waitFor();

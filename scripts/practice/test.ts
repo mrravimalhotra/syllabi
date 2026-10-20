@@ -11,7 +11,7 @@ import { splitQuestions } from "@/lib/rag/split-questions";
 import { handwritingIn, withoutHandwriting } from "@/lib/rag/handwriting";
 import { chunkPageText } from "@/lib/ingestion/chunk";
 import { COMMANDS, booksOfKinds, commandsInView, noBooksMessage, planCommand } from "@/app/dashboard/_ask/commands";
-import { bookShare, levelOf, scoreAnswer } from "@/lib/generation/confidence";
+import { bookShare, describeDetails, levelOf, scoreAnswer } from "@/lib/generation/confidence";
 import { scrub, scrubText } from "@/lib/debug/scrub";
 import { parseBugReport, reportMarkdown, statusLabel } from "@/lib/bug-report";
 import { pdfDisposition } from "@/lib/pdf/disposition";
@@ -525,6 +525,23 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
   check(levelOf(80) === "green" && levelOf(79) === "amber" && levelOf(60) === "amber" && levelOf(59) === "red" && levelOf(0) === "red", "Confidence: green from 80, amber from 60, red below");
   const hindi = scoreAnswer({ ...base, context: [{ content: "काली मिट्टी बेसाल्ट चट्टानों के अपक्षय से बनती है। यह कपास तंबाकू तिलहन और बाजरा के लिए उपयुक्त है।" }], text: "**Ans:** काली मिट्टी बेसाल्ट चट्टानों के अपक्षय से बनती है। यह कपास तंबाकू तिलहन के लिए उपयुक्त है।" });
   check(hindi.fromBook >= 80, `Confidence: Hindi answers are judged too (${hindi.fromBook})`);
+}
+
+// Confidence details: the facts behind the numbers, so a low score can be traced to its cause.
+{
+  const passages = SOIL_CONTEXT.map((c, i) => ({ ...c, source_type: i === 0 ? "textbook" : "exercise", page_number: 3 + i, similarity: 0.7 }));
+  const r = scoreAnswer({ context: passages, retrieval: { mode: "exercise", sectionChunks: 1, questions: 5, supportChunks: 1, topSimilarity: 0.42 }, checks: [], coverageLow: true, usedSearchGrounding: false, weakPages: 1, text: SOIL_MIXED });
+  const d = r.details!;
+  check(d.statements >= 3 && d.grounded >= 1 && d.grounded < d.statements, `Details: the statements judged and how many were found in the books (${d.grounded} of ${d.statements})`);
+  check(d.passages === 2 && d.pages === "textbook p3 (1), exercise p4 (1)" && /whole exercise: 1 exercise passages added; 5 questions searched in the books, 1 lesson passages added/.test(d.retrieval), `Details: where the passages came from and how they were found (${d.pages} | ${d.retrieval})`);
+  check(d.coverageLow && d.topSimilarity === 0.42 && d.weakPages === 1 && !d.usedSearchGrounding && d.failedChecks === 0, "Details: the match quality, weak pages, web search and failed checks are recorded");
+  check(d.outside.length >= 1 && d.outside.length <= 6 && d.outside[0].found < 55 && d.outside[0].missing.length > 0 && d.outside.every((o, i, a) => i === 0 || a[i - 1].found <= o.found), "Details: the statements furthest from the books are listed, worst first, with the words not found");
+  check(d.outside.some((o) => /vertisols|agronomists|foundations/.test(o.text + o.missing.join(" "))), "Details: the outside facts are the ones named");
+  const text = describeDetails(r);
+  check(["Confidence", "Statements judged", "Where they came from: textbook p3 (1), exercise p4 (1)", "How they were found: whole exercise", "Closest match to the request: 0.42 (weak", "Statements furthest from the books", "[not found:"].every((t) => text.includes(t)), "Details: the text to copy has all of it");
+  const clean = scoreAnswer({ context: passages, checks: [], coverageLow: false, usedSearchGrounding: false, weakPages: 0, text: SOIL_GROUNDED });
+  check(clean.details!.outside.length === 0 && /Every statement judged was found/.test(describeDetails(clean)) && clean.details!.retrieval === "not recorded", "Details: a well grounded answer lists no outside statements");
+  check(describeDetails({ correct: 80, fromBook: 80, reasons: [] }) === "", "Details: an older answer has none to describe");
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
