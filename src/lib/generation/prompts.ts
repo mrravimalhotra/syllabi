@@ -86,7 +86,9 @@ const ANSWER_STYLE = `Answer layout, for questions to be answered (an exercise, 
   "find out" questions follow the opinion rule below.
 - Exercises and worksheets restart the numbering under every heading (1 to 4 under Q1,
   again under Q2, then Q.I and Q.II on a worksheet). Always give the heading with the
-  number, **Q3.2** or **Q.II.4 (b)**, so no two answers look alike. Answer every question
+  number, **Q3.2** or **Q.II.4 (b)**, so no two answers look alike. Use one numbering
+  style for the whole answer: write every question as **Q<number>** with its sub-part in
+  brackets, never a bare "2." in one place and "Q2 (i)" in another. Answer every question
   of every section, in order, up to the last one on the last page: never stop early,
   skip a section, or merge questions. If the material shows N questions, write N answers.
 - Fill in the blanks: the missing word or phrase in bold. True or false: **True** or
@@ -106,6 +108,15 @@ const ANSWER_STYLE = `Answer layout, for questions to be answered (an exercise, 
   not shown.
 - Match the following: the pairs, one per line (A → 3). Research or "find out" questions:
   a short answer from general knowledge, marked as not from the book.
+- A statement that is not in the reference material (general knowledge you add to
+  complete an answer) ends with "(general knowledge)". Everything unmarked must be from
+  the pages. Never add a fact the pages do not support just to make an answer longer.
+- A word limit ("60-80 words") is a hard limit: count the words and stay inside it.
+- "Draw and label" questions: list the labels and what each shows, in the book's own
+  terms and only the parts the book names (no more layers or parts than it gives). A
+  small text sketch is fine only when it adds nothing the list does not already say.
+- Several acceptable answers ("name one"): give one answer, then at most one
+  alternative in brackets.
 - Earn full marks with the fewest words: lead with the textbook's key terms and phrasing,
   no filler ("The answer to this question is..."), and don't copy the whole question back.
 - Analytical questions ("analyse how...", "what factors..."): a one-line opening, a bold
@@ -148,6 +159,9 @@ How to mark each question:
    - A wrong value carried forward and used correctly afterwards earns the later method marks (follow-through).
    - Correct answer with no working: only the answer marks, never full marks; say "show your steps".
    - Wrong answer with a sound method: most of the method marks. Wrong method: few or none. No attempt: 0.
+   - A notation or wording slip when the numbers and method are right (for example the formula written the
+     wrong way round but the right numbers used): lose at most 0.5 of a mark and say so. Lose more only for a
+     wrong method, wrong numbers or a wrong answer.
    - Half marks are allowed. Never give full marks for a wrong answer or a wrong method.
    - A question with parts (a), (b): split its marks across the parts.
 5. Be fair and kind, as to a child, and specific: say exactly what was right and exactly what to change.
@@ -170,12 +184,15 @@ Write the report in EXACTLY this layout (code checks the numbers: the table must
 **Question:** <as read>
 **Correct answer:** <your own worked answer, brief, with the final value and unit>
 **Student's working:**
-- ✓ <step as written>
+- ✓ <all the correct steps together, in one line>
 - ✗ Student wrote: <wrong step> → <what it should be>
 **Marks:** Method <x>/<y>, Answer <x>/<y>. <one line why>
 **To do better:** <one or two specific tips for this question>
 
-(one such section for every question, in the same order and with the same marks as the table)
+(one such section for every question, in the same order and with the same marks as the table; list
+the student's correct steps together in one ✓ line and each wrong step on its own ✗ line, so the report stays short)
+
+Write math in plain Unicode, not LaTeX or dollar signs: × ÷ √ ² ₹ ½ and (a)/(b) for fractions.
 
 ## Overall feedback
 **Well done:** <what the student did well>
@@ -253,7 +270,8 @@ ${EXAM_CONVENTIONS}
 
 ${REQUEST_KINDS}
 
-Answer the student's question directly and helpfully. Keep the response focused and
+Answer the student's question directly and helpfully. When you use the reference material,
+say where it is from, for example "(page 6)". Keep the response focused and
 well-structured. If the request is ambiguous, make a reasonable interpretation and
 say so briefly rather than asking a clarifying question.`;
   }
