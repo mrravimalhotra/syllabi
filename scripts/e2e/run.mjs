@@ -1094,6 +1094,38 @@ await test("A saved answer that used whole books lists one line per book, not ev
   if ((await page.locator("ol li", { hasText: "[1]" }).count()) !== 0) throw new Error("Every passage was listed.");
 });
 
+await test("Answers to check: the weak answers of an exercise are highlighted, listed and can be jumped to, and a print shows none of it", async (page, ctx) => {
+  const text = "**Q1 (i). Which soil is found in northern Maharashtra?**\n**Ans:** Black soil.\n\n**Q1 (ii). Name the largest desert on Earth.**\n**Ans:** Antarctic Desert.\n\n**Q2.1 Research Mirabai.**\n**Ans:** A saint from Rajasthan. This is from general knowledge, not from the book.";
+  const confidence = { correct: 71, fromBook: 64, reasons: ["2 answers should be checked: Q1 (ii), Q2.1."], review: [
+    { index: 1, label: "Q1 (ii)", found: 0, level: "red", reason: "Only 0% of this answer's words are in your books." },
+    { index: 2, label: "Q2.1", found: 35, level: "amber", reason: "From general knowledge, not from your books." },
+  ] };
+  const a = { ...answer, taskType: "solution", createdAt: now, pack: null, worked: null, id: "r1", title: "Exercise answers", text, confidence };
+  await ctx.route("**/api/documents/r1", (r) => json(r, { answer: a }));
+  await page.goto(`${BASE}/dashboard/documents/r1`, { waitUntil: "networkidle" });
+  await page.getByTestId("review-count").getByText("2 to check").waitFor();
+  const tags = page.getByTestId("review-tag");
+  if ((await tags.count()) !== 2) throw new Error(`Expected two highlighted answers, saw ${await tags.count()}.`);
+  await tags.first().getByText(/Check this answer: Only 0% of this answer's words are in your books\./).waitFor();
+  await tags.nth(1).getByText(/From general knowledge, not from your books\./).waitFor();
+  const first = page.getByRole("region", { name: "Answer to check: Q1 (ii)" });
+  if (!/border-red/.test(await first.getAttribute("class"))) throw new Error("A red answer should have a red edge.");
+  if (!/border-amber/.test(await page.getByRole("region", { name: "Answer to check: Q2.1" }).getAttribute("class"))) throw new Error("An amber answer should have an amber edge.");
+  if ((await page.getByRole("region", { name: /Answer to check: Q1 \(i\)/ }).count()) !== 0) throw new Error("A good answer was highlighted.");
+  await page.getByText("Black soil.").first().waitFor();
+
+  await page.getByTestId("confidence").locator("summary").click();
+  const list = page.getByTestId("review-list");
+  await list.getByText("Answers to check first").waitFor();
+  await list.getByRole("button", { name: "Q2.1 · 35%" }).click();
+  await page.getByRole("region", { name: "Answer to check: Q2.1" }).waitFor();
+
+  await page.emulateMedia({ media: "print" });
+  if (await tags.first().isVisible()) throw new Error("The review tag is in the print view.");
+  await page.getByText("Antarctic Desert.").first().waitFor();
+  await page.emulateMedia({ media: "screen" });
+});
+
 await test("A saved answer that is gone says so", async (page, ctx) => {
   await ctx.route("**/api/documents/zz", (r) => json(r, { error: "no" }, 404));
   await page.goto(`${BASE}/dashboard/documents/zz`, { waitUntil: "networkidle" });

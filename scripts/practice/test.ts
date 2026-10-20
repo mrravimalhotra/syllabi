@@ -6,7 +6,8 @@ import { makeBlendQuiz } from "@/lib/kindergarten/quiz";
 import { blockedReason, buildRequestBody, questionProblem, type Question } from "@/app/dashboard/_ask/build-request";
 import { checkPages } from "@/lib/ingestion/upload-pages";
 import { parsePhotos } from "@/lib/generation/attachments";
-import { HANDWRITTEN_PAGE, LESSON_PAGES, OUTSIDE_ANSWER, PAGES as BHAKTI_PAGES, SOIL_CONTEXT, SOIL_GROUNDED, SOIL_MIXED } from "../fixtures/bhakti-exercise-pages";
+import { splitAnswerBlocks } from "@/lib/generation/blocks";
+import { HANDWRITTEN_PAGE, SOIL_EXERCISE_ANSWER, LESSON_PAGES, OUTSIDE_ANSWER, PAGES as BHAKTI_PAGES, SOIL_CONTEXT, SOIL_GROUNDED, SOIL_MIXED } from "../fixtures/bhakti-exercise-pages";
 import { splitQuestions } from "@/lib/rag/split-questions";
 import { handwritingIn, withoutHandwriting } from "@/lib/rag/handwriting";
 import { chunkPageText } from "@/lib/ingestion/chunk";
@@ -552,6 +553,25 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
 // How much book text may be passed whole.
 {
   check(fullContextBudget() === 400_000, "Budget: up to 400,000 characters (about 100,000 tokens) of book text are passed whole, whatever allowance is left");
+}
+
+// Answers to check: each answer of an exercise is judged on its own and the weak ones are flagged.
+{
+  const blocks = splitAnswerBlocks(SOIL_EXERCISE_ANSWER);
+  check(blocks.map((b) => b.label).join("|") === "|Q1 (i)|Q1 (ii)|Q1 (iii)|Q2.1|Warm-up Q1", `Review: the answer splits into one block per question (${blocks.map((b) => b.label).join("|")})`);
+  check(blocks[0].label === null && blocks[0].text.startsWith("# Unit 2") && !blocks[1].text.includes("Q1 (ii)") && blocks[1].text.includes("Black soil"), "Review: text before the first question is its own block, and each block holds only its question and answer");
+  check(splitAnswerBlocks("Plain paragraphs.\n\nNo questions here.").length === 1 && splitAnswerBlocks("**Q3.2 Why?**\n**Ans:** Because.\n---\nNote after.").map((b) => b.label).join() === "Q3.2,", "Review: an answer without questions is one block, and a rule ends a question");
+  const base = { context: SOIL_CONTEXT, checks: [], coverageLow: false, usedSearchGrounding: false, weakPages: 0 };
+  const r = scoreAnswer({ ...base, text: SOIL_EXERCISE_ANSWER });
+  const flagged = (r.review ?? []).map((x) => x.label).join("|");
+  check(flagged === "Q1 (iii)|Q2.1|Warm-up Q1", `Review: the invented, unrelated and general-knowledge answers are flagged, the good ones are not (${flagged})`);
+  check((r.review ?? []).every((x) => x.level === "red" && x.index >= 3) && (r.review ?? [])[2].reason === "From general knowledge, not from your books." && /Only \d+% of this answer's words are in your books\./.test((r.review ?? [])[0].reason), "Review: each flag says why, and general-knowledge answers say so");
+  check(!(r.review ?? []).some((x) => x.label === "Q1 (ii)"), "Review: a short true answer (Red soil) is judged by its question, and passes");
+  check(/3 answers should be checked: Q1 \(iii\), Q2\.1, Warm-up Q1\./.test(r.reasons.join(" ")), "Review: the confidence reasons name the answers to check");
+  const good = scoreAnswer({ ...base, text: SOIL_GROUNDED });
+  check(good.review === undefined, "Review: an answer that follows the book has nothing to check");
+  check(scoreAnswer({ ...base, text: "**Q1 Soil?**\n**Ans:** Volcanic eruptions create pillow lava formations underwater near ridges." }).review === undefined, "Review: a single answer isn't flagged (an exercise needs two or more questions)");
+  check(scoreAnswer({ ...base, context: [], text: SOIL_EXERCISE_ANSWER }).review === undefined, "Review: with no book passages there is nothing to compare, so no per-answer flags");
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

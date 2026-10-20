@@ -2,7 +2,7 @@
 
 import { sourceLabel } from "@/lib/format";
 import { useEffect, useState } from "react";
-import { Markdown } from "@/components/Markdown";
+import { AnswerText } from "@/components/AnswerText";
 import { AlertIcon, CheckIcon, CopyIcon, DownloadIcon } from "@/components/icons";
 import { PrintButton } from "@/components/PrintButton";
 import { PdfButton } from "@/components/PdfButton";
@@ -76,7 +76,7 @@ export function AnswerView({ answer, actions, meta }: { answer: Answer; actions?
         {answer.usedSearchGrounding && (
           <p className="hidden text-xs text-slate-500 print:block">Supplemented with a web search.</p>
         )}
-        <Markdown text={answer.text} />
+        <AnswerText text={answer.text} confidence={answer.confidence} />
         {answer.searchSuggestionsHtml && <SearchSuggestions html={answer.searchSuggestionsHtml} />}
         {answer.checks && answer.checks.length > 0 && <Checks checks={answer.checks} />}
         <p className="text-xs text-slate-400">AI-generated. Check it before using it with your child or student.</p>

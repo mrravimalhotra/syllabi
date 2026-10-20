@@ -71,3 +71,7 @@ Everything ticked under "Search these books" is meant to reach the AI. When the 
 When the selected books are too large () the closest passages are used, as before (with the whole-exercise and lesson-support steps above). The answer's confidence details say which happened: "every page of the selected books was passed (3 books, 66,480 characters)" or "closest passages only (the selected books hold N characters: too much to pass whole)". To get a complete read of a large library, select fewer books.
 
 Page pictures: up to 10 are sent (the exercise pages first, then the earliest others). An answer made from whole books shows one line per book under Sources, not every passage.
+
+### Answers to check
+
+For an exercise answered question by question (two or more answers labelled Q1, Q3.2, Warm-up Q1...), each answer is judged on its own against the book passages: an answer with fewer than 60% of its meaningful words in the books is highlighted on screen, red under 40% and amber from 40 to 59, with the reason ("Only 12% of this answer's words are in your books", or "From general knowledge, not from your books"). A short answer (True, one word) is judged by the question it answers. The numbers' box shows "3 to check" and a list of the flagged answers to jump to. These are the answers to read first. Highlights and tags are not printed. They are saved with the answer (`confidence.review`); answers made before this have none.

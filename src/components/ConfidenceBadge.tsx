@@ -17,7 +17,7 @@ const WORD: Record<Level, string> = { green: "High", amber: "Medium", red: "Low"
  */
 export function ConfidenceBadge({ confidence }: { confidence: AnswerConfidence | null | undefined }) {
   if (!confidence) return null;
-  const { correct, fromBook, reasons } = confidence;
+  const { correct, fromBook, reasons, review = [] } = confidence;
   const correctLevel = levelOf(correct);
   const bookLevel = levelOf(fromBook);
   return (
@@ -42,6 +42,17 @@ export function ConfidenceBadge({ confidence }: { confidence: AnswerConfidence |
         >
           {fromBook}
         </span>
+        {review.length > 0 && (
+          <span
+            className={cx(
+              "ml-1 rounded-full px-2 py-0.5 font-semibold",
+              review.some((r) => r.level === "red") ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-900",
+            )}
+            data-testid="review-count"
+          >
+            {review.length} to check
+          </span>
+        )}
       </summary>
       <div className="mt-2 max-w-xl space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
         <p>
@@ -59,6 +70,25 @@ export function ConfidenceBadge({ confidence }: { confidence: AnswerConfidence |
             <li key={r}>{r}</li>
           ))}
         </ul>
+        {review.length > 0 && (
+          <div data-testid="review-list">
+            <p className="mb-1 font-medium text-slate-800">Answers to check first</p>
+            <ul className="flex flex-wrap gap-1.5">
+              {review.map((r) => (
+                <li key={r.index}>
+                  <button
+                    type="button"
+                    onClick={() => document.getElementById(`review-${r.index}`)?.scrollIntoView({ behavior: "smooth", block: "center" })}
+                    className={cx("rounded-md px-2 py-1 font-medium ring-1", r.level === "red" ? CHIP.red : CHIP.amber)}
+                    title={r.reason}
+                  >
+                    {r.label} · {r.found}%
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <Diagnostics confidence={confidence} />
         <p className="text-slate-500">
           Green is 80 or more, amber 60 to 79, red below 60. These are estimates made by Syllabi&apos;s own checks, not a guarantee: still

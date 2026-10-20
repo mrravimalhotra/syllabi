@@ -3,6 +3,7 @@
 //  2. how much of the answer comes from the books and how much from outside them (general knowledge or the web).
 // Shown as "95 : 89" with a red, amber or green colour on each. They are estimates, not guarantees.
 
+import { splitAnswerBlocks } from "@/lib/generation/blocks";
 import { withoutHandwriting } from "@/lib/rag/handwriting";
 import type { AnswerCheck } from "@/types/database";
 
@@ -38,6 +39,18 @@ interface ConfidenceDetails {
   outside: OutsideStatement[];
 }
 
+/** An answer of the exercise that should be checked by a person: it is mostly not in the books. */
+export interface ReviewItem {
+  /** Which block of the answer (see splitAnswerBlocks). */
+  index: number;
+  /** "Q3.2". */
+  label: string;
+  /** Percent of the answer's words found in the book passages. */
+  found: number;
+  level: "amber" | "red";
+  reason: string;
+}
+
 export interface AnswerConfidence {
   /** 0 to 99: how sure we are the answers are correct and grounded in the books. */
   correct: number;
@@ -47,6 +60,8 @@ export interface AnswerConfidence {
   reasons: string[];
   /** The facts behind the numbers (answers made before these were kept have none). */
   details?: ConfidenceDetails;
+  /** Answers worth checking by a person, for an exercise answered question by question. */
+  review?: ReviewItem[];
 }
 
 interface ConfidencePassage {
@@ -132,9 +147,10 @@ interface Analysis {
   outside: OutsideStatement[];
 }
 
+const knownWords = (context: { content: string }[]) => new Set(contentWords(context.map((c) => withoutHandwriting(c.content)).join("\n")));
+
 /** Judges each statement of the answer against the book passages. */
-function analyse(text: string, context: { content: string }[]): Analysis {
-  const known = new Set(contentWords(context.map((c) => withoutHandwriting(c.content)).join("\n")));
+function analyse(text: string, context: { content: string }[], known = knownWords(context)): Analysis {
   let groundedWords = 0;
   let totalWords = 0;
   let statementCount = 0;
@@ -156,6 +172,36 @@ function analyse(text: string, context: { content: string }[]): Analysis {
   }
   outside.sort((a, b) => a.found - b.found);
   return { share: totalWords === 0 ? null : Math.round((groundedWords / totalWords) * 100), statements: statementCount, grounded: groundedCount, outside: outside.slice(0, 6) };
+}
+
+/** Below this share of its words found in the books, an answer is flagged for review (below the second number, red). */
+const REVIEW_BELOW = 60;
+const REVIEW_RED_BELOW = 40;
+/** An exercise has to be answered question by question for answers to be flagged. */
+const MIN_BLOCKS = 2;
+
+/** The answers (one per question) that are mostly not in the books, so a person can check them first. */
+function reviewItems(text: string, context: { content: string }[]): ReviewItem[] {
+  const blocks = splitAnswerBlocks(text);
+  if (blocks.filter((b) => b.label !== null).length < MIN_BLOCKS || context.length === 0) return [];
+  const known = knownWords(context);
+  const items: ReviewItem[] = [];
+  blocks.forEach((block, index) => {
+    if (block.label === null) return;
+    const own = analyse(block.text, context, known);
+    // A short answer (True, a word) has too little to judge: judge the question it answers instead.
+    const found = own.share ?? analyse(block.text.replace(/\*\*/g, " ").replace(/\bAns(?:wer)?:/gi, ". "), context, known).share;
+    if (found === null || found >= REVIEW_BELOW) return;
+    const general = OUTSIDE_NOTE.test(block.text);
+    items.push({
+      index,
+      label: block.label,
+      found,
+      level: found < REVIEW_RED_BELOW ? "red" : "amber",
+      reason: general ? "From general knowledge, not from your books." : `Only ${found}% of this answer's words are in your books.`,
+    });
+  });
+  return items;
 }
 
 /** The percentage (0 to 100) of the answer's content found in the book passages, or null when there is too little to judge. */
@@ -188,20 +234,8 @@ function retrievalSummary(r: RetrievalNote | undefined): string {
   return `closest passages only${r.sectionChunks > 0 ? `, ${r.sectionChunks} added whole` : ""}${r.totalChars > 0 ? ` (the selected books hold ${r.totalChars.toLocaleString("en-IN")} characters: too much to pass whole)` : ""}`;
 }
 
-/** Works out both numbers for an answer. */
-export function scoreAnswer(input: ConfidenceInput): AnswerConfidence {
-  const reasons: string[] = [];
-  const analysis = analyse(input.text, input.context);
-  let fromBook: number;
-  if (input.context.length === 0) {
-    fromBook = 0;
-    reasons.push("No matching pages were found in your books, so this answer is from outside them.");
-  } else {
-    // Too little in the answer to judge by words (a True, a one-word answer): go by how well the pages matched.
-    fromBook = analysis.share ?? (input.coverageLow ? 40 : 85);
-  }
-  if (fromBook < 80 && input.context.length > 0) reasons.push(`About ${100 - fromBook}% of the answer is not found in the pages of your books.`);
-
+/** The first number: starts from the book share, then points are added and taken off, each with its reason. */
+function correctness(input: ConfidenceInput, fromBook: number, reasons: string[]): number {
   const failed = input.checks.filter((c) => !c.ok);
   const calculations = input.checks.filter((c) => c.kind === "calculation");
   let correct = 55 + 0.4 * fromBook;
@@ -226,7 +260,26 @@ export function scoreAnswer(input: ConfidenceInput): AnswerConfidence {
     reasons.push(`${input.weakPages} page${input.weakPages === 1 ? "" : "s"} it relied on ${input.weakPages === 1 ? "was" : "were"} hard to read when scanned.`);
   }
   // An answer mostly from outside the books can't be called well grounded.
-  if (fromBook < 40) correct = Math.min(correct, 65);
+  return fromBook < 40 ? Math.min(correct, 65) : correct;
+}
+
+/** Works out both numbers for an answer. */
+export function scoreAnswer(input: ConfidenceInput): AnswerConfidence {
+  const reasons: string[] = [];
+  const analysis = analyse(input.text, input.context);
+  let fromBook: number;
+  if (input.context.length === 0) {
+    fromBook = 0;
+    reasons.push("No matching pages were found in your books, so this answer is from outside them.");
+  } else {
+    // Too little in the answer to judge by words (a True, a one-word answer): go by how well the pages matched.
+    fromBook = analysis.share ?? (input.coverageLow ? 40 : 85);
+  }
+  if (fromBook < 80 && input.context.length > 0) reasons.push(`About ${100 - fromBook}% of the answer is not found in the pages of your books.`);
+
+  const correct = correctness(input, fromBook, reasons);
+  const review = reviewItems(input.text, input.context);
+  if (review.length > 0) reasons.push(`${review.length} answer${review.length === 1 ? "" : "s"} should be checked: ${review.slice(0, 5).map((r) => r.label).join(", ")}${review.length > 5 ? " and more" : ""}.`);
   if (reasons.length === 0) reasons.push("The answer follows the pages of your books, and the automatic checks found nothing wrong.");
   const details: ConfidenceDetails = {
     statements: analysis.statements,
@@ -239,10 +292,10 @@ export function scoreAnswer(input: ConfidenceInput): AnswerConfidence {
     coverageLow: input.coverageLow,
     usedSearchGrounding: input.usedSearchGrounding,
     weakPages: input.weakPages,
-    failedChecks: failed.length,
+    failedChecks: input.checks.filter((c) => !c.ok).length,
     outside: analysis.outside,
   };
-  return { correct: Math.max(5, Math.min(99, Math.round(correct))), fromBook, reasons, details };
+  return { correct: Math.max(5, Math.min(99, Math.round(correct))), fromBook, reasons, details, ...(review.length > 0 ? { review } : {}) };
 }
 
 /** The facts behind the two numbers as plain text, to read on screen or paste into a problem report. Empty for answers made before these were kept. */
