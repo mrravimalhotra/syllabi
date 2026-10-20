@@ -1,5 +1,7 @@
 import { generateCompletion } from "@/lib/llm";
 import { recordTokenUsage } from "@/lib/llm/usage";
+import { countWeakPages } from "@/lib/ingestion/page-read";
+import { scoreAnswer, type AnswerConfidence } from "@/lib/generation/confidence";
 import { retrieveContext, formatContext, loadSourceImages } from "@/lib/rag/retrieve";
 import { checkQuota, QuotaExceededError } from "@/lib/quota";
 import { systemInstructionsFor } from "@/lib/generation/prompts";
@@ -41,6 +43,8 @@ export interface GenerationOutput {
   searchSuggestionsHtml?: string;
   /** What Syllabi's own code checked (calculations), shown with the answer. */
   checks: AnswerCheck[];
+  /** How sure we are the answer is correct and grounded, and how much of it comes from the books. */
+  confidence: AnswerConfidence;
   /** Where the time went, in milliseconds, to find out what is slow. */
   timings: GenerationTimings;
 }
@@ -212,8 +216,18 @@ export async function runGeneration({
     }
   }
 
+  const confidence = scoreAnswer({
+    text: result.text,
+    context: retrieval.chunks,
+    checks,
+    coverageLow: retrieval.coverageLow,
+    usedSearchGrounding: Boolean(result.usedSearchGrounding),
+    weakPages: await countWeakPages(retrieval.chunks),
+  });
+
   return {
     text: result.text,
+    confidence,
     sources: retrieval.chunks,
     sourceImages,
     usedSearchGrounding: Boolean(result.usedSearchGrounding),

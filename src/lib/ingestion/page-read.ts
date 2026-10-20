@@ -27,3 +27,21 @@ export async function recordPageRead(
     console.error("[ingest] page score not saved", ids.documentId, ids.pageNumber, err);
   }
 }
+
+/** How many of the pages these passages came from were hard to read when scanned (a page score under 60). Never fails: 0 if it can't tell. */
+export async function countWeakPages(chunks: { document_id: string; page_number: number | null }[]): Promise<number> {
+  const pages = new Set(chunks.filter((c) => c.page_number !== null).map((c) => `${c.document_id}:${c.page_number}`));
+  if (pages.size === 0) return 0;
+  try {
+    const { data, error } = await createAdminClient()
+      .from("page_reads")
+      .select("document_id, page_number")
+      .in("document_id", [...new Set(chunks.map((c) => c.document_id))])
+      .lt("confidence", 60);
+    if (error) throw error;
+    return ((data ?? []) as { document_id: string; page_number: number }[]).filter((r) => pages.has(`${r.document_id}:${r.page_number}`)).length;
+  } catch (err) {
+    console.error("[generate] weak pages", err);
+    return 0;
+  }
+}

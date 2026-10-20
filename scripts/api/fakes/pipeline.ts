@@ -13,6 +13,7 @@ export async function runGeneration(opts: { onText?: (delta: string) => void; pr
     usedSearchGrounding: false,
     searchSuggestionsHtml: null,
     checks: [],
+    confidence: { correct: 91, fromBook: 88, reasons: ["The answer follows the pages of your books, and the automatic checks found nothing wrong."] },
     timings: { totalMs: 1, searchMs: 0 },
   };
 }

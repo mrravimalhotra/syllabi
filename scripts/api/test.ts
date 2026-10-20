@@ -27,6 +27,7 @@ import { arrangeBookPages } from "../../src/lib/pdf/book-pages";
 import { formatContext, loadSourceImages, retrieveContext } from "../../src/lib/rag/retrieve";
 import { namedPages, wantsWholeSection } from "../../src/lib/rag/whole-pages";
 import * as scanCheck from "../../src/app/api/library/[id]/scan/route";
+import { countWeakPages } from "../../src/lib/ingestion/page-read";
 import * as reports from "../../src/app/api/bug-reports/route";
 import * as report from "../../src/app/api/bug-reports/[id]/route";
 import sharp from "sharp";
@@ -246,8 +247,10 @@ tables.generated_documents = [];
 pipeline.calls = 0;
 const made = await expect("generate: a question is answered and saved", adhoc.POST, 200, null, { prompt: "Explain photosynthesis" });
 check("generate: the answer carries its text, an id and a PDF link", made.json?.text === "Plants make food." && typeof made.json?.id === "string" && /\/pdf$/.test(String(made.json?.pdfUrl)));
+check("generate: the answer carries its two confidence numbers, and they are saved", (made.json?.confidence as { correct: number; fromBook: number } | undefined)?.correct === 91 && (made.json?.confidence as { fromBook: number }).fromBook === 88 && ((tables.generated_documents ?? [])[0].confidence as { correct: number } | undefined)?.correct === 91, JSON.stringify(made.json?.confidence));
 check("generate: it is saved with a fingerprint for reuse", (tables.generated_documents ?? []).length === 1 && Boolean((tables.generated_documents ?? [])[0].cache_key) && (tables.generated_documents ?? [])[0].title === "Explain photosynthesis");
 const again = await expect("generate: the same question again returns the saved answer", adhoc.POST, 200, null, { prompt: "Explain photosynthesis" });
+check("generate: a reused answer keeps its confidence", (again.json?.confidence as { fromBook: number } | undefined)?.fromBook === 88, JSON.stringify(again.json?.confidence));
 check("generate: no second AI call, and it says it was reused", pipeline.calls === 1 && Boolean(again.json?.reusedFrom));
 await expect("generate: a fresh answer can be asked for", adhoc.POST, 200, null, { prompt: "Explain photosynthesis", fresh: true });
 check("generate: fresh makes a second AI call and a second copy", pipeline.calls === 2 && (tables.generated_documents ?? []).length === 2);
@@ -593,6 +596,21 @@ fresh();
   await call(report.PATCH, { status: "open" }, { id: REPORT });
   check("reports: reopening clears the resolved time", (tables.bug_reports as { id: string; resolved_at: string | null }[]).find((r) => r.id === REPORT)!.resolved_at === null);
   session.user = person();
+}
+
+// ---- Weak pages behind an answer ----
+{
+  tables.page_reads = [
+    { document_id: BOOK, page_number: 4, confidence: 40, issues: ["blurry"] },
+    { document_id: BOOK, page_number: 5, confidence: 95, issues: [] },
+    { document_id: BOOK, page_number: 9, confidence: 30, issues: ["too_dark"] },
+  ];
+  const w = await countWeakPages([{ document_id: BOOK, page_number: 4 }, { document_id: BOOK, page_number: 5 }, { document_id: BOOK, page_number: null }]);
+  check("confidence: only the weak pages the answer used are counted (page 9 wasn't used, page 5 is fine)", w === 1, String(w));
+  check("confidence: no passages means no weak pages", (await countWeakPages([])) === 0);
+  failures.push({ table: "page_reads", message: "db down" });
+  check("confidence: if the page scores can't be read the answer is still scored", (await countWeakPages([{ document_id: BOOK, page_number: 4 }])) === 0);
+  failures.length = 0;
 }
 
 // ---- Background reader and error log ----

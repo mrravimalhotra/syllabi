@@ -6,6 +6,8 @@ import { Markdown } from "@/components/Markdown";
 import { AlertIcon, CheckIcon, CopyIcon, DownloadIcon } from "@/components/icons";
 import { PrintButton } from "@/components/PrintButton";
 import { PdfButton } from "@/components/PdfButton";
+import { ConfidenceBadge } from "@/components/ConfidenceBadge";
+import type { AnswerConfidence } from "@/lib/generation/confidence";
 import type { AnswerCheck } from "@/types/database";
 import { button, card, cx } from "@/components/ui";
 import { hasAnswerKey } from "@/lib/format";
@@ -29,6 +31,8 @@ export interface Answer {
   pdfUrl: string | null;
   /** What Syllabi's own code checked (calculations, marks...). */
   checks?: AnswerCheck[];
+  /** How sure we are it is correct and grounded, and how much comes from the books. */
+  confidence?: AnswerConfidence | null;
 }
 
 /**
@@ -42,6 +46,7 @@ export function AnswerView({ answer, actions, meta }: { answer: Answer; actions?
         <div className="min-w-0 flex-1 basis-60 space-y-1">
           <h2 className="text-lg font-semibold tracking-tight text-slate-900 [overflow-wrap:anywhere]">{answer.title}</h2>
           {meta && <div className="text-xs text-slate-500 print:hidden">{meta}</div>}
+          <ConfidenceBadge confidence={answer.confidence} />
         </div>
         <div className="flex shrink-0 flex-wrap gap-2 print:hidden">
           {actions}

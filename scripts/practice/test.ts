@@ -6,11 +6,12 @@ import { makeBlendQuiz } from "@/lib/kindergarten/quiz";
 import { blockedReason, buildRequestBody, questionProblem, type Question } from "@/app/dashboard/_ask/build-request";
 import { checkPages } from "@/lib/ingestion/upload-pages";
 import { parsePhotos } from "@/lib/generation/attachments";
-import { HANDWRITTEN_PAGE, LESSON_PAGES, PAGES as BHAKTI_PAGES } from "../fixtures/bhakti-exercise-pages";
+import { HANDWRITTEN_PAGE, LESSON_PAGES, OUTSIDE_ANSWER, PAGES as BHAKTI_PAGES, SOIL_CONTEXT, SOIL_GROUNDED, SOIL_MIXED } from "../fixtures/bhakti-exercise-pages";
 import { splitQuestions } from "@/lib/rag/split-questions";
 import { handwritingIn, withoutHandwriting } from "@/lib/rag/handwriting";
 import { chunkPageText } from "@/lib/ingestion/chunk";
 import { COMMANDS, booksOfKinds, commandsInView, noBooksMessage, planCommand } from "@/app/dashboard/_ask/commands";
+import { bookShare, levelOf, scoreAnswer } from "@/lib/generation/confidence";
 import { scrub, scrubText } from "@/lib/debug/scrub";
 import { parseBugReport, reportMarkdown, statusLabel } from "@/lib/bug-report";
 import { pdfDisposition } from "@/lib/pdf/disposition";
@@ -495,6 +496,35 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
   const md = reportMarkdown({ number: 7, title: "Answer skipped Q4", description: "I expected 8", path: "/dashboard", app_build: "abc123", status: "open", created_at: "2026-10-20T10:00:00Z", who: "ravi@example.com", resolution: null, context: { userAgent: "Chrome", viewport: "390x844", url: "https://x/dashboard", steps: [{ at: "2026-10-20T10:00:01Z", kind: "click", text: 'Clicked button "Generate"' }], requests: [{ at: "2026-10-20T10:00:02Z", method: "POST", path: "/api/generate/solution", status: 200, ms: 4100, sent: '{"prompt":"Solve"}', received: "```x```" }], onScreen: { fields: [{ label: "Your question", value: "Solve" }], text: "Answer text" } } });
   check(["# Bug #7: Answer skipped Q4", "by ravi@example.com", "## What the person wrote", "I expected 8", "## Typed on the screen (input)", "- Your question: Solve", "## What the screen showed (output)", "Answer text", 'Clicked button "Generate"', "POST /api/generate/solution → 200 (4100 ms)", "Sent:", '{"prompt":"Solve"}', "Received:"].every((t) => md.includes(t)), "Report: the ticket text has the person's words, input, output, steps and requests");
   check(!md.includes("```x```") && statusLabel("working") === "Being fixed" && statusLabel("wontfix") === "Won't fix", "Report: code fences inside captured text can't break the ticket, and statuses read in plain words");
+}
+
+// Answer confidence: two numbers, "correct and grounded : from the books", in red, amber or green.
+{
+  const base = { context: SOIL_CONTEXT, checks: [] as { kind: "calculation" | "marks" | "coverage"; ok: boolean; message: string }[], coverageLow: false, usedSearchGrounding: false, weakPages: 0 };
+  const grounded = scoreAnswer({ ...base, text: SOIL_GROUNDED });
+  check(grounded.fromBook >= 90 && grounded.correct >= 90 && levelOf(grounded.correct) === "green" && levelOf(grounded.fromBook) === "green", `Confidence: an answer that follows the book is green and green (${grounded.correct}:${grounded.fromBook})`);
+  check(grounded.correct < 100 && grounded.reasons.length > 0, "Confidence: it is never 100, and always says why");
+  const mixed = scoreAnswer({ ...base, text: SOIL_MIXED });
+  check(mixed.fromBook > 15 && mixed.fromBook < 50 && levelOf(mixed.fromBook) === "red" && mixed.correct < grounded.correct && /not found in the pages/.test(mixed.reasons.join(" ")), `Confidence: an answer with outside facts added scores low on the book share (${mixed.correct}:${mixed.fromBook})`);
+  const outside = scoreAnswer({ ...base, text: OUTSIDE_ANSWER });
+  check(outside.fromBook === 0 && levelOf(outside.correct) === "red" && outside.correct <= 65, `Confidence: an answer from general knowledge is 0% from the book and red (${outside.correct}:${outside.fromBook})`);
+  check(bookShare(SOIL_GROUNDED, [{ content: "Black soil is [Handwritten answer: formed from the weathering of volcanic basalt rock rich in clay holds moisture suits cotton tobacco oilseeds millets]" }]) !== null && (bookShare(SOIL_GROUNDED, [{ content: "[Handwritten answer: formed from the weathering of volcanic basalt rock rich in clay holds moisture suits cotton tobacco oilseeds millets farm northern Maharashtra]" }]) ?? 0) < 20, "Confidence: a student's handwriting on the page doesn't count as the book");
+  check(bookShare("**Q1** Name it.\n\n**Ans:** **True**", SOIL_CONTEXT) === null, "Confidence: an answer too short to judge by words gives no share");
+  check(scoreAnswer({ ...base, text: "**Q2.1** Sufis.\n\n**Ans:** **True**", coverageLow: false }).fromBook === 85 && scoreAnswer({ ...base, text: "**Q2.1** Sufis.\n\n**Ans:** **True**", coverageLow: true }).fromBook === 40, "Confidence: for a very short answer the share follows how well the pages matched");
+  const none = scoreAnswer({ ...base, context: [], text: SOIL_GROUNDED });
+  check(none.fromBook === 0 && /No matching pages/.test(none.reasons.join(" ")), "Confidence: with no matching pages everything is from outside, and it says so");
+  const failed = scoreAnswer({ ...base, text: SOIL_GROUNDED, checks: [{ kind: "calculation", ok: false, message: "12 × 15 = 180, not 170" }] });
+  check(failed.correct <= grounded.correct - 20 && failed.reasons[0].includes("12 × 15 = 180"), "Confidence: a failed automatic check lowers the score by 20 and comes first in the reasons");
+  const calc = scoreAnswer({ ...base, text: SOIL_GROUNDED, checks: [{ kind: "calculation", ok: true, message: "ok" }] });
+  check(calc.correct >= grounded.correct && /exact calculator/.test(calc.reasons.join(" ")), "Confidence: checked calculations are credited");
+  const web = scoreAnswer({ ...base, text: SOIL_GROUNDED, usedSearchGrounding: true });
+  const weak = scoreAnswer({ ...base, text: SOIL_GROUNDED, weakPages: 2, coverageLow: true });
+  check(web.correct === grounded.correct - 8 && /web search/.test(web.reasons.join(" ")), "Confidence: a web search lowers it by 8, and says why");
+  check(weak.correct <= grounded.correct - 20 && /2 pages it relied on were hard to read/.test(weak.reasons.join(" ")) && /matched the question only weakly/.test(weak.reasons.join(" ")), "Confidence: hard-to-read pages and weak matches lower it, and say why");
+  check(scoreAnswer({ ...base, text: SOIL_GROUNDED, checks: Array.from({ length: 9 }, () => ({ kind: "calculation" as const, ok: false, message: "x" })), weakPages: 9, usedSearchGrounding: true, coverageLow: true }).correct >= 5, "Confidence: it never goes below 5");
+  check(levelOf(80) === "green" && levelOf(79) === "amber" && levelOf(60) === "amber" && levelOf(59) === "red" && levelOf(0) === "red", "Confidence: green from 80, amber from 60, red below");
+  const hindi = scoreAnswer({ ...base, context: [{ content: "काली मिट्टी बेसाल्ट चट्टानों के अपक्षय से बनती है। यह कपास तंबाकू तिलहन और बाजरा के लिए उपयुक्त है।" }], text: "**Ans:** काली मिट्टी बेसाल्ट चट्टानों के अपक्षय से बनती है। यह कपास तंबाकू तिलहन के लिए उपयुक्त है।" });
+  check(hindi.fromBook >= 80, `Confidence: Hindi answers are judged too (${hindi.fromBook})`);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

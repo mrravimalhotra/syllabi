@@ -222,3 +222,12 @@ The crops produced in this kind of soil are:
 
 [Handwritten answer: The type of soil in that region would be Red Soil. It is formed due to the peeling-off of igneous & metamorphic rocks. This soil gets its red colour due to the presence of potash & a high percentage of iron.]
 `;
+
+// Reference passages and three answers for the confidence tests: one that follows the book, one that adds outside facts, one that is wholly from outside.
+export const SOIL_CONTEXT = [
+  { content: "Black soil, also called regur soil, is formed from the weathering of basalt, a volcanic rock. It is rich in clay, retains moisture for a long time and is ideal for growing cotton, tobacco, oilseeds and millets. It is found mainly in northern Maharashtra and the Deccan plateau.\n[Handwritten answer: The type of soil would be Black Soil. Cotton Tobacco]" },
+  { content: "Red soil is formed by the weathering of igneous and metamorphic rocks. It gets its red colour from the presence of iron. With fertilisation and irrigation, red soil can be used to grow pulses, oilseeds, cotton and wheat. It is found in south eastern Maharashtra." },
+];
+export const SOIL_GROUNDED = "**Q1.1 Which soil would a farm in northern Maharashtra have, and what crops grow in it?**\n\n**Ans:** The farm would have black soil. Black soil is formed from the weathering of volcanic basalt rock. Because it is rich in clay and holds moisture, it suits cotton, tobacco, oilseeds and millets.\n\n**Q1.2 Describe the soil in south east Maharashtra.**\n\n**Ans:** The soil there is red soil. It forms from the weathering of igneous and metamorphic rocks and is red because of its iron. With fertilisation and irrigation it can grow pulses, oilseeds, cotton and wheat.";
+export const SOIL_MIXED = "**Q1.1 Soil?**\n\n**Ans:** Black soil suits cotton and oilseeds, as it is formed from weathering of basalt rock. Globally, vertisols cover roughly two percent of land and were first classified by American agronomists in the nineteen thirties. Their shrink-swell behaviour damages roads and building foundations in many countries.";
+export const OUTSIDE_ANSWER = "**Research:** Mirabai was born around 1498 in Kudki, Rajasthan, and composed devotional songs addressed to Krishna. She left the royal palace after her husband died and travelled to Vrindavan and Dwarka. This is from general knowledge, not from the book.";

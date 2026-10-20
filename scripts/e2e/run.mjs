@@ -1030,6 +1030,40 @@ await test("A saved answer: the reference pages show on screen but never in a pr
   await page.emulateMedia({ media: "screen" });
 });
 
+await test("Answer confidence: two numbers like 95 : 89 in red, amber or green, with the reasons, not in a print", async (page, ctx) => {
+  const rated = (id, title, confidence) => ({ ...answer, taskType: "ad_hoc", createdAt: now, pack: null, worked: null, id, title, text: "Black soil suits cotton.", sources: [], confidence });
+  const green = rated("c1", "Green answer", { correct: 95, fromBook: 89, reasons: ["Every calculation was checked by an exact calculator."] });
+  const mixed = rated("c2", "Mixed answer", { correct: 66, fromBook: 31, reasons: ["About 69% of the answer is not found in the pages of your books.", "A web search was used: its facts were not checked against your books."] });
+  const unrated = rated("c3", "Older answer", null);
+  for (const a of [green, mixed, unrated]) await ctx.route(`**/api/documents/${a.id}`, (r) => json(r, { answer: a }));
+
+  await page.goto(`${BASE}/dashboard/documents/c1`, { waitUntil: "networkidle" });
+  const badge = page.getByTestId("confidence");
+  await badge.waitFor();
+  await badge.locator("summary").getByText("95", { exact: true }).waitFor();
+  await badge.locator("summary").getByText("89", { exact: true }).waitFor();
+  const colours = await badge.locator("summary span.font-semibold").evaluateAll((els) => els.map((e) => e.className));
+  if (!colours.every((c) => /emerald/.test(c))) throw new Error(`Both numbers should be green: ${colours.join(" | ")}`);
+  await badge.locator("summary").click();
+  await badge.getByText("Correct and grounded:").waitFor();
+  await badge.getByText(/89% from your books, 11% from outside them/).waitFor();
+  await badge.getByText("Every calculation was checked by an exact calculator.").waitFor();
+  await page.emulateMedia({ media: "print" });
+  if (await badge.isVisible()) throw new Error("The confidence box is in the print view.");
+  await page.emulateMedia({ media: "screen" });
+
+  await page.goto(`${BASE}/dashboard/documents/c2`, { waitUntil: "networkidle" });
+  const colours2 = await page.getByTestId("confidence").locator("summary span.font-semibold").evaluateAll((els) => els.map((e) => e.className));
+  if (!/amber/.test(colours2[0]) || !/red/.test(colours2[1])) throw new Error(`66 should be amber and 31 red: ${colours2.join(" | ")}`);
+  await page.getByTestId("confidence").locator("summary").click();
+  await page.getByText(/About 69% of the answer is not found/).waitFor();
+  await page.getByText(/A web search was used/).waitFor();
+
+  await page.goto(`${BASE}/dashboard/documents/c3`, { waitUntil: "networkidle" });
+  await page.getByText("Black soil suits cotton.").first().waitFor();
+  if ((await page.getByTestId("confidence").count()) !== 0) throw new Error("An older answer with no score should show none.");
+});
+
 await test("A saved answer that is gone says so", async (page, ctx) => {
   await ctx.route("**/api/documents/zz", (r) => json(r, { error: "no" }, 404));
   await page.goto(`${BASE}/dashboard/documents/zz`, { waitUntil: "networkidle" });

@@ -90,6 +90,8 @@ export interface SavedSource {
   similarity: number;
 }
 
+import type { AnswerConfidence } from "@/lib/generation/confidence";
+
 export interface GeneratedDocumentRow {
   id: string;
   student_id: string;
@@ -107,6 +109,8 @@ export interface GeneratedDocumentRow {
   cache_key: string | null;
   /** What Syllabi's own code checked about this answer. */
   checks: AnswerCheck[];
+  /** How sure we are it is correct and grounded, and how much comes from the books (answers made before this was kept have none). */
+  confidence: AnswerConfidence | null;
   /** Worked examples only: the problem; its steps are recomputed when opened. */
   worked: WorkedProblem | null;
   created_at: string;

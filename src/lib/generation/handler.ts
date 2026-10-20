@@ -24,6 +24,7 @@ async function savedAnswerResponse(saved: GeneratedDocumentRow) {
     searchSuggestionsHtml: saved.search_suggestions_html,
     pdfUrl: `/api/documents/${saved.id}/pdf`,
     checks: saved.checks ?? [],
+    confidence: saved.confidence ?? null,
     reusedFrom: saved.created_at,
   };
 }
@@ -78,6 +79,7 @@ async function makeAndSaveAnswer(
       search_suggestions_html: result.searchSuggestionsHtml ?? null,
       cache_key: cacheKey,
       checks: result.checks,
+      confidence: result.confidence,
     })
     .select("id")
     .single();
@@ -95,6 +97,7 @@ async function makeAndSaveAnswer(
     usedSearchGrounding: result.usedSearchGrounding,
     searchSuggestionsHtml: result.searchSuggestionsHtml ?? null,
     checks: result.checks,
+    confidence: result.confidence,
     timings,
     // Made on demand from the saved answer (null if saving failed).
     pdfUrl: doc ? `/api/documents/${doc.id}/pdf` : null,

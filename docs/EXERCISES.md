@@ -48,3 +48,12 @@ Books already uploaded keep their old page text, which may have the handwriting 
 - Printed page numbers can restart (the worksheet's pages print as 2 and 3). "Page 2" in a request means the 2nd page *uploaded*, not the printed number.
 - When asking from My books, the app cannot count how many questions the exercise has, so it cannot warn if one is skipped; attach the pages in Generate to get that check.
 - Page pictures, not text, carry figures: the answer depends on the page reader describing them well.
+
+## Answer confidence (the "95 : 89" under each answer)
+
+Every generated answer shows two numbers, each red, amber or green (green 80 and over, amber 60 to 79, red below 60). They are worked out by code (`lib/generation/confidence.ts`), not asked of the AI:
+
+1. **Correct and grounded (first number).** Starts from the book share (below), then: a failed automatic check (a calculation, the marks, every question answered) takes off 20 each; checked calculations add 5; a weak match between the question and the pages takes off 10; a web search takes off 8; each hard-to-read scanned page the answer used takes off 5 (to 15); an answer mostly from outside the books is held to 65 at most. Never 100, never under 5.
+2. **From the books (second number).** The answer is split into statements; a statement counts as from the book when at least 55% of its meaningful words (roots, without filler words) are found in the book pages it was written from (a student's handwriting on those pages is not counted as the book; a statement that says it is general knowledge or from the web never counts). The rest is "from outside". An answer too short to judge by words (True, one word) goes by how well the pages matched.
+
+Click the numbers for the meaning and the reasons. These are estimates: a good paraphrase can look less grounded than it is, and a copied wrong passage looks fully grounded. Answers made before this have none; study packs and worked examples have none yet.
