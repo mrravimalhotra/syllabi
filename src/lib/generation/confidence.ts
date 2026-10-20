@@ -40,7 +40,7 @@ interface ConfidenceDetails {
 }
 
 /** An answer of the exercise that should be checked by a person: it is mostly not in the books. */
-export interface ReviewItem {
+interface ReviewItem {
   /** Which block of the answer (see splitAnswerBlocks). */
   index: number;
   /** "Q3.2". */
