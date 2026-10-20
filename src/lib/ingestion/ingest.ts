@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { extractPageText } from "@/lib/ingestion/extract";
 import { chunkPageText } from "@/lib/ingestion/chunk";
 import { takeLegibility, type Legibility } from "@/lib/ingestion/confidence";
+import { withoutHandwriting } from "@/lib/rag/handwriting";
 import { recordPageRead } from "@/lib/ingestion/page-read";
 import { embedMany } from "@/lib/llm";
 import { recordTokenUsage } from "@/lib/llm/usage";
@@ -128,7 +129,7 @@ export async function ingestPage(ctx: PageContext, page: IngestPage, storedImage
   const embeddings =
     textChunks.length === 0
       ? []
-      : await embedMany(textChunks.map((c) => c.content)).catch((err) => failAt("indexing the page", page.pageNumber, err));
+      : await embedMany(textChunks.map((c) => withoutHandwriting(c.content) || c.content)).catch((err) => failAt("indexing the page", page.pageNumber, err));
   if (embeddings.length !== textChunks.length) {
     failAt("indexing the page", page.pageNumber, new Error(`Expected ${textChunks.length} embeddings, got ${embeddings.length}`));
   }

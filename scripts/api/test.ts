@@ -24,11 +24,12 @@ import * as health from "../../src/app/api/admin/health/route";
 import * as bookDownload from "../../src/app/api/library/[id]/download/route";
 import { made as madePdfs } from "./fakes/book-pdf";
 import { arrangeBookPages } from "../../src/lib/pdf/book-pages";
-import { loadSourceImages, retrieveContext } from "../../src/lib/rag/retrieve";
+import { formatContext, loadSourceImages, retrieveContext } from "../../src/lib/rag/retrieve";
 import { namedPages, wantsWholeSection } from "../../src/lib/rag/whole-pages";
 import * as scanCheck from "../../src/app/api/library/[id]/scan/route";
 import sharp from "sharp";
 import { measureImage } from "../../src/lib/ingestion/image-quality";
+import { HANDWRITTEN_PAGE } from "../fixtures/bhakti-exercise-pages";
 import { scorePage, summariseBook, takeLegibility } from "../../src/lib/ingestion/confidence";
 import * as guests from "../../src/app/api/admin/guests/route";
 import * as speech from "../../src/app/api/speech/route";
@@ -529,6 +530,15 @@ fresh();
   check("scan check: a text-only (Word) page is scored on its text", byPage(3)?.confidence === 100);
   await check1(BOOK);
   check("scan check: running it again replaces the scores, not adds", (tables.page_reads ?? []).length === 3);
+}
+
+// ---- Handwritten answers ----
+{
+  const context = formatContext([{ id: "h1", document_id: BOOK, content: HANDWRITTEN_PAGE, section_label: "[Questions: Think and Answer]", page_number: 5, source_type: "exercise", image_path: null, similarity: 0.8 }]);
+  const [printed, attempt1] = context.split("[Student's handwritten attempt");
+  check("handwriting: the printed questions reach the AI without the student's answers inside them", printed.includes("Which type of soil do you think it will be?") && !/Black Soil|Red Soil|Cotton/.test(printed), printed.slice(0, 300));
+  check("handwriting: the answers are given apart, labelled reference-only and never-copy", attempt1 !== undefined && /for reference only/.test(attempt1) && /Never copy it/.test(attempt1) && /Black Soil/.test(attempt1));
+  check("handwriting: a chunk with none is passed on as it was", formatContext([{ id: "h2", document_id: BOOK, content: "Plain printed text.", section_label: null, page_number: 1, source_type: "textbook", image_path: null, similarity: 0.9 }]).endsWith("Plain printed text."));
 }
 
 // ---- Background reader and error log ----

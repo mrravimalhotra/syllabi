@@ -205,3 +205,20 @@ A number of poet-saints emerged in north and central India around the 14th centu
 
 Page: 4`,
 ];
+
+// A workbook page with a student's handwritten answers under the printed questions (Geography, Unit 2: Lithosphere), as the page reader writes it.
+export const HANDWRITTEN_PAGE = `[Questions: Think and Answer]
+
+1. If you happen to visit one of the farms situated in the Northern part of Maharashtra, which type of soil do you think it will have? What all crops can be produced in that type of soil?
+
+[Handwritten answer: The type of soil in that region would be Black Soil.
+The crops produced in this kind of soil are:
+1. Cotton
+2. Tobacco
+3. Oilseeds
+4. Millets]
+
+2. If you happen to visit one of the farms situated in the south east of Maharashtra, the soil type of that farm would be different from that of the farms in northern Maharashtra. Which type of soil do you think it will be? Describe that type of soil in three to four sentences.
+
+[Handwritten answer: The type of soil in that region would be Red Soil. It is formed due to the peeling-off of igneous & metamorphic rocks. This soil gets its red colour due to the presence of potash & a high percentage of iron.]
+`;

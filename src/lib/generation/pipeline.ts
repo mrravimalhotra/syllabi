@@ -231,7 +231,7 @@ async function transcribePhotos(studentId: string, photos: CompletionImage[]): P
   const result = await generateCompletion({
     taskType: "ocr_extraction",
     systemInstructions:
-      "Transcribe the text in these photos of study material faithfully, including question numbers and math in plain notation. No commentary.",
+      "Transcribe the text in these photos of study material faithfully, including question numbers and math in plain notation. Transcribe each printed question alone, exactly as printed; put any handwriting (a student's answers, notes) separately as [Handwritten: ...] after its question, never inside the question text. No commentary.",
     prompt: "Transcribe these photos.",
     images: photos,
     temperature: 0,

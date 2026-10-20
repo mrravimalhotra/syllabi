@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { embed, embedMany } from "@/lib/llm";
+import { handwritingIn, withoutHandwriting } from "@/lib/rag/handwriting";
 import { splitQuestions } from "@/lib/rag/split-questions";
 import { withWholePages } from "@/lib/rag/whole-pages";
 import { downloadFile } from "@/lib/storage";
@@ -36,7 +37,9 @@ const MAX_SECTION_IMAGES = 10;
  * RPC. A worksheet with several questions gets one search per question (one
  * batched embedding call), so every question finds its own material.
  */
-export async function retrieveContext(query: string, scope: RetrievalScope): Promise<RetrievalResult> {
+export async function retrieveContext(typed: string, scope: RetrievalScope): Promise<RetrievalResult> {
+  // A student's handwritten answers on the page are not part of the question: search on the printed text only.
+  const query = withoutHandwriting(typed);
   const questions = splitQuestions(query);
   if (questions.length === 0) {
     const { embedding } = await embed(query);
@@ -122,7 +125,10 @@ export function formatContext(chunks: MatchedChunk[]): string {
     .map((c, i) => {
       const loc = [c.section_label, c.page_number ? `p.${c.page_number}` : null].filter(Boolean).join(", ");
       const imageNote = c.image_path ? " — the original scanned page image is attached below" : "";
-      return `[Source ${i + 1}${loc ? ` — ${loc}` : ""} — ${c.source_type}${imageNote}]\n${c.content}`;
+      // The printed text and the student's handwriting on it are kept apart, so an answer is never copied from the handwriting.
+      const attempt = handwritingIn(c.content);
+      const attemptNote = attempt.length > 0 ? `\n[Student's handwritten attempt, for reference only. It may be wrong. Never copy it: ${attempt.join(" / ")}]` : "";
+      return `[Source ${i + 1}${loc ? ` — ${loc}` : ""} — ${c.source_type}${imageNote}]\n${withoutHandwriting(c.content)}${attemptNote}`;
     })
     .join("\n\n");
 }

@@ -6,8 +6,9 @@ import { makeBlendQuiz } from "@/lib/kindergarten/quiz";
 import { blockedReason, buildRequestBody, questionProblem, type Question } from "@/app/dashboard/_ask/build-request";
 import { checkPages } from "@/lib/ingestion/upload-pages";
 import { parsePhotos } from "@/lib/generation/attachments";
-import { LESSON_PAGES, PAGES as BHAKTI_PAGES } from "../fixtures/bhakti-exercise-pages";
+import { HANDWRITTEN_PAGE, LESSON_PAGES, PAGES as BHAKTI_PAGES } from "../fixtures/bhakti-exercise-pages";
 import { splitQuestions } from "@/lib/rag/split-questions";
+import { handwritingIn, withoutHandwriting } from "@/lib/rag/handwriting";
 import { chunkPageText } from "@/lib/ingestion/chunk";
 import { pdfDisposition } from "@/lib/pdf/disposition";
 import { signUpProblem, signUpRefusal } from "@/lib/signup-check";
@@ -431,6 +432,15 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
   const lessonLabels = LESSON_PAGES.flatMap((p, i) => chunkPageText(p, 2 + i).map((c) => c.sectionLabel));
   check(lessonLabels.filter((l) => l?.startsWith("[Questions:")).length === 3, "Lesson boxes: each box starts its own chunk, labelled with its title");
   check(splitQuestions([...LESSON_PAGES, ...BHAKTI_PAGES].join("\n\n")).length === 37, "Lesson boxes and the exercise together: 9 + 28 questions");
+
+  // A student's handwritten answers on the page are reference only: never part of a question.
+  const hw = splitQuestions(HANDWRITTEN_PAGE);
+  check(hw.length === 2 && hw.every((q) => !/Black Soil|Red Soil|Cotton|Handwritten/.test(q)), `Handwriting: two questions are found, with none of the student's answers in them (${hw.length})`);
+  check(!withoutHandwriting(HANDWRITTEN_PAGE).includes("Handwritten") && withoutHandwriting(HANDWRITTEN_PAGE).includes("Which type of soil do you think it will be?"), "Handwriting: removing it leaves the printed questions whole");
+  const attempts = handwritingIn(HANDWRITTEN_PAGE);
+  check(attempts.length === 2 && attempts[0].startsWith("The type of soil in that region would be Black Soil.") && attempts[0].includes("4. Millets") && !attempts[0].includes("["), "Handwriting: each answer is found whole, without its marker");
+  check(withoutHandwriting("Fill in: Vajji is a ____ [Handwritten: Gana-Sangha] republic.") === "Fill in: Vajji is a ____  republic.", "Handwriting: a short note inside a line is taken out too");
+  check(splitQuestions("Q1. Answer.\n1. What is soil used for in farming?\n[Handwritten: 1. for crops\n2. for houses]\n2. Name one crop of black soil.").length === 2, "Handwriting: numbered lines inside a handwritten answer are not counted as questions");
 
   // Other layouts of the same kind of paper.
   const upper = splitQuestions("Q1. Choose the right answer.\n1. Which is a prime?\nA. 4\nB. 6\nC. 7\nD. 9\n2. Which is even?\nA. 3\nB. 5\nC. 8\nD. 9");

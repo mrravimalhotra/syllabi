@@ -1,3 +1,5 @@
+import { withoutHandwriting } from "@/lib/rag/handwriting";
+
 // Worksheets and exercises ask many questions at once, often on different
 // topics. One search for the whole text finds material for only a few of them,
 // so each question is searched separately. Formats seen in real school material:
@@ -118,7 +120,8 @@ function questionsInBlock(block: Block, context: string): string[] {
  * inside ``` code blocks never start a question.
  */
 export function splitQuestions(text: string): string[] {
-  const { preamble, blocks, bullets } = sortLines(text);
+  // A student's handwritten answer (its bullets, numbers) is never a question.
+  const { preamble, blocks, bullets } = sortLines(withoutHandwriting(text));
   const context = preamble.join(" ").slice(0, 200);
   const questions = [
     ...blocks.flatMap((block) => questionsInBlock(block, context)),

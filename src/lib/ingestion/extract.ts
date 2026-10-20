@@ -55,6 +55,11 @@ edges. Transcribe only the main page.
   handwritten (filled-in blanks, answers, margin notes, dates, "HW", corrections) as
   [Handwritten: ...] where it appears, e.g. "Vajji is an example of a ____ [Handwritten:
   Gana-Sangha]". Handwritten answers may be wrong; copy them exactly as written.
+  A student's handwritten answer written on the lines under a printed question: first the
+  printed question alone, exactly as printed, then on its own paragraph [Handwritten
+  answer: ...] with the whole answer (bullets and all). The question text must never
+  contain any of the handwriting. Words the student crossed out are left out; words
+  written above the line to correct or insert are put where they belong.
 - Ticks and circles on options: mark the chosen option as [Ticked]. A ticked item in a
   list of topics or tasks shows the one chosen.
 - Ignore pen underlines, brackets, stars and highlights around printed text; transcribe

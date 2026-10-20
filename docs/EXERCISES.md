@@ -34,6 +34,15 @@ Worked out from the owner's sample chapter (History, Unit 1: Bhakti Movement, Gr
 
 Warm-up, Source Analysis, 21st Century Skills (research questions), Think and Answer, Check your understanding and similar boxes are questions to answer too, even though no exercise is marked. The page reader writes each box as `[Questions: <box title>]` followed by its passage, poem or picture and its numbered questions. A whole-exercise request ("solve the exercise", "all questions in the chapter", "warm-up") brings in every such box of the book, in page order ahead of the exercise, and answers are labelled with the box (**Warm-up Q1**). They are not added to a plain question or to named pages. Research questions ("research more about Mirabai") are answered from general knowledge and marked as not from the book. Books uploaded before this change keep their old page text: re-upload (or retry) a book to get the box markers.
 
+## Handwritten answers on the page
+
+Workbook pages often carry a student's handwritten answers (the sample: Geography Unit 2, "Black Soil" with a bullet list of crops; "Red Soil"). They are reference only:
+- the page reader writes the printed question alone, then the handwriting as `[Handwritten answer: ...]` (crossed-out words left out, inserted words put in place);
+- searches and the question list use the printed text only (the handwriting is not embedded and its bullets and numbers are never counted as questions);
+- the AI is given the printed question and, separately, "Student's handwritten attempt, for reference only", and is told to write each answer fresh from the book, rewriting the attempt when it agrees with the book and leaving it out or correcting it, without copying or remarking on it, when it is wrong or incomplete;
+- the exception is when you ask it to check or mark the answers, which judges the handwriting as before.
+Books already uploaded keep their old page text, which may have the handwriting mixed into the printed text: re-upload them to get the clean separation.
+
 ## Known limits
 
 - Printed page numbers can restart (the worksheet's pages print as 2 and 3). "Page 2" in a request means the 2nd page *uploaded*, not the printed number.
