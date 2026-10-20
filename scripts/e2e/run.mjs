@@ -311,6 +311,54 @@ await test("Ask: only Solve has the command; the other kinds of answer have none
   }
 });
 
+await test("Check paper: attach the solved paper, set marks per question, and get a marked report with a score card", async (page, ctx) => {
+  const report = "# Paper check: Class 7 maths worksheet\n\n**Total: 12 / 15 (80%) · Grade: A**\n\n| Q | Max | Marks | Steps | Answer |\n|---|---|---|---|---|\n| 1 | 5 | 5 | ✓ | ✓ |\n| 2 | 5 | 4 | ✓ | ✗ |\n| 3 | 5 | 3 | ~ | ✗ |\n\n## Question 2 — 4/5\n**To do better:** Check each converted fraction.";
+  await ctx.route("**/api/me", (r) => json(r, me));
+  await ctx.route("**/api/library**", (r) => json(r, { documents: [{ id: "t1", title: "A Textbook", subject: null, grade: null, source_type: "textbook", status: "ready", created_at: now, pages: null }] }));
+  let sent = null;
+  let route = "";
+  await ctx.route("**/api/generate/**", (r) => {
+    sent = r.request().postDataJSON();
+    route = r.request().url();
+    return json(r, { ...answer, title: "Paper check", text: report, sources: [], checks: [], confidence: null });
+  });
+  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.getByRole("radio", { name: /Check paper/ }).click();
+  await page.getByPlaceholder(/Attach photos or a PDF of the solved paper/).waitFor();
+  // No books are used to mark a paper.
+  if ((await page.getByText("Search these books").count()) !== 0 || (await page.getByRole("button", { name: /Your 1 book|All 1 book/ }).count()) !== 0) throw new Error("The book picker should be hidden when checking a paper.");
+  // Nothing to check yet.
+  await page.getByRole("button", { name: /^Generate$/ }).click();
+  await page.getByText(/Attach photos or a PDF of the solved paper first/).waitFor();
+  await page.locator("input[type=file]").setInputFiles({ name: "paper.jpg", mimeType: "image/jpeg", buffer: tinyJpeg });
+  await page.getByRole("button", { name: "Remove page 1" }).waitFor({ timeout: 15000 });
+  await page.getByLabel("Marks per question").fill("8");
+  await page.getByRole("button", { name: /^Generate$/ }).click();
+  await page.getByTestId("paper-score").waitFor({ timeout: 10000 });
+  await page.getByTestId("paper-score").getByText("Grade A").waitFor();
+  await page.getByTestId("paper-score").getByText("80%").waitFor();
+  await page.getByRole("cell", { name: "Marks", exact: true }).first().waitFor();
+  await page.getByText("Check each converted fraction.").first().waitFor();
+  if (!route.endsWith("/api/generate/paper-check")) throw new Error(`Sent to ${route}.`);
+  if (!/Marks per question \(set\): 8/.test(sent.prompt) || sent.photos.length !== 1 || sent.documentIds.length !== 0) throw new Error(`Sent ${JSON.stringify({ p: sent.prompt, n: sent.photos.length, d: sent.documentIds })}.`);
+});
+
+await test("Check paper: with no marks given the request says 5 per question is assumed", async (page, ctx) => {
+  await baseRoutes(ctx);
+  let sent = null;
+  await ctx.route("**/api/generate/**", (r) => {
+    sent = r.request().postDataJSON();
+    return json(r, { ...answer, text: "# Paper check: x\n\n**Total: 5 / 5 (100%) · Grade: A+**", sources: [], checks: [] });
+  });
+  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.getByRole("radio", { name: /Check paper/ }).click();
+  await page.locator("textarea").fill("1) 12 x 15 = 180");
+  await page.getByRole("button", { name: /^Generate$/ }).click();
+  await page.getByTestId("paper-score").waitFor({ timeout: 10000 });
+  if (!/Marks per question: not given \(use the marks printed on the paper, or 5 per question/.test(sent.prompt)) throw new Error(`Sent ${sent.prompt}.`);
+  await page.getByTestId("paper-score").getByText("Grade A+").waitFor();
+});
+
 await test("Ask: an attached photo shows, can be removed, and goes with the question", async (page, ctx) => {
   await baseRoutes(ctx);
   let sentPhotos = -1;

@@ -15,6 +15,7 @@ const TASK_TYPE_LABELS: Record<string, string> = {
   sample_paper: "Sample papers",
   ad_hoc: "Ask (quick answers)",
   study_pack: "Chapter study packs",
+  paper_check: "Paper checker (marking solved papers)",
 };
 const labelFor = (taskType: string) =>
   TASK_TYPE_LABELS[taskType] ?? taskType.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());

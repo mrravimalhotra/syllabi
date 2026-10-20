@@ -8,12 +8,14 @@ import { LANGUAGE_NAMES, type AnswerLanguage } from "@/lib/generation/language";
 interface Props {
   isPack: boolean;
   isSamplePaper: boolean;
+  isPaperCheck: boolean;
   photoCount: number;
   bookCount: number;
   /** How many books answers will search. */
   activeCount: number;
   booksOpen: boolean;
   totalMarks: string;
+  marksEach: string;
   language: AnswerLanguage;
   loading: boolean;
   readingFiles: boolean;
@@ -24,6 +26,7 @@ interface Props {
   onAttach: (files: FileList | null) => void;
   onToggleBooks: () => void;
   onTotalMarks: (marks: string) => void;
+  onMarksEach: (marks: string) => void;
   onLanguage: (language: AnswerLanguage) => void;
 }
 
@@ -32,11 +35,13 @@ export function ComposerToolbar(p: Props) {
   const {
     isPack,
     isSamplePaper,
+    isPaperCheck,
     photoCount,
     bookCount,
     activeCount,
     booksOpen,
     totalMarks,
+    marksEach,
     language,
     loading,
     readingFiles,
@@ -44,7 +49,7 @@ export function ComposerToolbar(p: Props) {
     overQuota,
     blocked,
   } = p;
-  const { onAttach, onToggleBooks, onTotalMarks, onLanguage } = p;
+  const { onAttach, onToggleBooks, onTotalMarks, onMarksEach, onLanguage } = p;
   return (
     <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 px-3 py-3 sm:px-4">
       <label
@@ -66,7 +71,7 @@ export function ComposerToolbar(p: Props) {
         />
       </label>
 
-      {bookCount > 0 && !isPack && (
+      {bookCount > 0 && !isPack && !isPaperCheck && (
         <button
           type="button"
           onClick={onToggleBooks}
@@ -80,6 +85,24 @@ export function ComposerToolbar(p: Props) {
               : `All ${bookCount} books`
             : `${activeCount} of ${bookCount} ${bookCount === 1 ? "book" : "books"}`}
         </button>
+      )}
+
+      {isPaperCheck && (
+        <label className="inline-flex items-center gap-2 px-2 text-sm text-slate-600">
+          Marks per question
+          <input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={100}
+            value={marksEach}
+            onChange={(e) => onMarksEach(e.target.value)}
+            placeholder="5"
+            aria-label="Marks per question"
+            title="Leave empty to use the marks printed on the paper, or 5 per question when there are none"
+            className="w-16 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm"
+          />
+        </label>
       )}
 
       {isSamplePaper && (

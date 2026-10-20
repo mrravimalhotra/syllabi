@@ -54,11 +54,14 @@ const styles = StyleSheet.create({
   },
 });
 
+/** The PDF's fonts have no cross or heavy tick (✗ ✘ ✕ ✖ ✔): a marked paper would show blanks, so they become × and ✓. */
+const pdfGlyphs = (text: string) => text.replace(/[✗✘✕✖❌☓]/g, "×").replace(/[✔☑]/g, "✓");
+
 const ANSWER_KEY_HEADING = /^(?:answer key\b|उत्तर कुंजी|उत्तरसूची|उत्तर सूची|corrigé)/i;
 
 /** Renders one line of text with **bold** spans; other inline markdown (`code`, *italic*) is shown as plain text. */
 function InlineText({ text }: { text: string }) {
-  const clean = tidyMath(text)
+  const clean = pdfGlyphs(tidyMath(text))
     .replace(/`([^`]+)`/g, "$1")
     .replace(/(^|[^*])\*([^*\s][^*]*)\*/g, "$1$2")
     // [text](https://...) prints as "text (https://...)"
@@ -137,7 +140,7 @@ function readTable(lines: string[], start: number): Read {
 function readHeading(line: string, index: number, heading: RegExpExecArray): Read {
   const level = heading[1].length;
   const style = level === 1 ? styles.h1 : level === 2 ? styles.h2 : styles.h3;
-  const headingText = tidyMath(heading[2].replace(/\*\*/g, ""));
+  const headingText = pdfGlyphs(tidyMath(heading[2].replace(/\*\*/g, "")));
   return {
     node: (
       // A sample paper's answer key starts on a new page, so the paper prints on its own.

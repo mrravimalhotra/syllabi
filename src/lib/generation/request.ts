@@ -10,6 +10,7 @@ const DEFAULT_PHOTO_PROMPT: Record<GenerationTaskType, string> = {
   sample_paper: "Make a sample paper on the topic shown in the attached photo or file.",
   ad_hoc: "Explain what is shown in the attached photo or file.",
   study_pack: "Make a study pack for the chapter in the attached photos or file.",
+  paper_check: "Check the solved maths paper in the attached photos or file: mark every sum.",
 };
 
 export interface GenerationRequest {

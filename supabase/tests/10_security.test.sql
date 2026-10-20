@@ -213,6 +213,11 @@ begin
   perform pg_temp.check_page_jobs();
   perform pg_temp.check_page_reads();
   perform pg_temp.check_bug_reports();
+  perform pg_temp.check('a paper check can be saved as an answer', 'service_role', null,
+    format('insert into generated_documents (student_id, task_type, title, content) values (%L, ''paper_check'', ''Paper check'', ''# Paper check'')', '00000000-0000-0000-0000-0000000000b1'), '1');
+  perform pg_temp.check('the paper checker has a model setting', 'service_role', null, 'select 1 from llm_settings where task_type = ''paper_check''', '1');
+  perform pg_temp.check('an unknown kind of answer is still refused', 'service_role', null,
+    format('insert into generated_documents (student_id, task_type, title, content) values (%L, ''banana'', ''x'', ''x'')', '00000000-0000-0000-0000-0000000000b1'), 'error');
   perform pg_temp.check('user cannot call chunk_text_size', 'authenticated', p1, format('select * from chunk_text_size(%L, null)', p1), 'error');
   perform pg_temp.check('server reads the size of a set of books', 'service_role', null, format('select 1 from chunk_text_size(%L, null) where chars >= 0 and chunks >= 0', p1), '1');
   perform pg_temp.check('an answer keeps its confidence', 'service_role', null,

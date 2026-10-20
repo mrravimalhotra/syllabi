@@ -4,13 +4,13 @@ import { TABS } from "@/app/dashboard/_ask/constants";
 import { cx } from "@/components/ui";
 import type { GenerationTaskType } from "@/types/database";
 
-/** The five kinds of thing to make (answer, notes, sample paper, study pack...), as a radio group. */
+/** The kinds of thing to make (answer, notes, sample paper, study pack, paper check...), as a radio group. */
 export function TabPicker({ tab, onChoose }: { tab: GenerationTaskType; onChoose: (next: GenerationTaskType) => void }) {
   return (
     <div
       role="radiogroup"
       aria-label="What to make"
-      className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5 print:hidden [&>*:last-child]:col-span-2 sm:[&>*:last-child]:col-span-1"
+      className="grid grid-cols-2 gap-2 sm:grid-cols-3 print:hidden"
     >
       {TABS.map((t) => {
         const Icon = t.icon;

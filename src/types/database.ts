@@ -10,10 +10,10 @@ export interface AnswerCheck {
 }
 
 /** Every kind of AI job the app does; each can be given its own service and model in Admin. */
-export const TASK_TYPES = ["ocr_extraction", "embedding", "solution", "notes", "sample_paper", "ad_hoc", "study_pack"] as const;
+export const TASK_TYPES = ["ocr_extraction", "embedding", "solution", "notes", "sample_paper", "ad_hoc", "study_pack", "paper_check"] as const;
 export type TaskType = (typeof TASK_TYPES)[number];
 
-export type GenerationTaskType = "solution" | "notes" | "sample_paper" | "ad_hoc" | "study_pack";
+export type GenerationTaskType = "solution" | "notes" | "sample_paper" | "ad_hoc" | "study_pack" | "paper_check";
 
 /** The kinds of material a book page can be. */
 export const SOURCE_TYPES = ["textbook", "exercise", "past_paper", "notes"] as const;

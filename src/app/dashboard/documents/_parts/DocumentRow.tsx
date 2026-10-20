@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChatIcon, ClipboardIcon, DownloadIcon, LayersIcon, ListCheckIcon, NotesIcon, SparklesIcon, TrashIcon } from "@/components/icons";
+import { ChatIcon, ClipboardIcon, DownloadIcon, LayersIcon, ListCheckIcon, NotesIcon, PencilIcon, SparklesIcon, TrashIcon } from "@/components/icons";
 import { PdfButton } from "@/components/PdfButton";
 import { button } from "@/components/ui";
 import { formatDate, taskLabel } from "@/lib/format";
@@ -15,6 +15,7 @@ const TASK_ICONS: Record<string, typeof ListCheckIcon> = {
   sample_paper: ClipboardIcon,
   ad_hoc: ChatIcon,
   study_pack: LayersIcon,
+  paper_check: PencilIcon,
 };
 
 /** One saved answer: its kind and date, a link to open it, and buttons to download it as a PDF or delete it. */

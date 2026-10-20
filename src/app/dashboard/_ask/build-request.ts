@@ -10,6 +10,8 @@ export interface Question {
   prompt: string;
   /** Sample papers: total marks to aim for. */
   totalMarks: string;
+  /** Paper checker: marks for each question ("" = use the marks on the paper, or 5). */
+  marksEach: string;
   language: AnswerLanguage;
   /** Study packs: the chapter chosen from My books ("" = use the attached pages). */
   packBookId: string;
@@ -26,12 +28,25 @@ export function questionProblem(q: Question): string | null {
   if (q.task === "study_pack") {
     return !q.packBookId && q.photos.length === 0 ? "Choose the chapter from My books, or attach photos or a PDF of it." : null;
   }
-  if (!q.prompt.trim() && q.photos.length === 0 && q.docs.length === 0) return "Type a question or attach a photo or file first.";
+  if (!q.prompt.trim() && q.photos.length === 0 && q.docs.length === 0) {
+    return q.task === "paper_check" ? "Attach photos or a PDF of the solved paper first, or type the sums with the student's working." : "Type a question or attach a photo or file first.";
+  }
+  if (q.task === "paper_check" && q.marksEach.trim() !== "" && !(Number(q.marksEach) > 0 && Number(q.marksEach) <= 100)) return "Marks per question must be a number from 1 to 100, or leave it empty.";
   // Too much is refused with a reason, never cut off quietly (the last pages would be missed).
   return textTooLong(q.prompt.trim(), attachedText(q));
 }
 
 const toPhotos = (photos: DownscaledImage[]) => photos.map((p) => ({ data: p.imageBase64, mimeType: p.mimeType, text: p.text }));
+
+/** What is sent as the question: the typed text, with the marks (sample paper) or marks per question (paper checker) added. */
+function promptFor(q: Question): string {
+  const typed = q.prompt.trim();
+  if (q.task === "sample_paper") return `${typed}\n\nTotal marks: ${q.totalMarks}`.trim();
+  if (q.task !== "paper_check") return typed;
+  const each = Number(q.marksEach);
+  const marks = each > 0 && each <= 100 ? `Marks per question (set): ${each}` : "Marks per question: not given (use the marks printed on the paper, or 5 per question when none are printed)";
+  return `${typed}\n\n${marks}`.trim();
+}
 
 /** The request body for the question: a study pack from a chapter, or an answer from the ticked books. */
 export function buildRequestBody(q: Question): Record<string, unknown> {
@@ -44,8 +59,9 @@ export function buildRequestBody(q: Question): Record<string, unknown> {
     };
   }
   return {
-    prompt: q.task === "sample_paper" ? `${q.prompt.trim()}\n\nTotal marks: ${q.totalMarks}`.trim() : q.prompt.trim(),
-    documentIds: q.bookIds,
+    prompt: promptFor(q),
+    // Marking a paper needs no book.
+    documentIds: q.task === "paper_check" ? [] : q.bookIds,
     language: q.language,
     photos: toPhotos(q.photos),
     attachedText: attachedText(q),

@@ -234,3 +234,47 @@ export const OUTSIDE_ANSWER = "**Research:** Mirabai was born around 1498 in Kud
 
 // An exercise answered question by question: two answers follow the book, one is a short true answer, and three are not in it (an invented fact, an unrelated answer, a general-knowledge research answer).
 export const SOIL_EXERCISE_ANSWER = "# Unit 2: Solutions\n\n---\n\n## Worksheet\n\n**Q1 (i). Which soil is found in northern Maharashtra?**\n**Ans:** Black soil, formed from weathering of volcanic basalt rock, rich in clay and moisture.\n\n**Q1 (ii). Which soil is red?**\n**Ans:** **Red soil**\n\n**Q1 (iii). Name the largest desert on Earth.**\n**Ans:** **Antarctic Desert**\n\n**Q2.1 Why does lava cool quickly in oceans?**\n**Ans:** Lava meeting seawater cools quickly because water absorbs heat far faster than air, creating pillow basalt formations on volcanic ocean floors, a process geologists study around mid-ocean ridges.\n\n**Warm-up Q1 Research Mirabai.**\n**Ans:** Mirabai was a saint from Rajasthan. This is from general knowledge, not from the book.";
+
+// A marking report in the layout the paper checker asks for: three sums out of 5 each, 12 of 15.
+export const PAPER_REPORT = `# Paper check: Class 7 maths worksheet
+
+**Total: 12 / 15 (80%) · Grade: A**
+
+| Q | Max | Marks | Steps | Answer |
+|---|---|---|---|---|
+| 1 | 5 | 5 | ✓ | ✓ |
+| 2 | 5 | 4 | ✓ | ✗ |
+| 3 | 5 | 3 | ~ | ✗ |
+
+## Question 1 — 5/5
+**Question:** Find 15% of 240.
+**Correct answer:** 15% of 240 = 15 ÷ 100 × 240 = 36.
+**Student's working:**
+- ✓ 15/100 × 240
+- ✓ = 36
+**Marks:** Method 3/3, Answer 2/2. Complete and correct.
+**To do better:** Keep writing the unit when there is one.
+
+## Question 2 — 4/5
+**Question:** Add 3/4 and 2/3.
+**Correct answer:** 3/4 + 2/3 = 9/12 + 8/12 = 17/12 = 1 5/12.
+**Student's working:**
+- ✓ LCM of 4 and 3 is 12
+- ✗ Student wrote: 3/4 + 2/3 = 9/12 + 6/12 = 15/12 → 2/3 = 8/12, not 6/12
+**Marks:** Method 3/3, Answer 1/2. One conversion slip.
+**To do better:** Check each converted fraction by multiplying the top and bottom by the same number.
+
+## Question 3 — 3/5
+**Question:** Divide 5255 by 5.
+**Correct answer:** 5255 ÷ 5 = 1051.
+**Student's working:**
+- ~ Started the long division correctly
+- ✗ Student wrote: 5255 ÷ 5 = 1015 → the zero was put in the wrong place
+**Marks:** Method 2/3, Answer 1/2.
+**To do better:** After each digit, bring down the next one before dividing again.
+
+## Overall feedback
+**Well done:** Clear working and correct methods.
+**Work on:** Careful conversion of fractions and place value in division.
+**Next steps:** Practise five fraction additions, three long divisions with a zero in the answer, and check each answer by multiplying back.
+`;

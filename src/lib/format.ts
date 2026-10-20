@@ -17,6 +17,7 @@ const TASK_LABELS: Record<string, string> = {
   sample_paper: "Sample paper",
   ad_hoc: "Quick answer",
   study_pack: "Study pack",
+  paper_check: "Paper check",
 };
 
 /** A kind of document in words; never a raw code like "sample_paper". */

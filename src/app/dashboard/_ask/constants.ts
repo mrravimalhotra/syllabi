@@ -1,5 +1,5 @@
 import type { Answer } from "@/components/AnswerView";
-import { ChatIcon, ClipboardIcon, LayersIcon, ListCheckIcon, NotesIcon } from "@/components/icons";
+import { ChatIcon, ClipboardIcon, LayersIcon, ListCheckIcon, NotesIcon, PencilIcon } from "@/components/icons";
 import type { StudyPack } from "@/lib/study-pack/types";
 import type { GenerationTaskType, SourceType, Student } from "@/types/database";
 
@@ -86,7 +86,17 @@ export const TABS: {
     icon: LayersIcon,
     placeholder: "Optional: what to focus on, for example “keep the language simple” or “extra practice on dates”",
   },
+  {
+    value: "paper_check",
+    label: "Check paper",
+    description: "Marks maths sums",
+    icon: PencilIcon,
+    placeholder: "Attach photos or a PDF of the solved paper (several sums are fine), or type the sums with the student's working. Add the marks here if the paper doesn't show them.",
+  },
 ];
+
+/** Whether answers of this kind search the person's books (a study pack is made from one chosen chapter, and a paper check from the student's work). */
+export const usesBooks = (task: GenerationTaskType) => task !== "study_pack" && task !== "paper_check";
 
 export const ROUTE_BY_TASK: Record<GenerationTaskType, string> = {
   solution: "/api/generate/solution",
@@ -94,6 +104,7 @@ export const ROUTE_BY_TASK: Record<GenerationTaskType, string> = {
   sample_paper: "/api/generate/sample-paper",
   ad_hoc: "/api/generate/ad-hoc",
   study_pack: "/api/generate/study-pack",
+  paper_check: "/api/generate/paper-check",
 };
 
 // What the person sees while waiting; the steps move on with time, since the

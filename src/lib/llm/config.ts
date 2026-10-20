@@ -14,6 +14,7 @@ const FALLBACK: Record<TaskType, { provider: Provider; model: string }> = {
   sample_paper: { provider: "google", model: "gemini-flash-latest" },
   ad_hoc: { provider: "google", model: "gemini-flash-latest" },
   study_pack: { provider: "google", model: "gemini-flash-latest" },
+  paper_check: { provider: "google", model: "gemini-flash-latest" },
 };
 
 let cache: { at: number; rows: Map<TaskType, LlmSetting> } | null = null;

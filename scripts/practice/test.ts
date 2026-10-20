@@ -6,6 +6,9 @@ import { makeBlendQuiz } from "@/lib/kindergarten/quiz";
 import { blockedReason, buildRequestBody, questionProblem, type Question } from "@/app/dashboard/_ask/build-request";
 import { checkPages } from "@/lib/ingestion/upload-pages";
 import { parsePhotos } from "@/lib/generation/attachments";
+import { PAPER_REPORT } from "../fixtures/bhakti-exercise-pages";
+import { checkPaperMarks, gradeFor, gradeScaleText, withoutStudentWork } from "@/lib/checks/paper";
+import { checkArithmetic } from "@/lib/checks/arithmetic";
 import { splitAnswerBlocks } from "@/lib/generation/blocks";
 import { HANDWRITTEN_PAGE, SOIL_EXERCISE_ANSWER, LESSON_PAGES, OUTSIDE_ANSWER, PAGES as BHAKTI_PAGES, SOIL_CONTEXT, SOIL_GROUNDED, SOIL_MIXED } from "../fixtures/bhakti-exercise-pages";
 import { splitQuestions } from "@/lib/rag/split-questions";
@@ -298,7 +301,7 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
 
 // What is sent for a question on the Generate page.
 {
-  const q: Question = { task: "solution", prompt: "  What is 12 x 15?  ", totalMarks: "80", language: "auto", packBookId: "", bookIds: ["b1", "b2"], photos: [], docs: [] };
+  const q: Question = { task: "solution", prompt: "  What is 12 x 15?  ", totalMarks: "80", marksEach: "", language: "auto", packBookId: "", bookIds: ["b1", "b2"], photos: [], docs: [] };
   check(questionProblem({ ...q, prompt: "  " }) === "Type a question or attach a photo or file first.", "An empty question is refused");
   check(questionProblem(q) === null && questionProblem({ ...q, prompt: "", docs: [{ name: "a.docx", text: "hi" }] }) === null, "A question or an attachment is enough");
   check(questionProblem({ ...q, task: "study_pack" }) !== null && questionProblem({ ...q, task: "study_pack", packBookId: "b1" }) === null, "A study pack needs a chapter or pages");
@@ -572,6 +575,42 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
   check(good.review === undefined, "Review: an answer that follows the book has nothing to check");
   check(scoreAnswer({ ...base, text: "**Q1 Soil?**\n**Ans:** Volcanic eruptions create pillow lava formations underwater near ridges." }).review === undefined, "Review: a single answer isn't flagged (an exercise needs two or more questions)");
   check(scoreAnswer({ ...base, context: [], text: SOIL_EXERCISE_ANSWER }).review === undefined, "Review: with no book passages there is nothing to compare, so no per-answer flags");
+}
+
+// The paper checker: a teacher's marking, with its marks, total and grade checked by code.
+{
+  const good = checkPaperMarks(PAPER_REPORT, null);
+  check(good.every((c) => c.ok) && good.some((c) => c.message === "Marks add up to 12 / 15"), `Paper check: a correct report passes (${good.map((c) => c.message).join("; ")})`);
+  const bad = (from: string, to: string, per: number | null = null) => checkPaperMarks(PAPER_REPORT.replace(from, to), per).filter((c) => !c.ok).map((c) => c.message);
+  check(/adds up to 12 \/ 15, not the 13 \/ 15/.test(bad("Total: 12 / 15", "Total: 13 / 15").join()), "Paper check: a wrong total is caught");
+  check(/is 80%, not 85%/.test(bad("(80%)", "(85%)").join()), "Paper check: a wrong percentage is caught");
+  check(/80% is grade A, not B/.test(bad("Grade: A**", "Grade: B**").join()), "Paper check: a grade that doesn't follow from the percentage is caught");
+  check(/6 marks is not within 0 to 5/.test(bad("| 3 | 5 | 3 |", "| 3 | 5 | 6 |").join()), "Paper check: marks above the maximum are caught");
+  check(/heading says 4 \/ 5 but the table says 3 \/ 5/.test(bad("## Question 3 — 3/5", "## Question 3 — 4/5").join()), "Paper check: a question heading that disagrees with the table is caught");
+  check(/Question 1 is out of 5, but every question is out of 10/.test(bad("x", "y", 10).join()) && bad("x", "y", 5).length === 0, "Paper check: when the teacher sets marks per question, every question must be out of that");
+  check(checkPaperMarks("Just some text", null)[0].message.includes("no marks table"), "Paper check: a report with no table is refused");
+  check(!checkPaperMarks(PAPER_REPORT.replace(/\*\*Total:[^\n]*\n/, ""), null).every((c) => c.ok), "Paper check: a report without the Total line is refused");
+  check(gradeFor(90) === "A+" && gradeFor(89) === "A" && gradeFor(80) === "A" && gradeFor(70) === "B+" && gradeFor(60) === "B" && gradeFor(50) === "C" && gradeFor(40) === "D" && gradeFor(39) === "E" && gradeFor(0) === "E", "Paper check: the grades follow the scale");
+  check(gradeScaleText().startsWith("A+ is 90% and above, A is 80% up to 89%") && gradeScaleText().endsWith("E is 0% up to 39%"), "Paper check: the scale given to the teacher says the same");
+
+  // The student's wrong sums are quoted in the report: only the teacher's own sums are recomputed.
+  const sums = checkArithmetic(PAPER_REPORT);
+  const teacherOnly = checkArithmetic(withoutStudentWork(PAPER_REPORT));
+  check(sums.some((c) => !c.ok) && teacherOnly.every((c) => c.ok) && teacherOnly.length >= 2, `Paper check: the student's wrong sums are not mistaken for the teacher's (${sums.filter((c) => !c.ok).length} wrong sums quoted, ${teacherOnly.filter((c) => !c.ok).length} counted against the teacher)`);
+  check(!withoutStudentWork(PAPER_REPORT).includes("Student wrote") && withoutStudentWork(PAPER_REPORT).includes("5255 ÷ 5 = 1051"), "Paper check: quoted student lines are removed, the correct answers stay");
+
+  // The request.
+  const pq: Question = { task: "paper_check", prompt: "", totalMarks: "80", marksEach: "", language: "auto", packBookId: "", bookIds: ["b1"], photos: [], docs: [] };
+  check(/Attach photos or a PDF of the solved paper/.test(questionProblem(pq) ?? ""), "Paper check: nothing attached or typed is refused, saying what to attach");
+  check(questionProblem({ ...pq, prompt: "1) 12 x 15 = 170" }) === null && questionProblem({ ...pq, photos: [{ imageBase64: "AAAA", mimeType: "image/jpeg" } as never] }) === null, "Paper check: typed sums or an attached paper are enough");
+  check(/Marks per question must be a number/.test(questionProblem({ ...pq, prompt: "x", marksEach: "abc" }) ?? "") && questionProblem({ ...pq, prompt: "x", marksEach: "0" }) !== null && questionProblem({ ...pq, prompt: "x", marksEach: "7" }) === null, "Paper check: marks per question must be a number from 1 to 100, or empty");
+  const none = buildRequestBody({ ...pq, prompt: "Sums" });
+  check(String(none.prompt).includes("Marks per question: not given") && String(none.prompt).includes("5 per question") && JSON.stringify(none.documentIds) === "[]", "Paper check: with no marks given the request says 5 per question is assumed, and no book is used");
+  check(String(buildRequestBody({ ...pq, prompt: "Sums", marksEach: "8" }).prompt).includes("Marks per question (set): 8"), "Paper check: marks per question set by the teacher are sent");
+  check(!String(buildRequestBody({ ...q0(), prompt: "x" }).prompt).includes("Marks per question"), "Paper check: other kinds of answer don't get a marks line");
+}
+function q0(): Question {
+  return { task: "solution", prompt: "", totalMarks: "80", marksEach: "5", language: "auto", packBookId: "", bookIds: [], photos: [], docs: [] };
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

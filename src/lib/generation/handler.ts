@@ -30,7 +30,8 @@ async function savedAnswerResponse(saved: GeneratedDocumentRow) {
 }
 
 /** A short one-line title for the saved answer. */
-function titleFor(typedPrompt: string, hasAttachedText: boolean): string {
+function titleFor(typedPrompt: string, hasAttachedText: boolean, taskType: GenerationTaskType): string {
+  if (taskType === "paper_check") return "Paper check" + (typedPrompt ? `: ${typedPrompt.replace(/\s+/g, " ").slice(0, 60)}` : "");
   if (!typedPrompt) return hasAttachedText ? "Attached worksheet" : "Photo question";
   const oneLine = typedPrompt.replace(/\s+/g, " ");
   return oneLine.length > 80 ? `${oneLine.slice(0, 77)}...` : oneLine;
@@ -56,7 +57,7 @@ async function makeAndSaveAnswer(
     onText,
     onRestart,
   });
-  const title = titleFor(req.typedPrompt, req.hasAttachedText);
+  const title = titleFor(req.typedPrompt, req.hasAttachedText, taskType);
   const savedSources: SavedSource[] = result.sources.map((s) => ({
     id: s.id,
     document_id: s.document_id,

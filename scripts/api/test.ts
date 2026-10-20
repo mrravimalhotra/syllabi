@@ -34,6 +34,7 @@ import sharp from "sharp";
 import { measureImage } from "../../src/lib/ingestion/image-quality";
 import { HANDWRITTEN_PAGE } from "../fixtures/bhakti-exercise-pages";
 import { scorePage, summariseBook, takeLegibility } from "../../src/lib/ingestion/confidence";
+import * as paperCheck from "../../src/app/api/generate/paper-check/route";
 import * as guests from "../../src/app/api/admin/guests/route";
 import * as speech from "../../src/app/api/speech/route";
 import * as sounds from "../../src/app/api/sounds/route";
@@ -685,6 +686,21 @@ fresh();
   failures.push({ table: "page_reads", message: "db down" });
   check("confidence: if the page scores can't be read the answer is still scored", (await countWeakPages([{ document_id: BOOK, page_number: 4 }])) === 0);
   failures.length = 0;
+}
+
+// ---- Paper checker ----
+fresh(person({ role: "student" }));
+tables.generated_documents = [];
+pipeline.calls = 0;
+{
+  await expect("paper check: nothing attached or typed is refused", paperCheck.POST, 400, /Type a question, or attach a photo/i, { prompt: "  " });
+  await expect("paper check: too many pages are refused", paperCheck.POST, 400, /photos/i, { photos: Array.from({ length: 30 }, () => ({ data: "AAAA", mimeType: "image/jpeg" })) });
+  const marked = await expect("paper check: typed working is marked and saved", paperCheck.POST, 200, null, { prompt: "1) 12 x 15 = 170\n\nMarks per question (set): 4", documentIds: [] });
+  const row = (tables.generated_documents ?? [])[0] as { task_type: string; title: string; confidence: unknown } | undefined;
+  check("paper check: it is saved as a paper check with its own title", row?.task_type === "paper_check" && /^Paper check: 1\) 12 x 15 = 170/.test(row.title), JSON.stringify(row));
+  check("paper check: it is answered by the paper checker, not the book pipeline", pipeline.calls === 1 && typeof marked.json?.text === "string");
+  fresh(null);
+  await expect("paper check: a signed-out person is refused", paperCheck.POST, 401, null, { prompt: "x" });
 }
 
 // ---- Background reader and error log ----

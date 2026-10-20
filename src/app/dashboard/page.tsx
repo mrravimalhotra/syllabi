@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { AnswerLanguage } from "@/lib/generation/language";
 import { keep, peek } from "@/lib/client-cache";
-import { PACK_WAIT_STEPS, ROUTE_BY_TASK, TABS, WAIT_STEPS, type MeResponse } from "@/app/dashboard/_ask/constants";
+import { PACK_WAIT_STEPS, ROUTE_BY_TASK, TABS, WAIT_STEPS, type MeResponse, usesBooks } from "@/app/dashboard/_ask/constants";
 import { AskHeader } from "@/app/dashboard/_ask/AskHeader";
 import { AttachmentList } from "@/app/dashboard/_ask/AttachmentList";
 import { BookPicker } from "@/app/dashboard/_ask/BookPicker";
@@ -30,6 +30,8 @@ export default function DashboardPage() {
   const [prompt, setPrompt] = useState("");
   // Sample papers: total marks to aim for (Indian school papers are often 80).
   const [totalMarks, setTotalMarks] = useState("80");
+  // Paper checker: marks for each question ("" = the marks on the paper, or 5).
+  const [marksEach, setMarksEach] = useState("");
   const [showBooks, setShowBooks] = useState(false);
   // Language for this question; until changed, the Account page's default.
   const [answerLanguage, setAnswerLanguage] = useState<AnswerLanguage | null>(null);
@@ -58,6 +60,8 @@ export default function DashboardPage() {
   const chosenPackBook = packBookId ?? books.books[0]?.id ?? "";
   const currentTab = TABS.find((t) => t.value === tab)!;
   const isPack = tab === "study_pack";
+  // Marking a paper uses no book.
+  const isCheck = tab === "paper_check";
 
   async function submit(e?: React.FormEvent) {
     e?.preventDefault();
@@ -66,6 +70,7 @@ export default function DashboardPage() {
       task: tab,
       prompt,
       totalMarks,
+      marksEach,
       language,
       packBookId: chosenPackBook,
       bookIds: books.activeIds,
@@ -115,7 +120,7 @@ export default function DashboardPage() {
     if (await again.done) attachments.clear();
   }
 
-  const noBookSelected = !isPack && books.books.length > 0 && books.activeIds.length === 0;
+  const noBookSelected = usesBooks(tab) && books.books.length > 0 && books.activeIds.length === 0;
   const overQuota = me?.quota.overQuota ?? false;
   const blocked = blockedReason({ overQuota, noBookSelected, readingFiles, choosingPages: attachments.longPdfs.length > 0 });
   const showCommands = commandsInView(tab, prompt, photos.length > 0 || docs.length > 0);
@@ -158,7 +163,7 @@ export default function DashboardPage() {
           />
         ))}
 
-        {books.books.length > 0 && showBooks && !isPack && (
+        {books.books.length > 0 && showBooks && usesBooks(tab) && (
           <BookPicker
             books={books.books}
             activeIds={books.activeIds}
@@ -172,11 +177,13 @@ export default function DashboardPage() {
         <ComposerToolbar
           isPack={isPack}
           isSamplePaper={tab === "sample_paper"}
+          isPaperCheck={isCheck}
           photoCount={photos.length}
           bookCount={books.books.length}
           activeCount={books.activeIds.length}
           booksOpen={showBooks}
           totalMarks={totalMarks}
+          marksEach={marksEach}
           language={language}
           loading={generation.loading}
           readingFiles={readingFiles}
@@ -186,6 +193,7 @@ export default function DashboardPage() {
           onAttach={(files) => void attachments.add(files)}
           onToggleBooks={() => setShowBooks((v) => !v)}
           onTotalMarks={setTotalMarks}
+          onMarksEach={setMarksEach}
           onLanguage={setAnswerLanguage}
         />
       </DropForm>

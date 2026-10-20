@@ -33,6 +33,7 @@ export const COMMANDS: Record<GenerationTaskType, QuickCommand[]> = {
   sample_paper: [],
   ad_hoc: [],
   study_pack: [],
+  paper_check: [],
 };
 
 /** Ids of the ready books that are of one of these kinds. */

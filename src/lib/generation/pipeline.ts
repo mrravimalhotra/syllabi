@@ -3,7 +3,7 @@ import { recordTokenUsage } from "@/lib/llm/usage";
 import { fullContextBudget } from "@/lib/rag/budget";
 import { countWeakPages } from "@/lib/ingestion/page-read";
 import { scoreAnswer, type AnswerConfidence } from "@/lib/generation/confidence";
-import { retrieveContext, formatContext, loadSourceImages } from "@/lib/rag/retrieve";
+import { retrieveContext, formatContext, loadSourceImages, type RetrievalResult } from "@/lib/rag/retrieve";
 import { checkQuota, QuotaExceededError } from "@/lib/quota";
 import { systemInstructionsFor } from "@/lib/generation/prompts";
 import { levelLine } from "@/lib/generation/level";
@@ -11,6 +11,7 @@ import type { AnswerLanguage } from "@/lib/generation/language";
 import type { CompletionImage } from "@/lib/llm/types";
 import type { AnswerCheck, GenerationTaskType, MatchedChunk, Student } from "@/types/database";
 import { checkArithmetic } from "@/lib/checks/arithmetic";
+import { checkPaperMarks, withoutStudentWork } from "@/lib/checks/paper";
 import { checkCoverage, checkSamplePaper } from "@/lib/checks/rules";
 
 export interface GenerationInput {
@@ -45,7 +46,7 @@ export interface GenerationOutput {
   /** What Syllabi's own code checked (calculations), shown with the answer. */
   checks: AnswerCheck[];
   /** How sure we are the answer is correct and grounded, and how much of it comes from the books. */
-  confidence: AnswerConfidence;
+  confidence: AnswerConfidence | null;
   /** Every page of the selected books was passed to the AI (so the sources are the books, not a few passages). */
   fullContext: boolean;
   /** Where the time went, in milliseconds, to find out what is slow. */
@@ -71,6 +72,11 @@ interface GenerationTimings {
 
 /** All code checks that apply to this kind of answer. */
 function answerChecks(taskType: GenerationTaskType, text: string, questionText: string, prompt: string): AnswerCheck[] {
+  if (taskType === "paper_check") {
+    // The teacher's own sums are checked; lines quoting the student's (wrong) working are not, then the marks, total and grade.
+    const set = /Marks per question \(set\):\s*(\d+(?:\.\d+)?)/i.exec(prompt);
+    return [...checkArithmetic(withoutStudentWork(text)), ...checkPaperMarks(text, set ? Number(set[1]) : null)];
+  }
   const checks = checkArithmetic(text);
   if (taskType === "sample_paper") {
     const total = /Total marks:\s*(\d{1,3})/i.exec(prompt);
@@ -88,6 +94,8 @@ const TEMPERATURE: Record<GenerationTaskType, number> = {
   notes: 0.3,
   ad_hoc: 0.4,
   study_pack: 0.3,
+  // Marking must be exact and repeatable.
+  paper_check: 0.1,
 };
 
 /**
@@ -143,12 +151,16 @@ export async function runGeneration({
   if (quota.overQuota) throw new QuotaExceededError(quota);
 
   const searchStart = Date.now();
-  const retrieval = await retrieveContext(searchQuery, {
-    ownerId: student.id,
-    documentIds,
-    // The selected books are passed whole when they fit.
-    fullContextChars: fullContextBudget(),
-  });
+  // Marking a paper needs no book: the student's work is the material.
+  const retrieval: RetrievalResult =
+    taskType === "paper_check"
+      ? { chunks: [], coverageLow: false, stats: { mode: "search", books: 0, totalChars: 0, sectionChunks: 0, questions: 0, supportChunks: 0, topSimilarity: null } }
+      : await retrieveContext(searchQuery, {
+          ownerId: student.id,
+          documentIds,
+          // The selected books are passed whole when they fit.
+          fullContextChars: fullContextBudget(),
+        });
   timings.searchMs = Date.now() - searchStart;
 
   const imagesStart = Date.now();
@@ -164,7 +176,7 @@ export async function runGeneration({
     taskType,
     systemInstructions: systemInstructionsFor(taskType, levelLine(student), language),
     prompt: `${prompt}${photoNote}`,
-    context: formatContext(retrieval.chunks),
+    context: taskType === "paper_check" ? "(No reference material is needed: mark the student's work with your own mathematical knowledge.)" : formatContext(retrieval.chunks),
     images: [...photos, ...sourcePageImages],
     // Search grounding is opt-in per the RAG-first policy: only fires when
     // coverage from the books is weak.
@@ -224,15 +236,19 @@ export async function runGeneration({
     }
   }
 
-  const confidence = scoreAnswer({
-    text: result.text,
-    context: retrieval.chunks,
-    retrieval: retrieval.stats,
-    checks,
-    coverageLow: retrieval.coverageLow,
-    usedSearchGrounding: Boolean(result.usedSearchGrounding),
-    weakPages: await countWeakPages(retrieval.chunks),
-  });
+  // How much of a marking comes from the books is not a question: there are no books in it.
+  const confidence =
+    taskType === "paper_check"
+      ? null
+      : scoreAnswer({
+          text: result.text,
+          context: retrieval.chunks,
+          retrieval: retrieval.stats,
+          checks,
+          coverageLow: retrieval.coverageLow,
+          usedSearchGrounding: Boolean(result.usedSearchGrounding),
+          weakPages: await countWeakPages(retrieval.chunks),
+        });
 
   return {
     text: result.text,
