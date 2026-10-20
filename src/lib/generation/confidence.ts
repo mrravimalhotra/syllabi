@@ -9,7 +9,7 @@ import type { AnswerCheck } from "@/types/database";
 export type Level = "green" | "amber" | "red";
 
 /** A statement of the answer that was not found in the book passages, for finding out why. */
-export interface OutsideStatement {
+interface OutsideStatement {
   text: string;
   /** Percent of its meaningful words found in the book passages. */
   found: number;
@@ -18,7 +18,7 @@ export interface OutsideStatement {
 }
 
 /** What the numbers were worked out from: kept with the answer so a low score can be traced to its cause. */
-export interface ConfidenceDetails {
+interface ConfidenceDetails {
   /** Statements of the answer judged, and how many were found in the books. */
   statements: number;
   grounded: number;
@@ -49,7 +49,7 @@ export interface AnswerConfidence {
   details?: ConfidenceDetails;
 }
 
-export interface ConfidencePassage {
+interface ConfidencePassage {
   content: string;
   source_type?: string;
   page_number?: number | null;
@@ -57,7 +57,7 @@ export interface ConfidencePassage {
 }
 
 /** How the passages were found (see RetrievalStats). */
-export interface RetrievalNote {
+interface RetrievalNote {
   mode: "search" | "exercise";
   sectionChunks: number;
   questions: number;

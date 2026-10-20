@@ -15,7 +15,7 @@ export interface RetrievalScope {
 }
 
 /** How the passages were found, for finding out why an answer scored low. */
-export interface RetrievalStats {
+interface RetrievalStats {
   /** "exercise": whole exercise pages were fetched and lessons searched for each question; "search": the closest passages only. */
   mode: "search" | "exercise";
   /** Exercise (or named-page) passages added whole. */
