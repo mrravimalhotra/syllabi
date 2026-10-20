@@ -551,9 +551,7 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
 
 // How much book text may be passed whole.
 {
-  check(fullContextBudget(2_000_000) === 400_000, "Budget: plenty of allowance left caps the text at 400,000 characters");
-  check(fullContextBudget(20_000) === 40_000 && fullContextBudget(10_000) === 20_000, "Budget: never more than half of what is left this month (4 characters a token)");
-  check(fullContextBudget(0) === 0 && fullContextBudget(-5) === 0, "Budget: nothing left means nothing is passed whole");
+  check(fullContextBudget() === 400_000, "Budget: up to 400,000 characters (about 100,000 tokens) of book text are passed whole, whatever allowance is left");
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

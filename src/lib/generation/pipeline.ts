@@ -146,8 +146,8 @@ export async function runGeneration({
   const retrieval = await retrieveContext(searchQuery, {
     ownerId: student.id,
     documentIds,
-    // The selected books are passed whole when they fit, unless that would use up the rest of this month's allowance.
-    fullContextChars: fullContextBudget(quota.remaining),
+    // The selected books are passed whole when they fit.
+    fullContextChars: fullContextBudget(),
   });
   timings.searchMs = Date.now() - searchStart;
 
