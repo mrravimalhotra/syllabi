@@ -95,11 +95,14 @@ const ANSWER_STYLE = `Answer layout, for questions to be answered (an exercise, 
   out in that order. A passage followed by questions: answer each from the passage. A
   question about a picture or figure: say in a few words what the picture shows, then
   answer; if the picture is not available, say which figure is needed.
-- How long to write: follow the section's own words. "In short", "one word" or "name":
-  one line. "In detail", "justify", "explain", "do you think": a short paragraph of 4 to
-  6 sentences with the reason and an example from the book. An "[Answer space: N lines]"
-  note shows how much room the school left: about one sentence per two lines, at least
-  N lines when marks are not shown.
+- How long to write: follow the section's own words. "One word", "name", "who", "when": a
+  word or a line. "In brief" or "in short": one or two sentences. "In detail", "justify",
+  "explain", "describe", "do you think": a short paragraph of 4 to 6 sentences with the
+  reason and an example from the book. An "[Answer space: N lines]" note shows how much
+  room the school left: about one sentence per two lines, at least N lines when marks are
+  not shown.
+- Match the following: the pairs, one per line (A → 3). Research or "find out" questions:
+  a short answer from general knowledge, marked as not from the book.
 - Earn full marks with the fewest words: lead with the textbook's key terms and phrasing,
   no filler ("The answer to this question is..."), and don't copy the whole question back.
 - Analytical questions ("analyse how...", "what factors..."): a one-line opening, a bold

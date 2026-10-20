@@ -461,15 +461,17 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
   check(booksOfKinds(books, ["exercise"]).join() === "e1,e2" && booksOfKinds(books, ["past_paper"]).join() === "p1" && booksOfKinds(books, ["exercise", "textbook"]).join() === "t1,e1,e2", "Commands: books are picked by kind");
   check(booksOfKinds(books, ["notes"]).length === 0, "Commands: no book of that kind means none are picked");
   check(/exercise books/.test(noBooksMessage(["exercise"])) && /Past paper/.test(noBooksMessage(["past_paper"])) && /test papers/.test(noBooksMessage(["past_paper"])), "Commands: the message for a missing kind names it, and says how to add one");
-  const all = Object.values(COMMANDS).flat();
-  check(all.length >= 20 && all.every((c) => c.label.length > 0 && c.label.length <= 32 && c.prompt.length >= 20), "Commands: every command has a short label and a full request");
-  check(new Set(all.map((c) => c.label)).size === all.length, "Commands: labels are all different");
-  check(COMMANDS.solution.some((c) => c.label === "Solve all exercises" && c.books?.join() === "exercise") && COMMANDS.solution.some((c) => c.label === "Solve all test papers" && c.books?.join() === "past_paper"), "Commands: Solve all exercises uses Exercise books and Solve all test papers uses Test papers");
-  check(commandsInView("solution", "", false) && commandsInView("solution", COMMANDS.solution[0].prompt, false) && !commandsInView("solution", "my own question", false) && !commandsInView("solution", "", true), "Commands: they stay in view for an empty box or one of them, not for typed text or an attachment");
-  const exerciseCmd = COMMANDS.solution[0];
-  check(planCommand(exerciseCmd, books).books?.join() === "e1,e2" && planCommand(exerciseCmd, [lib("t1", "textbook")]).notice?.includes("exercise books") === true && planCommand(COMMANDS.solution.at(-1)!, books).books === null, "Commands: a plan picks the books, warns when there are none of that kind, or leaves the choice alone");
-  check(COMMANDS.study_pack.length === 0, "Commands: a study pack has none (it asks for a chapter)");
-  check(COMMANDS.solution.filter((c) => /exercise|questions/i.test(c.prompt)).length >= 5, "Commands: the Solve ones say 'exercise' or 'questions', which brings in the whole exercise pages");
+
+  const solve = COMMANDS.solution;
+  check(solve.length === 1 && solve[0].label === "Solve all exercise questions" && solve[0].books?.join() === "exercise,textbook", "Commands: Solve has the one command, using exercise books and textbooks");
+  const prompt = solve[0].prompt;
+  const kinds = ["fill in the blanks", "true or false", "multiple choice", "assertion and reason", "match the following", "ordering", "picture and passage based", "one-word", "in brief or in short", "in detail", "research or find-out"];
+  check(kinds.every((k) => prompt.includes(k)), `Commands: the request names every kind of question (${kinds.filter((k) => !prompt.includes(k)).join(", ")})`);
+  check(/Warm-up, Source Analysis/.test(prompt) && /Do not skip or merge/.test(prompt) && /section and number/.test(prompt), "Commands: it also asks for the questions inside lessons, no skipping, and section-and-number labels");
+  check(/exercise/i.test(prompt), "Commands: it says 'exercise', which brings in the whole exercise pages");
+  check(Object.entries(COMMANDS).filter(([k]) => k !== "solution").every(([, v]) => v.length === 0), "Commands: the other kinds of answer have none yet");
+  check(commandsInView("solution", "", false) && commandsInView("solution", prompt, false) && !commandsInView("solution", "my own question", false) && !commandsInView("solution", "", true), "Commands: they stay in view for an empty box or one of them, not for typed text or an attachment");
+  check(planCommand(solve[0], books).books?.join() === "t1,e1,e2" && planCommand(solve[0], [lib("p1", "past_paper")]).notice?.includes("exercise books") === true && planCommand({ label: "x", prompt: "y" }, books).books === null, "Commands: a plan picks the books, warns when there are none of that kind, or leaves the choice alone");
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

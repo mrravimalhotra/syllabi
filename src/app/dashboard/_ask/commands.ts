@@ -12,89 +12,26 @@ export interface QuickCommand {
   books?: SourceType[];
 }
 
+/**
+ * The command for each kind of answer. One to start with: a clear, complete request is better than many vague ones.
+ * (More can be added here: each is a label, the full request, and the kinds of book it searches.)
+ */
 export const COMMANDS: Record<GenerationTaskType, QuickCommand[]> = {
   solution: [
     {
-      label: "Solve all exercises",
-      prompt: "Solve every exercise in the selected books: every question of every section, in order, to the last page.",
-      books: ["exercise"],
-    },
-    {
-      label: "Solve all test papers",
-      prompt: "Solve every question of the selected test papers, section by section, in order, with the marks for each.",
-      books: ["past_paper"],
-    },
-    {
-      label: "Solve the chapter exercise",
-      prompt: "Solve the Textual Exercise at the end of the chapter: every question of every section, in order.",
-      books: ["textbook"],
-    },
-    {
-      label: "Answer the lesson questions",
+      label: "Solve all exercise questions",
       prompt:
-        "Answer all the questions inside the lessons (Warm-up, Source Analysis, 21st Century Skills and similar boxes), in page order.",
-      books: ["textbook"],
-    },
-    {
-      label: "Solve everything in the chapter",
-      prompt:
-        "Answer all the questions in the chapter: first the questions inside the lessons, then the exercise at the end, every question in order.",
-      books: ["textbook"],
-    },
-    {
-      label: "Answer key only",
-      prompt: "Give a numbered answer key for every question in the exercise: only the answers, one line each, in order.",
+        "Solve every question of every exercise in the selected books, in order, to the last page, and also the questions inside the lessons (Warm-up, Source Analysis, 21st Century Skills and similar boxes). " +
+        "Answer every kind of question the exercises ask: fill in the blanks, true or false, multiple choice, assertion and reason, match the following, ordering, " +
+        "picture and passage based questions with all their sub-parts, one-word answers, answer in brief or in short, answer in detail (justify, explain, describe, do you think), " +
+        "and research or find-out questions. Do not skip or merge any question. Label each answer with its section and number (for example Q3.2). " +
+        "Write each answer from the book, in your own words, and as long as the question asks for.",
       books: ["exercise", "textbook"],
     },
-    { label: "Explain a method", prompt: "Explain how to find the LCM of 12, 18 and 30, step by step." },
   ],
-  notes: [
-    {
-      label: "Notes for the whole chapter",
-      prompt: "Revision notes for the whole chapter, covering every heading, with key terms in bold.",
-    },
-    { label: "One-page summary", prompt: "A one-page summary of the chapter that can be read the night before the test." },
-    { label: "Key terms and definitions", prompt: "Key terms and definitions from the chapter, each in one line." },
-    { label: "Timeline and dates", prompt: "A timeline of the important events, dates and people in the chapter, one line each." },
-    {
-      label: "Likely exam questions",
-      prompt: "Short revision notes on the chapter, then the most likely exam questions with model answers.",
-    },
-  ],
-  sample_paper: [
-    { label: "Chapter test, 20 marks", prompt: "A chapter test of 20 marks on the whole chapter, with an answer key." },
-    {
-      label: "Half-yearly paper, 80 marks",
-      prompt: "A half-yearly paper of 80 marks on the chapters in the selected books, with an answer key.",
-    },
-    {
-      label: "Test from the exercises",
-      prompt: "A class test of 25 marks made from the style of the questions in the exercises, with an answer key.",
-      books: ["exercise", "textbook"],
-    },
-    {
-      label: "Quick quiz, 10 questions",
-      prompt: "A quick quiz of 10 questions on the chapter: a mix of fill in the blanks, true or false and multiple choice, with answers.",
-    },
-    {
-      label: "Like the past papers",
-      prompt: "A new paper in the style, sections and marking of the selected past papers, with an answer key.",
-      books: ["past_paper"],
-    },
-  ],
-  ad_hoc: [
-    {
-      label: "Explain the chapter simply",
-      prompt: "Explain the chapter in simple words, as if to a Class 6 student, with one everyday example for each idea.",
-    },
-    { label: "Five key points", prompt: "What are the five most important points of this chapter that every student must remember?" },
-    {
-      label: "Check understanding",
-      prompt: "Ask me ten questions, from easy to hard, to check whether I have understood the chapter, with the answers after.",
-    },
-    { label: "Plan revision", prompt: "How should we plan revision for next week's test on this chapter, day by day?" },
-    { label: "Project ideas", prompt: "Ideas for a school project or activity based on this chapter, with what is needed for each." },
-  ],
+  notes: [],
+  sample_paper: [],
+  ad_hoc: [],
   study_pack: [],
 };
 
