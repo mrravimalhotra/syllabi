@@ -6,7 +6,7 @@ import { standInFor } from "@/lib/llm/providers/google";
 // Partial text worth keeping when every model declines to copy the whole page.
 const MIN_PARTIAL_CHARS = 200;
 
-const EXTRACTION_SYSTEM_PROMPT = `You transcribe scanned or photographed textbook, worksheet and question-paper pages
+export const EXTRACTION_SYSTEM_PROMPT = `You transcribe scanned or photographed textbook, worksheet and question-paper pages
 into clean, well-structured text for a study app's search index. Pages are often phone
 photos: tilted, curved near the spine, with parts of the facing page or the table at the
 edges. Transcribe only the main page.

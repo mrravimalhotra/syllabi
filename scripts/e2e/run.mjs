@@ -1514,6 +1514,16 @@ await test("Sign-in: wrong password message is plain and specific", async (page)
   await page.getByText(/Wrong email, user ID or password/).first().waitFor();
 });
 
+await test("Admin rules: groups, a rule and the exact instructions are shown", async (page) => {
+  await page.goto(`${BASE}/admin/rules`, { waitUntil: "networkidle" });
+  await page.getByRole("heading", { name: "Rules and assumptions" }).waitFor();
+  await page.getByRole("heading", { name: "How an answer is written" }).waitFor();
+  await page.getByText(/Every question and every sub-part/i).first().waitFor();
+  await page.getByText("Exact instructions sent to the AI").waitFor();
+  await page.locator("details summary", { hasText: "Paper checker" }).click();
+  await page.locator("details[open] pre").first().waitFor();
+});
+
 await test("Sign-up: private-testing notice", async (page) => {
   await page.goto(`${BASE}/signup?error=private`, { waitUntil: "networkidle" });
   await page.getByRole("alert").filter({ hasText: /private|testing/i }).first().waitFor();

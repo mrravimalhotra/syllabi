@@ -136,7 +136,7 @@ function statements(text: string): string[] {
 
 const OUTSIDE_NOTE = /not from the book|general knowledge|outside the book|not in the book|from the web|web search/i;
 /** A statement is "from the book" when this share of its meaningful words are found in the book passages. */
-const GROUNDED_SHARE = 0.55;
+export const GROUNDED_SHARE = 0.55;
 const MIN_WORDS = 4;
 
 interface Analysis {
@@ -175,8 +175,8 @@ function analyse(text: string, context: { content: string }[], known = knownWord
 }
 
 /** Below this share of its words found in the books, an answer is flagged for review (below the second number, red). */
-const REVIEW_BELOW = 60;
-const REVIEW_RED_BELOW = 40;
+export const REVIEW_BELOW = 60;
+export const REVIEW_RED_BELOW = 40;
 /** An exercise has to be answered question by question for answers to be flagged. */
 const MIN_BLOCKS = 2;
 

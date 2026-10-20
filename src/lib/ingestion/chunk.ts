@@ -3,7 +3,7 @@ export interface TextChunk {
   sectionLabel: string | null;
 }
 
-const MAX_CHUNK_CHARS = 1500;
+export const MAX_CHUNK_CHARS = 1500;
 // Also Hindi/Marathi (पाठ, अध्याय, प्रश्न, स्वाध्याय, अभ्यास; Devanagari digits) and French
 // (Chapitre, Leçon, Exercice) chapter, lesson and question headings.
 const HEADING_RE =

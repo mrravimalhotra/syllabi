@@ -31,6 +31,7 @@ import { countWeakPages } from "../../src/lib/ingestion/page-read";
 import * as reports from "../../src/app/api/bug-reports/route";
 import * as report from "../../src/app/api/bug-reports/[id]/route";
 import sharp from "sharp";
+import { allPrompts, ruleGroups } from "../../src/lib/rules/catalogue";
 import { measureImage } from "../../src/lib/ingestion/image-quality";
 import { HANDWRITTEN_PAGE } from "../fixtures/bhakti-exercise-pages";
 import { scorePage, summariseBook, takeLegibility } from "../../src/lib/ingestion/confidence";
@@ -701,6 +702,17 @@ pipeline.calls = 0;
   check("paper check: it is answered by the paper checker, not the book pipeline", pipeline.calls === 1 && typeof marked.json?.text === "string");
   fresh(null);
   await expect("paper check: a signed-out person is refused", paperCheck.POST, 401, null, { prompt: "x" });
+}
+
+// ---- Rules page ----
+{
+  const groups = ruleGroups();
+  const prompts = new Map(allPrompts().map((p) => [p.key, p.text.toLowerCase()]));
+  const rules = groups.flatMap((g) => g.rules);
+  check("rules: groups have unique ids and every rule has text and a place in the code", new Set(groups.map((g) => g.id)).size === groups.length && rules.every((r) => r.text.trim() && r.where.trim()));
+  const missing = rules.filter((r) => r.prompt && !prompts.get(r.prompt.to)?.includes(r.prompt.contains.toLowerCase()));
+  check("rules: every instruction to the AI quotes a phrase that is really in its instructions", missing.length === 0, missing.map((r) => `${r.prompt?.to}: ${r.prompt?.contains}`).join(" | "));
+  check("rules: the instructions are all non-empty", [...prompts.values()].every((t) => t.length > 100));
 }
 
 // ---- Background reader and error log ----

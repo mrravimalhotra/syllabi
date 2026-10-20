@@ -10,6 +10,7 @@ const NAV = [
   { href: "/admin/llm-settings", label: "AI models" },
   { href: "/admin/health", label: "Health check" },
   { href: "/admin/reports", label: "Reports" },
+  { href: "/admin/rules", label: "Rules" },
 ];
 
 export function AdminTabs() {

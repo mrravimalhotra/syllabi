@@ -2,9 +2,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { MatchedChunk } from "@/types/database";
 
 /** The most extra passages added for a "whole exercise" or "page 45" request. */
-const MAX_EXTRA = 60;
+export const MAX_EXTRA = 60;
 /** The most pages one request can name ("pages 40 to 60" stops here). */
-const MAX_NAMED_PAGES = 12;
+export const MAX_NAMED_PAGES = 12;
 
 const NAMES_A_PAGE = /\bpages?\s+(\d{1,4})(?:\s*(-|–|to|and)\s*(\d{1,4}))?/gi;
 const WANTS_A_SECTION = /\b(exercises?|practice set|worksheet|revision|warm-?up|source analysis|all (?:the )?questions|every question|whole (?:exercise|chapter|page))\b/i;
@@ -29,9 +29,9 @@ export function wantsWholeSection(query: string): boolean {
 }
 
 /** The most pages of one exercise that are added. */
-const MAX_EXERCISE_PAGES = 12;
+export const MAX_EXERCISE_PAGES = 12;
 /** When no pages are marked as exercise, this many pages after the best match are added. */
-const PAGES_AFTER_MATCH = 5;
+export const PAGES_AFTER_MATCH = 5;
 
 /** The pages of the unbroken stretch of exercise pages that holds `anchor` (or the nearest exercise page to it). */
 function exerciseRun(exercisePages: number[], anchor: number): number[] {
@@ -46,7 +46,7 @@ function exerciseRun(exercisePages: number[], anchor: number): number[] {
 
 type Row = Omit<MatchedChunk, "similarity">;
 /** The most chunks of in-lesson question boxes added to a whole-exercise request. */
-const MAX_LESSON_QUESTION_CHUNKS = 30;
+export const MAX_LESSON_QUESTION_CHUNKS = 30;
 
 const COLUMNS = "id, document_id, content, section_label, page_number, source_type, image_path";
 

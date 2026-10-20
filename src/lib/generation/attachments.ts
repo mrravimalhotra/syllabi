@@ -5,18 +5,18 @@
 import type { CompletionImage } from "@/lib/llm/types";
 import { IMAGE_MIME_TYPES, looksLikeImage } from "@/lib/image-check";
 
-const MAX_PHOTOS = 12;
+export const MAX_PHOTOS = 12;
 // Base64 characters per request across all photos: keeps the body under
 // Vercel's ~4.5 MB request limit. The browser shrinks photos before sending.
 const MAX_PHOTO_BASE64_CHARS = 3_000_000;
 // Typed question, text of an attached Word file, and text found in PDF pages:
 // each capped, and the text of all attachments together capped too, so one
 // request can't carry a huge amount of text to be paid for.
-const MAX_PROMPT_CHARS = 8_000;
+export const MAX_PROMPT_CHARS = 8_000;
 // Text of one PDF page or the attached Word files (about 15,000 words in all).
-const MAX_ATTACHED_TEXT_CHARS = 20_000;
-const MAX_DOC_TEXT_CHARS = 60_000;
-const MAX_TOTAL_ATTACHED_TEXT_CHARS = 40_000;
+export const MAX_ATTACHED_TEXT_CHARS = 20_000;
+export const MAX_DOC_TEXT_CHARS = 60_000;
+export const MAX_TOTAL_ATTACHED_TEXT_CHARS = 40_000;
 
 /** What is wrong with one attached photo, or null if it is fine. */
 function photoProblem(p: { data?: unknown; mimeType?: unknown } | null | undefined): string | null {

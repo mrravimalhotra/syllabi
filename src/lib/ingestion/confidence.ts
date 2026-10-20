@@ -19,12 +19,12 @@ type PageIssue =
 
 // Measured on real scans (the sample chapter) and on copies of them made blurred, dark, faded and small:
 // sharp pages have an edge-to-contrast ratio of about 0.9 to 1.2, a little blur 0.55 to 0.75, real blur under 0.2.
-const BLURRY_RATIO = 0.3;
-const SLIGHTLY_BLURRY_RATIO = 0.62;
-const DARK_BRIGHTNESS = 110;
-const FADED_CONTRAST = 18;
-const LOW_SHORT_SIDE = 450;
-const SMALL_SHORT_SIDE = 650;
+export const BLURRY_RATIO = 0.3;
+export const SLIGHTLY_BLURRY_RATIO = 0.62;
+export const DARK_BRIGHTNESS = 110;
+export const FADED_CONTRAST = 18;
+export const LOW_SHORT_SIDE = 450;
+export const SMALL_SHORT_SIDE = 650;
 
 const PENALTY: Record<PageIssue, number> = {
   blurry: 45,
@@ -151,10 +151,10 @@ const ISSUE_WORDS: Record<PageIssue, string> = {
   reader_unsure: "hard to read",
 };
 
-const MEDIUM_SCORE = 80;
-const LOW_SCORE = 65;
+export const MEDIUM_SCORE = 80;
+export const LOW_SCORE = 65;
 /** When this share of the pages (or more) are weak the book as a whole is called low. */
-const WEAK_SHARE_FOR_LOW = 0.3;
+export const WEAK_SHARE_FOR_LOW = 0.3;
 
 const listPages = (pages: number[]) => (pages.length === 1 ? `page ${pages[0]}` : `pages ${pages.slice(0, 8).join(", ")}${pages.length > 8 ? " and more" : ""}`);
 

@@ -40,16 +40,16 @@ export interface RetrievalResult {
   coverageLow: boolean;
 }
 
-const MATCH_COUNT = 8;
+export const MATCH_COUNT = 8;
 // Worksheets: matches per question, and the most passages sent in total.
 const MATCHES_PER_QUESTION = 4;
 const MAX_TOTAL_MATCHES = 48;
-const COVERAGE_THRESHOLD = 0.55;
+export const COVERAGE_THRESHOLD = 0.55;
 // Caps how many source page images get sent to the model per request — request
 // size/cost scale with image count, and a handful of the top matches is enough.
-const MAX_SOURCE_IMAGES = 4;
+export const MAX_SOURCE_IMAGES = 4;
 // A whole exercise: its questions often point at a figure, so each of its pages (up to this many) is sent.
-const MAX_SECTION_IMAGES = 10;
+export const MAX_SECTION_IMAGES = 10;
 
 /**
  * The reusable RAG retrieval core: embed the query, then run a vector search
@@ -107,10 +107,10 @@ async function searchContext(typed: string, scope: RetrievalScope): Promise<Retr
 
 // Whole-exercise requests: how many of the exercise's questions are searched for support, how many passages each
 // search looks at, how many it keeps, and the most supporting passages added in all.
-const MAX_SUPPORT_QUESTIONS = 40;
+export const MAX_SUPPORT_QUESTIONS = 40;
 const SUPPORT_SEARCH = 8;
-const SUPPORT_PER_QUESTION = 3;
-const MAX_SUPPORT_CHUNKS = 36;
+export const SUPPORT_PER_QUESTION = 3;
+export const MAX_SUPPORT_CHUNKS = 36;
 
 /**
  * A whole-exercise request ("solve all exercise questions") has the exercise pages themselves, but the answers

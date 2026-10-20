@@ -20,7 +20,7 @@ const MAX_WORKING = 2;
 // page in hand within the server's 300-second limit.
 const STOP_TAKING_PAGES_AFTER_MS = 150_000;
 // A failing page is tried this many times in all, waiting longer each time.
-const MAX_ATTEMPTS = 5;
+export const MAX_ATTEMPTS = 5;
 const RETRY_AFTER_MINUTES = [1, 3, 10, 30];
 
 const EXTENSIONS: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
