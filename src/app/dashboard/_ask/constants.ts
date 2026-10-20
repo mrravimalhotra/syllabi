@@ -1,7 +1,7 @@
 import type { Answer } from "@/components/AnswerView";
 import { ChatIcon, ClipboardIcon, LayersIcon, ListCheckIcon, NotesIcon } from "@/components/icons";
 import type { StudyPack } from "@/lib/study-pack/types";
-import type { GenerationTaskType, Student } from "@/types/database";
+import type { GenerationTaskType, SourceType, Student } from "@/types/database";
 
 // Attachments to a question: up to this many images (photos, PDF pages, Word
 // pictures) within the request size budget, plus the text of Word files.
@@ -21,6 +21,8 @@ export interface Book {
   subject: string | null;
   grade: string | null;
   status: "processing" | "ready" | "failed";
+  /** What kind of material it is: Textbook, Exercise, Past paper (test) or Notes. */
+  source_type: SourceType;
 }
 
 export type GenerationResult = Answer & {
@@ -48,7 +50,6 @@ export const TABS: {
   description: string;
   icon: typeof ListCheckIcon;
   placeholder: string;
-  examples: string[];
 }[] = [
   {
     value: "solution",
@@ -56,7 +57,6 @@ export const TABS: {
     description: "Step by step",
     icon: ListCheckIcon,
     placeholder: "Type or paste the question, or attach a photo or PDF of the worksheet",
-    examples: ["Solve all the questions in the attached exercise", "Explain how to find the LCM of 12, 18 and 30"],
   },
   {
     value: "notes",
@@ -64,7 +64,6 @@ export const TABS: {
     description: "Revision notes",
     icon: NotesIcon,
     placeholder: "Which chapter or topic should the notes cover?",
-    examples: ["Revision notes for the chapter on Motion", "Key terms and definitions from the Internet chapter"],
   },
   {
     value: "sample_paper",
@@ -72,7 +71,6 @@ export const TABS: {
     description: "Practice tests",
     icon: ClipboardIcon,
     placeholder: "Which chapters or topics should the paper cover?",
-    examples: ["Half-yearly paper on chapters 1 to 4", "A short class test on fractions"],
   },
   {
     value: "ad_hoc",
@@ -80,7 +78,6 @@ export const TABS: {
     description: "Any question",
     icon: ChatIcon,
     placeholder: "Ask any study question",
-    examples: ["Ideas for a Class 6 science project on plants", "How should we plan revision for next week's test?"],
   },
   {
     value: "study_pack",
@@ -88,7 +85,6 @@ export const TABS: {
     description: "A whole chapter",
     icon: LayersIcon,
     placeholder: "Optional: what to focus on, for example “keep the language simple” or “extra practice on dates”",
-    examples: [],
   },
 ];
 

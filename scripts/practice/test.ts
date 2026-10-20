@@ -10,6 +10,7 @@ import { HANDWRITTEN_PAGE, LESSON_PAGES, PAGES as BHAKTI_PAGES } from "../fixtur
 import { splitQuestions } from "@/lib/rag/split-questions";
 import { handwritingIn, withoutHandwriting } from "@/lib/rag/handwriting";
 import { chunkPageText } from "@/lib/ingestion/chunk";
+import { COMMANDS, booksOfKinds, commandsInView, noBooksMessage, planCommand } from "@/app/dashboard/_ask/commands";
 import { pdfDisposition } from "@/lib/pdf/disposition";
 import { signUpProblem, signUpRefusal } from "@/lib/signup-check";
 import { parseGenerationRequest } from "@/lib/generation/request";
@@ -451,6 +452,24 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
   check(three.length === 6 && three[5].includes("Q.III."), "Layouts: Roman-numeral headings Q.I., Q.II., Q.III. each start a section");
   const word = splitQuestions("Question is this chapter about nouns?\nQuestion II: Name three nouns in a sentence.\n1. Write a noun here.\n2. Write another noun here.");
   check(word.length === 2, "Layouts: the word 'is' after Question is not a Roman numeral");
+}
+
+// Quick commands: ready-made requests, some tied to kinds of book.
+{
+  const lib = (id: string, source_type: "textbook" | "exercise" | "past_paper" | "notes") => ({ id, title: id, subject: null, grade: null, status: "ready" as const, source_type });
+  const books = [lib("t1", "textbook"), lib("e1", "exercise"), lib("p1", "past_paper"), lib("e2", "exercise")];
+  check(booksOfKinds(books, ["exercise"]).join() === "e1,e2" && booksOfKinds(books, ["past_paper"]).join() === "p1" && booksOfKinds(books, ["exercise", "textbook"]).join() === "t1,e1,e2", "Commands: books are picked by kind");
+  check(booksOfKinds(books, ["notes"]).length === 0, "Commands: no book of that kind means none are picked");
+  check(/exercise books/.test(noBooksMessage(["exercise"])) && /Past paper/.test(noBooksMessage(["past_paper"])) && /test papers/.test(noBooksMessage(["past_paper"])), "Commands: the message for a missing kind names it, and says how to add one");
+  const all = Object.values(COMMANDS).flat();
+  check(all.length >= 20 && all.every((c) => c.label.length > 0 && c.label.length <= 32 && c.prompt.length >= 20), "Commands: every command has a short label and a full request");
+  check(new Set(all.map((c) => c.label)).size === all.length, "Commands: labels are all different");
+  check(COMMANDS.solution.some((c) => c.label === "Solve all exercises" && c.books?.join() === "exercise") && COMMANDS.solution.some((c) => c.label === "Solve all test papers" && c.books?.join() === "past_paper"), "Commands: Solve all exercises uses Exercise books and Solve all test papers uses Test papers");
+  check(commandsInView("solution", "", false) && commandsInView("solution", COMMANDS.solution[0].prompt, false) && !commandsInView("solution", "my own question", false) && !commandsInView("solution", "", true), "Commands: they stay in view for an empty box or one of them, not for typed text or an attachment");
+  const exerciseCmd = COMMANDS.solution[0];
+  check(planCommand(exerciseCmd, books).books?.join() === "e1,e2" && planCommand(exerciseCmd, [lib("t1", "textbook")]).notice?.includes("exercise books") === true && planCommand(COMMANDS.solution.at(-1)!, books).books === null, "Commands: a plan picks the books, warns when there are none of that kind, or leaves the choice alone");
+  check(COMMANDS.study_pack.length === 0, "Commands: a study pack has none (it asks for a chapter)");
+  check(COMMANDS.solution.filter((c) => /exercise|questions/i.test(c.prompt)).length >= 5, "Commands: the Solve ones say 'exercise' or 'questions', which brings in the whole exercise pages");
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

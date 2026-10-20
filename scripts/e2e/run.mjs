@@ -217,7 +217,7 @@ await test("Ask: switching kind clears the text and the old answer", async (page
   await page.getByRole("radio", { name: /Notes/ }).click();
   await page.getByText("Plants make food from sunlight.").first().waitFor({ state: "detached", timeout: 5000 });
   if ((await page.locator("textarea").inputValue()) !== "") throw new Error("The text box was not cleared when switching kind.");
-  await page.getByText(/Revision notes for the chapter on Motion/).first().waitFor();
+  await page.getByRole("button", { name: /^Notes for the whole chapter/ }).waitFor();
 });
 
 await test("My Books: lists books with reading progress", async (page, ctx) => {
@@ -251,15 +251,67 @@ await test("Ask: example questions fill the box, and Ctrl+Enter sends", async (p
   });
   await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
   const box = page.locator("textarea");
-  const example = page.locator("form button.rounded-full").first();
-  const text = (await example.textContent()).trim();
-  await example.click();
-  if ((await box.inputValue()) !== text) throw new Error("The example did not fill the box.");
-  await page.locator("form button.rounded-full").first().waitFor({ state: "detached", timeout: 3000 });
+  await page.getByRole("button", { name: /^Explain a method/ }).click();
+  if (!/LCM of 12, 18 and 30/.test(await box.inputValue())) throw new Error("The quick command did not fill the box.");
+  await page.getByText("Quick commands").waitFor();
+  await box.fill("Why is the sky blue?");
+  await page.getByText("Quick commands").waitFor({ state: "detached", timeout: 3000 });
   await box.fill("Why is the sky blue?");
   await box.press("Control+Enter");
   await page.getByText(/checks|answer/i).first().waitFor({ timeout: 8000 });
   if (asked < 1) throw new Error("Ctrl+Enter did not send the question.");
+});
+
+await test("Ask: quick commands fill the box and pick the kind of book they name, and the picker can pick by kind", async (page, ctx) => {
+  const lib = (id, title, source_type) => ({ id, title, subject: "Geography", grade: "Class 7", source_type, status: "ready", created_at: now, pages: null });
+  await ctx.route("**/api/me", (r) => json(r, me));
+  await ctx.route("**/api/library**", (r) => json(r, { documents: [lib("t1", "Lithosphere Textbook", "textbook"), lib("e1", "Lithosphere Exercises", "exercise"), lib("p1", "Half Yearly Papers", "past_paper")] }));
+  let sent = null;
+  await ctx.route("**/api/generate/**", (r) => {
+    sent = r.request().postDataJSON();
+    return json(r, answer);
+  });
+  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  const box = page.locator("textarea");
+  const pressed = async (title) => (await page.getByRole("button", { name: new RegExp(title) }).getAttribute("aria-pressed")) === "true";
+
+  await page.getByRole("button", { name: /^Solve all exercises/ }).click();
+  if (!/Solve every exercise in the selected books/.test(await box.inputValue())) throw new Error("The command did not fill the box.");
+  if (!(await pressed("Lithosphere Exercises")) || (await pressed("Lithosphere Textbook")) || (await pressed("Half Yearly Papers"))) throw new Error("Only the exercise book should be picked.");
+
+  await page.getByRole("button", { name: /^Solve all test papers/ }).click();
+  if (!(await pressed("Half Yearly Papers")) || (await pressed("Lithosphere Exercises"))) throw new Error("Only the test papers should be picked.");
+
+  await page.getByRole("button", { name: /^Solve all exercises/ }).click();
+  await page.getByRole("button", { name: /^Generate$/ }).click();
+  await page.getByText(/checks|answer/i).first().waitFor({ timeout: 8000 });
+  if (!sent || sent.documentIds.join() !== "e1" || !/every exercise/.test(sent.prompt)) throw new Error(`Sent ${JSON.stringify(sent)}.`);
+
+  // The picker can choose by kind too.
+  await page.getByRole("button", { name: "Textbooks", exact: true }).click();
+  if (!(await pressed("Lithosphere Textbook")) || (await pressed("Lithosphere Exercises"))) throw new Error("Textbooks should be the only ones picked.");
+  await page.getByRole("button", { name: "All", exact: true }).click();
+  if (!(await pressed("Lithosphere Textbook")) || !(await pressed("Half Yearly Papers"))) throw new Error("All should pick every book.");
+});
+
+await test("Ask: a quick command for a kind of book that isn't uploaded says so and keeps the selection", async (page, ctx) => {
+  await ctx.route("**/api/me", (r) => json(r, me));
+  await ctx.route("**/api/library**", (r) => json(r, { documents: [{ id: "t1", title: "Only Textbook", subject: null, grade: null, source_type: "textbook", status: "ready", created_at: now, pages: null }] }));
+  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: /^Solve all test papers/ }).click();
+  await page.getByText(/You haven't uploaded any test papers yet/).waitFor();
+  if (!/Solve every question of the selected test papers/.test(await page.locator("textarea").inputValue())) throw new Error("The request should still fill the box.");
+});
+
+await test("Ask: each kind of answer has its own quick commands", async (page, ctx) => {
+  await baseRoutes(ctx);
+  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  for (const [tab, command] of [["Notes", "One-page summary"], ["Sample paper", "Quick quiz, 10 questions"], ["Ask", "Five key points"]]) {
+    await page.getByRole("radio", { name: new RegExp(tab) }).click();
+    await page.getByRole("button", { name: new RegExp(`^${command}`) }).waitFor();
+  }
+  await page.getByRole("radio", { name: /Study pack/ }).click();
+  if ((await page.getByText("Quick commands").count()) !== 0) throw new Error("A study pack should have no quick commands.");
 });
 
 await test("Ask: an attached photo shows, can be removed, and goes with the question", async (page, ctx) => {

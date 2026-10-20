@@ -9,6 +9,7 @@ import { AttachmentList } from "@/app/dashboard/_ask/AttachmentList";
 import { BookPicker } from "@/app/dashboard/_ask/BookPicker";
 import { DropForm } from "@/app/dashboard/_ask/DropForm";
 import { Messages } from "@/app/dashboard/_ask/Messages";
+import { QuickCommands } from "@/app/dashboard/_ask/QuickCommands";
 import { PromptBox } from "@/app/dashboard/_ask/PromptBox";
 import { ComposerToolbar } from "@/app/dashboard/_ask/ComposerToolbar";
 import { GeneratingCard } from "@/app/dashboard/_ask/Parts";
@@ -16,6 +17,7 @@ import { PdfPagePicker } from "@/app/dashboard/_ask/PdfPagePicker";
 import { PackChapter } from "@/app/dashboard/_ask/PackChapter";
 import { ResultSection } from "@/app/dashboard/_ask/ResultSection";
 import { TabPicker } from "@/app/dashboard/_ask/TabPicker";
+import { COMMANDS, booksOfKinds, commandsInView, planCommand, type QuickCommand } from "@/app/dashboard/_ask/commands";
 import { blockedReason, buildRequestBody, calculationAnswer, questionProblem, type Question } from "@/app/dashboard/_ask/build-request";
 import { useAttachments } from "@/app/dashboard/_ask/useAttachments";
 import { useBooks } from "@/app/dashboard/_ask/useBooks";
@@ -95,6 +97,17 @@ export default function DashboardPage() {
     generation.clear();
   }
 
+  /** A quick command: fills the question box and, when it names kinds of book, searches only those (and shows the picker so they can be changed). */
+  function runCommand(command: QuickCommand) {
+    setPrompt(command.prompt);
+    const plan = planCommand(command, books.books);
+    setNotice(plan.notice);
+    if (plan.books) {
+      books.selectOnly(plan.books);
+      setShowBooks(true);
+    }
+  }
+
   async function makeNewAnswer() {
     const again = generation.resend();
     if (!again) return;
@@ -105,7 +118,7 @@ export default function DashboardPage() {
   const noBookSelected = !isPack && books.books.length > 0 && books.activeIds.length === 0;
   const overQuota = me?.quota.overQuota ?? false;
   const blocked = blockedReason({ overQuota, noBookSelected, readingFiles, choosingPages: attachments.longPdfs.length > 0 });
-  const hasInput = Boolean(prompt.trim()) || photos.length > 0 || docs.length > 0;
+  const showCommands = commandsInView(tab, prompt, photos.length > 0 || docs.length > 0);
 
   return (
     <div className="space-y-6">
@@ -122,8 +135,9 @@ export default function DashboardPage() {
           onSend={() => void submit()}
           onPictures={(files) => void attachments.add(files)}
           placeholder={currentTab.placeholder}
-          examples={hasInput ? [] : currentTab.examples}
         />
+
+        {showCommands && <QuickCommands commands={COMMANDS[tab]} onPick={runCommand} />}
 
         <AttachmentList
           photos={photos}
@@ -150,6 +164,7 @@ export default function DashboardPage() {
             activeIds={books.activeIds}
             onAll={books.selectAll}
             onNone={books.selectNone}
+            onKind={(kind) => books.selectOnly(booksOfKinds(books.books, [kind]))}
             onToggle={books.toggle}
           />
         )}

@@ -40,6 +40,7 @@ export function useBooks() {
     activeIds,
     selectAll: () => setSelected(null),
     selectNone: () => setSelected([]),
+    selectOnly: (ids: string[]) => setSelected(ids),
     toggle: (id: string) =>
       setSelected((prev) => {
         const current = prev ?? books.map((b) => b.id);
