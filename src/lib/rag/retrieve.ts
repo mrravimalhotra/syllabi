@@ -12,12 +12,17 @@ export interface RetrievalScope {
   ownerId: string;
   /** Optionally narrow the search to these of the owner's books. */
   documentIds?: string[];
+  /** The most characters of book text to pass whole: the selected books are passed in full when they fit within this. */
+  fullContextChars?: number;
 }
 
 /** How the passages were found, for finding out why an answer scored low. */
 interface RetrievalStats {
-  /** "exercise": whole exercise pages were fetched and lessons searched for each question; "search": the closest passages only. */
-  mode: "search" | "exercise";
+  /** "full": every page of the selected books was passed; "exercise": whole exercise pages were fetched and lessons searched for each question; "search": the closest passages only. */
+  mode: "search" | "exercise" | "full";
+  /** The selected books: how many, and how much text they hold (so "too large to pass whole" can be seen). */
+  books: number;
+  totalChars: number;
   /** Exercise (or named-page) passages added whole. */
   sectionChunks: number;
   /** Questions of the exercise that were searched for in the books. */
@@ -53,6 +58,21 @@ const MAX_SECTION_IMAGES = 10;
  * batched embedding call), so every question finds its own material.
  */
 export async function retrieveContext(typed: string, scope: RetrievalScope): Promise<RetrievalResult> {
+  const size = await bookSize(scope);
+  // The selected books fit: pass all of them, so nothing the answer needs can be missed.
+  if (size.chars > 0 && size.chars <= (scope.fullContextChars ?? 0)) {
+    const whole = await wholeBooks(scope);
+    if (whole.length > 0) {
+      const stats: RetrievalStats = { mode: "full", books: new Set(whole.map((c) => c.document_id)).size, totalChars: size.chars, sectionChunks: 0, questions: 0, supportChunks: 0, topSimilarity: null };
+      return { chunks: whole, coverageLow: false, stats };
+    }
+  }
+  const found = await searchContext(typed, scope);
+  return { ...found, chunks: await withBookTitles(found.chunks), stats: { ...found.stats, books: size.books, totalChars: size.chars } };
+}
+
+/** The closest passages, plus (for a whole-exercise request) the exercise pages and the lessons that answer them. */
+async function searchContext(typed: string, scope: RetrievalScope): Promise<RetrievalResult> {
   // A student's handwritten answers on the page are not part of the question: search on the printed text only.
   const query = withoutHandwriting(typed);
   const questions = splitQuestions(query);
@@ -104,7 +124,7 @@ async function withSupport(chunks: MatchedChunk[], coverageLow: boolean, scope: 
   const whole = chunks.some((c) => c.similarity === 0);
   const section = whole ? chunks.filter((c) => c.similarity === 0 || c.source_type === "exercise") : [];
   const questions = splitQuestions(section.map((c) => withoutHandwriting(c.content)).join("\n\n")).slice(0, MAX_SUPPORT_QUESTIONS);
-  const stats: RetrievalStats = { mode: "search", sectionChunks: section.length, questions: 0, supportChunks: 0, topSimilarity };
+  const stats: RetrievalStats = { mode: "search", books: 0, totalChars: 0, sectionChunks: section.length, questions: 0, supportChunks: 0, topSimilarity };
   if (questions.length === 0) return { chunks, coverageLow, stats };
 
   const embeddings = await embedMany(questions);
@@ -145,6 +165,64 @@ async function search(embedding: number[], scope: RetrievalScope, count: number)
   return (data ?? []) as MatchedChunk[];
 }
 
+/** How many books and how many characters of text the selected books hold. */
+async function bookSize(scope: RetrievalScope): Promise<{ chars: number; chunks: number; books: number }> {
+  const { data, error } = await createAdminClient().rpc("chunk_text_size", {
+    p_owner_id: scope.ownerId,
+    p_document_ids: scope.documentIds?.length ? scope.documentIds : null,
+  });
+  if (error) {
+    // Not knowing the size only means the closest passages are used instead.
+    console.error("[retrieve] book size", error);
+    return { chars: 0, chunks: 0, books: 0 };
+  }
+  const row = ((data ?? []) as { chars: number | string; chunks: number | string }[])[0];
+  return { chars: Number(row?.chars ?? 0), chunks: Number(row?.chunks ?? 0), books: scope.documentIds?.length ?? 0 };
+}
+
+const PAGE_SIZE = 1000;
+
+/** Every passage of the selected books, book by book (oldest first), each in page order, with its book's title. */
+async function wholeBooks(scope: RetrievalScope): Promise<MatchedChunk[]> {
+  const admin = createAdminClient();
+  let books = admin.from("documents").select("id, title").eq("owner_id", scope.ownerId).order("created_at");
+  if (scope.documentIds?.length) books = books.in("id", scope.documentIds);
+  const { data: docs, error } = await books;
+  if (error) throw new Error(`Couldn't list the books: ${error.message}`);
+
+  const out: MatchedChunk[] = [];
+  for (const doc of (docs ?? []) as { id: string; title: string }[]) {
+    for (let from = 0; ; from += PAGE_SIZE) {
+      const { data, error: chunkError } = await admin
+        .from("chunks")
+        .select("id, document_id, content, section_label, page_number, source_type, image_path")
+        .eq("owner_id", scope.ownerId)
+        .eq("document_id", doc.id)
+        .order("page_number")
+        .order("chunk_index")
+        .range(from, from + PAGE_SIZE - 1);
+      if (chunkError) throw new Error(`Couldn't read the book: ${chunkError.message}`);
+      const rows = (data ?? []) as Omit<MatchedChunk, "similarity" | "book">[];
+      out.push(...rows.map((r) => ({ ...r, similarity: 1, book: doc.title })));
+      if (rows.length < PAGE_SIZE) break;
+    }
+  }
+  return out;
+}
+
+/** Fills in the title of each passage's book. Never fails: passages are used without titles if they can't be found. */
+async function withBookTitles(chunks: MatchedChunk[]): Promise<MatchedChunk[]> {
+  const ids = [...new Set(chunks.map((c) => c.document_id))];
+  if (ids.length === 0) return chunks;
+  const { data, error } = await createAdminClient().from("documents").select("id, title").in("id", ids);
+  if (error) {
+    console.error("[retrieve] book titles", error);
+    return chunks;
+  }
+  const titles = new Map(((data ?? []) as { id: string; title: string }[]).map((d) => [d.id, d.title]));
+  return chunks.map((c) => ({ ...c, book: titles.get(c.document_id) }));
+}
+
 /**
  * Loads the original scanned page images for the top-matched chunks, so the model
  * sees diagrams/maps/figures directly instead of relying on their OCR'd text —
@@ -153,14 +231,17 @@ async function search(embedding: number[], scope: RetrievalScope, count: number)
  * the PDF renderer can attach the right image to the right cited source).
  */
 export async function loadSourceImages(
-  chunks: MatchedChunk[]
+  chunks: MatchedChunk[],
+  limit?: number
 ): Promise<{ images: CompletionImage[]; byPath: Map<string, CompletionImage> }> {
   // Pages added for a whole exercise (similarity 0) come first and get more room: its questions refer to their figures.
   const wholeSection = chunks.some((c) => c.similarity === 0);
-  const ordered = wholeSection ? [...chunks.filter((c) => c.similarity === 0), ...chunks.filter((c) => c.similarity !== 0)] : chunks;
+  // Then exercise pages, then the rest by how close they are: when whole books are passed, these are the pages whose pictures matter most.
+  const rank = (c: MatchedChunk) => (c.similarity === 0 ? 0 : c.source_type === "exercise" ? 1 : 2);
+  const ordered = [...chunks].sort((a, b) => rank(a) - rank(b) || b.similarity - a.similarity);
   const uniquePaths = [...new Set(ordered.map((c) => c.image_path).filter((p): p is string => Boolean(p)))].slice(
     0,
-    wholeSection ? MAX_SECTION_IMAGES : MAX_SOURCE_IMAGES
+    limit ?? (wholeSection ? MAX_SECTION_IMAGES : MAX_SOURCE_IMAGES)
   );
 
   const byPath = new Map<string, CompletionImage>();
@@ -185,7 +266,7 @@ export function formatContext(chunks: MatchedChunk[]): string {
       // The printed text and the student's handwriting on it are kept apart, so an answer is never copied from the handwriting.
       const attempt = handwritingIn(c.content);
       const attemptNote = attempt.length > 0 ? `\n[Student's handwritten attempt, for reference only. It may be wrong. Never copy it: ${attempt.join(" / ")}]` : "";
-      return `[Source ${i + 1}${loc ? ` — ${loc}` : ""} — ${c.source_type}${imageNote}]\n${withoutHandwriting(c.content)}${attemptNote}`;
+      return `[Source ${i + 1}${c.book ? ` — ${c.book}` : ""}${loc ? ` — ${loc}` : ""} — ${c.source_type}${imageNote}]\n${withoutHandwriting(c.content)}${attemptNote}`;
     })
     .join("\n\n");
 }

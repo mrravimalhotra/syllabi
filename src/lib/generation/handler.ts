@@ -63,8 +63,10 @@ async function makeAndSaveAnswer(
     section_label: s.section_label,
     page_number: s.page_number,
     source_type: s.source_type,
-    image_path: s.image_path,
+    // When whole books were passed, only the pages whose pictures were sent keep their picture (a thumbnail for every page would be a wall).
+    image_path: result.fullContext && s.image_path && !result.sourceImages.has(s.image_path) ? null : s.image_path,
     similarity: s.similarity,
+    book: s.book,
   }));
   const savingStart = Date.now();
   const { data: doc, error } = await createAdminClient()

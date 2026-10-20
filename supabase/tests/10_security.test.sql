@@ -213,6 +213,8 @@ begin
   perform pg_temp.check_page_jobs();
   perform pg_temp.check_page_reads();
   perform pg_temp.check_bug_reports();
+  perform pg_temp.check('user cannot call chunk_text_size', 'authenticated', p1, format('select * from chunk_text_size(%L, null)', p1), 'error');
+  perform pg_temp.check('server reads the size of a set of books', 'service_role', null, format('select 1 from chunk_text_size(%L, null) where chars >= 0 and chunks >= 0', p1), '1');
   perform pg_temp.check('an answer keeps its confidence', 'service_role', null,
     'update generated_documents set confidence = ''{"correct": 95, "fromBook": 89, "reasons": []}''::jsonb where id = (select id from generated_documents limit 1); select 1 from generated_documents where (confidence->>''correct'')::int = 95', '1');
   perform pg_temp.check('user cannot read the error log', 'authenticated', p1, 'select * from error_log', 'error');

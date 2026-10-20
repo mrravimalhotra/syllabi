@@ -10,6 +10,7 @@ import { HANDWRITTEN_PAGE, LESSON_PAGES, OUTSIDE_ANSWER, PAGES as BHAKTI_PAGES, 
 import { splitQuestions } from "@/lib/rag/split-questions";
 import { handwritingIn, withoutHandwriting } from "@/lib/rag/handwriting";
 import { chunkPageText } from "@/lib/ingestion/chunk";
+import { fullContextBudget } from "@/lib/rag/budget";
 import { COMMANDS, booksOfKinds, commandsInView, noBooksMessage, planCommand } from "@/app/dashboard/_ask/commands";
 import { bookShare, describeDetails, levelOf, scoreAnswer } from "@/lib/generation/confidence";
 import { scrub, scrubText } from "@/lib/debug/scrub";
@@ -530,7 +531,7 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
 // Confidence details: the facts behind the numbers, so a low score can be traced to its cause.
 {
   const passages = SOIL_CONTEXT.map((c, i) => ({ ...c, source_type: i === 0 ? "textbook" : "exercise", page_number: 3 + i, similarity: 0.7 }));
-  const r = scoreAnswer({ context: passages, retrieval: { mode: "exercise", sectionChunks: 1, questions: 5, supportChunks: 1, topSimilarity: 0.42 }, checks: [], coverageLow: true, usedSearchGrounding: false, weakPages: 1, text: SOIL_MIXED });
+  const r = scoreAnswer({ context: passages, retrieval: { mode: "exercise", books: 2, totalChars: 9000, sectionChunks: 1, questions: 5, supportChunks: 1, topSimilarity: 0.42 }, checks: [], coverageLow: true, usedSearchGrounding: false, weakPages: 1, text: SOIL_MIXED });
   const d = r.details!;
   check(d.statements >= 3 && d.grounded >= 1 && d.grounded < d.statements, `Details: the statements judged and how many were found in the books (${d.grounded} of ${d.statements})`);
   check(d.passages === 2 && d.pages === "textbook p3 (1), exercise p4 (1)" && /whole exercise: 1 exercise passages added; 5 questions searched in the books, 1 lesson passages added/.test(d.retrieval), `Details: where the passages came from and how they were found (${d.pages} | ${d.retrieval})`);
@@ -542,6 +543,17 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
   const clean = scoreAnswer({ context: passages, checks: [], coverageLow: false, usedSearchGrounding: false, weakPages: 0, text: SOIL_GROUNDED });
   check(clean.details!.outside.length === 0 && /Every statement judged was found/.test(describeDetails(clean)) && clean.details!.retrieval === "not recorded", "Details: a well grounded answer lists no outside statements");
   check(describeDetails({ correct: 80, fromBook: 80, reasons: [] }) === "", "Details: an older answer has none to describe");
+  const full = scoreAnswer({ context: passages, retrieval: { mode: "full", books: 3, totalChars: 66480, sectionChunks: 0, questions: 0, supportChunks: 0, topSimilarity: null }, checks: [], coverageLow: false, usedSearchGrounding: false, weakPages: 0, text: SOIL_GROUNDED });
+  check(full.details!.retrieval === "every page of the selected books was passed (3 books, 66,480 characters)", `Details: whole-book passing is described (${full.details!.retrieval})`);
+  const big = scoreAnswer({ context: passages, retrieval: { mode: "search", books: 3, totalChars: 1200000, sectionChunks: 0, questions: 0, supportChunks: 0, topSimilarity: 0.6 }, checks: [], coverageLow: false, usedSearchGrounding: false, weakPages: 0, text: SOIL_GROUNDED });
+  check(/too much to pass whole/.test(big.details!.retrieval) && /12,00,000/.test(big.details!.retrieval), `Details: books too large to pass whole are called out (${big.details!.retrieval})`);
+}
+
+// How much book text may be passed whole.
+{
+  check(fullContextBudget(2_000_000) === 400_000, "Budget: plenty of allowance left caps the text at 400,000 characters");
+  check(fullContextBudget(20_000) === 40_000 && fullContextBudget(10_000) === 20_000, "Budget: never more than half of what is left this month (4 characters a token)");
+  check(fullContextBudget(0) === 0 && fullContextBudget(-5) === 0, "Budget: nothing left means nothing is passed whole");
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

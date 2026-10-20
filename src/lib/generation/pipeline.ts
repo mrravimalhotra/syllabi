@@ -1,5 +1,6 @@
 import { generateCompletion } from "@/lib/llm";
 import { recordTokenUsage } from "@/lib/llm/usage";
+import { fullContextBudget } from "@/lib/rag/budget";
 import { countWeakPages } from "@/lib/ingestion/page-read";
 import { scoreAnswer, type AnswerConfidence } from "@/lib/generation/confidence";
 import { retrieveContext, formatContext, loadSourceImages } from "@/lib/rag/retrieve";
@@ -45,6 +46,8 @@ export interface GenerationOutput {
   checks: AnswerCheck[];
   /** How sure we are the answer is correct and grounded, and how much of it comes from the books. */
   confidence: AnswerConfidence;
+  /** Every page of the selected books was passed to the AI (so the sources are the books, not a few passages). */
+  fullContext: boolean;
   /** Where the time went, in milliseconds, to find out what is slow. */
   timings: GenerationTimings;
 }
@@ -136,15 +139,20 @@ export async function runGeneration({
     searchQuery = [prompt, ...known, transcription].join("\n\n").trim().slice(0, MAX_SEARCH_QUERY_CHARS);
   }
 
-  const searchStart = Date.now();
-  const retrieval = await retrieveContext(searchQuery, { ownerId: student.id, documentIds });
-  timings.searchMs = Date.now() - searchStart;
-
   const quota = await quotaCheck;
   if (quota.overQuota) throw new QuotaExceededError(quota);
 
+  const searchStart = Date.now();
+  const retrieval = await retrieveContext(searchQuery, {
+    ownerId: student.id,
+    documentIds,
+    // The selected books are passed whole when they fit, unless that would use up the rest of this month's allowance.
+    fullContextChars: fullContextBudget(quota.remaining),
+  });
+  timings.searchMs = Date.now() - searchStart;
+
   const imagesStart = Date.now();
-  const { images: sourcePageImages, byPath: sourceImages } = await loadSourceImages(retrieval.chunks);
+  const { images: sourcePageImages, byPath: sourceImages } = await loadSourceImages(retrieval.chunks, retrieval.stats.mode === "search" ? undefined : MAX_PAGE_IMAGES);
   timings.loadingImagesMs = Date.now() - imagesStart;
 
   const photoNote =
@@ -229,6 +237,7 @@ export async function runGeneration({
   return {
     text: result.text,
     confidence,
+    fullContext: retrieval.stats.mode === "full",
     sources: retrieval.chunks,
     sourceImages,
     usedSearchGrounding: Boolean(result.usedSearchGrounding),
@@ -237,6 +246,9 @@ export async function runGeneration({
     timings,
   };
 }
+
+// Page pictures sent when books are passed whole or an exercise is answered (the exercise pages come first).
+const MAX_PAGE_IMAGES = 10;
 
 // Long enough for a whole worksheet; each question is then searched on its own.
 const MAX_SEARCH_QUERY_CHARS = 12000;

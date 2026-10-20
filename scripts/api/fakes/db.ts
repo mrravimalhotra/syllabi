@@ -24,6 +24,8 @@ class Query implements PromiseLike<Result> {
   private filters: ((r: Row) => boolean)[] = [];
   private op: "select" | "insert" | "upsert" | "update" | "delete" = "select";
   private conflict: string[] = ["id"];
+  private from = 0;
+  private sorts: { col: string; ascending: boolean }[] = [];
   private payload: Row | Row[] | null = null;
   private returning = false;
   private mode: "many" | "single" | "maybe" = "many";
@@ -55,8 +57,12 @@ class Query implements PromiseLike<Result> {
     this.filters.push((r) => re.test(String(r[col] ?? "")));
     return this;
   }
-  order() { return this; }
+  order(col?: string, opts: { ascending?: boolean } = {}) {
+    if (col) this.sorts.push({ col, ascending: opts.ascending !== false });
+    return this;
+  }
   limit(n: number) { this.max = n; return this; }
+  range(from: number, to: number) { this.from = from; this.max = to - from + 1; return this; }
   single() { this.mode = "single"; return this; }
   maybeSingle() { this.mode = "maybe"; return this; }
 
@@ -85,7 +91,16 @@ class Query implements PromiseLike<Result> {
       result = matches();
       tables[this.table] = rows.filter((r) => !result.includes(r));
     } else {
-      result = matches().slice(0, this.max);
+      // The first order() is the main sort key, the next ones break ties (as in the database).
+      const sorted = [...matches()].sort((a, b) => {
+        for (const { col, ascending } of this.sorts) {
+          const x = a[col] as string | number;
+          const y = b[col] as string | number;
+          if (x !== y) return (x < y ? -1 : 1) * (ascending ? 1 : -1);
+        }
+        return 0;
+      });
+      result = sorted.slice(this.from, this.from + this.max);
     }
 
     const count = this.wantCount ? matches().length : null;
@@ -113,6 +128,12 @@ class Query implements PromiseLike<Result> {
 export const fakeAdmin = {
   from: (table: string) => new Query(table),
   rpc: async (name: string, args: Row = {}) => {
+    // The size of the selected books' text, worked out from the fake chunks unless a test says otherwise.
+    if (name === "chunk_text_size" && !rpcs[name]) {
+      const wanted = args.p_document_ids as string[] | null;
+      const mine = (tables.chunks ?? []).filter((c) => c.owner_id === args.p_owner_id && (!wanted || wanted.includes(c.document_id as string)));
+      return { data: [{ chars: mine.reduce((n, c) => n + String(c.content ?? "").length, 0), chunks: mine.length }], error: null };
+    }
     const fn = rpcs[name];
     if (!fn) return { data: null, error: { message: `no fake for rpc ${name}` } };
     return { data: fn(args), error: null };

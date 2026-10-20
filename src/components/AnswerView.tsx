@@ -17,6 +17,8 @@ interface AnswerSource {
   section_label: string | null;
   source_type: string;
   page_number: number | null;
+  /** The title of the book it is from. */
+  book?: string;
   imageUrl?: string;
 }
 
@@ -84,14 +86,18 @@ export function AnswerView({ answer, actions, meta }: { answer: Answer; actions?
       {answer.sources.length > 0 && (
         <footer className="border-t border-slate-100 bg-slate-50/60 px-4 py-4 sm:px-6 print:hidden">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sources from your books</p>
-          <ol className="mt-2 space-y-1 text-xs text-slate-600">
-            {answer.sources.map((s, i) => (
-              <li key={s.id} className="flex gap-2">
-                <span className="w-6 shrink-0 text-slate-400">[{i + 1}]</span>
-                <span>{sourceLabel(s)}</span>
-              </li>
-            ))}
-          </ol>
+          {answer.sources.length > MAX_LISTED_SOURCES ? (
+            <BookSummary sources={answer.sources} />
+          ) : (
+            <ol className="mt-2 space-y-1 text-xs text-slate-600">
+              {answer.sources.map((s, i) => (
+                <li key={s.id} className="flex gap-2">
+                  <span className="w-6 shrink-0 text-slate-400">[{i + 1}]</span>
+                  <span>{s.book ? `${s.book}: ` : ""}{sourceLabel(s)}</span>
+                </li>
+              ))}
+            </ol>
+          )}
           <SourceImages sources={answer.sources} />
         </footer>
       )}
@@ -159,6 +165,33 @@ function Checks({ checks }: { checks: AnswerCheck[] }) {
         ))}
       </ul>
     </details>
+  );
+}
+
+/** Over this many sources, the list becomes one line per book (the whole books were used). */
+const MAX_LISTED_SOURCES = 12;
+
+/** "Geography Unit 2 Lithosphere Exercises: pages 1 to 10 (10 passages)": one line for each book the answer used. */
+function BookSummary({ sources }: { sources: AnswerSource[] }) {
+  const books = new Map<string, { pages: Set<number>; count: number }>();
+  for (const s of sources) {
+    const b = books.get(s.book ?? "Your books") ?? { pages: new Set<number>(), count: 0 };
+    b.count++;
+    if (s.page_number) b.pages.add(s.page_number);
+    books.set(s.book ?? "Your books", b);
+  }
+  return (
+    <ul className="mt-2 space-y-1 text-xs text-slate-600">
+      {[...books].map(([title, b]) => {
+        const pages = [...b.pages].sort((x, y) => x - y);
+        return (
+          <li key={title}>
+            <span className="font-medium text-slate-700">{title}</span>
+            {pages.length > 0 && `: pages ${pages[0]} to ${pages[pages.length - 1]}`} ({b.count} passages)
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

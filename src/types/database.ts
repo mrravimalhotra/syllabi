@@ -77,6 +77,8 @@ export interface MatchedChunk {
   source_type: string;
   image_path: string | null;
   similarity: number;
+  /** The title of the book it is from (filled in after the search). */
+  book?: string;
 }
 
 /** A source passage an answer used, as saved with the answer. */
@@ -88,6 +90,8 @@ export interface SavedSource {
   source_type: string;
   image_path: string | null;
   similarity: number;
+  /** The title of the book it is from. */
+  book?: string;
 }
 
 import type { AnswerConfidence } from "@/lib/generation/confidence";

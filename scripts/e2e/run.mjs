@@ -1081,6 +1081,19 @@ await test("Answer confidence: two numbers like 95 : 89 in red, amber or green, 
   if ((await page.getByTestId("confidence").count()) !== 0) throw new Error("An older answer with no score should show none.");
 });
 
+await test("A saved answer that used whole books lists one line per book, not every passage", async (page, ctx) => {
+  const src = (i, book, n) => ({ id: `s${i}`, document_id: "b1", section_label: `Page ${n}`, page_number: n, source_type: "textbook", book });
+  const sources = [...Array.from({ length: 10 }, (_, i) => src(i, "Geography Unit 2 Lethosphere Textbook", i + 1)), ...Array.from({ length: 6 }, (_, i) => src(20 + i, "Geography Unit 2 Lithosphere Exercises", i + 1))];
+  const big = { ...answer, taskType: "ad_hoc", createdAt: now, pack: null, worked: null, id: "w1", title: "Whole books", text: "Done.", sources };
+  await ctx.route("**/api/documents/w1", (r) => json(r, { answer: big }));
+  await page.goto(`${BASE}/dashboard/documents/w1`, { waitUntil: "networkidle" });
+  await page.getByText("Sources from your books").waitFor();
+  await page.getByText(/Geography Unit 2 Lethosphere Textbook/).first().waitFor();
+  await page.getByText(/pages 1 to 10 \(10 passages\)/).waitFor();
+  await page.getByText(/pages 1 to 6 \(6 passages\)/).waitFor();
+  if ((await page.locator("ol li", { hasText: "[1]" }).count()) !== 0) throw new Error("Every passage was listed.");
+});
+
 await test("A saved answer that is gone says so", async (page, ctx) => {
   await ctx.route("**/api/documents/zz", (r) => json(r, { error: "no" }, 404));
   await page.goto(`${BASE}/dashboard/documents/zz`, { waitUntil: "networkidle" });

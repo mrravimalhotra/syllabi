@@ -58,7 +58,9 @@ interface ConfidencePassage {
 
 /** How the passages were found (see RetrievalStats). */
 interface RetrievalNote {
-  mode: "search" | "exercise";
+  mode: "search" | "exercise" | "full";
+  books: number;
+  totalChars: number;
   sectionChunks: number;
   questions: number;
   supportChunks: number;
@@ -181,8 +183,9 @@ function pagesSummary(context: ConfidencePassage[]): string {
 
 function retrievalSummary(r: RetrievalNote | undefined): string {
   if (!r) return "not recorded";
+  if (r.mode === "full") return `every page of the selected books was passed (${r.books} book${r.books === 1 ? "" : "s"}, ${r.totalChars.toLocaleString("en-IN")} characters)`;
   if (r.mode === "exercise") return `whole exercise: ${r.sectionChunks} exercise passages added; ${r.questions} questions searched in the books, ${r.supportChunks} lesson passages added`;
-  return `closest passages only${r.sectionChunks > 0 ? `, ${r.sectionChunks} added whole` : ""}`;
+  return `closest passages only${r.sectionChunks > 0 ? `, ${r.sectionChunks} added whole` : ""}${r.totalChars > 0 ? ` (the selected books hold ${r.totalChars.toLocaleString("en-IN")} characters: too much to pass whole)` : ""}`;
 }
 
 /** Works out both numbers for an answer. */

@@ -598,6 +598,48 @@ fresh();
   session.user = person();
 }
 
+// ---- All selected books passed whole ----
+fresh();
+{
+  const BOOK2 = "88888888-8888-4888-8888-888888888888";
+  tables.documents = [
+    { id: BOOK, owner_id: ME, title: "Geography Textbook", created_at: "2026-10-01" },
+    { id: BOOK2, owner_id: ME, title: "Geography Exercises", created_at: "2026-10-02" },
+    { id: "99999999-9999-4999-8999-999999999999", owner_id: ME, title: "History", created_at: "2026-10-03" },
+  ];
+  const row = (id: string, doc: string, page: number, index: number, type: string, content: string) => ({ id, document_id: doc, owner_id: ME, page_number: page, chunk_index: index, source_type: type, section_label: `Page ${page}`, image_path: `sources/${doc}/page-${page}.jpg`, content });
+  tables.chunks = [
+    row("e1", BOOK2, 2, 0, "exercise", "Q1. Name the layers of the Earth."),
+    row("t2b", BOOK, 2, 1, "textbook", "The crust is the outermost layer."),
+    row("t1", BOOK, 1, 0, "textbook", "The Earth has crust, mantle and core."),
+    row("t2a", BOOK, 2, 0, "textbook", "Rocks are of three kinds."),
+    row("h1", "99999999-9999-4999-8999-999999999999", 1, 0, "textbook", "History text that was not selected."),
+  ];
+  rpcs.match_owner_chunks = () => [{ ...tables.chunks[1], similarity: 0.6 }];
+  const whole = await retrieveContext("What are the layers of the Earth?", { ownerId: ME, documentIds: [BOOK, BOOK2], fullContextChars: 10_000 });
+  check("whole books: every passage of the selected books is passed, book by book, each in page order", whole.chunks.map((c) => c.id).join() === "t1,t2a,t2b,e1", whole.chunks.map((c) => c.id).join());
+  check("whole books: a book that was not selected is left out", !whole.chunks.some((c) => c.id === "h1"));
+  check("whole books: each passage carries its book's title", whole.chunks[0].book === "Geography Textbook" && whole.chunks[3].book === "Geography Exercises");
+  check("whole books: it is recorded, and the books are judged covered", whole.stats.mode === "full" && whole.stats.books === 2 && whole.stats.totalChars > 100 && whole.coverageLow === false, JSON.stringify(whole.stats));
+  check("whole books: the text given to the AI names the book of each passage", formatContext(whole.chunks).includes("— Geography Exercises — Page 2, p.2 — exercise"), formatContext(whole.chunks).slice(0, 200));
+  const tight = await retrieveContext("What are the layers of the Earth?", { ownerId: ME, documentIds: [BOOK, BOOK2], fullContextChars: 50 });
+  check("whole books: when they don't fit, the closest passages are used (with book titles) and the size is recorded", tight.stats.mode === "search" && tight.chunks.length === 1 && tight.chunks[0].book === "Geography Textbook" && tight.stats.totalChars > 100, JSON.stringify(tight.stats));
+  const off = await retrieveContext("What are the layers of the Earth?", { ownerId: ME, documentIds: [BOOK] });
+  check("whole books: with no budget given, nothing changes", off.stats.mode === "search");
+  tables.chunks = [];
+  const empty = await retrieveContext("anything", { ownerId: ME, documentIds: [BOOK], fullContextChars: 10_000 });
+  check("whole books: books with no text fall back to the search", empty.stats.mode === "search");
+  delete rpcs.match_owner_chunks;
+
+  // Pictures: exercise pages first, up to the limit, whichever order the passages came in.
+  tables.documents = [];
+  for (let n = 1; n <= 12; n++) files.set(`sources/${BOOK}/page-${n}.jpg`, { data: Buffer.from(String(n)), contentType: "image/jpeg" });
+  const mk = (n: number, type: string) => ({ id: `p${n}`, document_id: BOOK, content: "x", section_label: null, page_number: n, source_type: type, image_path: `sources/${BOOK}/page-${n}.jpg`, similarity: 1 });
+  const imgs = await loadSourceImages([1, 2, 3, 4, 5, 6].map((n) => mk(n, "textbook")).concat([7, 8].map((n) => mk(n, "exercise"))), 4);
+  const got = [...imgs.byPath.keys()].map((k) => Number(/page-(\d+)/.exec(k)![1])).sort((a, b) => a - b).join();
+  check("whole books: the pictures sent are the exercise pages first (7, 8), then the earliest others", got === "1,2,7,8", got);
+}
+
 // ---- Whole exercise: lesson passages to answer it from ----
 fresh();
 {
