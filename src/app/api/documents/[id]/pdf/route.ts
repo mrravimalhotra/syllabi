@@ -4,10 +4,8 @@ import { apiError, authenticate } from "@/lib/api";
 import { findAnswer } from "@/lib/generation/answers";
 import { pdfDisposition } from "@/lib/pdf/disposition";
 import { renderGenerationPdf } from "@/lib/pdf/render";
-import { loadSourceImages } from "@/lib/rag/retrieve";
 import { getSignedUrl } from "@/lib/storage";
 import { withoutAnswerKey } from "@/lib/format";
-import type { MatchedChunk } from "@/types/database";
 
 // Rendering a long answer with embedded page images can take a few seconds.
 export const maxDuration = 60;
@@ -52,7 +50,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   // The same answer always gives the same PDF, so the browser can reuse its copy
   // (a rename or edit changes the tag). It must still ask first: the answer is private.
   const etag = `"${createHash("sha256")
-    .update(JSON.stringify([answer.id, answer.title, answer.content, answer.sources, user.full_name, user.email, questionsOnly]))
+    .update(JSON.stringify([answer.id, answer.title, answer.content, user.full_name, user.email, questionsOnly]))
     .digest("hex")
     .slice(0, 32)}"`;
   const baseHeaders = { ETag: etag, "Cache-Control": "private, no-cache" };
@@ -61,15 +59,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   try {
     let pdf = recent.get(etag);
     if (!pdf) {
-      const sources = (answer.sources ?? []) as unknown as MatchedChunk[];
-      const { byPath } = await loadSourceImages(sources);
       pdf = await renderGenerationPdf({
         taskType: answer.task_type,
         title: answer.title,
         preparedBy: user.full_name ?? user.email,
         content: questionsOnly ? withoutAnswerKey(answer.content) : answer.content,
-        sources: questionsOnly ? [] : sources,
-        sourceImages: byPath,
         usedSearchGrounding: answer.used_search_grounding,
       });
       remember(etag, pdf);

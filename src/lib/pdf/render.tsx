@@ -1,9 +1,8 @@
-import { sourceLabel, taskLabel } from "@/lib/format";
-import { Document, Page, Text, View, Image, StyleSheet, renderToBuffer } from "@react-pdf/renderer";
+import { taskLabel } from "@/lib/format";
+import { Document, Page, Text, View, StyleSheet, renderToBuffer } from "@react-pdf/renderer";
 import { CODE_FONT_FAMILY, FONT_FAMILY } from "@/lib/pdf/fonts";
 import { tidyMath } from "@/lib/tidy-math";
-import type { CompletionImage } from "@/lib/llm/types";
-import type { GenerationTaskType, MatchedChunk } from "@/types/database";
+import type { GenerationTaskType } from "@/types/database";
 
 const styles = StyleSheet.create({
   page: { paddingTop: 40, paddingBottom: 50, paddingHorizontal: 44, fontSize: 11, fontFamily: FONT_FAMILY },
@@ -43,10 +42,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     lineHeight: 1.5,
   },
-    sourcesTitle: { fontSize: 11, fontWeight: 700, marginTop: 18, marginBottom: 6 },
   source: { fontSize: 9, color: "#475569", marginBottom: 3 },
-  sourceBlock: { marginBottom: 8 },
-  sourceImage: { width: 240, marginTop: 4, marginBottom: 2, borderRadius: 2 },
   footer: {
     position: "absolute",
     bottom: 20,
@@ -236,9 +232,6 @@ export interface RenderPdfInput {
   title: string;
   preparedBy: string;
   content: string;
-  sources: MatchedChunk[];
-  /** Source image_path → loaded image, so diagrams/maps a source cites get embedded, not just referenced by name. */
-  sourceImages: Map<string, CompletionImage>;
   /** The answer used Google Search; the PDF says so. */
   usedSearchGrounding?: boolean;
   /** Overrides the kind shown under the title (e.g. "Practice worksheet"). */
@@ -262,28 +255,6 @@ export async function renderGenerationPdf(input: RenderPdfInput): Promise<Buffer
           <Text style={styles.source}>
             Parts of this answer used Google Search because the uploaded books didn&apos;t fully cover it.
           </Text>
-        )}
-
-        {input.sources.length > 0 && (
-          <>
-            <Text style={styles.sourcesTitle} minPresenceAhead={60}>
-              Sources
-            </Text>
-            {input.sources.map((s, i) => {
-              const image = s.image_path ? input.sourceImages.get(s.image_path) : undefined;
-              return (
-                <View key={s.id} style={styles.sourceBlock} wrap={false}>
-                  <Text style={styles.source}>
-                    [{i + 1}] {sourceLabel(s)}
-                  </Text>
-                  {image && (
-                    // eslint-disable-next-line jsx-a11y/alt-text -- this is @react-pdf/renderer's Image (no alt concept), not an HTML img
-                    <Image style={styles.sourceImage} src={`data:${image.mimeType};base64,${image.data}`} />
-                  )}
-                </View>
-              );
-            })}
-          </>
         )}
 
         <Text

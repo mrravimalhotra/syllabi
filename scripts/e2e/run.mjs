@@ -1018,6 +1018,18 @@ await test("A saved answer: it opens, can be renamed, and deleting it returns to
   if (deleted !== 1) throw new Error(`Expected one delete, saw ${deleted}`);
 });
 
+await test("A saved answer: the reference pages show on screen but never in a print, only the generated answer does", async (page, ctx) => {
+  const withSources = { ...answer, taskType: "ad_hoc", createdAt: now, pack: null, worked: null, id: "a9", title: "Soil answers", text: "Black soil suits cotton.", sources: [{ id: "s1", document_id: "b1", section_label: "Think and Answer", page_number: 5, source_type: "exercise", imageUrl: null }] };
+  await ctx.route("**/api/documents/a9", (r) => json(r, { answer: withSources }));
+  await page.goto(`${BASE}/dashboard/documents/a9`, { waitUntil: "networkidle" });
+  await page.getByText("Sources from your books").waitFor();
+  await page.emulateMedia({ media: "print" });
+  if (await page.getByText("Sources from your books").isVisible()) throw new Error("The reference list is in the print view.");
+  if (await page.getByText("Think and Answer").isVisible()) throw new Error("A reference page's label is in the print view.");
+  await page.getByText("Black soil suits cotton.").first().waitFor();
+  await page.emulateMedia({ media: "screen" });
+});
+
 await test("A saved answer that is gone says so", async (page, ctx) => {
   await ctx.route("**/api/documents/zz", (r) => json(r, { error: "no" }, 404));
   await page.goto(`${BASE}/dashboard/documents/zz`, { waitUntil: "networkidle" });

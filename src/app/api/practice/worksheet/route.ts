@@ -37,8 +37,6 @@ export async function GET(request: Request) {
       title,
       preparedBy: student.full_name ?? student.email,
       content: withAnswers ? markdown : withoutAnswerKey(markdown),
-      sources: [],
-      sourceImages: new Map(),
       label: "Practice worksheet",
       footer: "Made by Syllabi. Answers worked out by code, not AI.",
     });

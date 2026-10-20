@@ -75,8 +75,9 @@ export function AnswerView({ answer, actions, meta }: { answer: Answer; actions?
         <p className="text-xs text-slate-400">AI-generated. Check it before using it with your child or student.</p>
       </div>
 
+      {/* The reference pages are not printed: a print shows only the generated answer. */}
       {answer.sources.length > 0 && (
-        <footer className="border-t border-slate-100 bg-slate-50/60 px-4 py-4 sm:px-6 print:bg-white print:px-0">
+        <footer className="border-t border-slate-100 bg-slate-50/60 px-4 py-4 sm:px-6 print:hidden">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sources from your books</p>
           <ol className="mt-2 space-y-1 text-xs text-slate-600">
             {answer.sources.map((s, i) => (
