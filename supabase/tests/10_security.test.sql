@@ -76,6 +76,30 @@ begin
     format('delete from documents where id = %L; select 1 from page_jobs where document_id = %L', book, book), '0');
 end $$;
 
+-- Scan-quality scores per page: server only, summed per book by the database.
+create function pg_temp.check_page_reads() returns void language plpgsql as $$
+declare
+  p1 uuid := '00000000-0000-0000-0000-0000000000b1';
+  book uuid := '00000000-0000-0000-0000-0000000000d4';
+begin
+  insert into documents (id, title, owner_id, source_type, status) values (book, 'Scored book', p1, 'textbook', 'ready');
+  insert into page_reads (document_id, page_number, owner_id, confidence, issues) values
+    (book, 1, p1, 100, '{}'), (book, 2, p1, 50, '{blurry}'), (book, 3, p1, 90, '{too_dark}');
+  perform pg_temp.check('user cannot read page scores', 'authenticated', p1, 'select * from page_reads', 'error');
+  perform pg_temp.check('anon cannot read page scores', 'anon', null, 'select * from page_reads', 'error');
+  perform pg_temp.check('user cannot write page scores', 'authenticated', p1,
+    format('insert into page_reads (document_id, page_number, owner_id, confidence) values (%L, 9, %L, 100)', book, p1), 'error');
+  perform pg_temp.check('user cannot call page_read_summary', 'authenticated', p1, format('select * from page_read_summary(%L)', p1), 'error');
+  perform pg_temp.check('a score over 100 is refused', 'service_role', null,
+    format('insert into page_reads (document_id, page_number, owner_id, confidence) values (%L, 8, %L, 101)', book, p1), 'error');
+  perform pg_temp.check('the summary counts pages, averages, and lists weak pages and issues', 'service_role', null,
+    format('select 1 from page_read_summary(%L) where pages = 3 and average = 80.0 and weak_pages = %L::int[] and issues = %L::text[]', p1, '{2}', '{blurry,too_dark}'), '1');
+  perform pg_temp.check('a page scored again replaces its score', 'service_role', null,
+    format('insert into page_reads (document_id, page_number, owner_id, confidence) values (%L, 2, %L, 95) on conflict (document_id, page_number) do update set confidence = 95; select 1 from page_read_summary(%L) where weak_pages = %L::int[]', book, p1, p1, '{}'), '1');
+  perform pg_temp.check('scores go when their book is deleted', 'service_role', null,
+    format('delete from documents where id = %L; select 1 from page_reads where document_id = %L', book, book), '0');
+end $$;
+
 -- Seed (as table owner): two parents/tutors, one admin, one book each.
 insert into auth.users values
   ('00000000-0000-0000-0000-00000000000a', 'admin@example.com'),
@@ -167,6 +191,7 @@ begin
     'select * from monthly_usage_all()', 'error');
   perform pg_temp.check_answer_row();
   perform pg_temp.check_page_jobs();
+  perform pg_temp.check_page_reads();
   perform pg_temp.check('user cannot read the error log', 'authenticated', p1, 'select * from error_log', 'error');
   perform pg_temp.check('user cannot write the error log', 'authenticated', p1,
     'insert into error_log (source, context, message) values (''browser'', ''x'', ''x'')', 'error');

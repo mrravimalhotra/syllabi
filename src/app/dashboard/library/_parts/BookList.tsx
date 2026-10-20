@@ -1,6 +1,7 @@
 "use client";
 
 import { StatusBadge } from "@/app/dashboard/library/_parts/BookParts";
+import { ScanQuality } from "@/app/dashboard/library/_parts/ScanQuality";
 import type { DocumentRowView } from "@/app/dashboard/library/_parts/upload-helpers";
 import { EditableName } from "@/components/EditableName";
 import { BookIcon, DownloadIcon, TrashIcon } from "@/components/icons";
@@ -14,6 +15,8 @@ interface Props {
   deleting: string[];
   /** Books being made into a PDF to download right now. */
   downloading: string[];
+  /** Books whose scan quality is being worked out right now. */
+  checking: string[];
   /** Book id → why the last action on it failed. */
   errors: Record<string, string>;
   /** An upload that stopped part-way, or a book whose pages never arrived. */
@@ -21,6 +24,7 @@ interface Props {
   onRename: (id: string, title: string) => Promise<void>;
   onDelete: (d: DocumentRowView) => void;
   onDownload: (d: DocumentRowView) => void;
+  onCheckScan: (d: DocumentRowView) => void;
   onRetry: (id: string) => void;
   onRemoveUnfinished: () => void;
 }
@@ -31,11 +35,13 @@ export function BookList({
   loadFailed,
   deleting,
   downloading,
+  checking,
   errors,
   isUnfinished,
   onRename,
   onDelete,
   onDownload,
+  onCheckScan,
   onRetry,
   onRemoveUnfinished,
 }: Props) {
@@ -74,6 +80,12 @@ export function BookList({
                   {[d.subject, d.grade, sourceTypeLabel(d.source_type)].filter(Boolean).join(" · ")}
                 </p>
                 <StatusBadge status={d.status} unfinished={isUnfinished(d)} pages={d.pages} />
+                <ScanQuality scan={d.scan ?? null} />
+                {d.status === "ready" && !d.scan && (
+                  <button type="button" onClick={() => onCheckScan(d)} disabled={checking.includes(d.id)} className={cx(link, "text-xs")}>
+                    {checking.includes(d.id) ? "Checking the scan..." : "Check scan quality"}
+                  </button>
+                )}
                 {d.pages && d.pages.failed > 0 && d.status !== "processing" && (
                   <p className="text-xs text-red-600">
                     {d.pages.failed} page{d.pages.failed === 1 ? "" : "s"} couldn&apos;t be read: {d.pages.problems.join(" ")}{" "}

@@ -1,6 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { extractPageText } from "@/lib/ingestion/extract";
 import { chunkPageText } from "@/lib/ingestion/chunk";
+import { takeLegibility, type Legibility } from "@/lib/ingestion/confidence";
+import { recordPageRead } from "@/lib/ingestion/page-read";
 import { embedMany } from "@/lib/llm";
 import { recordTokenUsage } from "@/lib/llm/usage";
 import { uploadSourceFile } from "@/lib/storage";
@@ -99,6 +101,9 @@ export async function ingestPage(ctx: PageContext, page: IngestPage, storedImage
   // Text from Word files and digital PDFs is used as it is; only pages
   // without text (scans, photos) are read by the AI.
   let pageText: string;
+  // Only for pages the AI read from a picture: the reader's own rating of the page, for the book's scan score.
+  let legibility: Legibility | null = null;
+  let readFromPicture = false;
   if (page.text !== undefined) {
     pageText = page.text;
   } else {
@@ -112,7 +117,8 @@ export async function ingestPage(ctx: PageContext, page: IngestPage, storedImage
       model: extraction.model,
       usage: extraction.usage,
     });
-    pageText = extraction.text;
+    ({ text: pageText, legibility } = takeLegibility(extraction.text));
+    readFromPicture = true;
   }
 
   const textChunks = chunkPageText(pageText, page.pageNumber);
@@ -142,6 +148,7 @@ export async function ingestPage(ctx: PageContext, page: IngestPage, storedImage
     })),
   });
   if (error) failAt("saving the page", page.pageNumber, error);
+  await recordPageRead({ documentId: ctx.documentId, ownerId: ctx.ownerId, pageNumber: page.pageNumber }, pageText, readFromPicture ? page.imageBase64 : undefined, legibility);
 
   const embeddingTokens = embeddings.reduce((sum, e) => sum + e.usage.totalTokens, 0);
   if (embeddingTokens > 0) {

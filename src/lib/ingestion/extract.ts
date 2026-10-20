@@ -65,6 +65,11 @@ edges. Transcribe only the main page.
 - Math in plain Unicode (x², √x, ≤, π), not LaTeX.
 - Skip page furniture: running headers and footers, publisher or book names, and
   decorative elements. Keep the printed page number as a last line: "Page: <number>".
+- A word or phrase you cannot make out (blur, shadow, a finger, a torn or faded edge):
+  write [illegible] in its place. Never guess it from context.
+- Last of all, after the page number, one line rating how legible the page was:
+  [Legibility: clear], [Legibility: fair] (some words uncertain) or [Legibility: poor]
+  (much of it hard to read).
 - If the page is blank or unreadable, output exactly: [EMPTY PAGE]`;
 
 /**

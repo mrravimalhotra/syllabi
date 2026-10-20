@@ -22,7 +22,8 @@ type Result = { data: unknown; error: unknown; count?: number | null };
 
 class Query implements PromiseLike<Result> {
   private filters: ((r: Row) => boolean)[] = [];
-  private op: "select" | "insert" | "update" | "delete" = "select";
+  private op: "select" | "insert" | "upsert" | "update" | "delete" = "select";
+  private conflict: string[] = ["id"];
   private payload: Row | Row[] | null = null;
   private returning = false;
   private mode: "many" | "single" | "maybe" = "many";
@@ -40,6 +41,7 @@ class Query implements PromiseLike<Result> {
     return this;
   }
   insert(p: Row | Row[]) { this.op = "insert"; this.payload = p; return this; }
+  upsert(p: Row | Row[], opts: { onConflict?: string } = {}) { this.op = "upsert"; this.payload = p; this.conflict = (opts.onConflict ?? "id").split(","); return this; }
   update(p: Row) { this.op = "update"; this.payload = p; return this; }
   delete() { this.op = "delete"; return this; }
   eq(col: string, val: unknown) { this.filters.push((r) => r[col] === val); return this; }
@@ -68,6 +70,13 @@ class Query implements PromiseLike<Result> {
       const items = Array.isArray(this.payload) ? this.payload : [this.payload!];
       result = items.map((p) => ({ id: nextId(), created_at: new Date().toISOString(), ...p }));
       rows.push(...result);
+    } else if (this.op === "upsert") {
+      const items = Array.isArray(this.payload) ? this.payload : [this.payload!];
+      for (const item of items) {
+        const same = rows.find((r) => this.conflict.every((k) => r[k] === item[k]));
+        if (same) Object.assign(same, item);
+        else rows.push({ ...item });
+      }
     } else if (this.op === "update") {
       result = matches();
       for (const r of result) Object.assign(r, this.payload);

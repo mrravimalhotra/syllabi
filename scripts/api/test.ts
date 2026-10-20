@@ -26,6 +26,10 @@ import { made as madePdfs } from "./fakes/book-pdf";
 import { arrangeBookPages } from "../../src/lib/pdf/book-pages";
 import { loadSourceImages, retrieveContext } from "../../src/lib/rag/retrieve";
 import { namedPages, wantsWholeSection } from "../../src/lib/rag/whole-pages";
+import * as scanCheck from "../../src/app/api/library/[id]/scan/route";
+import sharp from "sharp";
+import { measureImage } from "../../src/lib/ingestion/image-quality";
+import { scorePage, summariseBook, takeLegibility } from "../../src/lib/ingestion/confidence";
 import * as guests from "../../src/app/api/admin/guests/route";
 import * as speech from "../../src/app/api/speech/route";
 import * as sounds from "../../src/app/api/sounds/route";
@@ -443,6 +447,88 @@ fresh();
   check("pictures: an ordinary answer gets at most 4 page pictures", plain.images.length === 4, String(plain.images.length));
   const section = await loadSourceImages([...[1, 2].map((n) => withPicture(n, 0.8)), ...[11, 12, 13, 14, 15, 16].map((n) => withPicture(n, 0))]);
   check("pictures: a whole exercise sends all its pages' pictures first (6 pages + 2 best matches)", section.images.length === 8 && [11, 12, 13, 14, 15, 16].every((n) => section.byPath.has(`sources/${BOOK}/page-${n}.jpg`)), [...section.byPath.keys()].join());
+}
+
+// ---- Scan confidence ----
+fresh();
+{
+  const lines = Array.from({ length: 28 }, (_, i) => `<text x="40" y="${60 + i * 34}" font-size="22" font-family="DejaVu Sans, Arial, sans-serif">${i + 1}. The Alvars were devoted to Vishnu and the Nayanars to Shiva.</text>`).join("");
+  const svg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="1100"><rect width="100%" height="100%" fill="white"/>${lines}</svg>`);
+  const page = await sharp(svg).jpeg({ quality: 85 }).toBuffer();
+  const sharpStats = (await measureImage(page))!;
+  const blurStats = (await measureImage(await sharp(page).blur(3).jpeg().toBuffer()))!;
+  const darkStats = (await measureImage(await sharp(page).linear(0.3, 0).jpeg().toBuffer()))!;
+  const smallStats = (await measureImage(await sharp(page).resize({ width: 380 }).jpeg().toBuffer()))!;
+  const text = "Q1. Fill in the blanks.\n1. The Alvars were devoted to Vishnu.\n2. The Nayanars were devoted to Shiva.\nPage: 11";
+
+  const good = scorePage({ text, image: sharpStats, legibility: "clear" });
+  check("scan: a sharp, bright page with clean text scores high with no issues", good.score >= 95 && good.issues.length === 0, JSON.stringify(good));
+  const blurry = scorePage({ text, image: blurStats, legibility: null });
+  check("scan: a blurred page is flagged blurry and scores weak", blurry.issues.includes("blurry") && blurry.score < 60, JSON.stringify(blurry));
+  check("scan: a dark page is flagged", scorePage({ text, image: darkStats, legibility: null }).issues.includes("too_dark"));
+  check("scan: a tiny picture is flagged low resolution", scorePage({ text, image: smallStats, legibility: null }).issues.includes("low_resolution"));
+  check("scan: text that came with the file (no picture) is not judged on a picture", scorePage({ text, image: null, legibility: null }).score === 100);
+  check("scan: the reader saying 'poor' caps the page at 45", scorePage({ text, image: sharpStats, legibility: "poor" }).score <= 45);
+  const gaps = scorePage({ text: `${text}\nThe [illegible] was [illegible] by [illegible] at [illegible]`, image: sharpStats, legibility: "fair" });
+  check("scan: [illegible] words cost points and are named", gaps.score <= 70 && gaps.issues.includes("illegible_words"), JSON.stringify(gaps));
+  check("scan: garbled text is flagged", scorePage({ text: "�����������������������������������������������������", image: sharpStats, legibility: null }).issues.includes("garbled"));
+  check("scan: Hindi and maths symbols are normal text, not garbage", scorePage({ text: "जाति न पूछे साधु की, पूछ लीजिये ज्ञान। मोल करो तरवार का, पड़ा रहन दो म्यान॥ 5 × 3 = 15, √4 = 2, ½ + ¼ ≤ ₹10", image: sharpStats, legibility: null }).score === 100);
+  check("scan: an empty page is 'blank' at 55, not an error", JSON.stringify(scorePage({ text: "[EMPTY PAGE]", image: sharpStats, legibility: null })) === '{"score":55,"issues":["blank"]}');
+  check("scan: a short page in a good picture (a heading or diagram) is not weak", scorePage({ text: "## Timeline\nFig. 1.1", image: sharpStats, legibility: "clear" }).score >= 80);
+  const taken = takeLegibility("Some text\nPage: 3\n[Legibility: fair]");
+  check("scan: the legibility line is taken out of the page text", taken.legibility === "fair" && taken.text === "Some text\nPage: 3" && takeLegibility("plain").legibility === null);
+
+  const book = (average: number, weak: number[], pages: number, failed = 0) => summariseBook({ pages, average, weak_pages: weak, issues: ["blurry", "too_dark"] }, { total: pages + failed, failed });
+  check("scan: clean pages make a High book with no advice", book(93, [], 15).level === "high" && book(93, [], 15).advice === null);
+  const one = book(92, [4], 15);
+  check("scan: one weak page keeps the book Medium and names the page", one.level === "medium" && /Page 4 is unclear/.test(one.advice ?? "") && /re-scan/i.test(one.advice ?? ""), one.advice ?? "");
+  const low = book(50, [2, 4, 6, 8, 9, 11], 15);
+  check("scan: a poor average is Low, asks for a re-scan and lists the pages", low.level === "low" && /Low confidence/.test(low.advice ?? "") && /pages 2, 4, 6, 8, 9, 11/.test(low.advice ?? ""), low.advice ?? "");
+  check("scan: many weak pages make the book Low even when the average is decent", book(78, [1, 2, 3, 4, 5], 15).level === "low");
+  const lost = book(95, [], 10, 5);
+  check("scan: pages that could not be read pull the score down and are counted", lost.score === 63 && lost.failedPages === 5 && lost.level === "low", JSON.stringify(lost));
+  check("scan: the issues are in plain words", /out of focus/.test(book(60, [1], 3).problems.join()) && /too dark/.test(book(60, [1], 3).problems.join()));
+
+  // The book list carries the score of a ready book.
+  session.user = person();
+  tables.documents = [{ id: BOOK, owner_id: ME, title: "History", status: "ready", subject: null, grade: null, source_type: "textbook", created_at: "2026-10-01" }];
+  rpcs.page_job_counts = () => [{ document_id: BOOK, status: "done", jobs: 15 }];
+  rpcs.page_read_summary = () => [{ document_id: BOOK, pages: 15, average: "91.4", weak_pages: [4], issues: ["blurry"] }];
+  const listed = await (library.GET as unknown as (r: Request) => Promise<Response>)(new Request("http://localhost/api/library"));
+  const body = (await listed.json()) as { documents: { scan: { level: string; weakPages: number[] } | null }[] };
+  check("scan: a ready book in the list carries its scan score and weak pages", body.documents[0].scan?.level === "medium" && body.documents[0].scan.weakPages.join() === "4", JSON.stringify(body));
+  failures.length = 0;
+  rpcs.page_read_summary = () => { throw new Error("db down"); };
+  const degraded = await (library.GET as unknown as (r: Request) => Promise<Response>)(new Request("http://localhost/api/library"));
+  check("scan: if the score can't be worked out the books still list, without it", degraded.status === 200 && ((await degraded.json()) as { documents: { scan: unknown }[] }).documents[0].scan === null);
+  delete rpcs.page_job_counts;
+  delete rpcs.page_read_summary;
+
+  // Scoring a book that was read before scores were kept: pictures are measured, Word pages judged on their text, no AI used.
+  const check1 = (id: string) => call(scanCheck.POST, undefined, { id });
+  check("scan check: a book id that isn't one is not found", (await check1("nope")).status === 404);
+  tables.documents = [{ id: BOOK, owner_id: OTHER, title: "Theirs" }];
+  check("scan check: someone else's book is not found", (await check1(BOOK)).status === 404);
+  tables.documents = [{ id: BOOK, owner_id: ME, title: "History" }];
+  files.clear();
+  tables.chunks = [];
+  check("scan check: a book with no saved pages says so", (await check1(BOOK)).status === 404);
+  files.set(`sources/${BOOK}/page-1.jpg`, { data: page, contentType: "image/jpeg" });
+  files.set(`sources/${BOOK}/page-2.jpg`, { data: await sharp(page).blur(3).jpeg().toBuffer(), contentType: "image/jpeg" });
+  tables.chunks = [
+    { document_id: BOOK, page_number: 1, chunk_index: 0, content: text },
+    { document_id: BOOK, page_number: 2, chunk_index: 0, content: text },
+    { document_id: BOOK, page_number: 3, chunk_index: 0, content: text },
+  ];
+  tables.page_reads = [];
+  const checked = await check1(BOOK);
+  const reads = (tables.page_reads ?? []) as { page_number: number; confidence: number; issues: string[]; owner_id: string }[];
+  const byPage = (n: number) => reads.find((r) => r.page_number === n);
+  check("scan check: every saved page gets a score and the book's owner", checked.status === 200 && reads.length === 3 && reads.every((r) => r.owner_id === ME), JSON.stringify(checked));
+  check("scan check: a sharp page scores high, a blurred one low and flagged", (byPage(1)?.confidence ?? 0) >= 95 && (byPage(2)?.confidence ?? 100) < 60 && byPage(2)?.issues.includes("blurry") === true, JSON.stringify(reads));
+  check("scan check: a text-only (Word) page is scored on its text", byPage(3)?.confidence === 100);
+  await check1(BOOK);
+  check("scan check: running it again replaces the scores, not adds", (tables.page_reads ?? []).length === 3);
 }
 
 // ---- Background reader and error log ----

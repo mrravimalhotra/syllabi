@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { apiError, authenticate, errorResponse } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { pageProgress } from "@/lib/ingestion/jobs";
+import { bookScans, pageProgress } from "@/lib/ingestion/jobs";
 import { QuotaExceededError, checkQuota } from "@/lib/quota";
 import { SOURCE_TYPES, type SourceType } from "@/types/database";
 import { cleanText } from "@/lib/validate";
@@ -32,7 +32,15 @@ export async function GET(request: Request) {
       withProgress ? pageProgress(user.id) : Promise.resolve({} as Awaited<ReturnType<typeof pageProgress>>),
     ]);
     if (error) throw error;
-    return NextResponse.json({ documents: data.map((d) => ({ ...d, pages: progress[d.id] ?? null })) });
+    // The scan score is a nice-to-have: if it can't be worked out the books still list.
+    let scans: Awaited<ReturnType<typeof bookScans>> = {};
+    if (withProgress) {
+      scans = await bookScans(user.id, progress).catch((err) => {
+        console.error("[library GET] scan scores", err);
+        return {};
+      });
+    }
+    return NextResponse.json({ documents: data.map((d) => ({ ...d, pages: progress[d.id] ?? null, scan: d.status === "ready" ? (scans[d.id] ?? null) : null })) });
   } catch (err) {
     return errorResponse(err, "library GET", "Couldn't load your books. Reload the page to try again.");
   }

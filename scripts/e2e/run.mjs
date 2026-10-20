@@ -775,6 +775,44 @@ await test("My Books: deleting a book asks first, then removes it from the list"
   await page.getByText("Science Notes").first().waitFor();
 });
 
+await test("My Books: each ready book shows how sure the app is of its scan, and asks for a re-scan when low", async (page, ctx) => {
+  const scan = (score, level, weakPages, advice, problems = []) => ({ score, level, pages: 15, weakPages, failedPages: 0, problems, advice });
+  const list = [
+    { ...books[0], id: "s1", title: "Clean Scan", status: "ready", pages: null, scan: scan(96, "high", [], null) },
+    { ...books[0], id: "s2", title: "Mostly Fine", status: "ready", pages: null, scan: scan(88, "medium", [4], "Page 4 is unclear. For the best answers, re-scan it and upload a new copy.", ["out of focus"]) },
+    { ...books[0], id: "s3", title: "Poor Scan", status: "ready", pages: null, scan: scan(52, "low", [2, 4, 6], "Low confidence: some of this book may be missing or wrong in answers. Re-scan pages 2, 4, 6 and upload a new copy.", ["too dark"]) },
+    { ...books[0], id: "s4", title: "Older Book", status: "ready", pages: null },
+  ];
+  await ctx.route("**/api/me", (r) => json(r, me));
+  await ctx.route("**/api/library", (r) => json(r, { documents: list }));
+  await page.goto(`${BASE}/dashboard/library`, { waitUntil: "networkidle" });
+  const card = (title) => page.locator("li", { hasText: title });
+  await card("Clean Scan").getByText("Scan quality: High (96%)").waitFor();
+  if ((await card("Clean Scan").locator("p.text-xs.text-amber-800, p.text-xs.text-red-700").count()) !== 0) throw new Error("A High book should give no advice.");
+  await card("Mostly Fine").getByText("Scan quality: Medium (88%)").waitFor();
+  await card("Mostly Fine").getByText(/Page 4 is unclear/).waitFor();
+  await card("Poor Scan").getByText("Scan quality: Low (52%)").waitFor();
+  await card("Poor Scan").getByText(/Low confidence.*Re-scan pages 2, 4, 6 and upload a new copy/).waitFor();
+  if ((await card("Older Book").getByText(/Scan quality/).count()) !== 0) throw new Error("A book with no score should show none.");
+});
+
+await test("My Books: an older book can be checked, and its score then appears", async (page, ctx) => {
+  let checked = 0;
+  const scored = { score: 41, level: "low", pages: 15, weakPages: [3, 4, 5, 6, 7, 8], failedPages: 0, problems: ["out of focus"], advice: "Low confidence: re-scan pages 3, 4, 5, 6, 7, 8 and upload a new copy." };
+  await ctx.route("**/api/me", (r) => json(r, me));
+  await ctx.route("**/api/library", (r) => json(r, { documents: [{ ...books[0], id: "o1", title: "Old Upload", status: "ready", pages: null, ...(checked ? { scan: scored } : {}) }] }));
+  await ctx.route("**/api/library/o1/scan", (r) => {
+    checked++;
+    return json(r, { ok: true, pages: 15 });
+  });
+  await page.goto(`${BASE}/dashboard/library`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Check scan quality" }).click();
+  await page.getByText("Scan quality: Low (41%)").waitFor({ timeout: 8000 });
+  await page.getByText(/Low confidence: re-scan pages 3, 4, 5, 6, 7, 8/).waitFor();
+  if (checked !== 1) throw new Error(`Expected one check, saw ${checked}.`);
+  if ((await page.getByRole("button", { name: "Check scan quality" }).count()) !== 0) throw new Error("The check button should go once there is a score.");
+});
+
 await test("My Books: a book can be downloaded as a PDF, and a refusal is explained", async (page, ctx) => {
   await ctx.route("**/api/me", (r) => json(r, me));
   await ctx.route("**/api/library", (r) => json(r, { documents: books }));

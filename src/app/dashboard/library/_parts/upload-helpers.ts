@@ -1,5 +1,6 @@
 import { SOURCE_TYPE_LABELS } from "@/lib/format";
 import type { SourceType } from "@/types/database";
+import type { BookScan } from "@/lib/ingestion/confidence";
 
 export const SOURCE_TYPE_OPTIONS = (Object.keys(SOURCE_TYPE_LABELS) as SourceType[]).map((value) => ({ value, label: SOURCE_TYPE_LABELS[value] }));
 
@@ -60,6 +61,8 @@ export interface DocumentRowView {
   status: "processing" | "ready" | "failed";
   /** Background reading progress; null for books uploaded before pages were read in the background. */
   pages: PageProgress | null;
+  /** How sure we are the scan was read completely (null until pages are scored, or for older books). */
+  scan?: BookScan | null;
   source_type: string;
   created_at: string;
   subject: string | null;

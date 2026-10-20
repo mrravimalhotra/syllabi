@@ -8,6 +8,7 @@
 // waiting, e.g. after the AI's daily allowance resets.
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { summariseBook, type BookScan, type PageReadSummary } from "@/lib/ingestion/confidence";
 import { downloadFile, uploadSourceFile } from "@/lib/storage";
 import { IngestError, ingestPage, type IngestPage } from "@/lib/ingestion/ingest";
 import type { UploadPage } from "@/lib/ingestion/upload-pages";
@@ -269,6 +270,18 @@ export async function pageProgress(ownerId: string): Promise<Record<string, Page
     const reason = (j.error ?? "").replace(/^Page \d+: /, "");
     if (reason && !p.problems.includes(reason)) p.problems.push(reason);
     if (j.status === "pending" && Date.parse(j.next_attempt_at) > soon) p.waitingUntil = j.next_attempt_at;
+  }
+  return out;
+}
+
+/** The scan-quality score of each of an owner's books that has scored pages. */
+export async function bookScans(ownerId: string, progress: Record<string, PageProgress>): Promise<Record<string, BookScan>> {
+  const { data, error } = await createAdminClient().rpc("page_read_summary", { p_owner_id: ownerId });
+  if (error) throw error;
+  const out: Record<string, BookScan> = {};
+  for (const row of (data ?? []) as (PageReadSummary & { document_id: string })[]) {
+    const queue = progress[row.document_id];
+    out[row.document_id] = summariseBook({ ...row, average: Number(row.average) }, queue ? { total: queue.total, failed: queue.failed } : null);
   }
   return out;
 }
