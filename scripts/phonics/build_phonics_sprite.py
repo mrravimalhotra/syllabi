@@ -7,7 +7,8 @@ adds a schwa when given a letter, so every clip is asked for in IPA:
 
   - continuous consonants: a prolonged spelling ("mmm"). Google still opens it
     with a vowel ("em-mm", whatever the markup), so the vowel is cut off and
-    only the held sound after it is kept;
+    only the held sound after it is kept, then slowed to about a second
+    without changing its pitch;
   - short vowels: the vowel alone between two short breaks;
   - stop consonants: the release burst sliced from the end of a carrier word
     ("map" gives /p/), or for /b/ and /g/ the isolated stop with its vowel
@@ -30,6 +31,7 @@ import argparse
 import io
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -57,6 +59,7 @@ VOWEL_SHARE = 0.25
 # means Google read the letter names ("vee vee vee"), whose "ee" sits outside the
 # vowel band and is not detected.
 MIN_HELD_MS, MAX_HELD_MS = 120, 700
+HOLD_MS = 1000  # held sounds are stretched to this, as a teacher holds "mmm"
 
 OUT_DIR = Path(__file__).resolve().parents[2] / "assets" / "audio"
 
@@ -186,6 +189,23 @@ def held_part(clip: AudioSegment, frame_ms: int = 10) -> AudioSegment | None:
     return held if MIN_HELD_MS <= len(held) <= MAX_HELD_MS else None
 
 
+def stretch(clip: AudioSegment, target_ms: int) -> AudioSegment:
+    """Slows a clip to target_ms without changing its pitch (ffmpeg atempo,
+    chained because one atempo filter goes no slower than 0.5)."""
+    factor, chain = len(clip) / target_ms, []
+    while factor < 0.5:
+        chain.append("atempo=0.5")
+        factor /= 0.5
+    chain.append(f"atempo={factor:.4f}")
+    wav = io.BytesIO()
+    clip.export(wav, format="wav")
+    out = subprocess.run(
+        ["ffmpeg", "-v", "error", "-f", "wav", "-i", "pipe:0", "-af", ",".join(chain), "-f", "wav", "pipe:1"],
+        input=wav.getvalue(), capture_output=True, check=True,
+    ).stdout
+    return AudioSegment.from_file(io.BytesIO(out), format="wav")
+
+
 def build_clip(tts: texttospeech.TextToSpeechClient, entry: dict) -> tuple[AudioSegment, str, str]:
     """Returns (processed clip, SSML used, method)."""
     kind, ssml = entry["kind"], entry["ssml"]
@@ -202,7 +222,7 @@ def build_clip(tts: texttospeech.TextToSpeechClient, entry: dict) -> tuple[Audio
         held = held_part(raw)
         if held is None:
             raise RuntimeError(f"no held sound found after the vowel in {ssml}")
-        raw = held
+        raw = stretch(held, HOLD_MS)
     elif kind == "cutoff":
         raw = trim(raw)[:STOP_CUTOFF_MS]
     # Normalise first, so the -42 dBFS trim measures every clip on the same scale
