@@ -20,9 +20,13 @@ a from "at"), and the cut ends where the next sound begins:
                              mixed with the low part of the same voice's /m/
                              hum, at the balance a person's z has
   stop         c, k, p, t    the burst and its breath, up to the vowel
-  head         b             the first 120 ms of "bat" after its leading silence:
-                             the voicing and the lip pop, strictly 110-130 ms
-                             (shorter is a click, longer adds "uh")
+  head         b             the first 120 ms of "bat" (made at 48 kHz) after a
+                             -45 dBFS silence gate: the voicing and the lip pop,
+                             strictly 110-130 ms (shorter is a click, longer
+                             adds "uh"); then an 80 Hz high-pass, a presence
+                             lift at 2 kHz and loudness of -16 LUFS with a
+                             -1 dBFS true-peak ceiling, so the short pop is not
+                             heard as quiet next to vowels and words
   prevoiced    (none now)    the voicing before the burst plus the burst, from
                              a half-speed carrier, strictly 110-130 ms
   voiced stop  d, g, j       a short window from the release burst (the
@@ -64,6 +68,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+from scipy.signal import butter, lfilter, resample_poly, sosfilt
 from google.api_core.client_options import ClientOptions
 from google.cloud import texttospeech
 from pydub import AudioSegment
@@ -96,10 +101,17 @@ RELEASE_SEARCH_MS = 150
 # Prevoiced stops: total length kept within these bounds, ending this long after the burst.
 PREVOICED_MIN_MS, PREVOICED_MAX_MS, PREVOICED_BURST_MS = 110, 130, 20
 HEAD_MS = 120  # head: how much of the carrier to keep after its leading silence
+HEAD_RATE = 48000  # head sounds are made and processed at this rate, then join the sprite at RATE
+HEAD_GATE_DBFS = -45.0  # leading silence: everything before the first millisecond louder than this
+HEAD_FADE_IN_MS, HEAD_FADE_OUT_MS = 5, 15  # linear in, cosine out
+HPF_HZ = 80  # removes low thumps from the voicing (2nd order: 12 dB per octave)
+PRESENCE_HZ, PRESENCE_DB, PRESENCE_Q = 2000, 2.75, 1.2  # lifts the lip-parting transient
+LUFS_TARGET, TRUE_PEAK_DBFS = -16.0, -1.0
+RAW_DIR = ROOT / "temp_raw_audio"  # the processed 48 kHz WAVs, for checking
 BETWEEN_MARGIN_MS = 20
 BUZZ_CUTOFF_HZ = 500  # the voice's buzz: only the part of the hum under this
 BUZZ_SHARE = 0.65  # share of a z's energy in the buzz, as measured in a person's z
-FADES = {"hiss": (10, 25), "hum": (10, 25), "stop": (2, 10), "voiced": (2, 30), "prevoiced": (5, 10), "head": (5, 15), "buzz": (10, 25), "glide": (5, 20), "vowel": (10, 30), "whole": (5, 25)}
+FADES = {"hiss": (10, 25), "hum": (10, 25), "stop": (2, 10), "voiced": (2, 30), "prevoiced": (5, 10), "buzz": (10, 25), "glide": (5, 20), "vowel": (10, 30), "whole": (5, 25)}
 
 
 @dataclass
@@ -162,7 +174,7 @@ def client() -> texttospeech.TextToSpeechClient:
     return texttospeech.TextToSpeechClient(client_options=ClientOptions(api_key=key), transport="rest")
 
 
-def synthesize(tts: texttospeech.TextToSpeechClient, ssml: str) -> AudioSegment:
+def synthesize(tts: texttospeech.TextToSpeechClient, ssml: str, sample_rate: int = RATE) -> AudioSegment:
     res = tts.synthesize_speech(
         input=texttospeech.SynthesisInput(ssml=ssml),
         voice=texttospeech.VoiceSelectionParams(language_code=VOICE[:5], name=VOICE),
@@ -170,7 +182,7 @@ def synthesize(tts: texttospeech.TextToSpeechClient, ssml: str) -> AudioSegment:
             audio_encoding=texttospeech.AudioEncoding.LINEAR16,
             speaking_rate=SPEAKING_RATE,
             pitch=PITCH,
-            sample_rate_hertz=RATE,
+            sample_rate_hertz=sample_rate,
         ),
     )
     return AudioSegment.from_file(io.BytesIO(res.audio_content), format="wav").set_channels(1)
@@ -322,6 +334,73 @@ CUTS = {"prevoiced": cut_prevoiced, "hiss": cut_hiss, "hum": cut_hum, "buzz": cu
 # ---------- shaping ----------
 
 
+# ---------- mastering for short stops (head) ----------
+
+
+def _biquad(kind: str, f0: float, fs: int, q: float, gain_db: float = 0.0) -> tuple[np.ndarray, np.ndarray]:
+    """Audio EQ cookbook (R. Bristow-Johnson) biquad coefficients: peaking, highshelf or highpass."""
+    a_gain = 10 ** (gain_db / 40)
+    w0 = 2 * np.pi * f0 / fs
+    cos, alpha = np.cos(w0), np.sin(w0) / (2 * q)
+    if kind == "peaking":
+        b = [1 + alpha * a_gain, -2 * cos, 1 - alpha * a_gain]
+        a = [1 + alpha / a_gain, -2 * cos, 1 - alpha / a_gain]
+    elif kind == "highshelf":
+        sq = 2 * np.sqrt(a_gain) * alpha
+        b = [a_gain * ((a_gain + 1) + (a_gain - 1) * cos + sq), -2 * a_gain * ((a_gain - 1) + (a_gain + 1) * cos), a_gain * ((a_gain + 1) + (a_gain - 1) * cos - sq)]
+        a = [(a_gain + 1) - (a_gain - 1) * cos + sq, 2 * ((a_gain - 1) - (a_gain + 1) * cos), (a_gain + 1) - (a_gain - 1) * cos - sq]
+    else:  # highpass
+        b = [(1 + cos) / 2, -(1 + cos), (1 + cos) / 2]
+        a = [1 + alpha, -2 * cos, 1 - alpha]
+    return np.array(b) / a[0], np.array(a) / a[0]
+
+
+def loudness_lufs(x: np.ndarray, fs: int) -> float:
+    """ITU-R BS.1770 loudness: K-weighting (a +4 dB shelf from 1.5 kHz and a 38 Hz high-pass), then the
+    mean square. The standard's gate works on 400 ms blocks, longer than a 120 ms stop, so the whole
+    clip is measured as one ungated block."""
+    y = lfilter(*_biquad("highshelf", 1500, fs, 1 / np.sqrt(2), 4.0), x)
+    y = lfilter(*_biquad("highpass", 38, fs, 0.5), y)
+    return float(-0.691 + 10 * np.log10(np.mean(y**2) + 1e-12))
+
+
+def true_peak_dbfs(x: np.ndarray) -> float:
+    """The peak after 4x oversampling, which catches peaks between samples that MP3 conversion can clip."""
+    return float(20 * np.log10(np.max(np.abs(resample_poly(x, 4, 1))) + 1e-12))
+
+
+def master_head(tts: texttospeech.TextToSpeechClient, sound: Sound, clip_id: str) -> tuple[AudioSegment, str]:
+    """A short stop at full clarity: the first HEAD_MS of the carrier after its leading silence, faded,
+    filtered, lifted and set to LUFS_TARGET under a TRUE_PEAK_DBFS ceiling. Prints what it measured."""
+    ssml = ssml_for(sound)
+    word = synthesize(tts, ssml, HEAD_RATE)
+    x, fs = samples(word), word.frame_rate
+    ms = fs // 1000
+    level = 20 * np.log10(np.array([np.sqrt(np.mean(x[i : i + ms] ** 2)) for i in range(0, len(x) - ms, ms)]) + 1e-12)
+    start = int(np.argmax(level > HEAD_GATE_DBFS)) * ms
+    y = x[start : start + HEAD_MS * ms].copy()
+    length_ms = len(y) / ms
+    if not PREVOICED_MIN_MS <= length_ms <= PREVOICED_MAX_MS:
+        raise RuntimeError(f"{clip_id} came out {length_ms:.0f} ms, outside {PREVOICED_MIN_MS}-{PREVOICED_MAX_MS} ms")
+    y = sosfilt(butter(2, HPF_HZ, "highpass", fs=fs, output="sos"), y)
+    y = lfilter(*_biquad("peaking", PRESENCE_HZ, fs, PRESENCE_Q, PRESENCE_DB), y)
+    y[: HEAD_FADE_IN_MS * ms] *= np.linspace(0, 1, HEAD_FADE_IN_MS * ms)
+    y[-HEAD_FADE_OUT_MS * ms :] *= np.cos(np.linspace(0, np.pi / 2, HEAD_FADE_OUT_MS * ms))
+    gain = LUFS_TARGET - loudness_lufs(y, fs)
+    gain = min(gain, TRUE_PEAK_DBFS - true_peak_dbfs(y))  # the ceiling wins over the loudness target
+    y *= 10 ** (gain / 20)
+    out = AudioSegment((np.clip(y, -1, 1) * 32767).astype(np.int16).tobytes(), frame_rate=fs, sample_width=2, channels=1)
+    RAW_DIR.mkdir(exist_ok=True)
+    out.export(RAW_DIR / f"p_{clip_id}.wav", format="wav")
+    rms = 20 * np.log10(np.sqrt(np.mean(y**2)) + 1e-12)
+    print(
+        f"  {clip_id}: {length_ms:.0f} ms at {fs} Hz | {loudness_lufs(y, fs):.1f} LUFS (ungated, target {LUFS_TARGET}), "
+        f"true peak {true_peak_dbfs(y):.1f} dBFS (ceiling {TRUE_PEAK_DBFS}), RMS {rms:.1f} dBFS | "
+        f"high-pass {HPF_HZ} Hz 12 dB/oct, +{PRESENCE_DB} dB at {PRESENCE_HZ} Hz Q {PRESENCE_Q} | {RAW_DIR / f'p_{clip_id}.wav'}"
+    )
+    return out.set_frame_rate(RATE), ssml
+
+
 def stretch(clip: AudioSegment, target_ms: int) -> AudioSegment:
     """Slows a clip to target_ms without changing its pitch (ffmpeg atempo,
     chained because one atempo filter goes no slower than 0.5)."""
@@ -362,17 +441,12 @@ def cut(tts: texttospeech.TextToSpeechClient, sound: Sound) -> tuple[AudioSegmen
         start, end = fr.onset(), fr.last_sound() + 1
     elif sound.kind == "voiced":
         start, end = cut_voiced(fr, sound.window_ms)
-    elif sound.kind == "head":
-        start = fr.onset()
-        end = min(len(fr.rms), start + HEAD_MS // FRAME_MS)
     elif sound.kind == "glide":
         start, end = cut_glide(fr, sound.window_ms)
     else:
         start, end = CUTS[sound.kind](fr)
     if end <= start:
         raise RuntimeError(f"nothing to cut from {ssml}")
-    if sound.kind == "head" and not PREVOICED_MIN_MS <= (end - start) * FRAME_MS <= PREVOICED_MAX_MS:
-        raise RuntimeError(f"b came out {(end - start) * FRAME_MS} ms, outside {PREVOICED_MIN_MS}-{PREVOICED_MAX_MS} ms")
     fade_in, fade_out = FADES[sound.kind]
     clip = word[start * FRAME_MS : end * FRAME_MS].fade_in(fade_in).fade_out(fade_out)
     if sound.kind in HOLD_MS:
@@ -390,6 +464,8 @@ def build(tts: texttospeech.TextToSpeechClient, clip_id: str, done: dict[str, Au
                 done[part] = build(tts, part, done)[0]
             joined += done[part][:most_ms].fade_out(25) if most_ms else done[part]
         return joined, " + ".join(f"{p} ({ms} ms)" if ms else p for p, ms in sound.parts)
+    if sound.kind == "head":
+        return master_head(tts, sound, clip_id)
     clip, ssml = cut(tts, sound)
     if sound.kind == "buzz":
         if sound.buzz_from not in done:
@@ -428,6 +504,12 @@ def main() -> None:
             clip.export(args.wav_dir / f"{clip_id}.wav", format="wav")
         print(f"{clip_id:9} {len(clip):5} ms  {sound.kind:7} {ssml}")
 
+    heads = [k for k in done if SOUNDS[k].kind == "head"]
+    if heads:
+        print("\nLoudness next to the words (ungated BS.1770):")
+        for k in heads + [w for w in ("word-map", "word-cat") if w in done]:
+            seg = done[k]
+            print(f"  {k:9} {loudness_lufs(samples(seg), seg.frame_rate):6.1f} LUFS")
     if args.only:
         return
     for letter in (k for k in done if len(k) == 1):

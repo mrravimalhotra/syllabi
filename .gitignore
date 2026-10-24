@@ -47,3 +47,6 @@ next-env.d.ts
 
 # python
 __pycache__/
+
+# processed phonics WAVs for checking (scripts/phonics)
+/temp_raw_audio/
