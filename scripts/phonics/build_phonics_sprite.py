@@ -20,7 +20,10 @@ a from "at"), and the cut ends where the next sound begins:
                              mixed with the low part of the same voice's /m/
                              hum, at the balance a person's z has
   stop         c, k, p, t    the burst and its breath, up to the vowel
-  voiced stop  b, d, g, j    a short window from the release burst (the
+  prevoiced    b             the voicing before the burst plus the burst, from
+                             a half-speed carrier ("bat"), strictly 110-130 ms:
+                             shorter is a click, longer opens into the vowel
+  voiced stop  d, g, j       a short window from the release burst (the
                              biggest jump in loudness), with a little of the
                              voicing after it: without it b is only a click
   glide        w, y          a short window from the first sound
@@ -88,15 +91,17 @@ VOWEL_MIN_MS = 40
 HUM_MARGIN_MS = 30  # dropped before the vowel, so the glide into it is not heard
 HUM_VOWEL_SHARE, HUM_JUMP_DB = 0.6, 8.0
 RELEASE_SEARCH_MS = 150
+# Prevoiced stops: total length kept within these bounds, ending this long after the burst.
+PREVOICED_MIN_MS, PREVOICED_MAX_MS, PREVOICED_BURST_MS = 110, 130, 20
 BETWEEN_MARGIN_MS = 20
 BUZZ_CUTOFF_HZ = 500  # the voice's buzz: only the part of the hum under this
 BUZZ_SHARE = 0.65  # share of a z's energy in the buzz, as measured in a person's z
-FADES = {"hiss": (10, 25), "hum": (10, 25), "stop": (2, 10), "voiced": (2, 30), "buzz": (10, 25), "glide": (5, 20), "vowel": (10, 30), "whole": (5, 25)}
+FADES = {"hiss": (10, 25), "hum": (10, 25), "stop": (2, 10), "voiced": (2, 30), "prevoiced": (5, 10), "buzz": (10, 25), "glide": (5, 20), "vowel": (10, 30), "whole": (5, 25)}
 
 
 @dataclass
 class Sound:
-    kind: str  # hiss | hum | buzz | stop | voiced | glide | vowel | whole | pair
+    kind: str  # hiss | hum | buzz | stop | prevoiced | voiced | glide | vowel | whole | pair
     word: str = ""  # carrier word as written
     ipa: str = ""  # how the carrier word is said
     rate: int = 50  # carrier speed in percent (100: as normal); slower makes its first sound last longer
@@ -109,7 +114,7 @@ class Sound:
 
 SOUNDS: dict[str, Sound] = {
     "a": Sound("vowel", "at", "æt", rate=100),
-    "b": Sound("voiced", "bat", "bæt", rate=100, window_ms=80, level_db=-2),
+    "b": Sound("prevoiced", "bat", "bæt", level_db=-2),  # half speed: 105 ms of voicing before the burst, not 20
     "c": Sound("stop", "cat", "kæt", rate=100, level_db=-6),
     "d": Sound("voiced", "dog", "dɒɡ", rate=100, window_ms=80, level_db=-2),
     "e": Sound("vowel", "egg", "ɛɡ", rate=100),
@@ -262,6 +267,18 @@ def cut_voiced(fr: Frames, window_ms: int) -> tuple[int, int]:
     return begin, min(len(db), begin + window_ms // FRAME_MS)
 
 
+def cut_prevoiced(fr: Frames) -> tuple[int, int]:
+    """The voicing before a stop's burst, then the burst itself (PREVOICED_BURST_MS of it),
+    kept within PREVOICED_MIN_MS to PREVOICED_MAX_MS so it neither clicks nor opens into the vowel."""
+    start = fr.onset()
+    db = 20 * np.log10(fr.rms + 1e-12)
+    search = range(start + 1, min(len(db), start + 2 * RELEASE_SEARCH_MS // FRAME_MS))
+    release = max(search, key=lambda i: db[i] - db[i - 1])
+    end = release + PREVOICED_BURST_MS // FRAME_MS
+    start = max(start, end - PREVOICED_MAX_MS // FRAME_MS)
+    return start, max(end, start + PREVOICED_MIN_MS // FRAME_MS)
+
+
 def cut_between(fr: Frames) -> tuple[int, int]:
     """The consonant between the carrier's two vowels: the longest stretch
     without loud voiced frames, less a margin on each side."""
@@ -296,7 +313,7 @@ def cut_vowel(fr: Frames) -> tuple[int, int]:
     return start, end
 
 
-CUTS = {"hiss": cut_hiss, "hum": cut_hum, "buzz": cut_between, "stop": cut_stop, "vowel": cut_vowel}
+CUTS = {"prevoiced": cut_prevoiced, "hiss": cut_hiss, "hum": cut_hum, "buzz": cut_between, "stop": cut_stop, "vowel": cut_vowel}
 
 
 # ---------- shaping ----------
