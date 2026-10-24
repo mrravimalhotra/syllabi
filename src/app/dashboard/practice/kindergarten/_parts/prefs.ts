@@ -1,3 +1,4 @@
+import { PLACE_MAX, type PlaceSettings } from "@/lib/kindergarten/place-value";
 import { ROUND_SIZES, type CompareSettings, type CvcSettings, type SightSettings } from "@/lib/kindergarten/quiz";
 import { SIGHT_LEVELS, VOWELS } from "@/lib/kindergarten/words";
 
@@ -18,4 +19,8 @@ export const isSight = (v: unknown): v is SightSettings => {
 export const isCompare = (v: unknown): v is CompareSettings => {
   const s = v as CompareSettings;
   return Boolean(s) && [5, 10, 20].includes(s.max) && ROUND_SIZES.includes(s.questions as 5 | 10);
+};
+export const isPlace = (v: unknown): v is PlaceSettings => {
+  const s = v as PlaceSettings;
+  return Boolean(s) && (PLACE_MAX as readonly number[]).includes(s.max) && ROUND_SIZES.includes(s.questions);
 };

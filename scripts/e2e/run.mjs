@@ -722,6 +722,39 @@ await test("Kindergarten: listen and blend - the sounds are heard, then the righ
   await page.getByText("Well done!").first().waitFor({ timeout: 20000 });
 });
 
+await test("Kindergarten: place value lesson steps through and leads to the game", async (page, ctx) => {
+  await baseRoutes(ctx);
+  await speechOk(ctx);
+  await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
+  await tap(page.getByRole("button", { name: /Learn first/ }));
+  await page.getByLabel("Place value lesson").waitFor();
+  for (let i = 0; i < 4; i++) await tap(page.getByRole("button", { name: "Next →", exact: true }));
+  await page.getByText(/Put the place values together/).waitFor();
+  await tap(page.getByRole("button", { name: /Play the game/ }));
+  await page.locator("[data-answer]").waitFor();
+});
+
+await test("Kindergarten: place value game - a wrong answer is not accepted, a full round ends in stars", async (page, ctx) => {
+  await baseRoutes(ctx);
+  await speechOk(ctx);
+  await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "▶ Play" }).nth(4).waitFor();
+  await tap(page.getByRole("button", { name: "▶ Play" }).nth(4));
+  for (let q = 0; q < 5; q++) {
+    const box = page.locator("[data-answer]");
+    await box.waitFor({ timeout: 15000 });
+    const answer = await box.getAttribute("data-answer");
+    const number = await box.getAttribute("data-number");
+    if (q === 0) {
+      const wrong = box.getByRole("button", { name: /^\d+$/ }).and(page.locator(`:not(:text-is("${answer}"))`));
+      await tap(wrong.first());
+    }
+    await tap(box.getByRole("button", { name: answer, exact: true }));
+    if (q < 4) await page.locator(`[data-number]:not([data-number="${number}"])`).waitFor({ timeout: 20000 });
+  }
+  await page.getByText("Well done!").first().waitFor({ timeout: 20000 });
+});
+
 await test("Kindergarten: recording a letter sound and saving it", async (page, ctx) => {
   await ctx.grantPermissions(["microphone"]);
   let saved = 0;

@@ -4,8 +4,11 @@ import { useMemo } from "react";
 import { BlendGame } from "@/components/kindergarten/BlendGame";
 import { CompareGame } from "@/components/kindergarten/CompareGame";
 import { CvcGame } from "@/components/kindergarten/CvcGame";
+import { PlaceValueGame } from "@/components/kindergarten/PlaceValueGame";
+import { PlaceValueTutorial } from "@/components/kindergarten/PlaceValueTutorial";
 import { SightGame } from "@/components/kindergarten/SightGame";
 import type { useSay } from "@/components/kindergarten/useSay";
+import { makePlaceQuiz, tutorialNumber, type PlaceSettings } from "@/lib/kindergarten/place-value";
 import {
   makeBlendQuiz,
   makeCompareQuiz,
@@ -16,7 +19,7 @@ import {
   type SightSettings,
 } from "@/lib/kindergarten/quiz";
 
-export type Activity = "blend" | "cvc" | "sight" | "compare";
+export type Activity = "blend" | "cvc" | "sight" | "compare" | "place" | "place-learn";
 
 interface Props {
   kind: Activity;
@@ -24,19 +27,27 @@ interface Props {
   cvc: CvcSettings;
   sight: SightSettings;
   compare: CompareSettings;
+  place: PlaceSettings;
   voice: ReturnType<typeof useSay>;
   onAgain: () => void;
+  /** From the lesson to the game. */
+  onPlay: () => void;
   onExit: () => void;
 }
 
 /** The round being played: its questions are made from the seed and the grown-up's choices, so "Play again" is a new seed. */
-export function ActivityGame({ kind, seed, cvc, sight, compare, voice, onAgain, onExit }: Props) {
+export function ActivityGame({ kind, seed, cvc, sight, compare, place, voice, onAgain, onPlay, onExit }: Props) {
   const { say, sound, prepare, prepareSounds } = voice;
   const blendQuiz = useMemo(() => (kind === "blend" ? makeBlendQuiz(cvc, seed) : null), [kind, cvc, seed]);
   const cvcQuiz = useMemo(() => (kind === "cvc" ? makeCvcQuiz(cvc, seed) : null), [kind, cvc, seed]);
   const sightQuiz = useMemo(() => (kind === "sight" ? makeSightQuiz(sight, seed) : null), [kind, sight, seed]);
   const compareQuiz = useMemo(() => (kind === "compare" ? makeCompareQuiz(compare, seed) : null), [kind, compare, seed]);
 
+  const placeQuiz = useMemo(() => (kind === "place" ? makePlaceQuiz(place, seed) : null), [kind, place, seed]);
+
+  if (kind === "place-learn")
+    return <PlaceValueTutorial key={seed} number={tutorialNumber(seed)} say={say} prepare={prepare} onAnother={onAgain} onPlay={onPlay} onExit={onExit} />;
+  if (placeQuiz) return <PlaceValueGame key={seed} questions={placeQuiz} say={say} prepare={prepare} onAgain={onAgain} onExit={onExit} />;
   if (blendQuiz)
     return (
       <BlendGame

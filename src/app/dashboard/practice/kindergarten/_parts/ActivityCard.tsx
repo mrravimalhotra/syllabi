@@ -10,12 +10,15 @@ export function ActivityCard({
   title,
   description,
   onPlay,
+  onLearn,
   children,
 }: {
   emoji: string;
   title: string;
   description: string;
   onPlay: () => void;
+  /** A lesson before the game, when the activity has one. */
+  onLearn?: () => void;
   children?: ReactNode;
 }) {
   return (
@@ -30,6 +33,15 @@ export function ActivityCard({
         </div>
       </div>
       {children}
+      {onLearn && (
+        <button
+          type="button"
+          onClick={onLearn}
+          className="min-h-14 w-full rounded-2xl border-4 border-brand-200 bg-white px-6 text-xl font-semibold text-brand-800 active:scale-95"
+        >
+          📖 Learn first
+        </button>
+      )}
       <button
         type="button"
         onClick={onPlay}

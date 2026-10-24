@@ -7,9 +7,10 @@ import { ActivityGame, type Activity } from "@/app/dashboard/practice/kindergart
 import { Chip } from "@/app/dashboard/practice/kindergarten/_parts/Chip";
 import { SoundGuide } from "@/app/dashboard/practice/kindergarten/_parts/SoundGuide";
 import { VoiceChoice } from "@/app/dashboard/practice/kindergarten/_parts/VoiceChoice";
-import { isCompare, isCvc, isSight } from "@/app/dashboard/practice/kindergarten/_parts/prefs";
+import { isCompare, isCvc, isPlace, isSight } from "@/app/dashboard/practice/kindergarten/_parts/prefs";
 import { useSay, useVoiceChoice } from "@/components/kindergarten/useSay";
 import { PageHeader } from "@/components/ui";
+import { DEFAULT_PLACE, PLACE_MAX } from "@/lib/kindergarten/place-value";
 import { DEFAULT_COMPARE, DEFAULT_CVC, DEFAULT_SIGHT, ROUND_SIZES } from "@/lib/kindergarten/quiz";
 import { SIGHT_LEVELS, SIGHT_LEVEL_LABELS, VOWELS, type Vowel } from "@/lib/kindergarten/words";
 import { newSeed } from "@/lib/practice/random";
@@ -28,6 +29,7 @@ export default function KindergartenPage() {
   const [cvc, setCvc] = usePref("syllabi-kg-cvc", DEFAULT_CVC, isCvc);
   const [sight, setSight] = usePref("syllabi-kg-sight", DEFAULT_SIGHT, isSight);
   const [compare, setCompare] = usePref("syllabi-kg-compare", DEFAULT_COMPARE, isCompare);
+  const [place, setPlace] = usePref("syllabi-kg-place", DEFAULT_PLACE, isPlace);
   const { voice, choose } = useVoiceChoice();
   const speaker = useSay();
 
@@ -46,8 +48,10 @@ export default function KindergartenPage() {
         cvc={cvc}
         sight={sight}
         compare={compare}
+        place={place}
         voice={speaker}
         onAgain={again}
+        onPlay={() => start("place")}
         onExit={exit}
       />
     );
@@ -131,6 +135,23 @@ export default function KindergartenPage() {
             </Chip>
           ))}
           {roundSizes(compare.questions, (n) => setCompare({ ...compare, questions: n }), "questions")}
+        </div>
+      </ActivityCard>
+
+      <ActivityCard
+        emoji="🔟"
+        title="Place value and face value"
+        description="Learn what a digit is, and what it is worth where it sits (the 4 in 47 is worth 40), with tens and ones blocks. Then play the quiz."
+        onLearn={() => start("place-learn")}
+        onPlay={() => start("place")}
+      >
+        <div className="flex flex-wrap gap-2" role="group" aria-label="How big the numbers are">
+          {PLACE_MAX.map((max) => (
+            <Chip key={max} on={place.max === max} onClick={() => setPlace({ ...place, max })}>
+              Up to {max}
+            </Chip>
+          ))}
+          {roundSizes(place.questions, (n) => setPlace({ ...place, questions: n }), "questions")}
         </div>
       </ActivityCard>
 

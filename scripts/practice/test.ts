@@ -3,6 +3,7 @@ import type { PracticeNumber } from "@/lib/practice/numbers";
 import { makeCompareQuiz, makeCvcQuiz, makeSightQuiz, type CompareSettings, type SightSettings } from "@/lib/kindergarten/quiz";
 import { IPA, PHONEMES, blendStart, soundText } from "@/lib/kindergarten/phonics";
 import { makeBlendQuiz } from "@/lib/kindergarten/quiz";
+import { PLACE_MAX, makePlaceQuiz, onesOf, placeSpeech, placeValue, tensOf, tutorialNumber, tutorialSteps } from "@/lib/kindergarten/place-value";
 import { blockedReason, buildRequestBody, questionProblem, type Question } from "@/app/dashboard/_ask/build-request";
 import { checkPages } from "@/lib/ingestion/upload-pages";
 import { parsePhotos } from "@/lib/generation/attachments";
@@ -149,6 +150,31 @@ for (const raw of [{ kind: "whole", digits: 4 }, { kind: "decimal", digits: 1, m
   for (const step of e.steps) console.log(`  ${step.relation}: ${step.reason}`);
 }
 
+
+
+// ---- Kindergarten: place value and face value ----
+for (let seed = 1; seed <= 400; seed++) {
+  const n = tutorialNumber(seed);
+  check(n >= 12 && n <= 98 && tensOf(n) !== onesOf(n) && onesOf(n) !== 0, `Lesson number ${n} has equal digits or a zero`);
+  const steps = tutorialSteps(n);
+  check(steps.length === 5 && steps.every((x) => x.say.length > 10), `Lesson for ${n} is incomplete`);
+  check(steps[2].say.includes(`place value is ${tensOf(n) * 10}`) && steps[4].say.includes(`${n}`), `Lesson for ${n} states a wrong value`);
+  for (const max of PLACE_MAX) {
+    for (const questions of [5, 10] as const) {
+      for (const q of makePlaceQuiz({ max, questions }, seed)) {
+        const t = tensOf(q.number);
+        const o = onesOf(q.number);
+        check(q.number >= 11 && q.number <= max, `Place number ${q.number} outside 11 to ${max}`);
+        check(q.choices.length === 3 && new Set(q.choices).size === 3 && q.choices.includes(q.answer), `Place choices for ${q.kind} ${q.number}: ${q.choices} (answer ${q.answer})`);
+        const digit = q.column === "tens" ? t : o;
+        const expected = q.kind === "face" ? digit : q.kind === "place" ? placeValue(digit, q.column) : q.kind === "which" ? digit : q.number;
+        check(Number(q.answer) === expected, `Place answer ${q.answer} wrong for ${q.kind} ${q.number} ${q.column}`);
+        check(placeSpeech(q).includes(String(q.kind === "build" ? "tap" : q.number)) || q.kind === "build", `Place speech for ${q.kind} ${q.number}`);
+        if (q.kind !== "build") check(t !== o, `Place question about ${q.number} cannot tell its digits apart`);
+      }
+    }
+  }
+}
 
 // ---- Kindergarten: word lists and quizzes ----
 for (const vowel of VOWELS) {
