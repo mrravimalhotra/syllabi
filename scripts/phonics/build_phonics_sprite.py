@@ -8,7 +8,9 @@ adds a schwa when given a letter, so every clip is asked for in IPA:
   - continuous consonants: a prolonged spelling ("mmm"). Google still opens it
     with a vowel ("em-mm", whatever the markup), so the vowel is cut off and
     only the held sound after it is kept, then slowed to about a second
-    without changing its pitch;
+    without changing its pitch (m, n, s). Where that leaves nothing clean
+    (f, l, r, z, v come out as "eff", "el", "zee"...), the sound is cut from the
+    start of a slowed carrier word instead ("fan" gives /f/), before its vowel;
   - short vowels: the vowel alone between two short breaks;
   - stop consonants: the release burst sliced from the end of a carrier word
     ("map" gives /p/), or for /b/ and /g/ the isolated stop with its vowel
@@ -59,6 +61,10 @@ VOWEL_SHARE = 0.25
 # means Google read the letter names ("vee vee vee"), whose "ee" sits outside the
 # vowel band and is not detected.
 MIN_HELD_MS, MAX_HELD_MS = 120, 700
+# Onset slicing: the vowel starts at the first 20 ms frame that is vowel-like
+# (this share in 500-2500 Hz) or this much louder than the frames before it.
+# A margin before it drops the glide into the vowel.
+ONSET_VOWEL_SHARE, ONSET_JUMP_DB, ONSET_MARGIN_MS, MIN_ONSET_MS = 0.6, 8, 40, 80
 HOLD_MS = 700  # held sounds are stretched to this, as a teacher holds "mmm"
 
 OUT_DIR = Path(__file__).resolve().parents[2] / "assets" / "audio"
@@ -72,24 +78,30 @@ def prolong(text: str) -> str:
     return f'<speak><prosody rate="80%">{text}</prosody></speak>'
 
 
+def slow_word(ph: str, text: str) -> str:
+    """A carrier word at half speed, so its first consonant lasts long enough to cut."""
+    return f'<speak><prosody rate="50%"><phoneme alphabet="ipa" ph="{ph}">{text}</phoneme></prosody></speak>'
+
+
 def vowel(ph: str, text: str) -> str:
     return f'<speak><break time="100ms"/><phoneme alphabet="ipa" ph="{ph}">{text}</phoneme><break time="100ms"/></speak>'
 
 
 # kind: "plain" (use the clip as synthesised), "held" (cut off the vowel Google
-# puts before a held consonant, keep the hum or hiss), "carrier" (slice the final stop
+# puts before a held consonant, keep the hum or hiss), "onset" (keep the first
+# consonant of a carrier word, up to its vowel), "carrier" (slice the final stop
 # burst out of the word), "cutoff" (isolated stop, keep only its first burst).
 # A carrier entry's "fallback" is the aspirated IPA tried if no burst is found.
 MANIFEST: dict[str, dict] = {
     # Continuous consonants
     "m": {"kind": "held", "ssml": prolong("mmm")},
     "s": {"kind": "held", "ssml": prolong("sss")},
-    "f": {"kind": "held", "ssml": prolong("fff")},
+    "f": {"kind": "onset", "ssml": slow_word("fːæn", "fan")},
     "n": {"kind": "held", "ssml": prolong("nnn")},
-    "l": {"kind": "held", "ssml": prolong("lll")},
-    "r": {"kind": "held", "ssml": prolong("rrr")},
-    "z": {"kind": "held", "ssml": prolong("zzz")},
-    "v": {"kind": "held", "ssml": prolong("vvv")},
+    "l": {"kind": "onset", "ssml": slow_word("lːæp", "lap")},
+    "r": {"kind": "onset", "ssml": slow_word("ɹːæt", "rat")},
+    "z": {"kind": "onset", "ssml": slow_word("zːæp", "zap")},
+    "v": {"kind": "onset", "ssml": slow_word("vːæn", "van")},
     # Short vowels
     "a": {"kind": "plain", "ssml": vowel("æ", "a")},
     "e": {"kind": "plain", "ssml": vowel("ɛ", "e")},
@@ -189,6 +201,22 @@ def held_part(clip: AudioSegment, frame_ms: int = 10) -> AudioSegment | None:
     return held if MIN_HELD_MS <= len(held) <= MAX_HELD_MS else None
 
 
+def onset_part(word: AudioSegment, frame_ms: int = 20) -> AudioSegment | None:
+    """The word's first consonant: everything before its vowel, less a margin."""
+    word = trim(normalize(word))
+    frames = vowel_share(word, frame_ms)
+    boundary = len(frames)
+    # Frame 0 is the soft attack, so loudness is compared from frame 1 on.
+    for i in range(2, len(frames)):
+        share, level = frames[i]
+        before = float(np.median([lv for _, lv in frames[1:i]]))
+        if share >= ONSET_VOWEL_SHARE or level >= before + ONSET_JUMP_DB:
+            boundary = i
+            break
+    onset = word[: max(0, boundary * frame_ms - ONSET_MARGIN_MS)]
+    return onset if len(onset) >= MIN_ONSET_MS else None
+
+
 def stretch(clip: AudioSegment, target_ms: int) -> AudioSegment:
     """Slows a clip to target_ms without changing its pitch (ffmpeg atempo,
     chained because one atempo filter goes no slower than 0.5)."""
@@ -223,6 +251,11 @@ def build_clip(tts: texttospeech.TextToSpeechClient, entry: dict) -> tuple[Audio
         if held is None:
             raise RuntimeError(f"no held sound found after the vowel in {ssml}")
         raw = stretch(held, HOLD_MS)
+    elif kind == "onset":
+        onset = onset_part(raw)
+        if onset is None:
+            raise RuntimeError(f"no consonant found before the vowel in {ssml}")
+        raw = stretch(onset, HOLD_MS)
     elif kind == "cutoff":
         raw = trim(raw)[:STOP_CUTOFF_MS]
     # Normalise first, so the -42 dBFS trim measures every clip on the same scale
