@@ -8,122 +8,122 @@
   "sprite": {
     "a": [
       0,
-      314
+      290
     ],
     "b": [
-      614,
-      30
+      590,
+      80
     ],
     "c": [
-      944,
+      970,
       110
     ],
     "d": [
-      1354,
-      30
+      1380,
+      80
     ],
     "e": [
-      1684,
-      317
+      1760,
+      270
     ],
     "f": [
-      2301,
-      583
+      2330,
+      476
     ],
     "g": [
-      3183,
-      30
+      3106,
+      80
     ],
     "h": [
-      3513,
+      3486,
       230
     ],
     "i": [
-      4043,
-      308
+      4016,
+      255
     ],
     "j": [
-      4651,
-      70
+      4571,
+      120
     ],
     "k": [
-      5021,
+      4991,
       100
     ],
     "l": [
-      5421,
-      633
+      5391,
+      527
     ],
     "m": [
-      6355,
-      618
+      6217,
+      519
     ],
     "n": [
-      7272,
-      650
+      7036,
+      543
     ],
     "o": [
-      8223,
-      311
+      7879,
+      270
     ],
     "p": [
-      8834,
+      8449,
       70
     ],
     "q": [
-      9204,
+      8819,
       210
     ],
     "r": [
-      9714,
-      670
+      9329,
+      551
     ],
     "s": [
-      10683,
-      660
+      10180,
+      554
     ],
     "t": [
-      11644,
+      11034,
       110
     ],
     "u": [
-      12054,
-      309
+      11444,
+      253
     ],
     "v": [
-      12663,
-      609
+      11996,
+      510
     ],
     "w": [
-      13572,
+      12807,
       110
     ],
     "x": [
-      13982,
-      760
+      13217,
+      250
     ],
     "y": [
-      15043,
+      13767,
       100
     ],
     "z": [
-      15443,
-      617
+      14167,
+      518
     ],
     "blend-ma": [
-      16360,
+      14985,
       430
     ],
     "blend-ca": [
-      17090,
+      15715,
       450
     ],
     "word-map": [
-      17840,
+      16465,
       580
     ],
     "word-cat": [
-      18720,
+      17345,
       580
     ]
   },
@@ -185,8 +185,8 @@
     },
     "l": {
       "kind": "hum",
-      "carrier": "lap",
-      "ssml": "<speak><prosody rate=\"50%\"><phoneme alphabet=\"ipa\" ph=\"læp\">lap</phoneme></prosody></speak>"
+      "carrier": "log",
+      "ssml": "<speak><prosody rate=\"50%\"><phoneme alphabet=\"ipa\" ph=\"lɒɡ\">log</phoneme></prosody></speak>"
     },
     "m": {
       "kind": "hum",
@@ -246,7 +246,7 @@
     "x": {
       "kind": "pair",
       "carrier": null,
-      "ssml": "k + s"
+      "ssml": "k + s (150 ms)"
     },
     "y": {
       "kind": "glide",
@@ -254,9 +254,9 @@
       "ssml": "<speak><prosody rate=\"50%\"><phoneme alphabet=\"ipa\" ph=\"jɛs\">yes</phoneme></prosody></speak>"
     },
     "z": {
-      "kind": "hum",
-      "carrier": "zap",
-      "ssml": "<speak><prosody rate=\"50%\"><phoneme alphabet=\"ipa\" ph=\"zæp\">zap</phoneme></prosody></speak>"
+      "kind": "buzz",
+      "carrier": "busy",
+      "ssml": "<speak><prosody rate=\"50%\"><phoneme alphabet=\"ipa\" ph=\"bɪzːi\">busy</phoneme></prosody></speak> + low part of m"
     },
     "blend-ma": {
       "kind": "whole",

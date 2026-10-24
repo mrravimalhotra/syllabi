@@ -11,15 +11,22 @@ silent closure before its burst. The carrier word starts with the sound (m from 
 a from "at"), and the cut ends where the next sound begins:
 
   hiss         s, f, h       from the first sound up to the vowel's voicing
-  hum          m, n, l, r,   up to the vowel: vowel-like energy, or a jump in
-               v, z          loudness, less a margin for the glide into it
+  hum          m, n, l, r, v up to the vowel: vowel-like energy, or a jump in
+                             loudness, less a margin for the glide into it
+  buzz         z             Google says z as a plain hiss, voiced only at its
+                             edges, so it sounds like s anywhere in a word.
+                             A z is a hiss and the voice's low buzz together,
+                             so the hiss from between the vowels of "busy" is
+                             mixed with the low part of the same voice's /m/
+                             hum, at the balance a person's z has
   stop         c, k, p, t    the burst and its breath, up to the vowel
-  voiced stop  b, d, g, j    from the release burst (the biggest jump in
-                             loudness) up to the vowel's formants
+  voiced stop  b, d, g, j    a short window from the release burst (the
+                             biggest jump in loudness), with a little of the
+                             voicing after it: without it b is only a click
   glide        w, y          a short window from the first sound
   vowel        a, e, i,      the voiced part, up to the closure of the
                o, u          consonant after it
-  pair         x, q          two cut sounds joined: k+s, k+w
+  pair         x, q          two cut sounds joined: k+s (a short s), k+w
 
 Hisses, hums and vowels are then slowed to a set length without changing
 their pitch. Every clip is fetched as LINEAR16 (WAV), cut, faded, matched in
@@ -66,54 +73,58 @@ HISS_ZCR = 3500  # above this, with little low-frequency energy, a frame is a hi
 TARGET_DBFS, PEAK_CAP = -20.0, 0.95  # loudness match: average level, then peak limit
 
 # Lengths in ms. Held sounds are slowed to these (never sped up).
-HOLD_MS = {"hiss": 700, "hum": 700, "vowel": 320}
+HOLD_MS = {"hiss": 580, "hum": 580, "buzz": 580, "vowel": 260}
 BREATH_HOLD_MS = 250  # /h/ is a breath, not a sound you can hold
 STOP_MAX_MS, STOP_MIN_MS = 120, 30
 VOWEL_MIN_MS = 40
 HUM_MARGIN_MS = 30  # dropped before the vowel, so the glide into it is not heard
 HUM_VOWEL_SHARE, HUM_JUMP_DB = 0.6, 8.0
-RELEASE_SEARCH_MS, VOICED_VOWEL_SHARE, VOICED_MIN_MS = 150, 0.5, 30
-FADES = {"hiss": (10, 25), "hum": (10, 25), "stop": (2, 10), "voiced": (2, 15), "glide": (5, 20), "vowel": (10, 30), "whole": (5, 25)}
+RELEASE_SEARCH_MS = 150
+BETWEEN_MARGIN_MS = 20
+BUZZ_CUTOFF_HZ = 500  # the voice's buzz: only the part of the hum under this
+BUZZ_SHARE = 0.65  # share of a z's energy in the buzz, as measured in a person's z
+FADES = {"hiss": (10, 25), "hum": (10, 25), "stop": (2, 10), "voiced": (2, 30), "buzz": (10, 25), "glide": (5, 20), "vowel": (10, 30), "whole": (5, 25)}
 
 
 @dataclass
 class Sound:
-    kind: str  # hiss | hum | stop | voiced | glide | vowel | whole | pair
+    kind: str  # hiss | hum | buzz | stop | voiced | glide | vowel | whole | pair
     word: str = ""  # carrier word as written
     ipa: str = ""  # how the carrier word is said
     slow: bool = True  # carrier at half speed, so its first sound lasts longer
-    window_ms: int = 0  # voiced stops: the most to keep from the release; glides: how much to keep
-    parts: tuple[str, ...] = ()  # pairs: the sounds joined
+    window_ms: int = 0  # voiced stops: how much to keep from the release; glides: from the start
+    parts: tuple[tuple[str, int], ...] = ()  # pairs: (sound, most ms to keep, 0 for all)
     hold_ms: int = 0  # overrides HOLD_MS for this sound
+    buzz_from: str = ""  # buzz: the hum whose low part is mixed in
 
 
 SOUNDS: dict[str, Sound] = {
     "a": Sound("vowel", "at", "æt", slow=False),
-    "b": Sound("voiced", "bat", "bæt", slow=False, window_ms=60),
+    "b": Sound("voiced", "bat", "bæt", slow=False, window_ms=80),
     "c": Sound("stop", "cat", "kæt", slow=False),
-    "d": Sound("voiced", "dog", "dɒɡ", slow=False, window_ms=60),
+    "d": Sound("voiced", "dog", "dɒɡ", slow=False, window_ms=80),
     "e": Sound("vowel", "egg", "ɛɡ", slow=False),
     "f": Sound("hiss", "fan", "fæn"),
-    "g": Sound("voiced", "gap", "ɡæp", slow=False, window_ms=60),
+    "g": Sound("voiced", "gap", "ɡæp", slow=False, window_ms=80),
     "h": Sound("hiss", "hat", "hæt", hold_ms=BREATH_HOLD_MS),
     "i": Sound("vowel", "it", "ɪt", slow=False),
-    "j": Sound("voiced", "jam", "dʒæm", slow=False, window_ms=110),
+    "j": Sound("voiced", "jam", "dʒæm", slow=False, window_ms=120),
     "k": Sound("stop", "kit", "kɪt", slow=False),
-    "l": Sound("hum", "lap", "læp"),
+    "l": Sound("hum", "log", "lɒɡ"),  # a back vowel after it keeps the l dark, as teachers say it
     "m": Sound("hum", "map", "mæp"),
     "n": Sound("hum", "nap", "næp"),
     "o": Sound("vowel", "ox", "ɒks", slow=False),
     "p": Sound("stop", "pan", "pæn", slow=False),
-    "q": Sound("pair", parts=("k", "w")),
+    "q": Sound("pair", parts=(("k", 0), ("w", 0))),
     "r": Sound("hum", "rat", "ɹæt"),
     "s": Sound("hiss", "sun", "sʌn"),
     "t": Sound("stop", "tap", "tæp", slow=False),
     "u": Sound("vowel", "up", "ʌp", slow=False),
     "v": Sound("hum", "van", "væn"),
     "w": Sound("glide", "wet", "wɛt", window_ms=110),
-    "x": Sound("pair", parts=("k", "s")),
+    "x": Sound("pair", parts=(("k", 0), ("s", 150))),
     "y": Sound("glide", "yes", "jɛs", window_ms=100),
-    "z": Sound("hum", "zap", "zæp"),
+    "z": Sound("buzz", "busy", "bɪzːi", buzz_from="m"),
     # Blends and whole words, said as they are
     "blend-ma": Sound("whole", "ma", "mæ", slow=False),
     "blend-ca": Sound("whole", "ca", "kæ", slow=False),
@@ -231,17 +242,33 @@ def cut_stop(fr: Frames) -> tuple[int, int]:
 
 
 def cut_voiced(fr: Frames, window_ms: int) -> tuple[int, int]:
-    """From the release burst to where the vowel starts (its formants, or loud voicing). The release is
-    the biggest jump in loudness near the start, since a voiced stop can hum
-    quietly before it."""
+    """A short window from the release burst, the biggest jump in loudness near
+    the start (a voiced stop can hum quietly before it). It keeps a little of the
+    voicing after the burst, as a teacher's b does; the fade-out stops it there."""
     start = fr.onset()
     db = 20 * np.log10(fr.rms + 1e-12)
     search = range(start + 1, min(len(db), start + RELEASE_SEARCH_MS // FRAME_MS))
     release = max(search, key=lambda i: db[i] - db[i - 1])
     begin = release - 1
-    limit = min(len(db), begin + window_ms // FRAME_MS)
-    end = next((i for i in range(release + 1, limit) if fr.mid[i] >= VOICED_VOWEL_SHARE or fr.voiced(i, 0.4)), limit)
-    return begin, max(end, begin + VOICED_MIN_MS // FRAME_MS)
+    return begin, min(len(db), begin + window_ms // FRAME_MS)
+
+
+def cut_between(fr: Frames) -> tuple[int, int]:
+    """The consonant between the carrier's two vowels: the longest stretch
+    without loud voiced frames, less a margin on each side."""
+    vowel = np.flatnonzero([fr.voiced(i) for i in range(len(fr.rms))])
+    gap = int(np.argmax(np.diff(vowel)))
+    margin = BETWEEN_MARGIN_MS // FRAME_MS
+    return vowel[gap] + 1 + margin, vowel[gap + 1] - margin
+
+
+def add_buzz(hiss: AudioSegment, hum: AudioSegment) -> AudioSegment:
+    """Mixes the low part of a hum under a hiss, so BUZZ_SHARE of the energy is buzz."""
+    buzz = hum.low_pass_filter(BUZZ_CUTOFF_HZ).low_pass_filter(BUZZ_CUTOFF_HZ)
+    buzz = (buzz * (len(hiss) // len(buzz) + 1))[: len(hiss)].fade_in(10).fade_out(25)
+    energy = lambda seg: float(np.sum(samples(seg) ** 2)) + 1e-12
+    gain = 10 * np.log10(BUZZ_SHARE / (1 - BUZZ_SHARE) * energy(hiss) / energy(buzz))
+    return hiss.overlay(buzz.apply_gain(gain))
 
 
 def cut_glide(fr: Frames, window_ms: int) -> tuple[int, int]:
@@ -260,7 +287,7 @@ def cut_vowel(fr: Frames) -> tuple[int, int]:
     return start, end
 
 
-CUTS = {"hiss": cut_hiss, "hum": cut_hum, "stop": cut_stop, "vowel": cut_vowel}
+CUTS = {"hiss": cut_hiss, "hum": cut_hum, "buzz": cut_between, "stop": cut_stop, "vowel": cut_vowel}
 
 
 # ---------- shaping ----------
@@ -323,11 +350,18 @@ def build(tts: texttospeech.TextToSpeechClient, clip_id: str, done: dict[str, Au
     """A loudness-matched clip; a pair joins clips already built (or builds them)."""
     sound = SOUNDS[clip_id]
     if sound.kind == "pair":
-        for part in sound.parts:
+        joined = AudioSegment.empty()
+        for part, most_ms in sound.parts:
             if part not in done:
                 done[part] = build(tts, part, done)[0]
-        return sum((done[p] for p in sound.parts), AudioSegment.empty()), " + ".join(sound.parts)
+            joined += done[part][:most_ms].fade_out(25) if most_ms else done[part]
+        return joined, " + ".join(f"{p} ({ms} ms)" if ms else p for p, ms in sound.parts)
     clip, ssml = cut(tts, sound)
+    if sound.kind == "buzz":
+        if sound.buzz_from not in done:
+            done[sound.buzz_from] = build(tts, sound.buzz_from, done)[0]
+        clip = add_buzz(clip, done[sound.buzz_from])
+        ssml += f" + low part of {sound.buzz_from}"
     return match_loudness(clip), ssml
 
 
