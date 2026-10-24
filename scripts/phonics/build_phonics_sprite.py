@@ -5,7 +5,9 @@ Children must hear pure sounds: /m/ held as a hum, /p/ as a lip pop with no
 "uh" after it, short vowels with no glide. A speech voice says letter names or
 adds a schwa when given a letter, so every clip is asked for in IPA:
 
-  - continuous consonants: the sound lengthened with "ː" (mː, sː...);
+  - continuous consonants: a prolonged spelling ("mmm"). Google still opens it
+    with a vowel ("em-mm", whatever the markup), so the vowel is cut off and
+    only the held sound after it is kept;
   - short vowels: the vowel alone between two short breaks;
   - stop consonants: the release burst sliced from the end of a carrier word
     ("map" gives /p/), or for /b/ and /g/ the isolated stop with its vowel
@@ -16,9 +18,10 @@ trailing silence, given a 10 ms fade-in and 15 ms fade-out, then joined into
 one MP3 with a Howler-style JSON map of [start_ms, duration_ms].
 
 Usage (the key is read from GOOGLE_TTS_API_KEY):
-  pip install pydub audioop-lts google-cloud-texttospeech   # and ffmpeg
+  pip install pydub audioop-lts numpy google-cloud-texttospeech   # and ffmpeg
   python3 scripts/phonics/build_phonics_sprite.py            # test batch only
   python3 scripts/phonics/build_phonics_sprite.py --all      # every clip
+  python3 scripts/phonics/build_phonics_sprite.py --only m --wav-dir /tmp/clips
 """
 
 from __future__ import annotations
@@ -30,6 +33,7 @@ import os
 import sys
 from pathlib import Path
 
+import numpy as np
 from google.api_core.client_options import ClientOptions
 from google.cloud import texttospeech
 from pydub import AudioSegment
@@ -46,6 +50,13 @@ SILENCE_THRESH = -55.0
 FADE_IN_MS, FADE_OUT_MS = 10, 15
 GAP_MS = 300  # silence between clips in the sprite, so neighbours never bleed
 STOP_CUTOFF_MS = 90  # isolated /b/ and /g/: keep the burst, drop the vowel tail
+# A 10 ms frame is "vowel" when this share of its energy is in 500-2500 Hz
+# (vowel formants). A hum keeps almost all of it under 400 Hz, a hiss above 3 kHz.
+VOWEL_SHARE = 0.25
+# A held sound outside these bounds after the vowel is cut is a failure. Too long
+# means Google read the letter names ("vee vee vee"), whose "ee" sits outside the
+# vowel band and is not detected.
+MIN_HELD_MS, MAX_HELD_MS = 120, 700
 
 OUT_DIR = Path(__file__).resolve().parents[2] / "assets" / "audio"
 
@@ -54,23 +65,28 @@ def ipa(ph: str, text: str) -> str:
     return f'<speak><phoneme alphabet="ipa" ph="{ph}">{text}</phoneme></speak>'
 
 
+def prolong(text: str) -> str:
+    return f'<speak><prosody rate="80%">{text}</prosody></speak>'
+
+
 def vowel(ph: str, text: str) -> str:
     return f'<speak><break time="100ms"/><phoneme alphabet="ipa" ph="{ph}">{text}</phoneme><break time="100ms"/></speak>'
 
 
-# kind: "plain" (use the clip as synthesised), "carrier" (slice the final stop
+# kind: "plain" (use the clip as synthesised), "held" (cut off the vowel Google
+# puts before a held consonant, keep the hum or hiss), "carrier" (slice the final stop
 # burst out of the word), "cutoff" (isolated stop, keep only its first burst).
 # A carrier entry's "fallback" is the aspirated IPA tried if no burst is found.
 MANIFEST: dict[str, dict] = {
     # Continuous consonants
-    "m": {"kind": "plain", "ssml": ipa("mː", "mmm")},
-    "s": {"kind": "plain", "ssml": ipa("sː", "sss")},
-    "f": {"kind": "plain", "ssml": ipa("fː", "fff")},
-    "n": {"kind": "plain", "ssml": ipa("nː", "nnn")},
-    "l": {"kind": "plain", "ssml": ipa("lː", "lll")},
-    "r": {"kind": "plain", "ssml": ipa("ɹ", "rrr")},
-    "z": {"kind": "plain", "ssml": ipa("zː", "zzz")},
-    "v": {"kind": "plain", "ssml": ipa("vː", "vvv")},
+    "m": {"kind": "held", "ssml": prolong("mmm")},
+    "s": {"kind": "held", "ssml": prolong("sss")},
+    "f": {"kind": "held", "ssml": prolong("fff")},
+    "n": {"kind": "held", "ssml": prolong("nnn")},
+    "l": {"kind": "held", "ssml": prolong("lll")},
+    "r": {"kind": "held", "ssml": prolong("rrr")},
+    "z": {"kind": "held", "ssml": prolong("zzz")},
+    "v": {"kind": "held", "ssml": prolong("vvv")},
     # Short vowels
     "a": {"kind": "plain", "ssml": vowel("æ", "a")},
     "e": {"kind": "plain", "ssml": vowel("ɛ", "e")},
@@ -145,6 +161,31 @@ def final_burst(word: AudioSegment) -> AudioSegment | None:
     return burst if 10 <= len(burst) <= 250 else None
 
 
+def vowel_share(clip: AudioSegment, frame_ms: int = 10) -> list[tuple[float, float]]:
+    """(share of energy in 500-2500 Hz, level in dBFS) for each frame."""
+    x = np.array(clip.get_array_of_samples(), dtype=float)
+    n = int(clip.frame_rate * frame_ms / 1000)
+    freqs = np.fft.rfftfreq(n, 1 / clip.frame_rate)
+    band = (freqs >= 500) & (freqs <= 2500)
+    out = []
+    for i in range(0, len(x) - n + 1, n):
+        power = np.abs(np.fft.rfft(x[i : i + n] * np.hanning(n))) ** 2
+        out.append((power[band].sum() / (power.sum() + 1e-9), clip[i * 1000 // clip.frame_rate :][:frame_ms].dBFS))
+    return out
+
+
+def held_part(clip: AudioSegment, frame_ms: int = 10) -> AudioSegment | None:
+    """The held consonant after the vowel Google opens it with: everything after
+    the last loud vowel-like frame, plus one frame for the transition."""
+    clip = trim(normalize(clip))
+    frames = vowel_share(clip, frame_ms)
+    loud = clip.max_dBFS - 30
+    vowel_frames = [i for i, (share, level) in enumerate(frames) if share >= VOWEL_SHARE and level > loud]
+    start = (vowel_frames[-1] + 2) * frame_ms if vowel_frames else 0
+    held = clip[start:]
+    return held if MIN_HELD_MS <= len(held) <= MAX_HELD_MS else None
+
+
 def build_clip(tts: texttospeech.TextToSpeechClient, entry: dict) -> tuple[AudioSegment, str, str]:
     """Returns (processed clip, SSML used, method)."""
     kind, ssml = entry["kind"], entry["ssml"]
@@ -157,6 +198,11 @@ def build_clip(tts: texttospeech.TextToSpeechClient, entry: dict) -> tuple[Audio
         else:
             ssml, method = entry["fallback"], "aspirated fallback"
             raw = synthesize(tts, ssml)
+    elif kind == "held":
+        held = held_part(raw)
+        if held is None:
+            raise RuntimeError(f"no held sound found after the vowel in {ssml}")
+        raw = held
     elif kind == "cutoff":
         raw = trim(raw)[:STOP_CUTOFF_MS]
     # Normalise first, so the -42 dBFS trim measures every clip on the same scale
@@ -168,10 +214,13 @@ def build_clip(tts: texttospeech.TextToSpeechClient, entry: dict) -> tuple[Audio
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--all", action="store_true", help="build every clip, not just the test batch")
+    parser.add_argument("--only", help="comma-separated clip ids; writes WAVs only, leaves the sprite alone")
     parser.add_argument("--wav-dir", type=Path, help="also save each processed clip here as WAV")
     args = parser.parse_args()
 
-    ids = list(MANIFEST) if args.all else TEST_BATCH
+    ids = args.only.split(",") if args.only else list(MANIFEST) if args.all else TEST_BATCH
+    if args.only and not args.wav_dir:
+        parser.error("--only needs --wav-dir")
     tts = client()
     gap = AudioSegment.silent(duration=GAP_MS, frame_rate=24000)
     sprite = AudioSegment.silent(duration=0, frame_rate=24000)
@@ -188,6 +237,8 @@ def main() -> None:
             clip.export(args.wav_dir / f"{clip_id}.wav", format="wav")
         print(f"{clip_id:9} {len(clip):5} ms  {method:18} {ssml}")
 
+    if args.only:
+        return
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     sprite.export(OUT_DIR / "phonics_sprite.mp3", format="mp3", bitrate="64k")
     manifest = {

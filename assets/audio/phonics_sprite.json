@@ -8,45 +8,45 @@
   "sprite": {
     "m": [
       0,
-      455
+      256
     ],
     "p": [
-      755,
+      556,
       70
     ],
     "t": [
-      1125,
+      926,
       95
     ],
     "a": [
-      1520,
+      1321,
       435
     ],
     "i": [
-      2255,
+      2056,
       415
     ],
     "blend-ma": [
-      2970,
+      2771,
       430
     ],
     "blend-ca": [
-      3700,
+      3501,
       450
     ],
     "word-map": [
-      4450,
+      4251,
       565
     ],
     "word-cat": [
-      5315,
+      5116,
       574
     ]
   },
   "meta": {
     "m": {
-      "ssml": "<speak><phoneme alphabet=\"ipa\" ph=\"mː\">mmm</phoneme></speak>",
-      "method": "plain"
+      "ssml": "<speak><prosody rate=\"80%\">mmm</prosody></speak>",
+      "method": "held"
     },
     "p": {
       "ssml": "<speak><phoneme alphabet=\"ipa\" ph=\"mæp\">map</phoneme></speak>",
