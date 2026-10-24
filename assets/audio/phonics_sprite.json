@@ -1,0 +1,84 @@
+{
+  "src": [
+    "phonics_sprite.mp3"
+  ],
+  "voice": "en-US-Neural2-F",
+  "speakingRate": 0.8,
+  "pitch": 0.5,
+  "sprite": {
+    "m": [
+      0,
+      455
+    ],
+    "p": [
+      755,
+      70
+    ],
+    "t": [
+      1125,
+      95
+    ],
+    "a": [
+      1520,
+      435
+    ],
+    "i": [
+      2255,
+      415
+    ],
+    "blend-ma": [
+      2970,
+      430
+    ],
+    "blend-ca": [
+      3700,
+      450
+    ],
+    "word-map": [
+      4450,
+      565
+    ],
+    "word-cat": [
+      5315,
+      574
+    ]
+  },
+  "meta": {
+    "m": {
+      "ssml": "<speak><phoneme alphabet=\"ipa\" ph=\"mː\">mmm</phoneme></speak>",
+      "method": "plain"
+    },
+    "p": {
+      "ssml": "<speak><phoneme alphabet=\"ipa\" ph=\"mæp\">map</phoneme></speak>",
+      "method": "carrier"
+    },
+    "t": {
+      "ssml": "<speak><phoneme alphabet=\"ipa\" ph=\"kæt\">cat</phoneme></speak>",
+      "method": "carrier"
+    },
+    "a": {
+      "ssml": "<speak><break time=\"100ms\"/><phoneme alphabet=\"ipa\" ph=\"æ\">a</phoneme><break time=\"100ms\"/></speak>",
+      "method": "plain"
+    },
+    "i": {
+      "ssml": "<speak><break time=\"100ms\"/><phoneme alphabet=\"ipa\" ph=\"ɪ\">i</phoneme><break time=\"100ms\"/></speak>",
+      "method": "plain"
+    },
+    "blend-ma": {
+      "ssml": "<speak><phoneme alphabet=\"ipa\" ph=\"mæ\">ma</phoneme></speak>",
+      "method": "plain"
+    },
+    "blend-ca": {
+      "ssml": "<speak><phoneme alphabet=\"ipa\" ph=\"kæ\">ca</phoneme></speak>",
+      "method": "plain"
+    },
+    "word-map": {
+      "ssml": "<speak><phoneme alphabet=\"ipa\" ph=\"mæp\">map</phoneme></speak>",
+      "method": "plain"
+    },
+    "word-cat": {
+      "ssml": "<speak><phoneme alphabet=\"ipa\" ph=\"kæt\">cat</phoneme></speak>",
+      "method": "plain"
+    }
+  }
+}
