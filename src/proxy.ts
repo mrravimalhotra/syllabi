@@ -7,6 +7,7 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|mjs|js|css|map|json|txt|xml|woff|woff2|ttf|pdf)$).*)",
+    // sounds/: the public letter sounds, played without a session check.
+    "/((?!_next/static|_next/image|favicon.ico|sounds/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|mjs|js|css|map|json|txt|xml|woff|woff2|ttf|pdf)$).*)",
   ],
 };
