@@ -20,9 +20,11 @@ a from "at"), and the cut ends where the next sound begins:
                              mixed with the low part of the same voice's /m/
                              hum, at the balance a person's z has
   stop         c, k, p, t    the burst and its breath, up to the vowel
-  prevoiced    b             the voicing before the burst plus the burst, from
-                             a half-speed carrier ("bat"), strictly 110-130 ms:
-                             shorter is a click, longer opens into the vowel
+  head         b             the first 120 ms of "bat" after its leading silence:
+                             the voicing and the lip pop, strictly 110-130 ms
+                             (shorter is a click, longer adds "uh")
+  prevoiced    (none now)    the voicing before the burst plus the burst, from
+                             a half-speed carrier, strictly 110-130 ms
   voiced stop  d, g, j       a short window from the release burst (the
                              biggest jump in loudness), with a little of the
                              voicing after it: without it b is only a click
@@ -93,15 +95,16 @@ HUM_VOWEL_SHARE, HUM_JUMP_DB = 0.6, 8.0
 RELEASE_SEARCH_MS = 150
 # Prevoiced stops: total length kept within these bounds, ending this long after the burst.
 PREVOICED_MIN_MS, PREVOICED_MAX_MS, PREVOICED_BURST_MS = 110, 130, 20
+HEAD_MS = 120  # head: how much of the carrier to keep after its leading silence
 BETWEEN_MARGIN_MS = 20
 BUZZ_CUTOFF_HZ = 500  # the voice's buzz: only the part of the hum under this
 BUZZ_SHARE = 0.65  # share of a z's energy in the buzz, as measured in a person's z
-FADES = {"hiss": (10, 25), "hum": (10, 25), "stop": (2, 10), "voiced": (2, 30), "prevoiced": (5, 10), "buzz": (10, 25), "glide": (5, 20), "vowel": (10, 30), "whole": (5, 25)}
+FADES = {"hiss": (10, 25), "hum": (10, 25), "stop": (2, 10), "voiced": (2, 30), "prevoiced": (5, 10), "head": (5, 15), "buzz": (10, 25), "glide": (5, 20), "vowel": (10, 30), "whole": (5, 25)}
 
 
 @dataclass
 class Sound:
-    kind: str  # hiss | hum | buzz | stop | prevoiced | voiced | glide | vowel | whole | pair
+    kind: str  # hiss | hum | buzz | stop | head | prevoiced | voiced | glide | vowel | whole | pair
     word: str = ""  # carrier word as written
     ipa: str = ""  # how the carrier word is said
     rate: int = 50  # carrier speed in percent (100: as normal); slower makes its first sound last longer
@@ -114,7 +117,7 @@ class Sound:
 
 SOUNDS: dict[str, Sound] = {
     "a": Sound("vowel", "at", "æt", rate=100),
-    "b": Sound("prevoiced", "bat", "bæt", level_db=-2),  # half speed: 105 ms of voicing before the burst, not 20
+    "b": Sound("head", "bat", "bæt", rate=100, level_db=-2),
     "c": Sound("stop", "cat", "kæt", rate=100, level_db=-6),
     "d": Sound("voiced", "dog", "dɒɡ", rate=100, window_ms=80, level_db=-2),
     "e": Sound("vowel", "egg", "ɛɡ", rate=100),
@@ -359,12 +362,17 @@ def cut(tts: texttospeech.TextToSpeechClient, sound: Sound) -> tuple[AudioSegmen
         start, end = fr.onset(), fr.last_sound() + 1
     elif sound.kind == "voiced":
         start, end = cut_voiced(fr, sound.window_ms)
+    elif sound.kind == "head":
+        start = fr.onset()
+        end = min(len(fr.rms), start + HEAD_MS // FRAME_MS)
     elif sound.kind == "glide":
         start, end = cut_glide(fr, sound.window_ms)
     else:
         start, end = CUTS[sound.kind](fr)
     if end <= start:
         raise RuntimeError(f"nothing to cut from {ssml}")
+    if sound.kind == "head" and not PREVOICED_MIN_MS <= (end - start) * FRAME_MS <= PREVOICED_MAX_MS:
+        raise RuntimeError(f"b came out {(end - start) * FRAME_MS} ms, outside {PREVOICED_MIN_MS}-{PREVOICED_MAX_MS} ms")
     fade_in, fade_out = FADES[sound.kind]
     clip = word[start * FRAME_MS : end * FRAME_MS].fade_in(fade_in).fade_out(fade_out)
     if sound.kind in HOLD_MS:
