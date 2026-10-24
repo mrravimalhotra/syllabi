@@ -114,6 +114,8 @@ function checkUnits(left: string, right: string): Attempt {
   const unitL = UNIT_TAIL.exec(left);
   const unitR = UNIT_HEAD.exec(right);
   if (!unitL || !unitR) return undefined;
+  // "12 m + 8 m = 20 m" is a sum of quantities, not a conversion of the last one.
+  if (/[-+*/×÷^]\s*$/.test(left.slice(0, unitL.index))) return undefined;
   try {
     const from = quantity(unitL[1]);
     const to = quantity(unitR[1]);
@@ -139,7 +141,10 @@ function sides(left: string, right: string): { tail: string; head: string } | nu
   // right after them ("2x") means this isn't plain arithmetic.
   const before = left.slice(0, tailMatch!.index).trimEnd();
   if (/[\p{L}]$/u.test(before) && /^\s*[-+*/^]/.test(tail)) return null;
-  if (/[\p{L}]$/u.test(left.slice(0, tailMatch!.index))) return null;
+  // A word then a space ("Hence 12 × 15 = 170") is a sentence; a letter stuck to the number ("Q1", "2x") or a lone
+  // letter before it ("8 x 9", "n 5") is algebra or a multiplication sign, which this check leaves alone.
+  const beforeRaw = left.slice(0, tailMatch!.index);
+  if (/[\p{L}]$/u.test(beforeRaw) && (!/^\s/.test(tail) || /(?:^|[^\p{L}])\p{L}$/u.test(beforeRaw))) return null;
   if (/^[\p{L}]/u.test(right.slice(head.trimEnd().length))) return null;
   return { tail, head };
 }

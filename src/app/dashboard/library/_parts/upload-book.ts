@@ -62,7 +62,7 @@ async function postBatch(
   bookId: string,
   batch: PendingPage[],
   signal: AbortSignal
-): Promise<{ res: Response; data: { error?: string; retryable?: boolean } } | "aborted"> {
+): Promise<{ res: Response; data: { error?: string; retryable?: boolean; quota?: unknown } } | "aborted"> {
   try {
     const res = await fetch(`/api/library/${bookId}/pages`, {
       method: "POST",
@@ -97,7 +97,7 @@ async function sendBatch(bookId: string, batch: PendingPage[], job: UploadJob, r
     const retry = res.status >= 500 && data.retryable !== false && attempt < UPLOAD_ATTEMPTS;
     if (!retry) {
       batch.forEach((p) => run.failures.set(p.id, reason));
-      if (res.status === 404 || /daily allowance|quota exceeded/i.test(reason)) run.stopReason = reason;
+      if (res.status === 404 || (res.status === 429 && data.quota) || /daily allowance|quota exceeded/i.test(reason)) run.stopReason = reason;
       return;
     }
     job.progress(`${reason} Trying ${name} again (${attempt + 1} of ${UPLOAD_ATTEMPTS})`);

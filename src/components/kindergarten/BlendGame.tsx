@@ -46,20 +46,28 @@ export function BlendGame({ questions, say, sound, prepare, prepareSounds, onAga
     async (q: BlendQuestion) => {
       cancelListen.current?.();
       let cancelled = false;
-      cancelListen.current = () => {
+      const mine = () => {
         cancelled = true;
       };
+      cancelListen.current = mine;
       await Promise.resolve();
       setListening(true);
-      await say("Listen.");
-      for (let i = 0; i < q.letters.length; i++) {
-        if (cancelled) return;
-        setLit(i);
-        await sound(q.letters[i], true);
+      try {
+        await say("Listen.");
+        for (let i = 0; i < q.letters.length; i++) {
+          if (cancelled) return;
+          setLit(i);
+          await sound(q.letters[i], true);
+        }
+        setLit(-1);
+        if (!cancelled) await say("What word is it?");
+      } finally {
+        // Cut short by a tapped answer: clear the finger dot and let "hear again" work. A newer listen has taken over otherwise.
+        if (cancelListen.current === mine || !cancelled) {
+          setLit(-1);
+          setListening(false);
+        }
       }
-      setLit(-1);
-      if (!cancelled) await say("What word is it?");
-      if (!cancelled) setListening(false);
     },
     [say, sound]
   );

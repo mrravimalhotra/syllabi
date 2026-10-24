@@ -118,6 +118,8 @@ export async function ingestPage(ctx: PageContext, page: IngestPage, storedImage
       model: extraction.model,
       usage: extraction.usage,
     });
+    // The reader says "[EMPTY PAGE]" for a blank page: an empty reply is a failed read (a backup service answering nothing), not a blank page.
+    if (!extraction.text.trim()) failAt("reading the page", page.pageNumber, new Error("The reader returned no text"));
     ({ text: pageText, legibility } = takeLegibility(extraction.text));
     readFromPicture = true;
   }

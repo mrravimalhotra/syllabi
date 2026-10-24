@@ -10,6 +10,9 @@ import { parsePhotos } from "@/lib/generation/attachments";
 import { PAPER_REPORT } from "../fixtures/bhakti-exercise-pages";
 import { checkPaperMarks, gradeFor, gradeScaleText, withoutStudentWork } from "@/lib/checks/paper";
 import { checkArithmetic } from "@/lib/checks/arithmetic";
+import { checkSamplePaper } from "@/lib/checks/rules";
+import { autoKeyFor } from "@/lib/study-pack/auto-key";
+import { pureProblem } from "@/lib/worked/detect";
 import { splitAnswerBlocks } from "@/lib/generation/blocks";
 import { HANDWRITTEN_PAGE, SOIL_EXERCISE_ANSWER, LESSON_PAGES, OUTSIDE_ANSWER, PAGES as BHAKTI_PAGES, SOIL_CONTEXT, SOIL_GROUNDED, SOIL_MIXED } from "../fixtures/bhakti-exercise-pages";
 import { splitQuestions } from "@/lib/rag/split-questions";
@@ -151,6 +154,24 @@ for (const raw of [{ kind: "whole", digits: 4 }, { kind: "decimal", digits: 1, m
 }
 
 
+
+// ---- Bug-scan regressions ----
+{
+  const opts = ["(a) A king", "(b) A beggar", "(c) A farmer"];
+  check(JSON.stringify(autoKeyFor("Who?", "mcq", opts, "A beggar")) === '{"kind":"option","index":1}', "Auto key: the answer 'A beggar' is option b, not option a");
+  check(JSON.stringify(autoKeyFor("Who?", "mcq", opts, "(c) A farmer")) === '{"kind":"option","index":2}', "Auto key: a lettered answer still works");
+  const quarter = autoKeyFor("Half of 1/2 is ____", "fill", [], "**1/4**");
+  check(quarter?.kind === "blank" && quarter.answers.includes("1 4") && !quarter.answers.includes("1"), "Auto key: 1/4 is not split into 1 and 4");
+  const lakh = autoKeyFor("Write one lakh: ____", "fill", [], "**1,00,000**");
+  check(lakh?.kind === "blank" && lakh.answers.includes("100000"), "Auto key: 1,00,000 accepts 100000");
+  const either = autoKeyFor("The sky is ____", "fill", [], "**blue or grey**");
+  check(either?.kind === "blank" && either.answers.join() === "blue,grey", "Auto key: alternatives are still split");
+  const paperText = "1. Define a cell.\n3. Case study: read and answer\n(a) Name the part\n(b) Why needed\n\n## Answer Key\n**Q1. ** A unit of life.\n**Q3 (a). Name the part** Nucleus\n**Q3 (b). Why needed** It controls the cell.";
+  check(checkSamplePaper(paperText, null).every((c) => c.ok), "Rules: a key headed 'Q3 (a).' covers question 3");
+  check(pureProblem("Add 10, 20, 30, 40 and 50") === null, "Worked: five numbers to add go to the AI, not a four-number board");
+  check(pureProblem("Find the LCM of 0.5 and 0.75") === null, "Worked: decimals in an LCM go to the AI");
+  check(pureProblem("Find the LCM of 12, 18 and 30") !== null, "Worked: a plain LCM is still answered by code");
+}
 
 // ---- Kindergarten: place value and face value ----
 for (let seed = 1; seed <= 400; seed++) {
@@ -474,6 +495,10 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
   check(!withoutHandwriting(HANDWRITTEN_PAGE).includes("Handwritten") && withoutHandwriting(HANDWRITTEN_PAGE).includes("Which type of soil do you think it will be?"), "Handwriting: removing it leaves the printed questions whole");
   const attempts = handwritingIn(HANDWRITTEN_PAGE);
   check(attempts.length === 2 && attempts[0].startsWith("The type of soil in that region would be Black Soil.") && attempts[0].includes("4. Millets") && !attempts[0].includes("["), "Handwriting: each answer is found whole, without its marker");
+  check(withoutHandwriting("1. Define cell.\n[Handwritten: cell is the [illegible] of life]") === "1. Define cell.", "Handwriting: [illegible] inside handwriting is taken out with it");
+  check(checkArithmetic("Total length = 12 m + 8 m = 20 m").every((c) => c.ok), "Arithmetic: a sum of quantities is not a unit conversion");
+  check(checkArithmetic("Hence 12 × 15 = 170").some((c) => !c.ok), "Arithmetic: a wrong sum after a plain word is caught");
+  check(checkArithmetic("So 25 × 4 = 100").every((c) => c.ok), "Arithmetic: a right sum after a plain word passes");
   check(withoutHandwriting("Fill in: Vajji is a ____ [Handwritten: Gana-Sangha] republic.") === "Fill in: Vajji is a ____  republic.", "Handwriting: a short note inside a line is taken out too");
   check(splitQuestions("Q1. Answer.\n1. What is soil used for in farming?\n[Handwritten: 1. for crops\n2. for houses]\n2. Name one crop of black soil.").length === 2, "Handwriting: numbered lines inside a handwritten answer are not counted as questions");
 

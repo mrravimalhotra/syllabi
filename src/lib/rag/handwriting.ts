@@ -3,7 +3,8 @@
 // and an answer is written fresh from the book, with the handwriting kept for reference.
 
 /** "[Handwritten: ...]" or "[Handwritten answer to Q2: ...]", over several lines. */
-const HANDWRITTEN = /\[Handwritten[^\]]*\]/gi;
+// One level of brackets inside is allowed: the reader writes [illegible] within handwriting.
+const HANDWRITTEN = /\[Handwritten(?:[^[\]]|\[[^\]]*\])*\]/gi;
 
 /** The text without its handwritten parts, with the gaps tidied. */
 export function withoutHandwriting(text: string): string {
@@ -16,5 +17,5 @@ export function withoutHandwriting(text: string): string {
 
 /** What the handwritten parts say, without their markers. */
 export function handwritingIn(text: string): string[] {
-  return (text.match(HANDWRITTEN) ?? []).map((m) => m.replace(/^\[Handwritten[^:\]]*:?\s*/i, "").replace(/\]$/, "").trim()).filter(Boolean);
+  return (text.match(HANDWRITTEN) ?? []).map((m) => m.replace(/^\[Handwritten[^:[\]]*:?\s*/i, "").replace(/\]$/, "").trim()).filter(Boolean);
 }

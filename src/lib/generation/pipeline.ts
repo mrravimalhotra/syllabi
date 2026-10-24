@@ -144,7 +144,9 @@ export async function runGeneration({
     const photosStart = Date.now();
     const transcription = unread.length > 0 ? await transcribePhotos(student.id, unread) : "";
     timings.readingPhotosMs = Date.now() - photosStart;
-    searchQuery = [prompt, ...known, transcription].join("\n\n").trim().slice(0, MAX_SEARCH_QUERY_CHARS);
+    // Each part gets its share, so a long typed or attached text cannot push the photos' questions out of the search.
+    const share = Math.floor(MAX_SEARCH_QUERY_CHARS / 3);
+    searchQuery = [prompt.slice(0, share), transcription.slice(0, share), ...known].join("\n\n").trim().slice(0, MAX_SEARCH_QUERY_CHARS);
   }
 
   const quota = await quotaCheck;

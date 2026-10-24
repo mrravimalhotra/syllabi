@@ -117,7 +117,8 @@ function findAdditions(line: string, add: Add) {
       if (partOfLongerExpression(line, m)) continue;
       // "add 12, 5 and 3" / "12 + 5 + 3": every number in the match.
       const numbers = numbersIn(m[0]);
-      if (numbers.length >= 2) add({ kind: "column", op: "add", numbers: numbers.slice(0, 4) }, m[0]);
+      // The board shows two to four numbers: more would be answered wrongly, so those go to the AI.
+      if (numbers.length >= 2 && numbers.length <= 4) add({ kind: "column", op: "add", numbers }, m[0]);
     }
   }
 }
@@ -184,9 +185,11 @@ function findLcmHcf(line: string, add: Add) {
   const after = line.slice(keyword.index + keyword[0].length).split(/\b(?:is|are|was|equals)\b|=|है|आहे/)[0];
   let numbers = wholeNumbersIn(after);
   if (numbers.length < 2) numbers = wholeNumbersIn(line.slice(0, keyword.index));
-  if (numbers.length >= 2) {
+  // Decimals and fractions ("0.5 and 0.75") would be read as whole numbers, and more than six numbers don't fit: the AI answers those.
+  const notWhole = /\d[./]\d/.test(line);
+  if (numbers.length >= 2 && numbers.length <= 6 && !notWhole) {
     const want = wantsLcm && wantsHcf ? "both" : wantsLcm ? "lcm" : "hcf";
-    add({ kind: "lcm-hcf", numbers: numbers.slice(0, 6), want }, line.trim());
+    add({ kind: "lcm-hcf", numbers, want }, line.trim());
   }
 }
 

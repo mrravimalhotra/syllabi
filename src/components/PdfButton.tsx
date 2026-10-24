@@ -14,7 +14,7 @@ export function inIosHomeScreenApp(): boolean {
   return typeof navigator !== "undefined" && (navigator as Navigator & { standalone?: boolean }).standalone === true;
 }
 
-type State = { kind: "idle" } | { kind: "preparing" } | { kind: "ready"; file: File };
+type State = { kind: "idle" } | { kind: "preparing" } | { kind: "ready"; file: File; url: string };
 
 /**
  * Opens a PDF: in a new tab normally; in the iPhone home-screen app, through
@@ -25,13 +25,13 @@ type State = { kind: "idle" } | { kind: "preparing" } | { kind: "ready"; file: F
 export function usePdfOpener(name: string) {
   const [state, setState] = useState<State>({ kind: "idle" });
 
-  const share = async (file: File) => {
+  const share = async (file: File, url: string) => {
     try {
       await navigator.share({ files: [file], title: name });
       setState({ kind: "idle" });
     } catch (err) {
       const reason = err instanceof Error ? err.name : "";
-      if (reason === "NotAllowedError") setState({ kind: "ready", file });
+      if (reason === "NotAllowedError") setState({ kind: "ready", file, url });
       else setState({ kind: "idle" }); // cancelled, or nothing to do
     }
   };
@@ -41,7 +41,8 @@ export function usePdfOpener(name: string) {
       window.open(url, "_blank", "noopener");
       return;
     }
-    if (state.kind === "ready") return share(state.file);
+    // The PDF made for another address (the worksheet without answers, after the one with) is not the one asked for.
+    if (state.kind === "ready" && state.url === url) return share(state.file, url);
     if (state.kind === "preparing") return;
     setState({ kind: "preparing" });
     try {
@@ -53,7 +54,7 @@ export function usePdfOpener(name: string) {
         window.alert("This phone can't share PDFs from the Home Screen app. Open Syllabi in Safari to print or save PDFs.");
         return;
       }
-      await share(file);
+      await share(file, url);
     } catch (err) {
       setState({ kind: "idle" });
       window.alert(err instanceof TypeError ? OFFLINE_MESSAGE : err instanceof Error ? err.message : "Couldn't make the PDF. Check your connection and try again.");

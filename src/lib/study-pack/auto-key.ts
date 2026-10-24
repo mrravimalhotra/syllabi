@@ -18,7 +18,7 @@ export function normaliseResponse(text: string): string {
 
 /** The letter an option is labelled with: "(a) Delhi", "a) Delhi", "a. Delhi", "A: Delhi". */
 function optionLetter(option: string): string | null {
-  return /^\s*\(?([a-hA-H])[).:\s]/.exec(option)?.[1].toLowerCase() ?? null;
+  return /^\s*\(?([a-hA-H])[).:]/.exec(option)?.[1].toLowerCase() ?? null;
 }
 
 function optionText(option: string): string {
@@ -29,8 +29,9 @@ export function autoKeyFor(question: string, type: string, options: string[], an
   const plain = answer.replace(/[*_`]/g, "").trim();
 
   if (options.length >= 2) {
-    // "(b) Agra" or "b) Agra" or "Option b"
-    const letter = /^\s*(?:option\s*)?\(?([a-hA-H])[).:\s]/i.exec(plain)?.[1].toLowerCase();
+    // "(b) Agra" or "b) Agra" or "Option b". A bare "A " is the word "A" ("A king"), not a label.
+    const labelled = /^\s*(?:option\s+\(?([a-hA-H])\b|\(?([a-hA-H])[).:])/i.exec(plain);
+    const letter = (labelled?.[1] ?? labelled?.[2])?.toLowerCase();
     if (letter) {
       const index = options.findIndex((o) => optionLetter(o) === letter);
       if (index !== -1) return { kind: "option", index };
@@ -55,10 +56,10 @@ export function autoKeyFor(question: string, type: string, options: string[], an
     const bold = /\*\*([^*]{1,60})\*\*/.exec(answer)?.[1];
     const firstLine = plain.split("\n")[0].replace(/^(ans(wer)?|उत्तर)\s*:\s*/i, "").trim();
     const word = bold ?? (firstLine.split(/\s+/).length <= 4 ? firstLine : "");
-    const options = word
-      .split(/\s*(?:\/|\bor\b|,)\s*/)
-      .map(normaliseResponse)
-      .filter(Boolean);
+    // Alternatives are split on "or", " / " and commas, but never inside a number or fraction (1/4, 1,00,000).
+    const alternatives = word.split(/\s*(?:\s\/\s|\bor\b|(?<!\d),|,(?!\d)|(?<!\d)\/|\/(?!\d))\s*/);
+    if (/^[\d,.\s/]+$/.test(word)) alternatives.push(word, word.replace(/,/g, ""));
+    const options = [...new Set(alternatives.map(normaliseResponse).filter(Boolean))];
     if (options.length > 0) return { kind: "blank", answers: options };
   }
   return undefined;

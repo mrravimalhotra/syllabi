@@ -80,6 +80,12 @@ const checkDatabase = async (adminId: string) => {
   return `Connected. ${count ?? 0} account(s). Your usage this month: ${quota.used.toLocaleString("en-IN")} of ${quota.quota.toLocaleString("en-IN")} tokens.`;
 };
 
+/** Who really answered: a backup or stand-in is named, so a green check never hides that the chosen model is down. */
+const answeredBy = (result: { provider: string; model: string; standInFor?: string }, provider: string, model: string) =>
+  result.provider === provider && !result.standInFor
+    ? `${provider} / ${model}`
+    : `${result.provider} / ${result.model} (a backup: ${provider} / ${model} didn't answer)`;
+
 const checkAnswers = async () => {
   const { provider, model } = await getLlmSetting("ad_hoc");
   const result = await generateCompletion({
@@ -88,7 +94,7 @@ const checkAnswers = async () => {
     prompt: "Health check.",
     maxOutputTokens: 1024,
   });
-  return `${provider} / ${model} replied "${result.text.trim().slice(0, 40)}".`;
+  return `${answeredBy(result, provider, model)} replied "${result.text.trim().slice(0, 40)}".`;
 };
 
 const checkSearch = async () => {
@@ -136,7 +142,7 @@ const checkPageReading = async () => {
     prompt: "Say ok.",
     maxOutputTokens: 256,
   });
-  return `${provider} / ${model} replied "${result.text.trim().slice(0, 20)}".${model === "gemini-flash-lite-latest" ? " If its free daily allowance runs out, pages wait until it resets (or are read by a backup AI that can read images, if one is set up)." : " If this model's free daily allowance runs out, pages are read with gemini-flash-lite-latest instead."}`;
+  return `${answeredBy(result, provider, model)} replied "${result.text.trim().slice(0, 20)}".${model === "gemini-flash-lite-latest" ? " If its free daily allowance runs out, pages wait until it resets (or are read by a backup AI that can read images, if one is set up)." : " If this model's free daily allowance runs out, pages are read with gemini-flash-lite-latest instead."}`;
 };
 
 const checkBackground = async (origin: string) => {

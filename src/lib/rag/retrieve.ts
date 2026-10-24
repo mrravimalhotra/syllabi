@@ -130,9 +130,10 @@ async function withSupport(chunks: MatchedChunk[], coverageLow: boolean, scope: 
   const embeddings = await embedMany(questions);
   const have = new Set(chunks.map((c) => c.id));
   // Exercise passages are already there whole: only lessons and notes can support an answer.
-  const perQuestion = (await Promise.all(embeddings.map((e) => search(e.embedding, scope, SUPPORT_SEARCH)))).map((found) =>
-    found.filter((c) => c.source_type !== "exercise" && !have.has(c.id)).slice(0, SUPPORT_PER_QUESTION)
+  const lessons = (await Promise.all(embeddings.map((e) => search(e.embedding, scope, SUPPORT_SEARCH)))).map((found) =>
+    found.filter((c) => c.source_type !== "exercise")
   );
+  const perQuestion = lessons.map((found) => found.filter((c) => !have.has(c.id)).slice(0, SUPPORT_PER_QUESTION));
 
   const added: MatchedChunk[] = [];
   for (let rank = 0; rank < SUPPORT_PER_QUESTION; rank++) {
@@ -145,10 +146,11 @@ async function withSupport(chunks: MatchedChunk[], coverageLow: boolean, scope: 
     }
   }
   // The books cover the exercise when most of its questions found a close lesson passage.
-  const weak = perQuestion.filter((m) => (m[0]?.similarity ?? 0) < COVERAGE_THRESHOLD).length;
+  // A passage already in the context still counts as the question's best match.
+  const weak = lessons.filter((m) => (m[0]?.similarity ?? 0) < COVERAGE_THRESHOLD).length;
   return {
     chunks: [...chunks, ...added],
-    coverageLow: weak * 2 >= perQuestion.length,
+    coverageLow: weak * 2 >= lessons.length,
     stats: { ...stats, mode: "exercise", questions: questions.length, supportChunks: added.length },
   };
 }

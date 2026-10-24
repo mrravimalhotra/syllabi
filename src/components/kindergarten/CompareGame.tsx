@@ -62,7 +62,7 @@ export function CompareGame({ questions, say, prepare, onAgain, onExit }: Props)
     setPicked({ side, ok });
     if (!ok) {
       setMistake(true);
-      setTimeout(() => setPicked(null), 450);
+      setTimeout(() => setPicked((p) => (p && !p.ok ? null : p)), 450);
       void say("Try again!");
       return;
     }

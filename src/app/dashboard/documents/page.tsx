@@ -28,13 +28,15 @@ export default function MyDocumentsPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const visible = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return documents.filter((d) => (type === "all" || d.task_type === type) && (!q || d.title.toLowerCase().includes(q)));
-  }, [documents, query, type]);
-
   // Only offer the filters for kinds of answer the person actually has.
   const types = useMemo(() => [...new Set(documents.map((d) => d.task_type))], [documents]);
+  // A kind whose last answer was deleted is no longer a filter; show everything rather than an empty list with no way out.
+  const activeType = type !== "all" && !(types as string[]).includes(type) ? "all" : type;
+
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return documents.filter((d) => (activeType === "all" || d.task_type === activeType) && (!q || d.title.toLowerCase().includes(q)));
+  }, [documents, query, activeType]);
 
   async function remove(doc: Row) {
     if (!window.confirm(`Delete "${doc.title}"? This can't be undone.`)) return;
@@ -79,7 +81,7 @@ export default function MyDocumentsPage() {
         />
       ) : (
         <>
-          <DocumentFilters query={query} onQuery={setQuery} types={types} type={type} onType={setType} />
+          <DocumentFilters query={query} onQuery={setQuery} types={types} type={activeType} onType={setType} />
 
           <ul className={cx(card, "divide-y divide-slate-100 overflow-hidden")}>
             {visible.map((d) => (

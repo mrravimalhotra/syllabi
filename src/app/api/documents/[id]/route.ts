@@ -65,11 +65,12 @@ export async function DELETE(_request: Request, { params }: Params) {
   const answer = await findAnswer((await params).id, user);
   if (!answer) return apiError(404, GONE);
 
-  if (answer.storage_path) {
-    await deletePrefix(answer.storage_path).catch((err) => console.error("[documents DELETE] stored PDF", err));
-  }
+  // The row goes first: if that fails, nothing is lost and the stored PDF is still there.
   const admin = createAdminClient();
   const { error } = await admin.from("generated_documents").delete().eq("id", answer.id);
   if (error) return errorResponse(error, "documents DELETE", "Couldn't delete this answer. Nothing was deleted. Try again in a moment.");
+  if (answer.storage_path) {
+    await deletePrefix(answer.storage_path).catch((err) => console.error("[documents DELETE] stored PDF", err));
+  }
   return NextResponse.json({ ok: true });
 }

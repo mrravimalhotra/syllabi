@@ -10,6 +10,8 @@ import type { AnswerCheck } from "@/types/database";
 const MARKS_AT_END =
   /(?:[[(]\s*(\d{1,2})\s*(?:marks?|m|अंक|गुण|points?)?\s*[\])]|[-–—]\s*(\d{1,2})\s*(?:marks?|अंक|गुण))\s*\**\s*$/i;
 // A question line: "Q1.", "Q.1", "1.", "1)", "प्रश्न 1", with optional bold.
+// In the answer key a question may be headed with its sub-part: **Q3 (a). ...**
+const KEY_LINE = /^\s*\**\s*(?:Q\.?\s*|प्रश्न\s*|प्र\.?\s*)?([0-9०-९]{1,2})\s*(?:\([a-z0-9ivx]+\)\s*)?[.):]/i;
 const QUESTION_LINE = /^\s*\**\s*(?:Q\.?\s*|प्रश्न\s*|प्र\.?\s*)?([0-9०-९]{1,2})\s*[.):]/i;
 const SUBPART_LINE = /^\s*\**\s*\(?(?:[a-h]|i{1,3}|iv|v|vi{0,3})[.)]\s/i;
 const SECTION_LINE = /section|खंड|विभाग|partie|part\s+[a-z0-9]/i;
@@ -44,11 +46,11 @@ function marksCheck(lines: string[], totalMarks: number): AnswerCheck | null {
 }
 
 /** The question numbers at the start of lines, as plain digits. */
-const questionNumbers = (text: string) =>
+const questionNumbers = (text: string, line = QUESTION_LINE) =>
   new Set(
     text
       .split("\n")
-      .map((l) => QUESTION_LINE.exec(l)?.[1])
+      .map((l) => line.exec(l)?.[1])
       .filter((n): n is string => Boolean(n))
       .map(toAscii)
   );
@@ -56,7 +58,7 @@ const questionNumbers = (text: string) =>
 /** Every question number in the paper appears in the answer key. Null when the paper has no numbered questions. */
 function keyCoversCheck(paper: string, key: string): AnswerCheck | null {
   const asked = questionNumbers(paper);
-  const answered = questionNumbers(key);
+  const answered = questionNumbers(key, KEY_LINE);
   if (asked.size === 0) return null;
   const missing = [...asked].filter((n) => !answered.has(n)).sort((a, b) => Number(a) - Number(b));
   return {

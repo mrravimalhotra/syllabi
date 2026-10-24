@@ -410,6 +410,10 @@ fresh();
   check("pages: 'pages 3 and 5' is two pages, not a range", namedPages("pages 3 and 5 please").join() === "3,5");
   check("pages: a huge range is cut short", namedPages("pages 1-500").length === 12);
   check("pages: no page named", namedPages("What is photosynthesis?").length === 0);
+  check("pages: 'page 11 to page 16' is a range", namedPages("solve from page 11 to page 16").join() === "11,12,13,14,15,16");
+  check("pages: a list of pages", namedPages("pages 5, 6 and 7").join() === "5,6,7");
+  check("pages: a range and another page", namedPages("pages 11-13 and 20").join() === "11,12,13,20");
+  check("pages: marks after 'and' are not a page", namedPages("Solve Q5 on page 12 and 15 marks").join() === "12");
   check("exercise: asking for an exercise wants the whole section", wantsWholeSection("Solve Exercise 3.2") && !wantsWholeSection("What is a prime number?"));
 
   const row = (id: string, doc: string, page: number, index: number, owner = ME) => ({ id, document_id: doc, owner_id: owner, page_number: page, chunk_index: index, content: `${id} text`, section_label: `Page ${page}`, source_type: "textbook", image_path: null });

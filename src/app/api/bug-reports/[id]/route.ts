@@ -44,7 +44,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (typeof body.status !== "string" || !BUG_STATUSES.includes(body.status as BugStatus))
       return apiError(400, "Choose Open, Being fixed, Fixed or Won't fix.");
     updates.status = body.status as BugStatus;
-    updates.resolved_at = body.status === "fixed" || body.status === "wontfix" ? new Date().toISOString() : null;
   }
   if (body.resolution !== undefined) {
     const note = typeof body.resolution === "string" ? body.resolution.trim() : "";
@@ -54,6 +53,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (Object.keys(updates).length === 0) return apiError(400, "There was nothing to change.");
 
   try {
+    if (updates.status) {
+      // The resolved time is when the status became Fixed or Won't fix, not the time of the latest save.
+      const { data: before, error: readError } = await createAdminClient().from("bug_reports").select("status, resolved_at").eq("id", id).maybeSingle();
+      if (readError) throw readError;
+      if (!before) return apiError(404, NOT_FOUND);
+      const resolved = updates.status === "fixed" || updates.status === "wontfix";
+      if (!resolved) updates.resolved_at = null;
+      else if (before.status !== updates.status || !before.resolved_at) updates.resolved_at = new Date().toISOString();
+    }
     const { data, error } = await createAdminClient()
       .from("bug_reports")
       .update(updates)

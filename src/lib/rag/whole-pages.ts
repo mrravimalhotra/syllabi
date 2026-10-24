@@ -6,19 +6,31 @@ export const MAX_EXTRA = 60;
 /** The most pages one request can name ("pages 40 to 60" stops here). */
 export const MAX_NAMED_PAGES = 12;
 
-const NAMES_A_PAGE = /\bpages?\s+(\d{1,4})(?:\s*(-|–|to|and)\s*(\d{1,4}))?/gi;
+const NAMES_A_PAGE = /\bpages?\s+(?=\d)/gi;
+// After a page number: a range joiner (11-16, 11 to 16) or a list joiner (3, 5 and 7), then optionally another "page".
+const NEXT_PAGE = /^\s*(-|–|to|and|,|&)\s*(?:pages?\s+)?(\d{1,4})(?!\d)/i;
+// "pages 12 and 15 marks" is not the page 15.
+const NOT_A_PAGE = /^\s*(?:marks?|questions?|words?|lines?|sentences?|times|points?)\b/i;
 const WANTS_A_SECTION = /\b(exercises?|practice set|worksheet|revision|warm-?up|source analysis|all (?:the )?questions|every question|whole (?:exercise|chapter|page))\b/i;
 
-/** Page numbers a request names ("page 45", "pages 12-14", "pages 3 and 5"), at most 12. */
+/** Page numbers a request names ("page 45", "pages 12-14", "page 11 to page 16", "pages 3, 5 and 7"), at most 12. */
 export function namedPages(query: string): number[] {
   const pages = new Set<number>();
-  for (const [, first, joiner, last] of query.matchAll(NAMES_A_PAGE)) {
-    const from = Number(first);
-    const to = last ? Number(last) : from;
-    // "pages 3 and 5" is two pages; a dash or "to" is a range.
-    const range = joiner && joiner.toLowerCase() !== "and" && to >= from;
-    const list = range ? Array.from({ length: Math.min(to - from + 1, MAX_NAMED_PAGES) }, (_, i) => from + i) : [from, to];
-    list.forEach((n) => pages.add(n));
+  for (const start of query.matchAll(NAMES_A_PAGE)) {
+    let rest = query.slice(start.index + start[0].length);
+    const first = /^\d{1,4}/.exec(rest)?.[0];
+    if (!first) continue;
+    let from = Number(first);
+    pages.add(from);
+    rest = rest.slice(first.length);
+    for (let next = NEXT_PAGE.exec(rest); next && !NOT_A_PAGE.test(rest.slice(next[0].length)); next = NEXT_PAGE.exec(rest)) {
+      const n = Number(next[2]);
+      const range = next[1] !== "," && next[1] !== "&" && next[1].toLowerCase() !== "and" && n >= from;
+      const list = range ? Array.from({ length: Math.min(n - from + 1, MAX_NAMED_PAGES) }, (_, i) => from + i) : [n];
+      list.forEach((x) => pages.add(x));
+      from = n;
+      rest = rest.slice(next[0].length);
+    }
   }
   return [...pages].filter((n) => n >= 1).slice(0, MAX_NAMED_PAGES);
 }

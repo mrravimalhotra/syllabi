@@ -157,6 +157,17 @@ async function readOne(job: Job): Promise<void> {
   }
   if (!book) return; // deleted meanwhile; its jobs go with it
 
+  // A page whose reading kept dying mid-way (the claim counts a try each time) stops here instead of being reclaimed for ever.
+  if (job.attempts > MAX_ATTEMPTS) {
+    const { error } = await admin
+      .from("page_jobs")
+      .update({ status: "failed", error: `Page ${job.page_number}: reading kept failing.`, locked_at: null })
+      .eq("id", job.id);
+    if (error) console.error("[jobs] giving up on a page", job.id, error);
+    await finishBookIfDone(job.document_id);
+    return;
+  }
+
   try {
     const page = await pageToRead(job);
     // A page keeps its own kind (e.g. the exercises after a chapter) within its book.

@@ -43,7 +43,12 @@ export function ReportProblem() {
   useEffect(() => {
     if (!open) return;
     titleRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setOpen(false);
+      setSent(null);
+      setError(null);
+    };
     document.addEventListener("keydown", onKey);
     fetch("/api/bug-reports")
       .then((res) => (res.ok ? res.json() : { reports: [] }))

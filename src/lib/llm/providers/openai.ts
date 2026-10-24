@@ -27,6 +27,8 @@ function client(provider: OpenAiCompatible) {
   return new OpenAI({
     apiKey,
     baseURL,
+    // A hung call must end well inside the 300 s function limit.
+    timeout: 90_000,
     // OpenRouter asks apps to name themselves; harmless elsewhere.
     defaultHeaders: provider === "openrouter" ? { "X-Title": "Syllabi" } : undefined,
   });

@@ -49,7 +49,7 @@ export function tutorialSteps(n: number): TutorialStep[] {
   return [
     { say: `Look at the number ${n}. It is made of ${t} ${tensWord} and ${o} ${onesWord}.`, light: "none" },
     { say: `Face value is the digit itself, just as you see it. Place value is what the digit is worth because of where it sits.`, light: "none" },
-    { say: `The ${t} sits in the tens place. Its face value is ${t}. Its place value is ${t * 10}, because ${t} tens make ${t * 10}.`, light: "tens" },
+    { say: `The ${t} sits in the tens place. Its face value is ${t}. Its place value is ${t * 10}, because ${t} ${tensWord} make ${t * 10}.`, light: "tens" },
     o === 0
       ? { say: `The 0 sits in the ones place. Its face value is 0, and its place value is 0 too: there are no ones.`, light: "ones" }
       : { say: `The ${o} sits in the ones place. Its face value is ${o}. Its place value is ${o}, because ${o} ${onesWord} make ${o}.`, light: "ones" },

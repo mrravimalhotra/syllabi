@@ -28,6 +28,8 @@ export function PracticeTest({
   // For objective questions marked by code: whether the child's choice was right.
   const [autoResult, setAutoResult] = useState<boolean | null>(null);
   const [marks, setMarks] = useState<(boolean | null)[]>(() => questions.map(() => null));
+  // "Try again the ones marked Not yet": only those questions are asked, in order; null means all of them.
+  const [retry, setRetry] = useState<number[] | null>(null);
   const finished = index >= questions.length;
   const score = marks.filter(Boolean).length;
   const q = questions[index];
@@ -38,7 +40,7 @@ export function PracticeTest({
     setRevealed(false);
     setShowHint(false);
     setAutoResult(null);
-    setIndex((i) => i + 1);
+    setIndex((i) => (retry ? (retry[retry.indexOf(i) + 1] ?? questions.length) : i + 1));
   }
 
   /** The child answered an objective question: marked at once by comparing with the key. */
@@ -49,9 +51,12 @@ export function PracticeTest({
 
   function restart(onlyMissed: boolean) {
     if (onlyMissed) {
-      const first = marks.findIndex((m) => m === false);
-      setIndex(first === -1 ? 0 : first);
+      const missed = marks.flatMap((m, i) => (m === false ? [i] : []));
+      setRetry(missed.length > 0 ? missed : null);
+      if (missed.length === 0) setMarks(questions.map(() => null));
+      setIndex(missed[0] ?? 0);
     } else {
+      setRetry(null);
       setMarks(questions.map(() => null));
       setIndex(0);
     }

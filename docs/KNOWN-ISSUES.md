@@ -67,3 +67,19 @@ what works.
 | 1.3 | A shared guest login (user ID + one fixed password) is one account for everyone who knows it: they see each other's books and answers and share one monthly allowance. If Supabase refuses the stand-in address made for an ID-only guest (it can check that an email domain exists), the form says so; use the email option for that guest | Medium | Keep the allowance small and the end date short; change the password by making a new guest. |
 | Q.1 | Code-quality backlog (nothing is broken). Done: every big screen and route was split into small parts, each with browser or route tests that pass on the old and new code (My books, Generate, Practice, Quiz, Study pack and its practice test, Kindergarten, Record sounds, Accounts and the guest form, Account, Documents, Worksheets, the health check, guest and generation routes, middleware); request checking moved to tested helpers; the maths, answer checks, question splitting and PDF blocks are guarded by 6,465 golden cases (`npm run test:golden`). A lint ratchet (`eslint.config.mjs`: complexity 22, function length 165, depth 4, parameters 7) stops new code getting worse. Still above the comfortable limits (complexity 15, 120 lines, 5 parameters) and left on purpose or for later: `DashboardPage` (133 lines, complexity 22), `useGeneration` (147), `LibraryPage` (149), `PracticePage` (130), `CvcGame` (156), `BlendGame` (127), `useSay` (161), `TutorialsCard` (148), `AnswerBlock` (126), five functions at complexity 16 (`createGuest`, `columnSubtraction`, `toResult`, a docx reader, one more), `tone`, `makeAndSaveAnswer` and `digitSteps` (6-7 parameters), and the narration methods in `worked/say.ts` (6-7 parameters each, once per language, which read better as they are) | Low | Do one at a time with its browser test green before and after, then lower the numbers in `eslint.config.mjs`. |
 | K.4 | Hindi and Marathi letters, counting objects, number order, shapes and colours | Low | Planned next activities. |
+
+## Logic-bug scan, 2026-10-24: found, needs an owner decision (not changed)
+
+| # | Item | Why it needs a decision |
+|---|---|---|
+| D1 | Background page reading ignores the monthly allowance after upload starts (`lib/ingestion/jobs.ts`) | Pause or fail pages mid-book, or let a started upload finish? |
+| D2 | An expired guest can't be re-enabled: "Grant access" says done but `guest_until` is unchanged (`lib/access.ts`, `lib/account-update.ts`) | Extend the guest, or turn the guest into a normal account? |
+| D3 | "Exercise/worksheet/revision" words inside pasted or attached text switch on whole-exercise mode (`rag/whole-pages.ts`) | Which part of the request counts as the ask? |
+| D4 | Reused answers (60 days) can be stale after a book is uploaded or re-read (`generation/handler.ts` cache key) | Instant reuse vs freshness |
+| D5 | Thousands separators in the Practice tutorials: "4,567, 789" is split into 4, 567, 789 (`TutorialsCard.tsx`) | Changes how "12,18" with no space is read |
+| D6 | Study pack: attached pages are ignored when a book is chosen, and the newest book is chosen by default (`build-request.ts`) | Changes the default chapter choice |
+| D7 | Deleting a book removes the row before its images; a failed image delete leaves orphans (`api/library/[id]`) | Which failure is preferable |
+| D8 | Tapping a page-read's embedding/saving failure re-runs the AI reading and its token cost (`ingest.ts`) | Saving the read text needs a new column; and who pays |
+| D9 | Bug-report resolution note is labelled "shown to nobody else" but the reporter's own list returns it | Hide it, or fix the label |
+| D10 | Attachments read while another read is running can overwrite each other (`_ask/useAttachments.ts`) | Larger change to the attach flow; no owner decision, but not done yet |
+| D11 | Two quick study-pack edits to different questions can overwrite each other (`documents/[id]/pack`) | Needs an atomic update (SQL) |

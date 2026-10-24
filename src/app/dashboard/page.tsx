@@ -65,7 +65,7 @@ export default function DashboardPage() {
 
   async function submit(e?: React.FormEvent) {
     e?.preventDefault();
-    if (generation.isBusy() || readingFiles) return;
+    if (generation.isBusy() || readingFiles || blocked) return;
     const question: Question = {
       task: tab,
       prompt,

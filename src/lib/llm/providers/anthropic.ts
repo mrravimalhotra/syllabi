@@ -6,7 +6,8 @@ function client() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not configured");
   assertHeaderSafe("ANTHROPIC_API_KEY", apiKey);
-  return new Anthropic({ apiKey });
+  // A hung call must end well inside the 300 s function limit.
+  return new Anthropic({ apiKey, timeout: 90_000 });
 }
 
 export const anthropicAdapter: LlmProviderAdapter = {

@@ -93,26 +93,31 @@ export async function updateSession(request: NextRequest) {
   // is about to expire. Whether the account may still use Syllabi is checked
   // against its database row below and in each API route.
   const userId = await identify(supabase);
+  // A redirect or error reply must carry the cookies the refresh just set, or the browser keeps the old (rotated-out) sign-in.
+  const keepCookies = (response: NextResponse) => {
+    supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
+    return response;
+  };
 
   const { pathname } = request.nextUrl;
   const isPublic = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
   const isApi = pathname.startsWith("/api/");
 
   if (!userId && !isPublic) {
-    if (isApi) return apiError(401, "Your session has ended. Please sign in again.");
+    if (isApi) return keepCookies(apiError(401, "Your session has ended. Please sign in again."));
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("next", pathname);
-    return NextResponse.redirect(url);
+    return keepCookies(NextResponse.redirect(url));
   }
 
   // API routes check the account row themselves (authenticate in lib/api.ts),
   // so only pages need the lookup here: it saves a database round trip per request.
   if (userId && !isPublic && !isApi) {
     const blocked = await pageGate(request, supabase, userId);
-    if (blocked) return blocked;
+    if (blocked) return keepCookies(blocked);
   }
 
-  if (userId && (pathname === "/login" || pathname === "/signup")) return redirectTo(request, "/dashboard");
+  if (userId && (pathname === "/login" || pathname === "/signup")) return keepCookies(redirectTo(request, "/dashboard"));
   return supabaseResponse;
 }
