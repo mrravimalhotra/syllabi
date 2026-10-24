@@ -59,7 +59,7 @@ VOWEL_SHARE = 0.25
 # means Google read the letter names ("vee vee vee"), whose "ee" sits outside the
 # vowel band and is not detected.
 MIN_HELD_MS, MAX_HELD_MS = 120, 700
-HOLD_MS = 1000  # held sounds are stretched to this, as a teacher holds "mmm"
+HOLD_MS = 700  # held sounds are stretched to this, as a teacher holds "mmm"
 
 OUT_DIR = Path(__file__).resolve().parents[2] / "assets" / "audio"
 
