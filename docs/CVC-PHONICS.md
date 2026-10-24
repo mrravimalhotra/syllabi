@@ -12,10 +12,11 @@ Source: "CVC Phonics Engine: Architecture & Technical Implementation Roadmap" (o
 | Blend mode: slide across the tiles, "ma..." then the whole word (section 7) | **Slide to blend** slider in Word explorer: step 1 joins the first two sounds, step 2 says the word. |
 | No schwa: never "puh", "tuh", "muh"; continuous sounds held, stop sounds clipped (sections 1, 2.1) | Already how `phonics.ts` works (kinds `continuous` / `stop` / `vowel`, "quick: p, not puh"); unchanged. |
 | Short vowel IPA (section 3.1) | `IPA` in `phonics.ts`: æ ɛ ɪ ʌ as in the roadmap. |
+| Pre-rendered pure sounds made once with Google Cloud TTS (sections 1, 2, 5, 6) | `public/sounds/a.mp3` to `z.mp3`, made by `scripts/phonics/build_phonics_sprite.py`. Google says letter names or adds "uh" for any isolated spelling, so each sound is cut out of a real word that starts with it (m from "map", t from "tap", a from "at"), held sounds are slowed to about half a second, and each is set to the loudness a person gives it next to a vowel. z is Google's hiss mixed with the voice's low buzz, as Google says z unvoiced. The app plays these files; a grown-up's own recording still wins. |
 
 ## Not adopted, and why
 
 - **Short o as /ɑ/** (American). Syllabi keeps **/ɒ/** (British: "octopus", "dog"), which is what Indian schools teach. Change `IPA.o` in `phonics.ts` if the school teaches the American sound.
-- **Pre-rendered audio sprite with Howler.js, built with Google Cloud TTS and FFmpeg** (sections 1, 2, 5, 6). Syllabi already keeps each spoken clip in R2 after the first time it is made (so repeats are instant), and a grown-up can record the letter sounds in their own voice (Practice → Kindergarten → Record the sounds), which is played instead of the speech voice. A bundled sprite would add a build step, a Google Cloud account and a second voice; it would also not be offline-first unless the service worker cached it. It stays an option: if the speech voice's sounds are not clean enough, generate the roadmap's clips once and ship them under `public/sounds/`.
+- **Howler.js and one audio sprite.** The app plays one file per letter through its existing player; `assets/audio/phonics_sprite.mp3` (all clips in one file) is kept only for listening to the whole set.
 - **Native (Expo / AVPlayer) playback.** Syllabi is a web app.
 - **Onset-blend clips for 35 onsets.** The app makes the joined sound ("ma…") from the first two letters' sounds (`blendStart`).

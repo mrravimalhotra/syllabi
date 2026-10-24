@@ -39,9 +39,9 @@ export function SoundGuide() {
             ))}
         </div>
         <p className="text-xs text-slate-500">
-          The app&apos;s voice can only approximate a pure sound. For the clearest sounds, record your own voice saying each one (or use a
-          recording you have) and add the files as <code>/sounds/m.mp3</code>, <code>/sounds/a.mp3</code> and so on. The app plays a
-          recording whenever one exists. See <code>public/sounds/README.md</code>.
+          The app plays a pure sound for each letter, cut from a real word (m from &quot;map&quot;), with no letter name and no
+          &quot;uh&quot;. To use the voice the child&apos;s school uses, record your own on the Record the sounds page: your recording is
+          played instead. See <code>public/sounds/README.md</code>.
         </p>
       </div>
     </details>

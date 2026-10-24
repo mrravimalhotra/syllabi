@@ -32,14 +32,18 @@ Hisses, hums and vowels are then slowed to a set length without changing
 their pitch. Every clip is fetched as LINEAR16 (WAV), cut and faded, then set
 to the loudness a person gives it next to a vowel: f is about 16 dB softer, m
 about the same. Raising soft sounds to vowel loudness also raises the faint
-noise in Google's audio, so they are not. The clips are joined into one MP3
-with a Howler-style JSON map of [start_ms, duration_ms].
+noise in Google's audio, so they are not.
+
+Each letter's clip is written to public/sounds/<letter>.mp3, which the app
+plays instead of its speech voice (a grown-up's own recording still wins).
+All clips, with the test blends and words, are also joined into one MP3 for
+listening, with a Howler-style JSON map of [start_ms, duration_ms].
 
 Short o is the British /ɒ/ ("ox"), as Indian schools teach it.
 
 Usage (the key is read from GOOGLE_TTS_API_KEY):
   pip install pydub audioop-lts numpy google-cloud-texttospeech   # and ffmpeg
-  python3 scripts/phonics/build_phonics_sprite.py                 # the sprite
+  python3 scripts/phonics/build_phonics_sprite.py                 # letters and sprite
   python3 scripts/phonics/build_phonics_sprite.py --only m,s --wav-dir /tmp/clips
 """
 
@@ -64,7 +68,9 @@ SPEAKING_RATE = 0.80
 PITCH = 0.5  # semitones: slightly warm for children
 RATE = 24000
 GAP_MS = 300  # silence between clips in the sprite, so neighbours never bleed
-OUT_DIR = Path(__file__).resolve().parents[2] / "assets" / "audio"
+ROOT = Path(__file__).resolve().parents[2]
+OUT_DIR = ROOT / "assets" / "audio"
+LETTERS_DIR = ROOT / "public" / "sounds"  # the app plays /sounds/<letter>.mp3
 
 FRAME_MS = 10
 # A frame this far under the loudest one is silence (-50 dB). Not higher: the
@@ -399,6 +405,8 @@ def main() -> None:
 
     if args.only:
         return
+    for letter in (k for k in done if len(k) == 1):
+        done[letter].set_frame_rate(RATE).set_channels(1).export(LETTERS_DIR / f"{letter}.mp3", format="mp3", bitrate="96k")
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     sprite.export(OUT_DIR / "phonics_sprite.mp3", format="mp3", bitrate="96k")
     manifest = {
@@ -410,7 +418,7 @@ def main() -> None:
         "meta": meta,
     }
     (OUT_DIR / "phonics_sprite.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")
-    print(f"\nWrote {OUT_DIR / 'phonics_sprite.mp3'} ({len(sprite)} ms) and phonics_sprite.json")
+    print(f"\nWrote {LETTERS_DIR}/<letter>.mp3, {OUT_DIR / 'phonics_sprite.mp3'} ({len(sprite)} ms) and phonics_sprite.json")
 
 
 if __name__ == "__main__":

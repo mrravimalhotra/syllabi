@@ -807,10 +807,33 @@ await test("Kindergarten: a recorded sound is played instead of the voice", asyn
   if (fetched < 3) throw new Error(`Expected the recorded sounds to be fetched, saw ${fetched}.`);
 });
 
-await test("Kindergarten: letter sounds are asked for in the sound style", async (page, ctx) => {
+await test("Kindergarten: letter sounds play the pure-sound files, not the speech voice", async (page, ctx) => {
+  const kinds = new Set();
+  const files = new Set();
+  await baseRoutes(ctx);
+  await ctx.route("**/api/sounds", (r) => json(r, { letters: [] }));
+  await ctx.route("**/api/speech", (r) => {
+    kinds.add(JSON.parse(r.request().postData() ?? "{}").kind);
+    return r.fulfill({ status: 200, contentType: "audio/wav", body: silentWav });
+  });
+  page.on("request", (req) => {
+    const m = new URL(req.url()).pathname.match(/^\/sounds\/([a-z])\.mp3$/);
+    if (m) files.add(m[1]);
+  });
+  await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
+  await tap(page.getByRole("button", { name: /Play/ }).first());
+  await page.locator("[data-word]").waitFor({ timeout: 15000 });
+  for (let i = 0; i < 60 && !(files.size && kinds.has("phrase")); i++) await page.waitForTimeout(250);
+  if (!files.size) throw new Error("Expected the letter sound files in /sounds to be used.");
+  if (kinds.has("sound")) throw new Error("A letter sound was asked of the speech voice although its file exists.");
+  if (!kinds.has("phrase")) throw new Error(`Expected phrases from the speech voice, saw ${[...kinds]}.`);
+});
+
+await test("Kindergarten: without the sound files, letter sounds are asked for in the sound style", async (page, ctx) => {
   const kinds = new Set();
   await baseRoutes(ctx);
   await ctx.route("**/api/sounds", (r) => json(r, { letters: [] }));
+  await ctx.route(/\/sounds\/[a-z]\.mp3$/, (r) => r.fulfill({ status: 404, body: "" }));
   await ctx.route("**/api/speech", (r) => {
     kinds.add(JSON.parse(r.request().postData() ?? "{}").kind);
     return r.fulfill({ status: 200, contentType: "audio/wav", body: silentWav });

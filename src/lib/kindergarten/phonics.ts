@@ -8,7 +8,7 @@
 //   - to blend, touch each letter and say its sound, then glide the sounds
 //     together, slowly at first and then faster, until they make the word.
 // A speech voice can only approximate a pure sound from a spelling, so the app
-// also plays recorded sounds when files are provided (public/sounds/README.md).
+// plays the pure sounds in public/sounds instead (public/sounds/README.md).
 
 type SoundKind = "vowel" | "continuous" | "stop";
 
