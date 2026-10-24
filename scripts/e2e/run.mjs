@@ -755,6 +755,24 @@ await test("Kindergarten: place value game - a wrong answer is not accepted, a f
   await page.getByText("Well done!").first().waitFor({ timeout: 20000 });
 });
 
+await test("Kindergarten: word explorer - tap a letter, slide to blend, next word", async (page, ctx) => {
+  await baseRoutes(ctx);
+  await speechOk(ctx);
+  await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
+  // Only the -at family: every word rhymes.
+  await tap(page.getByRole("group", { name: "Word family" }).getByRole("button", { name: "-at", exact: true }));
+  await tap(page.getByRole("button", { name: "▶ Play" }).nth(5));
+  const tiles = page.locator("[data-word]");
+  await tiles.waitFor();
+  const word = await tiles.getAttribute("data-word");
+  if (!word.endsWith("at")) throw new Error(`Expected an -at word, got ${word}`);
+  await tap(tiles.getByRole("button").first());
+  await page.getByRole("slider", { name: "Slide to blend" }).fill("2");
+  await page.getByText(`${word}!`).waitFor();
+  await tap(page.getByRole("button", { name: "Next word →" }));
+  await page.locator("[data-word]").waitFor();
+});
+
 await test("Kindergarten: recording a letter sound and saving it", async (page, ctx) => {
   await ctx.grantPermissions(["microphone"]);
   let saved = 0;

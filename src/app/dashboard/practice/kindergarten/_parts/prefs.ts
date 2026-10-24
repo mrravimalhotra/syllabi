@@ -9,7 +9,8 @@ export const isCvc = (v: unknown): v is CvcSettings => {
     Boolean(s) &&
     Array.isArray(s.vowels) &&
     s.vowels.every((x) => (VOWELS as readonly string[]).includes(x)) &&
-    ROUND_SIZES.includes(s.questions as 5 | 10)
+    ROUND_SIZES.includes(s.questions as 5 | 10) &&
+    (s.family === undefined || (typeof s.family === "string" && /^[a-z]{2}$/.test(s.family)))
   );
 };
 export const isSight = (v: unknown): v is SightSettings => {

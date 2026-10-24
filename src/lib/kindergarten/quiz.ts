@@ -2,7 +2,7 @@
 // the same questions). No AI: every answer is known for certain.
 
 import { seeded } from "@/lib/practice/random";
-import { COUNT_EMOJI, CVC_WORDS, SIGHT_SETS, VOWELS, type SightLevel, type Vowel } from "@/lib/kindergarten/words";
+import { COUNT_EMOJI, CVC_WORDS, SIGHT_SETS, VOWELS, rimeOf, type CvcWord, type SightLevel, type Vowel } from "@/lib/kindergarten/words";
 
 export const ROUND_SIZES = [5, 10] as const;
 
@@ -21,15 +21,23 @@ export interface CvcQuestion {
 export interface CvcSettings {
   vowels: Vowel[];
   questions: number;
+  /** Practise one word family only ("at": cat, bat, mat...); all the chosen vowels' words when absent. */
+  family?: string;
+}
+
+/** The words a round draws from: the chosen vowels, narrowed to one family when it has words there. */
+export function cvcPool(settings: CvcSettings): CvcWord[] {
+  const vowels = settings.vowels.length ? settings.vowels : VOWELS.slice();
+  const all = vowels.flatMap((v) => CVC_WORDS[v]);
+  const family = settings.family ? all.filter((w) => rimeOf(w.word) === settings.family) : [];
+  return family.length > 0 ? family : all;
 }
 
 export const DEFAULT_CVC: CvcSettings = { vowels: ["a"], questions: 5 };
 
 export function makeCvcQuiz(settings: CvcSettings, seed: number): CvcQuestion[] {
   const r = seeded(seed);
-  const vowels = settings.vowels.length ? settings.vowels : VOWELS.slice();
-  const pool = vowels.flatMap((v) => CVC_WORDS[v]);
-  const order = r.shuffle(pool);
+  const order = r.shuffle(cvcPool(settings));
   const quiz: CvcQuestion[] = [];
   for (let i = 0; i < settings.questions; i++) {
     const entry = order[i % order.length];
@@ -131,9 +139,10 @@ export interface BlendQuestion {
  */
 export function makeBlendQuiz(settings: CvcSettings, seed: number): BlendQuestion[] {
   const r = seeded(seed);
-  const vowels = settings.vowels.length ? settings.vowels : VOWELS.slice();
   const picture = (w: { word: string; emoji: string | null }): w is { word: string; emoji: string } => w.emoji !== null;
-  const pool = vowels.flatMap((v) => CVC_WORDS[v]).filter(picture);
+  // A family with no picture words falls back to all the chosen vowels' picture words.
+  const familyPool = cvcPool(settings).filter(picture);
+  const pool = familyPool.length > 0 ? familyPool : cvcPool({ ...settings, family: undefined }).filter(picture);
   const everything = VOWELS.flatMap((v) => CVC_WORDS[v]).filter(picture);
   const order = r.shuffle(pool);
   const quiz: BlendQuestion[] = [];

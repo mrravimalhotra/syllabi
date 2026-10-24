@@ -2,7 +2,7 @@ import { describe, explain, worksheetMarkdown, makeQuiz, markOrder, normaliseSet
 import type { PracticeNumber } from "@/lib/practice/numbers";
 import { makeCompareQuiz, makeCvcQuiz, makeSightQuiz, type CompareSettings, type SightSettings } from "@/lib/kindergarten/quiz";
 import { IPA, PHONEMES, blendStart, soundText } from "@/lib/kindergarten/phonics";
-import { makeBlendQuiz } from "@/lib/kindergarten/quiz";
+import { makeBlendQuiz, cvcPool } from "@/lib/kindergarten/quiz";
 import { PLACE_MAX, makePlaceQuiz, onesOf, placeSpeech, placeValue, tensOf, tutorialNumber, tutorialSteps } from "@/lib/kindergarten/place-value";
 import { blockedReason, buildRequestBody, questionProblem, type Question } from "@/app/dashboard/_ask/build-request";
 import { checkPages } from "@/lib/ingestion/upload-pages";
@@ -33,7 +33,7 @@ import { parseProblem } from "@/lib/worked/parse";
 import { describeOutcome } from "@/app/dashboard/library/_parts/upload-book";
 import { LOGIN_ID, internalEmail, looksLikeLoginId, normaliseLoginId } from "@/lib/login-id";
 import { BOARD_COLUMNS, BOARD_ROWS, makeBoardGame, makeFamilySheet, makeMatchSheet, schoolFamilySheet, schoolMatchSheet } from "@/lib/kindergarten/worksheets";
-import { BOARD_WORDS, CVC_WORDS, SIGHT_LEVELS, SIGHT_SETS, VOWELS } from "@/lib/kindergarten/words";
+import { BOARD_WORDS, CVC_WORDS, familiesOf, rimeOf, SIGHT_LEVELS, SIGHT_SETS, VOWELS } from "@/lib/kindergarten/words";
 
 let passed = 0;
 let failed = 0;
@@ -173,6 +173,31 @@ for (const raw of [{ kind: "whole", digits: 4 }, { kind: "decimal", digits: 1, m
   check(pureProblem("Find the LCM of 12, 18 and 30") !== null, "Worked: a plain LCM is still answered by code");
 }
 
+// ---- Kindergarten: CVC inventory and word families ----
+{
+  const every = VOWELS.flatMap((v) => CVC_WORDS[v]);
+  check(every.length >= 120, `The CVC inventory has ${every.length} words, not 120 or more`);
+  const pictures = every.map((w) => w.emoji).filter(Boolean);
+  check(new Set(pictures).size === pictures.length, "Two CVC words share a picture, so a picture choice could be ambiguous");
+  for (const family of ["at", "an", "ap", "et", "en", "in", "it", "ip", "ig", "ot", "op", "og", "ug", "un", "ut"]) {
+    check(VOWELS.some((v) => familiesOf(v).includes(family)), `The word family -${family} is missing`);
+  }
+  for (const v of VOWELS) for (const rime of familiesOf(v)) {
+    const words = CVC_WORDS[v].filter((w) => rimeOf(w.word) === rime);
+    check(words.length >= 3 && words.every((w) => w.word[1] === v), `Family -${rime} is not three or more words of vowel ${v}`);
+  }
+  check(cvcPool({ vowels: ["a"], questions: 5, family: "at" }).every((w) => w.word.endsWith("at")), "A chosen family limits the words");
+  check(cvcPool({ vowels: ["a"], questions: 5, family: "zz" }).length === CVC_WORDS.a.length, "An unknown family falls back to all the vowel's words");
+  for (let seed = 1; seed <= 200; seed++) {
+    for (const family of ["at", "ig", "ug", "ex"]) {
+      const quiz = makeBlendQuiz({ vowels: ["a", "i", "u"], questions: 10, family }, seed);
+      check(quiz.length === 10 && quiz.every((q) => q.choices.length === 3 && new Set(q.choices.map((c) => c.word)).size === 3), `Blend quiz for family ${family}`);
+      const spell = makeCvcQuiz({ vowels: ["a", "i", "u"], questions: 10, family }, seed);
+      check(spell.length === 10 && spell.every((q) => q.tray.length === 5), `Spelling quiz for family ${family}`);
+    }
+  }
+}
+
 // ---- Kindergarten: place value and face value ----
 for (let seed = 1; seed <= 400; seed++) {
   const n = tutorialNumber(seed);
@@ -235,7 +260,7 @@ for (let seed = 1; seed <= 400; seed++) {
       for (const q of quiz) {
         check(q.letters.join("") === q.word && vowels.includes(q.word[1] as never), `CVC question ${q.word} outside the chosen vowels`);
         check(q.tray.length === 5 && q.letters.every((l) => q.tray.includes(l)), `CVC tray for ${q.word} lacks its letters: ${q.tray}`);
-        check(new Set(q.tray).size === 5, `CVC tray for ${q.word} repeats a letter: ${q.tray}`);
+        check(new Set(q.tray).size === new Set(q.letters).size + 2, `CVC tray for ${q.word} has a wrong extra letter: ${q.tray}`);
       }
       const words = quiz.map((q) => q.word);
       const poolSize = vowels.flatMap((v) => CVC_WORDS[v]).length;

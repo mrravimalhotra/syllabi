@@ -12,7 +12,7 @@ import { useSay, useVoiceChoice } from "@/components/kindergarten/useSay";
 import { PageHeader } from "@/components/ui";
 import { DEFAULT_PLACE, PLACE_MAX } from "@/lib/kindergarten/place-value";
 import { DEFAULT_COMPARE, DEFAULT_CVC, DEFAULT_SIGHT, ROUND_SIZES } from "@/lib/kindergarten/quiz";
-import { SIGHT_LEVELS, SIGHT_LEVEL_LABELS, VOWELS, type Vowel } from "@/lib/kindergarten/words";
+import { SIGHT_LEVELS, SIGHT_LEVEL_LABELS, VOWELS, familiesOf, type Vowel } from "@/lib/kindergarten/words";
 import { newSeed } from "@/lib/practice/random";
 import { usePref } from "@/lib/use-pref";
 
@@ -59,8 +59,13 @@ export default function KindergartenPage() {
 
   const toggleVowel = (v: Vowel) => {
     const next = cvc.vowels.includes(v) ? cvc.vowels.filter((x) => x !== v) : [...cvc.vowels, v];
-    if (next.length > 0) setCvc({ ...cvc, vowels: VOWELS.filter((x) => next.includes(x)) });
+    if (next.length === 0) return;
+    const vowels = VOWELS.filter((x) => next.includes(x));
+    // A family that no chosen vowel has any more is dropped.
+    const family = cvc.family && vowels.some((x) => familiesOf(x).includes(cvc.family!)) ? cvc.family : undefined;
+    setCvc({ ...cvc, vowels, family });
   };
+  const families = cvc.vowels.flatMap(familiesOf);
   const roundSizes = (current: number, set: (n: 5 | 10) => void, label: string) =>
     ROUND_SIZES.map((n) => (
       <Chip key={n} on={current === n} onClick={() => set(n)}>
@@ -97,6 +102,17 @@ export default function KindergartenPage() {
             {VOWELS.map((v) => (
               <Chip key={v} on={cvc.vowels.includes(v)} onClick={() => toggleVowel(v)}>
                 {v} <span className="text-slate-400">as in {VOWEL_WORD[v]}</span>
+              </Chip>
+            ))}
+          </div>
+          <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">Word family (rhyming words)</p>
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Word family">
+            <Chip on={!cvc.family} onClick={() => setCvc({ ...cvc, family: undefined })}>
+              All words
+            </Chip>
+            {families.map((rime) => (
+              <Chip key={rime} on={cvc.family === rime} onClick={() => setCvc({ ...cvc, family: rime })}>
+                -{rime}
               </Chip>
             ))}
           </div>
@@ -154,6 +170,13 @@ export default function KindergartenPage() {
           {roundSizes(place.questions, (n) => setPlace({ ...place, questions: n }), "questions")}
         </div>
       </ActivityCard>
+
+      <ActivityCard
+        emoji="🔍"
+        title="Word explorer (CVC words)"
+        description="No questions, no scores. Tap each letter to hear its pure sound, then slide from the first letter to the last to blend them into the word. Uses the vowels and word family chosen under Spell the word."
+        onPlay={() => start("explore")}
+      />
 
       <MenuLink
         href="/dashboard/practice/kindergarten/sounds"

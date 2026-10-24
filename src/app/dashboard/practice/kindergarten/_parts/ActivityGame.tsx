@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { BlendGame } from "@/components/kindergarten/BlendGame";
 import { CompareGame } from "@/components/kindergarten/CompareGame";
+import { ExplorerGame } from "@/components/kindergarten/ExplorerGame";
 import { CvcGame } from "@/components/kindergarten/CvcGame";
 import { PlaceValueGame } from "@/components/kindergarten/PlaceValueGame";
 import { PlaceValueTutorial } from "@/components/kindergarten/PlaceValueTutorial";
@@ -19,7 +20,7 @@ import {
   type SightSettings,
 } from "@/lib/kindergarten/quiz";
 
-export type Activity = "blend" | "cvc" | "sight" | "compare" | "place" | "place-learn";
+export type Activity = "blend" | "cvc" | "sight" | "compare" | "place" | "place-learn" | "explore";
 
 interface Props {
   kind: Activity;
@@ -43,8 +44,11 @@ export function ActivityGame({ kind, seed, cvc, sight, compare, place, voice, on
   const sightQuiz = useMemo(() => (kind === "sight" ? makeSightQuiz(sight, seed) : null), [kind, sight, seed]);
   const compareQuiz = useMemo(() => (kind === "compare" ? makeCompareQuiz(compare, seed) : null), [kind, compare, seed]);
 
+  const explorerWords = useMemo(() => (kind === "explore" ? makeCvcQuiz({ ...cvc, questions: 10 }, seed) : null), [kind, cvc, seed]);
   const placeQuiz = useMemo(() => (kind === "place" ? makePlaceQuiz(place, seed) : null), [kind, place, seed]);
 
+  if (explorerWords)
+    return <ExplorerGame key={seed} words={explorerWords} say={say} sound={sound} prepare={prepare} prepareSounds={prepareSounds} onAgain={onAgain} onExit={onExit} />;
   if (kind === "place-learn")
     return <PlaceValueTutorial key={seed} number={tutorialNumber(seed)} say={say} prepare={prepare} onAnother={onAgain} onPlay={onPlay} onExit={onExit} />;
   if (placeQuiz) return <PlaceValueGame key={seed} questions={placeQuiz} say={say} prepare={prepare} onAgain={onAgain} onExit={onExit} />;
