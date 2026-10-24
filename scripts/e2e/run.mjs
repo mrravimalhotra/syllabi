@@ -723,9 +723,9 @@ await test("Kindergarten: listen and blend - the sounds are heard, then the righ
     if (q === 0) {
       await page.getByText("=", { exact: true }).first().waitFor({ timeout: 15000 });
       // The question stays after the right picture: the sounds can be heard again before Next.
-      const again = page.getByRole("button", { name: /Hear the sounds again/ });
+      const again = page.getByRole("button", { name: /Play again/ });
       await again.waitFor();
-      if (await again.isDisabled()) throw new Error("Hear the sounds again should work after the right picture.");
+      if (await again.isDisabled()) throw new Error("Play again should work after the right picture.");
     }
     await tap(page.getByRole("button", { name: "Next →", exact: true }));
     if (q < 4) await page.locator(`[data-word]:not([data-word="${word}"])`).waitFor({ timeout: 20000 });

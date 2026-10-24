@@ -132,9 +132,9 @@ export function BlendGame({ questions, say, sound, prepare, prepareSounds, onAga
           type="button"
           disabled={listening}
           onClick={() => void listen(question, Boolean(right))}
-          className="mx-auto flex items-center gap-2 rounded-full bg-amber-50 px-5 py-2 text-base font-medium text-amber-900 disabled:opacity-50"
+          className={cx(button.primary, "mx-auto rounded-full px-6 text-lg disabled:opacity-50")}
         >
-          <span aria-hidden>🔊</span> Hear the sounds again
+          <span aria-hidden>🔊</span> Play again
         </button>
         <div className="grid grid-cols-3 gap-3">
           {question.choices.map((choice) => (
