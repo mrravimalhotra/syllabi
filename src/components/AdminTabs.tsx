@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { LinkSpinner } from "@/components/LinkPending";
 import { cx } from "@/components/ui";
 
 const NAV = [
@@ -30,6 +31,7 @@ export function AdminTabs() {
             )}
           >
             {item.label}
+            <LinkSpinner />
           </Link>
         );
       })}

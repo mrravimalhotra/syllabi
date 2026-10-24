@@ -137,6 +137,9 @@ export function Skeleton({ className }: { className?: string }) {
 export function PageSkeleton({ rows = 3 }: { rows?: number }) {
   return (
     <div className="space-y-6" role="status" aria-label="Loading">
+      <div className="flex items-center gap-2 text-sm text-slate-500">
+        <Spinner className="h-5 w-5 text-brand-600" /> Loading…
+      </div>
       <div className="space-y-2">
         <Skeleton className="h-7 w-48" />
         <Skeleton className="h-4 w-72 max-w-full" />

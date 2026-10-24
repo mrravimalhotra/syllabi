@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { LinkSpinner, PendingIcon } from "@/components/LinkPending";
 import { useSyncExternalStore } from "react";
 import { signOut } from "@/lib/actions/auth";
 import { forgetAll } from "@/lib/client-cache";
@@ -80,6 +81,7 @@ export function AppNav({ name, isAdmin }: { name: string; isAdmin: boolean }) {
                   )}
                 >
                   {item.label}
+                  <LinkSpinner />
                 </Link>
               );
             })}
@@ -90,6 +92,7 @@ export function AppNav({ name, isAdmin }: { name: string; isAdmin: boolean }) {
               <Link href="/admin" className={button.ghost} title="Admin" aria-label="Admin">
                 <ShieldIcon className="h-4.5 w-4.5" />
                 <span className="hidden sm:inline">Admin</span>
+                <LinkSpinner />
               </Link>
             )}
             <span className="hidden max-w-48 truncate px-2 text-sm text-slate-500 lg:inline" title={name}>
@@ -123,7 +126,7 @@ export function AppNav({ name, isAdmin }: { name: string; isAdmin: boolean }) {
                   )}
                 >
                   <span className={cx("flex h-7 w-12 items-center justify-center rounded-full", active && "bg-brand-50")}>
-                    <Icon className="h-5 w-5" />
+                    <PendingIcon icon={Icon} className="h-5 w-5" />
                   </span>
                   {item.short ?? item.label}
                 </Link>

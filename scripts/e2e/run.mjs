@@ -1514,6 +1514,16 @@ await test("Sign-in: wrong password message is plain and specific", async (page)
   await page.getByText(/Wrong email, user ID or password/).first().waitFor();
 });
 
+await test("Menus: a spinning wheel shows while the next screen loads", async (page) => {
+  await page.goto(`${BASE}/admin/health`, { waitUntil: "networkidle" });
+  await page.route("**/admin/rules**", async (r) => {
+    await new Promise((res) => setTimeout(res, 2500));
+    await r.continue();
+  });
+  await page.getByRole("link", { name: "Rules" }).evaluate((el) => el.click());
+  await page.getByRole("link", { name: "Rules" }).getByRole("status", { name: "Loading" }).waitFor({ timeout: 2000 });
+});
+
 await test("Admin rules: groups, a rule and the exact instructions are shown", async (page) => {
   await page.goto(`${BASE}/admin/rules`, { waitUntil: "networkidle" });
   await page.getByRole("heading", { name: "Rules and assumptions" }).waitFor();
