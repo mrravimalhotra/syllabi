@@ -1,5 +1,6 @@
 "use client";
 
+import { Burst } from "@/components/kindergarten/Burst";
 import { RIGHT_CARD, WRONG_CARD } from "@/components/kindergarten/feedback";
 import { useEffect, useState } from "react";
 import { RoundDone, RoundFrame } from "@/components/kindergarten/RoundFrame";
@@ -68,21 +69,20 @@ export function SightGame({ questions, say, prepare, onAgain, onExit }: Props) {
         </button>
         <p className="text-sm text-slate-500">Find the word you heard.</p>
         <div className="grid gap-3">
-          {question.choices.map((word) => (
+          {question.choices.map((word, i) => (
             <button
-              key={word}
+              key={`${index}-${word}`}
               type="button"
               onClick={() => void choose(word)}
               className={cx(
-                "min-h-24 rounded-3xl border-4 bg-white text-6xl font-bold text-slate-800 shadow-sm transition active:scale-95",
-                right === word
-                  ? RIGHT_CARD
-                  : shake === word
-                    ? cx("kg-shake", WRONG_CARD)
-                    : "border-brand-200"
+                "relative min-h-24 rounded-3xl border-4 bg-white text-6xl font-bold text-slate-800 shadow-sm transition active:scale-95",
+                right === word ? RIGHT_CARD : shake === word ? cx("kg-shake", WRONG_CARD) : "border-brand-200"
               )}
             >
-              {word}
+              <span className="kg-pop inline-block" style={{ animationDelay: `${i * 0.08}s` }}>
+                {word}
+              </span>
+              {right === word && <Burst />}
             </button>
           ))}
         </div>

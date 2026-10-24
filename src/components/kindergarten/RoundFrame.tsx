@@ -1,9 +1,13 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { Burst } from "@/components/kindergarten/Burst";
 import { button, card, cx } from "@/components/ui";
 
-/** The top of every kindergarten round: a way back, progress dots and the stars so far. */
+/** The play space every kindergarten screen sits in: a soft sky wash, the children's letter font, and room to breathe on a tablet. */
+export const STAGE = cx(card, "kg-stage font-kid min-h-[calc(100dvh-13rem)] border-sky-100 md:min-h-[36rem]");
+
+/** The top of every kindergarten round: a way back, progress (a star for each question done) and the stars so far. */
 export function RoundFrame({
   index,
   total,
@@ -18,21 +22,27 @@ export function RoundFrame({
   children: ReactNode;
 }) {
   return (
-    <section className={cx(card, "space-y-5 p-4 sm:p-6")} aria-label="Activity">
+    <section className={cx(STAGE, "space-y-5 p-4 sm:p-6")} aria-label="Activity">
       <div className="flex items-center justify-between gap-3">
-        <button type="button" onClick={onExit} className={button.small}>
+        <button type="button" onClick={onExit} className={cx(button.small, "bg-white/80")}>
           ← Menu
         </button>
-        <div className="flex gap-1.5" role="img" aria-label={`Question ${Math.min(index + 1, total)} of ${total}`}>
-          {Array.from({ length: total }, (_, i) => (
-            <span
-              key={i}
-              className={cx("h-3 w-3 rounded-full", i < index ? "bg-amber-400" : i === index ? "bg-brand-500" : "bg-slate-200")}
-            />
-          ))}
+        <div className="flex items-center gap-1.5" role="img" aria-label={`Question ${Math.min(index + 1, total)} of ${total}`}>
+          {Array.from({ length: total }, (_, i) =>
+            i < index ? (
+              <span key={i} className="kg-pop text-sm leading-none text-amber-400" aria-hidden>
+                ★
+              </span>
+            ) : (
+              <span key={i} className={cx("rounded-full", i === index ? "h-3.5 w-3.5 bg-brand-500" : "h-3 w-3 bg-slate-200")} />
+            )
+          )}
         </div>
-        <span className="text-lg font-semibold tabular-nums" aria-label={`${stars} stars`}>
-          ⭐ {stars}
+        <span className="rounded-full bg-white/80 px-3 py-1 text-lg font-bold tabular-nums" aria-label={`${stars} stars`}>
+          <span key={stars} className={stars > 0 ? "kg-bump" : undefined} aria-hidden>
+            ⭐
+          </span>{" "}
+          {stars}
         </span>
       </div>
       {children}
@@ -54,29 +64,34 @@ export function RoundDone({
   onExit: () => void;
 }) {
   return (
-    <section className={cx(card, "space-y-5 p-6 text-center")} aria-label="Well done">
-      <p className="text-5xl" aria-hidden>
-        🎉
-      </p>
-      <h2 className="text-2xl font-semibold text-slate-900">Well done!</h2>
-      <p className="flex flex-wrap justify-center gap-1 text-4xl" aria-label={`You earned ${stars} stars`}>
+    <section className={cx(STAGE, "flex flex-col items-center justify-center gap-5 p-6 text-center")} aria-label="Well done">
+      <div className="relative">
+        <p className="kg-pop text-7xl sm:text-8xl" aria-hidden>
+          🏆
+        </p>
+        <Burst />
+      </div>
+      <h2 className="kg-pop text-3xl font-bold text-slate-900 sm:text-4xl" style={{ animationDelay: "0.15s" }}>
+        Well done!
+      </h2>
+      <p className="flex max-w-md flex-wrap justify-center gap-1 text-4xl sm:text-5xl" aria-label={`You earned ${stars} stars`}>
         {Array.from({ length: stars }, (_, i) => (
-          <span key={i} className="kg-star" style={{ animationDelay: `${i * 0.12}s` }}>
+          <span key={i} className="kg-star" style={{ animationDelay: `${0.3 + i * 0.12}s` }}>
             ⭐
           </span>
         ))}
       </p>
       {helped.length > 0 && (
-        <p className="text-sm text-slate-500">
-          For the grown-up: needed another go on <span className="font-medium text-slate-700">{helped.join(", ")}</span>. Try this activity
+        <p className="max-w-md font-sans text-sm text-slate-600">
+          For the grown-up: needed another go on <span className="font-medium text-slate-800">{helped.join(", ")}</span>. Try this activity
           again soon.
         </p>
       )}
       <div className="flex flex-wrap justify-center gap-3">
-        <button type="button" onClick={onAgain} className={button.primary}>
+        <button type="button" onClick={onAgain} className={cx(button.primary, "min-h-14 rounded-2xl px-8 text-xl")}>
           Play again
         </button>
-        <button type="button" onClick={onExit} className={button.secondary}>
+        <button type="button" onClick={onExit} className={cx(button.secondary, "min-h-14 rounded-2xl px-6 text-lg")}>
           Back to the menu
         </button>
       </div>

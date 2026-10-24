@@ -1,8 +1,9 @@
 "use client";
 
+import { STAGE } from "@/components/kindergarten/RoundFrame";
 import { useEffect, useState } from "react";
 import { PlaceBlocks } from "@/components/kindergarten/PlaceBlocks";
-import { button, card, cx } from "@/components/ui";
+import { button, cx } from "@/components/ui";
 import { onesOf, tensOf, tutorialSteps } from "@/lib/kindergarten/place-value";
 
 interface Props {
@@ -35,7 +36,7 @@ export function PlaceValueTutorial({ number, say, prepare, onAnother, onPlay, on
   const lit = (column: "tens" | "ones") => current.light === "both" || current.light === column;
 
   return (
-    <section className={cx(card, "space-y-5 p-4 text-center sm:p-6")} aria-label="Place value lesson">
+    <section className={cx(STAGE, "space-y-5 p-4 text-center sm:p-6")} aria-label="Place value lesson">
       <div className="flex items-center justify-between gap-3">
         <button type="button" onClick={onExit} className={button.small}>
           ← Menu
@@ -60,7 +61,12 @@ export function PlaceValueTutorial({ number, say, prepare, onAnother, onPlay, on
       </button>
 
       <div className="flex flex-wrap justify-center gap-3">
-        <button type="button" onClick={() => setStep(step - 1)} disabled={step === 0} className={cx(button.secondary, "min-h-12 px-6 text-lg")}>
+        <button
+          type="button"
+          onClick={() => setStep(step - 1)}
+          disabled={step === 0}
+          className={cx(button.secondary, "min-h-12 px-6 text-lg")}
+        >
           ← Back
         </button>
         {last ? (

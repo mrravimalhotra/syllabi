@@ -4,9 +4,43 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { card, cx } from "@/components/ui";
 
+/** The colour behind an activity's picture: sky for letters, sunshine for numbers, grey for the grown-up's tools. */
+const TILE = {
+  letters: "bg-sky-100",
+  numbers: "bg-amber-100",
+  grownups: "bg-slate-100",
+} as const;
+type Tone = keyof typeof TILE;
+
+/** A group of activities on the menu, under its own heading. */
+export function MenuGroup({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="space-y-3" aria-label={title}>
+      <h2 className="pt-2 text-sm font-semibold tracking-wide text-slate-500 uppercase">{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+function Picture({ emoji, tone, small }: { emoji: string; tone: Tone; small?: boolean }) {
+  return (
+    <span
+      className={cx(
+        "flex shrink-0 items-center justify-center rounded-2xl",
+        TILE[tone],
+        small ? "h-14 w-14 text-3xl" : "h-16 w-16 text-4xl"
+      )}
+      aria-hidden
+    >
+      {emoji}
+    </span>
+  );
+}
+
 /** One activity on the menu: a big picture, what it is, the grown-up's choices (children), and a Play button. */
 export function ActivityCard({
   emoji,
+  tone,
   title,
   description,
   onPlay,
@@ -14,6 +48,7 @@ export function ActivityCard({
   children,
 }: {
   emoji: string;
+  tone: Tone;
   title: string;
   description: string;
   onPlay: () => void;
@@ -24,11 +59,9 @@ export function ActivityCard({
   return (
     <section className={cx(card, "space-y-4 p-4 sm:p-6")}>
       <div className="flex items-start gap-4">
-        <span className="text-5xl" aria-hidden>
-          {emoji}
-        </span>
+        <Picture emoji={emoji} tone={tone} />
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
+          <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
           <p className="text-sm text-slate-500">{description}</p>
         </div>
       </div>
@@ -57,9 +90,7 @@ export function ActivityCard({
 export function MenuLink({ href, emoji, title, description }: { href: string; emoji: string; title: string; description: string }) {
   return (
     <Link href={href} className={cx(card, "flex items-center gap-4 p-4 transition hover:border-brand-300 sm:p-5")}>
-      <span className="text-4xl" aria-hidden>
-        {emoji}
-      </span>
+      <Picture emoji={emoji} tone="grownups" small />
       <span>
         <span className="block text-base font-semibold text-slate-900">{title}</span>
         <span className="block text-sm text-slate-500">{description}</span>

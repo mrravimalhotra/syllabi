@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Burst } from "@/components/kindergarten/Burst";
 import { CONSONANT_TEXT, pause, RIGHT_CARD, SOUND_GAP_MS, VOWEL_TEXT, WRONG_CARD } from "@/components/kindergarten/feedback";
 import { RoundDone, RoundFrame } from "@/components/kindergarten/RoundFrame";
 import { button, cx } from "@/components/ui";
@@ -120,7 +121,7 @@ export function BlendGame({ questions, say, sound, prepare, prepareSounds, onAga
               key={i}
               className={cx(
                 "flex h-16 w-16 items-center justify-center rounded-full border-4 text-3xl font-bold transition-transform",
-                lit === i ? "scale-125 border-amber-400 bg-amber-100" : "border-slate-200 bg-white",
+                lit === i ? "kg-ping scale-125 border-amber-400 bg-amber-100" : "border-sky-200 bg-white",
                 right && (isVowel(letter) ? VOWEL_TEXT : CONSONANT_TEXT)
               )}
             >
@@ -137,19 +138,22 @@ export function BlendGame({ questions, say, sound, prepare, prepareSounds, onAga
           <span aria-hidden>🔊</span> Play again
         </button>
         <div className="grid grid-cols-3 gap-3">
-          {question.choices.map((choice) => (
+          {question.choices.map((choice, i) => (
             <button
-              key={choice.word}
+              key={`${question.word}-${choice.word}`}
               type="button"
               aria-label={choice.word}
               onClick={() => choose(choice.word)}
               className={cx(
-                "relative flex aspect-square items-center justify-center rounded-3xl border-4 bg-white text-6xl shadow-sm transition active:scale-95 sm:text-7xl",
+                "relative flex aspect-square items-center justify-center rounded-3xl border-4 bg-white text-6xl shadow-sm transition active:scale-95 sm:text-8xl",
                 right === choice.word ? RIGHT_CARD : wrong.includes(choice.word) ? WRONG_CARD : "border-brand-200",
                 shake === choice.word && "kg-shake"
               )}
             >
-              <span aria-hidden>{choice.emoji}</span>
+              <span aria-hidden className="kg-pop" style={{ animationDelay: `${i * 0.08}s` }}>
+                {choice.emoji}
+              </span>
+              {right === choice.word && <Burst />}
               {(right === choice.word || wrong.includes(choice.word)) && (
                 <span
                   aria-hidden
@@ -163,7 +167,7 @@ export function BlendGame({ questions, say, sound, prepare, prepareSounds, onAga
         </div>
         {right && (
           <>
-            <p className="kg-star text-5xl font-bold tracking-wide text-slate-800">
+            <p className="kg-star text-4xl font-bold tracking-wide text-slate-800 sm:text-5xl">
               {question.letters.map((l, i) => (
                 <span key={i} className={isVowel(l) ? VOWEL_TEXT : CONSONANT_TEXT}>
                   {phoneLabel(l)}

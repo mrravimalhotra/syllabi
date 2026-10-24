@@ -1,7 +1,8 @@
 "use client";
 
+import { STAGE } from "@/components/kindergarten/RoundFrame";
 import { useEffect, useState } from "react";
-import { cx, button, card } from "@/components/ui";
+import { cx, button } from "@/components/ui";
 import { IPA, blendStart, phoneLabel } from "@/lib/kindergarten/phonics";
 import type { CvcQuestion } from "@/lib/kindergarten/quiz";
 
@@ -54,7 +55,7 @@ export function ExplorerGame({ words, say, sound, prepare, prepareSounds, onAgai
   const shown = position === 0 ? word.letters.join("   ") : position === 1 ? `${word.letters[0]}${word.letters[1]}…` : word.word;
 
   return (
-    <section className={cx(card, "space-y-5 p-4 text-center sm:p-6")} aria-label="Word explorer">
+    <section className={cx(STAGE, "space-y-5 p-4 text-center sm:p-6")} aria-label="Word explorer">
       <div className="flex items-center justify-between gap-3">
         <button type="button" onClick={onExit} className={button.small}>
           ← Menu
@@ -68,7 +69,9 @@ export function ExplorerGame({ words, say, sound, prepare, prepareSounds, onAgai
       </div>
 
       <button type="button" onClick={() => void say(word.word)} className="mx-auto block text-8xl leading-none" aria-label="Hear the word">
-        <span aria-hidden>{word.emoji ?? "🔊"}</span>
+        <span key={word.word} aria-hidden className="kg-pop inline-block">
+          <span className="kg-bob inline-block">{word.emoji ?? "🔊"}</span>
+        </span>
       </button>
 
       <div data-word={word.word} className="flex justify-center gap-3" role="group" aria-label="Tap a letter to hear its sound">

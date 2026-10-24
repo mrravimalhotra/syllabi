@@ -1,5 +1,6 @@
 "use client";
 
+import { Burst } from "@/components/kindergarten/Burst";
 import { RIGHT_CARD, WRONG_CARD } from "@/components/kindergarten/feedback";
 import { useEffect, useState } from "react";
 import { PlaceBlocks } from "@/components/kindergarten/PlaceBlocks";
@@ -22,10 +23,7 @@ function BigNumber({ q }: { q: PlaceQuestion }) {
   return (
     <p className="flex justify-center gap-2 text-7xl font-bold text-slate-800" aria-label={`The number ${q.number}`}>
       {digits.map((d, i) => (
-        <span
-          key={i}
-          className={cx("rounded-2xl px-3", asked === (i === 0 ? "tens" : "ones") ? "bg-amber-100 ring-4 ring-amber-400" : "")}
-        >
+        <span key={i} className={cx("rounded-2xl px-3", asked === (i === 0 ? "tens" : "ones") ? "bg-amber-100 ring-4 ring-amber-400" : "")}>
           {d}
         </span>
       ))}
@@ -85,17 +83,20 @@ export function PlaceValueGame({ questions, say, prepare, onAgain, onExit }: Pro
         </button>
         {question.kind === "build" ? <PlaceBlocks number={question.number} /> : <BigNumber q={question} />}
         <div className="grid grid-cols-3 gap-3">
-          {question.choices.map((choice) => (
+          {question.choices.map((choice, i) => (
             <button
-              key={choice}
+              key={`${index}-${choice}`}
               type="button"
               onClick={() => void choose(choice)}
               className={cx(
-                "min-h-24 rounded-3xl border-4 bg-white text-5xl font-bold text-slate-800 shadow-sm transition active:scale-95",
+                "relative min-h-24 rounded-3xl border-4 bg-white text-5xl font-bold text-slate-800 shadow-sm transition active:scale-95",
                 right === choice ? RIGHT_CARD : shake === choice ? cx("kg-shake", WRONG_CARD) : "border-brand-200"
               )}
             >
-              {choice}
+              <span className="kg-pop inline-block" style={{ animationDelay: `${i * 0.08}s` }}>
+                {choice}
+              </span>
+              {right === choice && <Burst />}
             </button>
           ))}
         </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { Burst } from "@/components/kindergarten/Burst";
 import { RIGHT_CARD, WRONG_CARD } from "@/components/kindergarten/feedback";
 import { useEffect, useState } from "react";
 import { RoundDone, RoundFrame } from "@/components/kindergarten/RoundFrame";
@@ -20,19 +21,16 @@ function Group({ count, emoji, tone }: { count: number; emoji: string; tone: "id
   return (
     <span
       className={cx(
-        "flex min-h-32 flex-1 flex-wrap content-center items-center justify-center gap-1 rounded-3xl border-4 p-3 text-3xl leading-none sm:text-4xl",
-        tone === "right"
-          ? RIGHT_CARD
-          : tone === "wrong"
-            ? cx("kg-shake", WRONG_CARD)
-            : "border-brand-200 bg-white"
+        "relative flex min-h-32 flex-1 flex-wrap content-center items-center justify-center gap-1 rounded-3xl border-4 p-3 text-3xl leading-none sm:text-4xl",
+        tone === "right" ? RIGHT_CARD : tone === "wrong" ? cx("kg-shake", WRONG_CARD) : "border-brand-200 bg-white"
       )}
     >
       {Array.from({ length: count }, (_, i) => (
-        <span key={i} aria-hidden>
+        <span key={i} aria-hidden className="kg-pop" style={{ animationDelay: `${i * 0.04}s` }}>
           {emoji}
         </span>
       ))}
+      {tone === "right" && <Burst />}
     </span>
   );
 }
@@ -90,25 +88,22 @@ export function CompareGame({ questions, say, prepare, onAgain, onExit }: Props)
         </button>
         <div className="flex gap-3">
           <button type="button" aria-label="The left group" onClick={() => void choose("left")} className="flex flex-1 active:scale-95">
-            <Group count={question.left} emoji={question.emoji} tone={toneOf("left")} />
+            <Group key={index} count={question.left} emoji={question.emoji} tone={toneOf("left")} />
           </button>
           <button type="button" aria-label="The right group" onClick={() => void choose("right")} className="flex flex-1 active:scale-95">
-            <Group count={question.right} emoji={question.emoji} tone={toneOf("right")} />
+            <Group key={index} count={question.right} emoji={question.emoji} tone={toneOf("right")} />
           </button>
         </div>
         <button
           type="button"
           onClick={() => void choose("same")}
           className={cx(
-            "mx-auto block rounded-full border-4 px-8 py-3 text-xl font-semibold transition active:scale-95",
-            picked?.side === "same"
-              ? picked.ok
-                ? RIGHT_CARD
-                : cx("kg-shake", WRONG_CARD)
-              : "border-slate-200 bg-white text-slate-700"
+            "relative mx-auto block rounded-full border-4 px-8 py-3 text-xl font-semibold transition active:scale-95",
+            picked?.side === "same" ? (picked.ok ? RIGHT_CARD : cx("kg-shake", WRONG_CARD)) : "border-slate-200 bg-white text-slate-700"
           )}
         >
           They are the same
+          {picked?.side === "same" && picked.ok && <Burst />}
         </button>
       </div>
     </RoundFrame>

@@ -1,9 +1,10 @@
 "use client";
 
+import { Burst } from "@/components/kindergarten/Burst";
 import { CONSONANT_TEXT, pause, SOUND_GAP_MS, VOWEL_TEXT, WRONG_CARD } from "@/components/kindergarten/feedback";
 import { useEffect, useRef, useState } from "react";
 import { RoundDone, RoundFrame } from "@/components/kindergarten/RoundFrame";
-import { cx } from "@/components/ui";
+import { button, cx } from "@/components/ui";
 import type { CvcQuestion } from "@/lib/kindergarten/quiz";
 import { blendStart, isVowel, phoneLabel } from "@/lib/kindergarten/phonics";
 
@@ -121,7 +122,9 @@ export function CvcGame({ questions, say, sound, prepare, prepareSounds, onAgain
           className="mx-auto block text-8xl leading-none"
           aria-label="Hear the word again"
         >
-          <span aria-hidden>{question.emoji ?? "🔊"}</span>
+          <span key={question.word} aria-hidden className="kg-pop inline-block">
+            <span className="kg-bob inline-block">{question.emoji ?? "🔊"}</span>
+          </span>
         </button>
         <p className="text-sm text-slate-500">Tap the letters to spell the word. Tap the picture to hear it again.</p>
         <button
@@ -131,12 +134,13 @@ export function CvcGame({ questions, say, sound, prepare, prepareSounds, onAgain
             setCelebrating(true);
             void soundOut(question, false).finally(() => setCelebrating(false));
           }}
-          className="mx-auto flex items-center gap-2 rounded-full bg-amber-50 px-5 py-2 text-base font-medium text-amber-900 disabled:opacity-50"
+          className={cx(button.primary, "mx-auto rounded-full px-6 text-lg disabled:opacity-50")}
         >
           <span aria-hidden>🔊</span> Sound it out
         </button>
 
-        <div className="flex justify-center gap-3" aria-label="The word so far">
+        <div className="relative flex justify-center gap-3" aria-label="The word so far">
+          {blended && <Burst />}
           {question.letters.map((letter, i) => (
             <span
               key={i}
@@ -145,11 +149,19 @@ export function CvcGame({ questions, say, sound, prepare, prepareSounds, onAgain
                 (lit === i || (pair && i < 2)) && "scale-110 border-amber-400 bg-amber-100",
                 lit !== i &&
                   !(pair && i < 2) &&
-                  (i < placed ? "border-emerald-400 bg-emerald-50 text-emerald-700" : "border-dashed border-slate-300 text-transparent"),
+                  (i < placed
+                    ? "border-emerald-400 bg-emerald-50 text-emerald-700"
+                    : "border-dashed border-sky-300 bg-white/60 text-transparent"),
                 i < placed && isVowel(letter) && VOWEL_TEXT
               )}
             >
-              {i < placed ? letter : "_"}
+              {i < placed ? (
+                <span key={`${question.word}-${i}`} className="kg-pop">
+                  {letter}
+                </span>
+              ) : (
+                "_"
+              )}
             </span>
           ))}
         </div>
@@ -164,7 +176,7 @@ export function CvcGame({ questions, say, sound, prepare, prepareSounds, onAgain
         </div>
         {blended && (
           <p
-            className="kg-star text-5xl font-bold tracking-wide text-slate-800"
+            className="kg-star text-4xl font-bold tracking-wide text-slate-800 sm:text-5xl"
             aria-label={`The sounds ${question.letters.join(", ")} make the word ${question.word}`}
           >
             {question.letters.map((l, i) => (
@@ -178,23 +190,46 @@ export function CvcGame({ questions, say, sound, prepare, prepareSounds, onAgain
           </p>
         )}
 
-        <div className="flex flex-wrap justify-center gap-3" role="group" aria-label="Letters to choose from">
-          {question.tray.map((letter, i) => (
-            <button
-              key={i}
-              type="button"
-              disabled={used.includes(i) || celebrating}
-              onClick={() => void tap(i)}
-              className={cx(
-                "flex h-20 w-20 items-center justify-center rounded-2xl border-4 border-brand-200 bg-brand-50 text-5xl font-bold text-brand-800 shadow-sm transition active:scale-95 disabled:opacity-30",
-                shake === i && cx("kg-shake", WRONG_CARD)
-              )}
-            >
-              {letter}
-            </button>
-          ))}
-        </div>
+        <LetterTray word={question.word} tray={question.tray} used={used} busy={celebrating} shake={shake} onTap={(i) => void tap(i)} />
       </div>
     </RoundFrame>
+  );
+}
+
+/** The letters to choose from; they arrive one after another for each new word. */
+function LetterTray({
+  word,
+  tray,
+  used,
+  busy,
+  shake,
+  onTap,
+}: {
+  word: string;
+  tray: string[];
+  used: number[];
+  busy: boolean;
+  shake: number | null;
+  onTap: (i: number) => void;
+}) {
+  return (
+    <div className="flex flex-wrap justify-center gap-3" role="group" aria-label="Letters to choose from">
+      {tray.map((letter, i) => (
+        <button
+          key={i}
+          type="button"
+          disabled={used.includes(i) || busy}
+          onClick={() => onTap(i)}
+          className={cx(
+            "flex h-20 w-20 items-center justify-center rounded-2xl border-4 border-brand-200 bg-brand-50 text-5xl font-bold text-brand-800 shadow-sm transition active:scale-95 disabled:opacity-30",
+            shake === i && cx("kg-shake", WRONG_CARD)
+          )}
+        >
+          <span key={word} className="kg-pop" style={{ animationDelay: `${i * 0.06}s` }}>
+            {letter}
+          </span>
+        </button>
+      ))}
+    </div>
   );
 }

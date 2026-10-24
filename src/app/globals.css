@@ -14,6 +14,8 @@
   --color-brand-900: var(--color-indigo-900);
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  /* Kindergarten letters: Andika, made for early readers (single-storey a and g, as taught in school). */
+  --font-kid: var(--font-andika), ui-rounded, system-ui, sans-serif;
 }
 
 @theme {
@@ -155,3 +157,31 @@ body {
 @keyframes kg-star { 0% { transform: scale(0.2) rotate(-30deg); opacity: 0; } 60% { transform: scale(1.35) rotate(8deg); opacity: 1; } 100% { transform: scale(1) rotate(0); opacity: 1; } }
 .kg-shake { animation: kg-shake 0.4s ease-in-out; }
 .kg-star { animation: kg-star 0.5s ease-out both; }
+
+/* Kindergarten play space: a soft sky-to-sunshine wash with a few faint balloons of colour. */
+.kg-stage {
+  background:
+    radial-gradient(circle at 8% 12%, rgb(253 230 138 / 0.45) 0 56px, transparent 57px),
+    radial-gradient(circle at 94% 8%, rgb(186 230 253 / 0.6) 0 84px, transparent 85px),
+    radial-gradient(circle at 90% 92%, rgb(251 207 232 / 0.45) 0 64px, transparent 65px),
+    radial-gradient(circle at 4% 86%, rgb(187 247 208 / 0.45) 0 48px, transparent 49px),
+    linear-gradient(180deg, #eef6ff 0%, #fffbeb 100%);
+}
+/* A tile or card arriving: grows in with a little overshoot. */
+@keyframes kg-pop { 0% { transform: scale(0.4); opacity: 0; } 70% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+.kg-pop { animation: kg-pop 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
+/* The star counter going up. */
+@keyframes kg-bump { 0% { transform: scale(1); } 40% { transform: scale(1.5) rotate(-10deg); } 100% { transform: scale(1); } }
+.kg-bump { display: inline-block; animation: kg-bump 0.5s ease-out; }
+/* The sound being played right now: a ripple round it. */
+@keyframes kg-ping { 0% { box-shadow: 0 0 0 0 rgb(251 191 36 / 0.7); } 100% { box-shadow: 0 0 0 18px rgb(251 191 36 / 0); } }
+.kg-ping { animation: kg-ping 0.9s ease-out infinite; }
+/* A right answer: stars and sparkles fly out from the middle. */
+@keyframes kg-burst {
+  0% { transform: translate(-50%, -50%) rotate(var(--r)) translateY(0) scale(0.5); opacity: 1; }
+  100% { transform: translate(-50%, -50%) rotate(var(--r)) translateY(var(--d)) rotate(calc(var(--r) * -1)) scale(1.1); opacity: 0; }
+}
+.kg-burst > span { position: absolute; left: 50%; top: 50%; animation: kg-burst 0.9s ease-out forwards; }
+/* A gentle bob for the big picture of the word. */
+@keyframes kg-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+.kg-bob { animation: kg-bob 2.8s ease-in-out infinite; }

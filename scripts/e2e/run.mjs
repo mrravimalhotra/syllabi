@@ -749,8 +749,8 @@ await test("Kindergarten: place value game - a wrong answer is not accepted, a f
   await baseRoutes(ctx);
   await speechOk(ctx);
   await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
-  await page.getByRole("button", { name: "▶ Play" }).nth(4).waitFor();
-  await tap(page.getByRole("button", { name: "▶ Play" }).nth(4));
+  await page.getByRole("button", { name: "▶ Play" }).nth(5).waitFor();
+  await tap(page.getByRole("button", { name: "▶ Play" }).nth(5));
   for (let q = 0; q < 5; q++) {
     const box = page.locator("[data-answer]");
     await box.waitFor({ timeout: 15000 });
@@ -772,7 +772,7 @@ await test("Kindergarten: word explorer - tap a letter, slide to blend, next wor
   await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
   // Only the -at family: every word rhymes.
   await tap(page.getByRole("group", { name: "Word family" }).getByRole("button", { name: "-at", exact: true }));
-  await tap(page.getByRole("button", { name: "▶ Play" }).nth(5));
+  await tap(page.getByRole("button", { name: "▶ Play" }).nth(3));
   const tiles = page.locator("[data-word]");
   await tiles.waitFor();
   const word = await tiles.getAttribute("data-word");
@@ -899,7 +899,7 @@ await test("Kindergarten: more, fewer or same - tapping the right group earns a 
   await baseRoutes(ctx);
   await speechOk(ctx);
   await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
-  await tap(page.getByRole("button", { name: /Play/ }).nth(3));
+  await tap(page.getByRole("button", { name: /Play/ }).nth(4));
   for (let q = 0; q < 5; q++) {
     const box = page.locator("[data-answer]");
     await box.waitFor({ timeout: 8000 });
