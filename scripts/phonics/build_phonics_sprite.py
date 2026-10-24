@@ -2,29 +2,36 @@
 """Builds the CVC phonics audio sprite with Google Cloud Text-to-Speech.
 
 Children must hear pure sounds: /m/ held as a hum, /p/ as a lip pop with no
-"uh" after it, short vowels with no glide. A speech voice says letter names or
-adds a schwa when given a letter, so every clip is asked for in IPA:
+"uh" after it, short vowels with no glide. Google says letter names ("em",
+"ess ess ess") or adds a vowel for any isolated spelling, whatever the SSML,
+so every letter sound is cut out of a real carrier word instead, where the
+voice says it naturally. Words for held sounds are said at half speed, so the
+sound lasts longer; words for stops are not, because a slowed stop gets a long
+silent closure before its burst. The carrier word starts with the sound (m from "map",
+a from "at"), and the cut ends where the next sound begins:
 
-  - continuous consonants: a prolonged spelling ("mmm"). Google still opens it
-    with a vowel ("em-mm", whatever the markup), so the vowel is cut off and
-    only the held sound after it is kept, then slowed to about a second
-    without changing its pitch (m, n, s). Where that leaves nothing clean
-    (f, l, r, z, v come out as "eff", "el", "zee"...), the sound is cut from the
-    start of a slowed carrier word instead ("fan" gives /f/), before its vowel;
-  - short vowels: the vowel alone between two short breaks;
-  - stop consonants: the release burst sliced from the end of a carrier word
-    ("map" gives /p/), or for /b/ and /g/ the isolated stop with its vowel
-    tail cut off.
+  hiss         s, f, h       from the first sound up to the vowel's voicing
+  hum          m, n, l, r,   up to the vowel: vowel-like energy, or a jump in
+               v, z          loudness, less a margin for the glide into it
+  stop         c, k, p, t    the burst and its breath, up to the vowel
+  voiced stop  b, d, g, j    from the release burst (the biggest jump in
+                             loudness) up to the vowel's formants
+  glide        w, y          a short window from the first sound
+  vowel        a, e, i,      the voiced part, up to the closure of the
+               o, u          consonant after it
+  pair         x, q          two cut sounds joined: k+s, k+w
 
-Each clip is fetched as LINEAR16 (WAV), normalised, trimmed of leading and
-trailing silence, given a 10 ms fade-in and 15 ms fade-out, then joined into
-one MP3 with a Howler-style JSON map of [start_ms, duration_ms].
+Hisses, hums and vowels are then slowed to a set length without changing
+their pitch. Every clip is fetched as LINEAR16 (WAV), cut, faded, matched in
+loudness (average level, so quiet consonants are not drowned by vowels), and
+joined into one MP3 with a Howler-style JSON map of [start_ms, duration_ms].
+
+Short o is the British /ɒ/ ("ox"), as Indian schools teach it.
 
 Usage (the key is read from GOOGLE_TTS_API_KEY):
   pip install pydub audioop-lts numpy google-cloud-texttospeech   # and ffmpeg
-  python3 scripts/phonics/build_phonics_sprite.py            # test batch only
-  python3 scripts/phonics/build_phonics_sprite.py --all      # every clip
-  python3 scripts/phonics/build_phonics_sprite.py --only m --wav-dir /tmp/clips
+  python3 scripts/phonics/build_phonics_sprite.py                 # the sprite
+  python3 scripts/phonics/build_phonics_sprite.py --only m,s --wav-dir /tmp/clips
 """
 
 from __future__ import annotations
@@ -35,94 +42,89 @@ import json
 import os
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 from google.api_core.client_options import ClientOptions
 from google.cloud import texttospeech
 from pydub import AudioSegment
-from pydub.effects import normalize
-from pydub.silence import detect_leading_silence
 
 VOICE = "en-US-Neural2-F"  # Journey voices reject SSML, so they cannot take <phoneme>.
 SPEAKING_RATE = 0.80
 PITCH = 0.5  # semitones: slightly warm for children
-# dBFS, for trimming leading and trailing silence after normalising. Not -42:
-# a word-final stop burst sits near -43 and "map" would lose its /p/. Google's
-# silence is digital (about -81), so -55 keeps every burst and still trims.
-SILENCE_THRESH = -55.0
-FADE_IN_MS, FADE_OUT_MS = 10, 15
+RATE = 24000
 GAP_MS = 300  # silence between clips in the sprite, so neighbours never bleed
-STOP_CUTOFF_MS = 90  # isolated /b/ and /g/: keep the burst, drop the vowel tail
-# A 10 ms frame is "vowel" when this share of its energy is in 500-2500 Hz
-# (vowel formants). A hum keeps almost all of it under 400 Hz, a hiss above 3 kHz.
-VOWEL_SHARE = 0.25
-# A held sound outside these bounds after the vowel is cut is a failure. Too long
-# means Google read the letter names ("vee vee vee"), whose "ee" sits outside the
-# vowel band and is not detected.
-MIN_HELD_MS, MAX_HELD_MS = 120, 700
-# Onset slicing: the vowel starts at the first 20 ms frame that is vowel-like
-# (this share in 500-2500 Hz) or this much louder than the frames before it.
-# A margin before it drops the glide into the vowel.
-ONSET_VOWEL_SHARE, ONSET_JUMP_DB, ONSET_MARGIN_MS, MIN_ONSET_MS = 0.6, 8, 40, 80
-HOLD_MS = 700  # held sounds are stretched to this, as a teacher holds "mmm"
-
 OUT_DIR = Path(__file__).resolve().parents[2] / "assets" / "audio"
 
+FRAME_MS = 10
+# A frame this far under the loudest one is silence (-50 dB). Not higher: the
+# hiss of /f/ sits about 40 dB under the vowel. Google's silence is digital.
+SILENT = 0.003
+VOICED_ZCR = 2800  # zero crossings per second: below this a loud frame is voiced
+HISS_ZCR = 3500  # above this, with little low-frequency energy, a frame is a hiss
+TARGET_DBFS, PEAK_CAP = -20.0, 0.95  # loudness match: average level, then peak limit
 
-def ipa(ph: str, text: str) -> str:
-    return f'<speak><phoneme alphabet="ipa" ph="{ph}">{text}</phoneme></speak>'
+# Lengths in ms. Held sounds are slowed to these (never sped up).
+HOLD_MS = {"hiss": 700, "hum": 700, "vowel": 320}
+BREATH_HOLD_MS = 250  # /h/ is a breath, not a sound you can hold
+STOP_MAX_MS, STOP_MIN_MS = 120, 30
+VOWEL_MIN_MS = 40
+HUM_MARGIN_MS = 30  # dropped before the vowel, so the glide into it is not heard
+HUM_VOWEL_SHARE, HUM_JUMP_DB = 0.6, 8.0
+RELEASE_SEARCH_MS, VOICED_VOWEL_SHARE, VOICED_MIN_MS = 150, 0.5, 30
+FADES = {"hiss": (10, 25), "hum": (10, 25), "stop": (2, 10), "voiced": (2, 15), "glide": (5, 20), "vowel": (10, 30), "whole": (5, 25)}
 
 
-def prolong(text: str) -> str:
-    return f'<speak><prosody rate="80%">{text}</prosody></speak>'
+@dataclass
+class Sound:
+    kind: str  # hiss | hum | stop | voiced | glide | vowel | whole | pair
+    word: str = ""  # carrier word as written
+    ipa: str = ""  # how the carrier word is said
+    slow: bool = True  # carrier at half speed, so its first sound lasts longer
+    window_ms: int = 0  # voiced stops: the most to keep from the release; glides: how much to keep
+    parts: tuple[str, ...] = ()  # pairs: the sounds joined
+    hold_ms: int = 0  # overrides HOLD_MS for this sound
 
 
-def slow_word(ph: str, text: str) -> str:
-    """A carrier word at half speed, so its first consonant lasts long enough to cut."""
-    return f'<speak><prosody rate="50%"><phoneme alphabet="ipa" ph="{ph}">{text}</phoneme></prosody></speak>'
-
-
-def vowel(ph: str, text: str) -> str:
-    return f'<speak><break time="100ms"/><phoneme alphabet="ipa" ph="{ph}">{text}</phoneme><break time="100ms"/></speak>'
-
-
-# kind: "plain" (use the clip as synthesised), "held" (cut off the vowel Google
-# puts before a held consonant, keep the hum or hiss), "onset" (keep the first
-# consonant of a carrier word, up to its vowel), "carrier" (slice the final stop
-# burst out of the word), "cutoff" (isolated stop, keep only its first burst).
-# A carrier entry's "fallback" is the aspirated IPA tried if no burst is found.
-MANIFEST: dict[str, dict] = {
-    # Continuous consonants
-    "m": {"kind": "held", "ssml": prolong("mmm")},
-    "s": {"kind": "held", "ssml": prolong("sss")},
-    "f": {"kind": "onset", "ssml": slow_word("fːæn", "fan")},
-    "n": {"kind": "held", "ssml": prolong("nnn")},
-    "l": {"kind": "onset", "ssml": slow_word("lːæp", "lap")},
-    "r": {"kind": "onset", "ssml": slow_word("ɹːæt", "rat")},
-    "z": {"kind": "onset", "ssml": slow_word("zːæp", "zap")},
-    "v": {"kind": "onset", "ssml": slow_word("vːæn", "van")},
-    # Short vowels
-    "a": {"kind": "plain", "ssml": vowel("æ", "a")},
-    "e": {"kind": "plain", "ssml": vowel("ɛ", "e")},
-    "i": {"kind": "plain", "ssml": vowel("ɪ", "i")},
-    "o": {"kind": "plain", "ssml": vowel("ɑ", "o")},
-    "u": {"kind": "plain", "ssml": vowel("ʌ", "u")},
-    # Stop consonants
-    "p": {"kind": "carrier", "ssml": ipa("mæp", "map"), "fallback": ipa("pʰ", "p")},
-    "t": {"kind": "carrier", "ssml": ipa("kæt", "cat"), "fallback": ipa("tʰ", "t")},
-    "k": {"kind": "carrier", "ssml": ipa("pæk", "pack"), "fallback": ipa("kʰ", "c")},
-    "d": {"kind": "carrier", "ssml": ipa("bɛd", "bed"), "fallback": ipa("d", "d")},
-    "b": {"kind": "cutoff", "ssml": ipa("b", "b")},
-    "g": {"kind": "cutoff", "ssml": ipa("ɡ", "g")},
-    # Blends (onset + vowel) and whole words
-    "blend-ma": {"kind": "plain", "ssml": ipa("mæ", "ma")},
-    "blend-ca": {"kind": "plain", "ssml": ipa("kæ", "ca")},
-    "word-map": {"kind": "plain", "ssml": ipa("mæp", "map")},
-    "word-cat": {"kind": "plain", "ssml": ipa("kæt", "cat")},
+SOUNDS: dict[str, Sound] = {
+    "a": Sound("vowel", "at", "æt", slow=False),
+    "b": Sound("voiced", "bat", "bæt", slow=False, window_ms=60),
+    "c": Sound("stop", "cat", "kæt", slow=False),
+    "d": Sound("voiced", "dog", "dɒɡ", slow=False, window_ms=60),
+    "e": Sound("vowel", "egg", "ɛɡ", slow=False),
+    "f": Sound("hiss", "fan", "fæn"),
+    "g": Sound("voiced", "gap", "ɡæp", slow=False, window_ms=60),
+    "h": Sound("hiss", "hat", "hæt", hold_ms=BREATH_HOLD_MS),
+    "i": Sound("vowel", "it", "ɪt", slow=False),
+    "j": Sound("voiced", "jam", "dʒæm", slow=False, window_ms=110),
+    "k": Sound("stop", "kit", "kɪt", slow=False),
+    "l": Sound("hum", "lap", "læp"),
+    "m": Sound("hum", "map", "mæp"),
+    "n": Sound("hum", "nap", "næp"),
+    "o": Sound("vowel", "ox", "ɒks", slow=False),
+    "p": Sound("stop", "pan", "pæn", slow=False),
+    "q": Sound("pair", parts=("k", "w")),
+    "r": Sound("hum", "rat", "ɹæt"),
+    "s": Sound("hiss", "sun", "sʌn"),
+    "t": Sound("stop", "tap", "tæp", slow=False),
+    "u": Sound("vowel", "up", "ʌp", slow=False),
+    "v": Sound("hum", "van", "væn"),
+    "w": Sound("glide", "wet", "wɛt", window_ms=110),
+    "x": Sound("pair", parts=("k", "s")),
+    "y": Sound("glide", "yes", "jɛs", window_ms=100),
+    "z": Sound("hum", "zap", "zæp"),
+    # Blends and whole words, said as they are
+    "blend-ma": Sound("whole", "ma", "mæ", slow=False),
+    "blend-ca": Sound("whole", "ca", "kæ", slow=False),
+    "word-map": Sound("whole", "map", "mæp", slow=False),
+    "word-cat": Sound("whole", "cat", "kæt", slow=False),
 }
 
-TEST_BATCH = ["m", "p", "t", "a", "i", "blend-ma", "blend-ca", "word-map", "word-cat"]
+
+def ssml_for(sound: Sound) -> str:
+    word = f'<phoneme alphabet="ipa" ph="{sound.ipa}">{sound.word}</phoneme>'
+    return f'<speak><prosody rate="50%">{word}</prosody></speak>' if sound.slow else f"<speak>{word}</speak>"
 
 
 def client() -> texttospeech.TextToSpeechClient:
@@ -140,86 +142,135 @@ def synthesize(tts: texttospeech.TextToSpeechClient, ssml: str) -> AudioSegment:
             audio_encoding=texttospeech.AudioEncoding.LINEAR16,
             speaking_rate=SPEAKING_RATE,
             pitch=PITCH,
+            sample_rate_hertz=RATE,
         ),
     )
-    return AudioSegment.from_file(io.BytesIO(res.audio_content), format="wav")
+    return AudioSegment.from_file(io.BytesIO(res.audio_content), format="wav").set_channels(1)
 
 
-def trim(clip: AudioSegment, thresh: float = SILENCE_THRESH) -> AudioSegment:
-    """Removes leading and trailing silence only; silence inside the clip stays."""
-    start = detect_leading_silence(clip, silence_threshold=thresh)
-    end = len(clip) - detect_leading_silence(clip.reverse(), silence_threshold=thresh)
-    return clip[start:end] if end > start else clip
+# ---------- analysis ----------
 
 
-def final_burst(word: AudioSegment) -> AudioSegment | None:
-    """The release burst of a word-final stop: whatever follows the last closure
-    (at least 20 ms quieter than 48 dB below the word's peak) in the last 350 ms.
-    Bursts are faint (about 45 dB under the vowel), so levels are relative to the
-    word's peak, never the fixed trim threshold, which would delete them."""
-    peak = word.max_dBFS
-    word = trim(word, peak - 60)
-    frame, quiet = 5, peak - 48
-    tail_start = max(0, len(word) - 350)
-    levels = [word[t : t + frame].dBFS for t in range(tail_start, len(word) - frame, frame)]
-    run, closure_end = 0, None
-    for idx, level in enumerate(levels):
-        if level < quiet:
-            run += 1
-        else:
-            if run * frame >= 20:
-                closure_end = tail_start + idx * frame
-            run = 0
-    if closure_end is None:
-        return None
-    burst = word[closure_end:]
-    return burst if 10 <= len(burst) <= 250 else None
+@dataclass
+class Frames:
+    rms: np.ndarray  # linear level per frame
+    low: np.ndarray  # share of energy under 400 Hz
+    mid: np.ndarray  # share of energy in 500-2500 Hz (vowel formants)
+    zcr: np.ndarray  # zero crossings per second
+
+    @property
+    def peak(self) -> float:
+        return float(self.rms.max())
+
+    def silent(self, i: int) -> bool:
+        return self.rms[i] < self.peak * SILENT
+
+    def voiced(self, i: int, level: float = 0.3) -> bool:
+        return self.rms[i] > self.peak * level and self.zcr[i] < VOICED_ZCR
+
+    def hiss(self, i: int) -> bool:
+        return not self.silent(i) and self.zcr[i] > HISS_ZCR and self.low[i] < 0.2
+
+    def onset(self) -> int:
+        return next(i for i in range(len(self.rms)) if not self.silent(i))
+
+    def last_sound(self) -> int:
+        return max(i for i in range(len(self.rms)) if not self.silent(i))
 
 
-def vowel_share(clip: AudioSegment, frame_ms: int = 10) -> list[tuple[float, float]]:
-    """(share of energy in 500-2500 Hz, level in dBFS) for each frame."""
-    x = np.array(clip.get_array_of_samples(), dtype=float)
-    n = int(clip.frame_rate * frame_ms / 1000)
+def samples(clip: AudioSegment) -> np.ndarray:
+    return np.array(clip.get_array_of_samples(), dtype=float) / (1 << (8 * clip.sample_width - 1))
+
+
+def analyse(clip: AudioSegment) -> Frames:
+    x = samples(clip)
+    n = clip.frame_rate * FRAME_MS // 1000
     freqs = np.fft.rfftfreq(n, 1 / clip.frame_rate)
-    band = (freqs >= 500) & (freqs <= 2500)
-    out = []
+    rms, low, mid, zcr = [], [], [], []
     for i in range(0, len(x) - n + 1, n):
-        power = np.abs(np.fft.rfft(x[i : i + n] * np.hanning(n))) ** 2
-        out.append((power[band].sum() / (power.sum() + 1e-9), clip[i * 1000 // clip.frame_rate :][:frame_ms].dBFS))
-    return out
+        f = x[i : i + n]
+        power = np.abs(np.fft.rfft(f * np.hanning(n))) ** 2
+        total = power.sum() + 1e-12
+        rms.append(np.sqrt(np.mean(f**2)))
+        low.append(power[freqs < 400].sum() / total)
+        mid.append(power[(freqs >= 500) & (freqs <= 2500)].sum() / total)
+        zcr.append(np.count_nonzero(np.diff(np.signbit(f))) * 1000 / FRAME_MS)
+    return Frames(*(np.array(a) for a in (rms, low, mid, zcr)))
 
 
-def held_part(clip: AudioSegment, frame_ms: int = 10) -> AudioSegment | None:
-    """The held consonant after the vowel Google opens it with: everything after
-    the last loud vowel-like frame, plus one frame for the transition."""
-    clip = trim(normalize(clip))
-    frames = vowel_share(clip, frame_ms)
-    loud = clip.max_dBFS - 30
-    vowel_frames = [i for i, (share, level) in enumerate(frames) if share >= VOWEL_SHARE and level > loud]
-    start = (vowel_frames[-1] + 2) * frame_ms if vowel_frames else 0
-    held = clip[start:]
-    return held if MIN_HELD_MS <= len(held) <= MAX_HELD_MS else None
+# ---------- cutting: each returns (start, end) in frames ----------
 
 
-def onset_part(word: AudioSegment, frame_ms: int = 20) -> AudioSegment | None:
-    """The word's first consonant: everything before its vowel, less a margin."""
-    word = trim(normalize(word))
-    frames = vowel_share(word, frame_ms)
-    boundary = len(frames)
-    # Frame 0 is the soft attack, so loudness is compared from frame 1 on.
-    for i in range(2, len(frames)):
-        share, level = frames[i]
-        before = float(np.median([lv for _, lv in frames[1:i]]))
-        if share >= ONSET_VOWEL_SHARE or level >= before + ONSET_JUMP_DB:
-            boundary = i
+def cut_hiss(fr: Frames) -> tuple[int, int]:
+    """From the first sound to the frame before the vowel's voicing."""
+    start = fr.onset()
+    end = next((i for i in range(start, len(fr.rms)) if fr.voiced(i)), len(fr.rms))
+    return start, end - 1
+
+
+def cut_hum(fr: Frames) -> tuple[int, int]:
+    """Up to the vowel: the first frame that is vowel-like or clearly louder than
+    the hum before it. The first frame is the soft attack, so it is not compared."""
+    start = fr.onset()
+    db = 20 * np.log10(fr.rms + 1e-12)
+    end = len(fr.rms)
+    for i in range(start + 2, len(fr.rms)):
+        before = float(np.median(db[start + 1 : i]))
+        if fr.mid[i] >= HUM_VOWEL_SHARE or db[i] >= before + HUM_JUMP_DB:
+            end = i
             break
-    onset = word[: max(0, boundary * frame_ms - ONSET_MARGIN_MS)]
-    return onset if len(onset) >= MIN_ONSET_MS else None
+    return start, end - HUM_MARGIN_MS // FRAME_MS
+
+
+def cut_stop(fr: Frames) -> tuple[int, int]:
+    """The burst and the breath after it, up to the vowel's voicing."""
+    start = fr.onset()
+    limit = min(len(fr.rms), start + STOP_MAX_MS // FRAME_MS)
+    end = next((i for i in range(start, limit) if fr.voiced(i)), limit)
+    return start, max(end, start + STOP_MIN_MS // FRAME_MS)
+
+
+def cut_voiced(fr: Frames, window_ms: int) -> tuple[int, int]:
+    """From the release burst to where the vowel starts (its formants, or loud voicing). The release is
+    the biggest jump in loudness near the start, since a voiced stop can hum
+    quietly before it."""
+    start = fr.onset()
+    db = 20 * np.log10(fr.rms + 1e-12)
+    search = range(start + 1, min(len(db), start + RELEASE_SEARCH_MS // FRAME_MS))
+    release = max(search, key=lambda i: db[i] - db[i - 1])
+    begin = release - 1
+    limit = min(len(db), begin + window_ms // FRAME_MS)
+    end = next((i for i in range(release + 1, limit) if fr.mid[i] >= VOICED_VOWEL_SHARE or fr.voiced(i, 0.4)), limit)
+    return begin, max(end, begin + VOICED_MIN_MS // FRAME_MS)
+
+
+def cut_glide(fr: Frames, window_ms: int) -> tuple[int, int]:
+    """A glide or affricate cannot be held or cut cleanly: keep its first moment."""
+    start = fr.onset()
+    return start, start + window_ms // FRAME_MS
+
+
+def cut_vowel(fr: Frames) -> tuple[int, int]:
+    """The voiced part, from the first loud voiced frame to where the consonant
+    after it closes (the level falls away)."""
+    start = next(i for i in range(len(fr.rms)) if fr.voiced(i, 0.2) and not fr.hiss(i))
+    end = start + VOWEL_MIN_MS // FRAME_MS
+    while end < len(fr.rms) and not fr.silent(end) and not fr.hiss(end) and fr.rms[end] > fr.peak * 0.25:
+        end += 1
+    return start, end
+
+
+CUTS = {"hiss": cut_hiss, "hum": cut_hum, "stop": cut_stop, "vowel": cut_vowel}
+
+
+# ---------- shaping ----------
 
 
 def stretch(clip: AudioSegment, target_ms: int) -> AudioSegment:
     """Slows a clip to target_ms without changing its pitch (ffmpeg atempo,
     chained because one atempo filter goes no slower than 0.5)."""
+    if len(clip) >= target_ms:
+        return clip
     factor, chain = len(clip) / target_ms, []
     while factor < 0.5:
         chain.append("atempo=0.5")
@@ -229,66 +280,85 @@ def stretch(clip: AudioSegment, target_ms: int) -> AudioSegment:
     clip.export(wav, format="wav")
     out = subprocess.run(
         ["ffmpeg", "-v", "error", "-f", "wav", "-i", "pipe:0", "-af", ",".join(chain), "-f", "wav", "pipe:1"],
-        input=wav.getvalue(), capture_output=True, check=True,
+        input=wav.getvalue(),
+        capture_output=True,
+        check=True,
     ).stdout
     return AudioSegment.from_file(io.BytesIO(out), format="wav")
 
 
-def build_clip(tts: texttospeech.TextToSpeechClient, entry: dict) -> tuple[AudioSegment, str, str]:
-    """Returns (processed clip, SSML used, method)."""
-    kind, ssml = entry["kind"], entry["ssml"]
-    raw = synthesize(tts, ssml)
-    method = kind
-    if kind == "carrier":
-        burst = final_burst(raw)
-        if burst is not None:
-            raw = burst
-        else:
-            ssml, method = entry["fallback"], "aspirated fallback"
-            raw = synthesize(tts, ssml)
-    elif kind == "held":
-        held = held_part(raw)
-        if held is None:
-            raise RuntimeError(f"no held sound found after the vowel in {ssml}")
-        raw = stretch(held, HOLD_MS)
-    elif kind == "onset":
-        onset = onset_part(raw)
-        if onset is None:
-            raise RuntimeError(f"no consonant found before the vowel in {ssml}")
-        raw = stretch(onset, HOLD_MS)
-    elif kind == "cutoff":
-        raw = trim(raw)[:STOP_CUTOFF_MS]
-    # Normalise first, so the -42 dBFS trim measures every clip on the same scale
-    # (a sliced burst arrives at about -49 dBFS).
-    clip = trim(normalize(raw)).fade_in(FADE_IN_MS).fade_out(FADE_OUT_MS)
-    return clip, ssml, method
+def match_loudness(clip: AudioSegment) -> AudioSegment:
+    """Average level of the sounding frames to TARGET_DBFS, without clipping."""
+    fr = analyse(clip)
+    sounding = fr.rms[fr.rms >= fr.peak * SILENT]
+    level = 20 * np.log10(np.sqrt(np.mean(sounding**2)) + 1e-12)
+    peak = np.abs(samples(clip)).max()
+    gain = min(TARGET_DBFS - level, 20 * np.log10(PEAK_CAP / (peak + 1e-12)))
+    return clip.apply_gain(gain)
+
+
+def cut(tts: texttospeech.TextToSpeechClient, sound: Sound) -> tuple[AudioSegment, str]:
+    """The sound, cut, faded and slowed (not yet loudness-matched), and its SSML."""
+    ssml = ssml_for(sound)
+    word = synthesize(tts, ssml)
+    fr = analyse(word)
+    if sound.kind == "whole":
+        start, end = fr.onset(), fr.last_sound() + 1
+    elif sound.kind == "voiced":
+        start, end = cut_voiced(fr, sound.window_ms)
+    elif sound.kind == "glide":
+        start, end = cut_glide(fr, sound.window_ms)
+    else:
+        start, end = CUTS[sound.kind](fr)
+    if end <= start:
+        raise RuntimeError(f"nothing to cut from {ssml}")
+    fade_in, fade_out = FADES[sound.kind]
+    clip = word[start * FRAME_MS : end * FRAME_MS].fade_in(fade_in).fade_out(fade_out)
+    if sound.kind in HOLD_MS:
+        clip = stretch(clip, sound.hold_ms or HOLD_MS[sound.kind])
+    return clip, ssml
+
+
+def build(tts: texttospeech.TextToSpeechClient, clip_id: str, done: dict[str, AudioSegment]) -> tuple[AudioSegment, str]:
+    """A loudness-matched clip; a pair joins clips already built (or builds them)."""
+    sound = SOUNDS[clip_id]
+    if sound.kind == "pair":
+        for part in sound.parts:
+            if part not in done:
+                done[part] = build(tts, part, done)[0]
+        return sum((done[p] for p in sound.parts), AudioSegment.empty()), " + ".join(sound.parts)
+    clip, ssml = cut(tts, sound)
+    return match_loudness(clip), ssml
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--all", action="store_true", help="build every clip, not just the test batch")
     parser.add_argument("--only", help="comma-separated clip ids; writes WAVs only, leaves the sprite alone")
-    parser.add_argument("--wav-dir", type=Path, help="also save each processed clip here as WAV")
+    parser.add_argument("--wav-dir", type=Path, help="also save each clip here as WAV")
     args = parser.parse_args()
-
-    ids = args.only.split(",") if args.only else list(MANIFEST) if args.all else TEST_BATCH
     if args.only and not args.wav_dir:
         parser.error("--only needs --wav-dir")
+
+    ids = args.only.split(",") if args.only else list(SOUNDS)
     tts = client()
-    gap = AudioSegment.silent(duration=GAP_MS, frame_rate=24000)
-    sprite = AudioSegment.silent(duration=0, frame_rate=24000)
+    done: dict[str, AudioSegment] = {}
+    gap = AudioSegment.silent(duration=GAP_MS, frame_rate=RATE)
+    sprite = AudioSegment.silent(duration=0, frame_rate=RATE)
     sprite_map, meta = {}, {}
 
     print(f"Voice {VOICE}, rate {SPEAKING_RATE}, pitch {PITCH:+}st\n")
     for clip_id in ids:
-        clip, ssml, method = build_clip(tts, MANIFEST[clip_id])
+        clip, ssml = build(tts, clip_id, done)
+        done[clip_id] = clip
+        clip = clip.set_frame_rate(RATE).set_channels(1)
+        sound = SOUNDS[clip_id]
         sprite_map[clip_id] = [len(sprite), len(clip)]
-        meta[clip_id] = {"ssml": ssml, "method": method}
-        sprite += clip.set_frame_rate(24000).set_channels(1) + gap
+        meta[clip_id] = {"kind": sound.kind, "carrier": sound.word or None, "ssml": ssml}
+        sprite += clip + gap
         if args.wav_dir:
             args.wav_dir.mkdir(parents=True, exist_ok=True)
             clip.export(args.wav_dir / f"{clip_id}.wav", format="wav")
-        print(f"{clip_id:9} {len(clip):5} ms  {method:18} {ssml}")
+        print(f"{clip_id:9} {len(clip):5} ms  {sound.kind:7} {ssml}")
 
     if args.only:
         return

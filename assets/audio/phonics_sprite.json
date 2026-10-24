@@ -6,79 +6,277 @@
   "speakingRate": 0.8,
   "pitch": 0.5,
   "sprite": {
-    "m": [
-      0,
-      636
-    ],
-    "p": [
-      936,
-      70
-    ],
-    "t": [
-      1306,
-      95
-    ],
     "a": [
-      1701,
-      435
+      0,
+      314
+    ],
+    "b": [
+      614,
+      30
+    ],
+    "c": [
+      944,
+      110
+    ],
+    "d": [
+      1354,
+      30
+    ],
+    "e": [
+      1684,
+      317
+    ],
+    "f": [
+      2301,
+      583
+    ],
+    "g": [
+      3183,
+      30
+    ],
+    "h": [
+      3513,
+      230
     ],
     "i": [
-      2436,
-      415
+      4043,
+      308
+    ],
+    "j": [
+      4651,
+      70
+    ],
+    "k": [
+      5021,
+      100
+    ],
+    "l": [
+      5421,
+      633
+    ],
+    "m": [
+      6355,
+      618
+    ],
+    "n": [
+      7272,
+      650
+    ],
+    "o": [
+      8223,
+      311
+    ],
+    "p": [
+      8834,
+      70
+    ],
+    "q": [
+      9204,
+      210
+    ],
+    "r": [
+      9714,
+      670
+    ],
+    "s": [
+      10683,
+      660
+    ],
+    "t": [
+      11644,
+      110
+    ],
+    "u": [
+      12054,
+      309
+    ],
+    "v": [
+      12663,
+      609
+    ],
+    "w": [
+      13572,
+      110
+    ],
+    "x": [
+      13982,
+      760
+    ],
+    "y": [
+      15043,
+      100
+    ],
+    "z": [
+      15443,
+      617
     ],
     "blend-ma": [
-      3151,
+      16360,
       430
     ],
     "blend-ca": [
-      3881,
+      17090,
       450
     ],
     "word-map": [
-      4631,
-      565
+      17840,
+      580
     ],
     "word-cat": [
-      5496,
-      574
+      18720,
+      580
     ]
   },
   "meta": {
-    "m": {
-      "ssml": "<speak><prosody rate=\"80%\">mmm</prosody></speak>",
-      "method": "held"
-    },
-    "p": {
-      "ssml": "<speak><phoneme alphabet=\"ipa\" ph=\"mæp\">map</phoneme></speak>",
-      "method": "carrier"
-    },
-    "t": {
-      "ssml": "<speak><phoneme alphabet=\"ipa\" ph=\"kæt\">cat</phoneme></speak>",
-      "method": "carrier"
-    },
     "a": {
-      "ssml": "<speak><break time=\"100ms\"/><phoneme alphabet=\"ipa\" ph=\"æ\">a</phoneme><break time=\"100ms\"/></speak>",
-      "method": "plain"
+      "kind": "vowel",
+      "carrier": "at",
+      "ssml": "<speak><phoneme alphabet=\"ipa\" ph=\"æt\">at</phoneme></speak>"
+    },
+    "b": {
+      "kind": "voiced",
+      "carrier": "bat",
+      "ssml": "<speak><phoneme alphabet=\"ipa\" ph=\"bæt\">bat</phoneme></speak>"
+    },
+    "c": {
+      "kind": "stop",
+      "carrier": "cat",
+      "ssml": "<speak><phoneme alphabet=\"ipa\" ph=\"kæt\">cat</phoneme></speak>"
+    },
+    "d": {
+      "kind": "voiced",
+      "carrier": "dog",
+      "ssml": "<speak><phoneme alphabet=\"ipa\" ph=\"dɒɡ\">dog</phoneme></speak>"
+    },
+    "e": {
+      "kind": "vowel",
+      "carrier": "egg",
+      "ssml": "<speak><phoneme alphabet=\"ipa\" ph=\"ɛɡ\">egg</phoneme></speak>"
+    },
+    "f": {
+      "kind": "hiss",
+      "carrier": "fan",
+      "ssml": "<speak><prosody rate=\"50%\"><phoneme alphabet=\"ipa\" ph=\"fæn\">fan</phoneme></prosody></speak>"
+    },
+    "g": {
+      "kind": "voiced",
+      "carrier": "gap",
+      "ssml": "<speak><phoneme alphabet=\"ipa\" ph=\"ɡæp\">gap</phoneme></speak>"
+    },
+    "h": {
+      "kind": "hiss",
+      "carrier": "hat",
+      "ssml": "<speak><prosody rate=\"50%\"><phoneme alphabet=\"ipa\" ph=\"hæt\">hat</phoneme></prosody></speak>"
     },
     "i": {
-      "ssml": "<speak><break time=\"100ms\"/><phoneme alphabet=\"ipa\" ph=\"ɪ\">i</phoneme><break time=\"100ms\"/></speak>",
-      "method": "plain"
+      "kind": "vowel",
+      "carrier": "it",
+      "ssml": "<speak><phoneme alphabet=\"ipa\" ph=\"ɪt\">it</phoneme></speak>"
+    },
+    "j": {
+      "kind": "voiced",
+      "carrier": "jam",
+      "ssml": "<speak><phoneme alphabet=\"ipa\" ph=\"dʒæm\">jam</phoneme></speak>"
+    },
+    "k": {
+      "kind": "stop",
+      "carrier": "kit",
+      "ssml": "<speak><phoneme alphabet=\"ipa\" ph=\"kɪt\">kit</phoneme></speak>"
+    },
+    "l": {
+      "kind": "hum",
+      "carrier": "lap",
+      "ssml": "<speak><prosody rate=\"50%\"><phoneme alphabet=\"ipa\" ph=\"læp\">lap</phoneme></prosody></speak>"
+    },
+    "m": {
+      "kind": "hum",
+      "carrier": "map",
+      "ssml": "<speak><prosody rate=\"50%\"><phoneme alphabet=\"ipa\" ph=\"mæp\">map</phoneme></prosody></speak>"
+    },
+    "n": {
+      "kind": "hum",
+      "carrier": "nap",
+      "ssml": "<speak><prosody rate=\"50%\"><phoneme alphabet=\"ipa\" ph=\"næp\">nap</phoneme></prosody></speak>"
+    },
+    "o": {
+      "kind": "vowel",
+      "carrier": "ox",
+      "ssml": "<speak><phoneme alphabet=\"ipa\" ph=\"ɒks\">ox</phoneme></speak>"
+    },
+    "p": {
+      "kind": "stop",
+      "carrier": "pan",
+      "ssml": "<speak><phoneme alphabet=\"ipa\" ph=\"pæn\">pan</phoneme></speak>"
+    },
+    "q": {
+      "kind": "pair",
+      "carrier": null,
+      "ssml": "k + w"
+    },
+    "r": {
+      "kind": "hum",
+      "carrier": "rat",
+      "ssml": "<speak><prosody rate=\"50%\"><phoneme alphabet=\"ipa\" ph=\"ɹæt\">rat</phoneme></prosody></speak>"
+    },
+    "s": {
+      "kind": "hiss",
+      "carrier": "sun",
+      "ssml": "<speak><prosody rate=\"50%\"><phoneme alphabet=\"ipa\" ph=\"sʌn\">sun</phoneme></prosody></speak>"
+    },
+    "t": {
+      "kind": "stop",
+      "carrier": "tap",
+      "ssml": "<speak><phoneme alphabet=\"ipa\" ph=\"tæp\">tap</phoneme></speak>"
+    },
+    "u": {
+      "kind": "vowel",
+      "carrier": "up",
+      "ssml": "<speak><phoneme alphabet=\"ipa\" ph=\"ʌp\">up</phoneme></speak>"
+    },
+    "v": {
+      "kind": "hum",
+      "carrier": "van",
+      "ssml": "<speak><prosody rate=\"50%\"><phoneme alphabet=\"ipa\" ph=\"væn\">van</phoneme></prosody></speak>"
+    },
+    "w": {
+      "kind": "glide",
+      "carrier": "wet",
+      "ssml": "<speak><prosody rate=\"50%\"><phoneme alphabet=\"ipa\" ph=\"wɛt\">wet</phoneme></prosody></speak>"
+    },
+    "x": {
+      "kind": "pair",
+      "carrier": null,
+      "ssml": "k + s"
+    },
+    "y": {
+      "kind": "glide",
+      "carrier": "yes",
+      "ssml": "<speak><prosody rate=\"50%\"><phoneme alphabet=\"ipa\" ph=\"jɛs\">yes</phoneme></prosody></speak>"
+    },
+    "z": {
+      "kind": "hum",
+      "carrier": "zap",
+      "ssml": "<speak><prosody rate=\"50%\"><phoneme alphabet=\"ipa\" ph=\"zæp\">zap</phoneme></prosody></speak>"
     },
     "blend-ma": {
-      "ssml": "<speak><phoneme alphabet=\"ipa\" ph=\"mæ\">ma</phoneme></speak>",
-      "method": "plain"
+      "kind": "whole",
+      "carrier": "ma",
+      "ssml": "<speak><phoneme alphabet=\"ipa\" ph=\"mæ\">ma</phoneme></speak>"
     },
     "blend-ca": {
-      "ssml": "<speak><phoneme alphabet=\"ipa\" ph=\"kæ\">ca</phoneme></speak>",
-      "method": "plain"
+      "kind": "whole",
+      "carrier": "ca",
+      "ssml": "<speak><phoneme alphabet=\"ipa\" ph=\"kæ\">ca</phoneme></speak>"
     },
     "word-map": {
-      "ssml": "<speak><phoneme alphabet=\"ipa\" ph=\"mæp\">map</phoneme></speak>",
-      "method": "plain"
+      "kind": "whole",
+      "carrier": "map",
+      "ssml": "<speak><phoneme alphabet=\"ipa\" ph=\"mæp\">map</phoneme></speak>"
     },
     "word-cat": {
-      "ssml": "<speak><phoneme alphabet=\"ipa\" ph=\"kæt\">cat</phoneme></speak>",
-      "method": "plain"
+      "kind": "whole",
+      "carrier": "cat",
+      "ssml": "<speak><phoneme alphabet=\"ipa\" ph=\"kæt\">cat</phoneme></speak>"
     }
   }
 }
