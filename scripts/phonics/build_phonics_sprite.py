@@ -29,9 +29,11 @@ a from "at"), and the cut ends where the next sound begins:
   pair         x, q          two cut sounds joined: k+s (a short s), k+w
 
 Hisses, hums and vowels are then slowed to a set length without changing
-their pitch. Every clip is fetched as LINEAR16 (WAV), cut, faded, matched in
-loudness (average level, so quiet consonants are not drowned by vowels), and
-joined into one MP3 with a Howler-style JSON map of [start_ms, duration_ms].
+their pitch. Every clip is fetched as LINEAR16 (WAV), cut and faded, then set
+to the loudness a person gives it next to a vowel: f is about 16 dB softer, m
+about the same. Raising soft sounds to vowel loudness also raises the faint
+noise in Google's audio, so they are not. The clips are joined into one MP3
+with a Howler-style JSON map of [start_ms, duration_ms].
 
 Short o is the British /ɒ/ ("ox"), as Indian schools teach it.
 
@@ -70,7 +72,7 @@ FRAME_MS = 10
 SILENT = 0.003
 VOICED_ZCR = 2800  # zero crossings per second: below this a loud frame is voiced
 HISS_ZCR = 3500  # above this, with little low-frequency energy, a frame is a hiss
-TARGET_DBFS, PEAK_CAP = -20.0, 0.95  # loudness match: average level, then peak limit
+VOWEL_DBFS, PEAK_CAP = -20.0, 0.95  # vowels' average level; every clip's peak limit
 
 # Lengths in ms. Held sounds are slowed to these (never sped up).
 HOLD_MS = {"hiss": 580, "hum": 580, "buzz": 580, "vowel": 260}
@@ -91,51 +93,52 @@ class Sound:
     kind: str  # hiss | hum | buzz | stop | voiced | glide | vowel | whole | pair
     word: str = ""  # carrier word as written
     ipa: str = ""  # how the carrier word is said
-    slow: bool = True  # carrier at half speed, so its first sound lasts longer
+    rate: int = 50  # carrier speed in percent (100: as normal); slower makes its first sound last longer
     window_ms: int = 0  # voiced stops: how much to keep from the release; glides: from the start
     parts: tuple[tuple[str, int], ...] = ()  # pairs: (sound, most ms to keep, 0 for all)
     hold_ms: int = 0  # overrides HOLD_MS for this sound
     buzz_from: str = ""  # buzz: the hum whose low part is mixed in
+    level_db: float = 0.0  # loudness next to a vowel, as measured in a person's phonics sounds
 
 
 SOUNDS: dict[str, Sound] = {
-    "a": Sound("vowel", "at", "æt", slow=False),
-    "b": Sound("voiced", "bat", "bæt", slow=False, window_ms=80),
-    "c": Sound("stop", "cat", "kæt", slow=False),
-    "d": Sound("voiced", "dog", "dɒɡ", slow=False, window_ms=80),
-    "e": Sound("vowel", "egg", "ɛɡ", slow=False),
-    "f": Sound("hiss", "fan", "fæn"),
-    "g": Sound("voiced", "gap", "ɡæp", slow=False, window_ms=80),
-    "h": Sound("hiss", "hat", "hæt", hold_ms=BREATH_HOLD_MS),
-    "i": Sound("vowel", "it", "ɪt", slow=False),
-    "j": Sound("voiced", "jam", "dʒæm", slow=False, window_ms=120),
-    "k": Sound("stop", "kit", "kɪt", slow=False),
-    "l": Sound("hum", "log", "lɒɡ"),  # a back vowel after it keeps the l dark, as teachers say it
+    "a": Sound("vowel", "at", "æt", rate=100),
+    "b": Sound("voiced", "bat", "bæt", rate=100, window_ms=80, level_db=-2),
+    "c": Sound("stop", "cat", "kæt", rate=100, level_db=-6),
+    "d": Sound("voiced", "dog", "dɒɡ", rate=100, window_ms=80, level_db=-2),
+    "e": Sound("vowel", "egg", "ɛɡ", rate=100),
+    "f": Sound("hiss", "fan", "fæn", rate=35, level_db=-14),
+    "g": Sound("voiced", "gap", "ɡæp", rate=100, window_ms=80, level_db=-3),
+    "h": Sound("hiss", "hat", "hæt", hold_ms=BREATH_HOLD_MS, level_db=-12),
+    "i": Sound("vowel", "it", "ɪt", rate=100),
+    "j": Sound("voiced", "jam", "dʒæm", rate=100, window_ms=120, level_db=-6),
+    "k": Sound("stop", "kit", "kɪt", rate=100, level_db=-6),
+    "l": Sound("hum", "log", "lɒɡ", level_db=-5),  # a back vowel after it keeps the l dark, as teachers say it
     "m": Sound("hum", "map", "mæp"),
     "n": Sound("hum", "nap", "næp"),
-    "o": Sound("vowel", "ox", "ɒks", slow=False),
-    "p": Sound("stop", "pan", "pæn", slow=False),
+    "o": Sound("vowel", "ox", "ɒks", rate=100),
+    "p": Sound("stop", "pan", "pæn", rate=100, level_db=-12),
     "q": Sound("pair", parts=(("k", 0), ("w", 0))),
-    "r": Sound("hum", "rat", "ɹæt"),
-    "s": Sound("hiss", "sun", "sʌn"),
-    "t": Sound("stop", "tap", "tæp", slow=False),
-    "u": Sound("vowel", "up", "ʌp", slow=False),
-    "v": Sound("hum", "van", "væn"),
-    "w": Sound("glide", "wet", "wɛt", window_ms=110),
+    "r": Sound("hum", "rat", "ɹæt", level_db=-6),
+    "s": Sound("hiss", "sun", "sʌn", level_db=-2),
+    "t": Sound("stop", "tap", "tæp", rate=100, level_db=-10),
+    "u": Sound("vowel", "up", "ʌp", rate=100),
+    "v": Sound("hum", "van", "væn", rate=35, level_db=-8),
+    "w": Sound("glide", "wet", "wɛt", window_ms=110, level_db=-4),
     "x": Sound("pair", parts=(("k", 0), ("s", 150))),
-    "y": Sound("glide", "yes", "jɛs", window_ms=100),
-    "z": Sound("buzz", "busy", "bɪzːi", buzz_from="m"),
+    "y": Sound("glide", "yes", "jɛs", window_ms=100, level_db=-6),
+    "z": Sound("buzz", "busy", "bɪzːi", buzz_from="m", level_db=-7),
     # Blends and whole words, said as they are
-    "blend-ma": Sound("whole", "ma", "mæ", slow=False),
-    "blend-ca": Sound("whole", "ca", "kæ", slow=False),
-    "word-map": Sound("whole", "map", "mæp", slow=False),
-    "word-cat": Sound("whole", "cat", "kæt", slow=False),
+    "blend-ma": Sound("whole", "ma", "mæ", rate=100),
+    "blend-ca": Sound("whole", "ca", "kæ", rate=100),
+    "word-map": Sound("whole", "map", "mæp", rate=100),
+    "word-cat": Sound("whole", "cat", "kæt", rate=100),
 }
 
 
 def ssml_for(sound: Sound) -> str:
     word = f'<phoneme alphabet="ipa" ph="{sound.ipa}">{sound.word}</phoneme>'
-    return f'<speak><prosody rate="50%">{word}</prosody></speak>' if sound.slow else f"<speak>{word}</speak>"
+    return f'<speak><prosody rate="{sound.rate}%">{word}</prosody></speak>' if sound.rate != 100 else f"<speak>{word}</speak>"
 
 
 def client() -> texttospeech.TextToSpeechClient:
@@ -314,13 +317,13 @@ def stretch(clip: AudioSegment, target_ms: int) -> AudioSegment:
     return AudioSegment.from_file(io.BytesIO(out), format="wav")
 
 
-def match_loudness(clip: AudioSegment) -> AudioSegment:
-    """Average level of the sounding frames to TARGET_DBFS, without clipping."""
+def match_loudness(clip: AudioSegment, level_db: float = 0.0) -> AudioSegment:
+    """Average level of the sounding frames to VOWEL_DBFS + level_db, without clipping."""
     fr = analyse(clip)
     sounding = fr.rms[fr.rms >= fr.peak * SILENT]
     level = 20 * np.log10(np.sqrt(np.mean(sounding**2)) + 1e-12)
     peak = np.abs(samples(clip)).max()
-    gain = min(TARGET_DBFS - level, 20 * np.log10(PEAK_CAP / (peak + 1e-12)))
+    gain = min(VOWEL_DBFS + level_db - level, 20 * np.log10(PEAK_CAP / (peak + 1e-12)))
     return clip.apply_gain(gain)
 
 
@@ -362,7 +365,7 @@ def build(tts: texttospeech.TextToSpeechClient, clip_id: str, done: dict[str, Au
             done[sound.buzz_from] = build(tts, sound.buzz_from, done)[0]
         clip = add_buzz(clip, done[sound.buzz_from])
         ssml += f" + low part of {sound.buzz_from}"
-    return match_loudness(clip), ssml
+    return match_loudness(clip, sound.level_db), ssml
 
 
 def main() -> None:
@@ -397,7 +400,7 @@ def main() -> None:
     if args.only:
         return
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    sprite.export(OUT_DIR / "phonics_sprite.mp3", format="mp3", bitrate="64k")
+    sprite.export(OUT_DIR / "phonics_sprite.mp3", format="mp3", bitrate="96k")
     manifest = {
         "src": ["phonics_sprite.mp3"],
         "voice": VOICE,

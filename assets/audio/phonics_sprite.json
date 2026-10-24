@@ -28,102 +28,102 @@
     ],
     "f": [
       2330,
-      476
+      526
     ],
     "g": [
-      3106,
+      3156,
       80
     ],
     "h": [
-      3486,
+      3536,
       230
     ],
     "i": [
-      4016,
+      4066,
       255
     ],
     "j": [
-      4571,
+      4620,
       120
     ],
     "k": [
-      4991,
+      5040,
       100
     ],
     "l": [
-      5391,
+      5440,
       527
     ],
     "m": [
-      6217,
+      6267,
       519
     ],
     "n": [
-      7036,
+      7086,
       543
     ],
     "o": [
-      7879,
+      7929,
       270
     ],
     "p": [
-      8449,
+      8499,
       70
     ],
     "q": [
-      8819,
+      8869,
       210
     ],
     "r": [
-      9329,
+      9379,
       551
     ],
     "s": [
-      10180,
+      10230,
       554
     ],
     "t": [
-      11034,
+      11083,
       110
     ],
     "u": [
-      11444,
+      11493,
       253
     ],
     "v": [
-      11996,
-      510
+      12046,
+      530
     ],
     "w": [
-      12807,
+      12876,
       110
     ],
     "x": [
-      13217,
+      13286,
       250
     ],
     "y": [
-      13767,
+      13836,
       100
     ],
     "z": [
-      14167,
+      14236,
       518
     ],
     "blend-ma": [
-      14985,
+      15054,
       430
     ],
     "blend-ca": [
-      15715,
+      15784,
       450
     ],
     "word-map": [
-      16465,
+      16534,
       580
     ],
     "word-cat": [
-      17345,
+      17414,
       580
     ]
   },
@@ -156,7 +156,7 @@
     "f": {
       "kind": "hiss",
       "carrier": "fan",
-      "ssml": "<speak><prosody rate=\"50%\"><phoneme alphabet=\"ipa\" ph=\"fæn\">fan</phoneme></prosody></speak>"
+      "ssml": "<speak><prosody rate=\"35%\"><phoneme alphabet=\"ipa\" ph=\"fæn\">fan</phoneme></prosody></speak>"
     },
     "g": {
       "kind": "voiced",
@@ -236,7 +236,7 @@
     "v": {
       "kind": "hum",
       "carrier": "van",
-      "ssml": "<speak><prosody rate=\"50%\"><phoneme alphabet=\"ipa\" ph=\"væn\">van</phoneme></prosody></speak>"
+      "ssml": "<speak><prosody rate=\"35%\"><phoneme alphabet=\"ipa\" ph=\"væn\">van</phoneme></prosody></speak>"
     },
     "w": {
       "kind": "glide",
