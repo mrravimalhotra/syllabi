@@ -1,5 +1,6 @@
 "use client";
 
+import { RIGHT_CARD, WRONG_CARD } from "@/components/kindergarten/feedback";
 import { useEffect, useState } from "react";
 import { RoundDone, RoundFrame } from "@/components/kindergarten/RoundFrame";
 import { cx } from "@/components/ui";
@@ -21,9 +22,9 @@ function Group({ count, emoji, tone }: { count: number; emoji: string; tone: "id
       className={cx(
         "flex min-h-32 flex-1 flex-wrap content-center items-center justify-center gap-1 rounded-3xl border-4 p-3 text-3xl leading-none sm:text-4xl",
         tone === "right"
-          ? "border-emerald-400 bg-emerald-50"
+          ? RIGHT_CARD
           : tone === "wrong"
-            ? "kg-shake border-red-300 bg-red-50"
+            ? cx("kg-shake", WRONG_CARD)
             : "border-brand-200 bg-white"
       )}
     >
@@ -102,8 +103,8 @@ export function CompareGame({ questions, say, prepare, onAgain, onExit }: Props)
             "mx-auto block rounded-full border-4 px-8 py-3 text-xl font-semibold transition active:scale-95",
             picked?.side === "same"
               ? picked.ok
-                ? "border-emerald-400 bg-emerald-50"
-                : "kg-shake border-red-300 bg-red-50"
+                ? RIGHT_CARD
+                : cx("kg-shake", WRONG_CARD)
               : "border-slate-200 bg-white text-slate-700"
           )}
         >

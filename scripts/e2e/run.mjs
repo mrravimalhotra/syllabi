@@ -714,9 +714,20 @@ await test("Kindergarten: listen and blend - the sounds are heard, then the righ
     const word = await box.getAttribute("data-word");
     // The sounds are played first; a wrong picture must not end the question.
     const others = page.getByRole("button", { name: /^[a-z]{3}$/ }).and(page.locator(`:not([aria-label="${word}"])`));
-    if (q === 0 && (await others.count()) > 0) await tap(others.first());
+    if (q === 0 && (await others.count()) > 0) {
+      await tap(others.first());
+      // A wrong picture stays marked with a cross until the question changes.
+      await page.getByRole("button", { name: /^[a-z]{3}$/ }).getByText("✗").first().waitFor({ timeout: 5000 });
+    }
     await tap(page.getByRole("button", { name: word, exact: true }));
-    if (q === 0) await page.getByText("=", { exact: true }).first().waitFor({ timeout: 15000 });
+    if (q === 0) {
+      await page.getByText("=", { exact: true }).first().waitFor({ timeout: 15000 });
+      // The question stays after the right picture: the sounds can be heard again before Next.
+      const again = page.getByRole("button", { name: /Hear the sounds again/ });
+      await again.waitFor();
+      if (await again.isDisabled()) throw new Error("Hear the sounds again should work after the right picture.");
+    }
+    await tap(page.getByRole("button", { name: "Next →", exact: true }));
     if (q < 4) await page.locator(`[data-word]:not([data-word="${word}"])`).waitFor({ timeout: 20000 });
   }
   await page.getByText("Well done!").first().waitFor({ timeout: 20000 });

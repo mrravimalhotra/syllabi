@@ -1,5 +1,6 @@
 "use client";
 
+import { CONSONANT_TEXT, pause, SOUND_GAP_MS, VOWEL_TEXT, WRONG_CARD } from "@/components/kindergarten/feedback";
 import { useEffect, useRef, useState } from "react";
 import { RoundDone, RoundFrame } from "@/components/kindergarten/RoundFrame";
 import { cx } from "@/components/ui";
@@ -55,6 +56,7 @@ export function CvcGame({ questions, say, sound, prepare, prepareSounds, onAgain
    */
   async function soundOut(q: CvcQuestion, blend: boolean) {
     for (let i = 0; i < q.letters.length; i++) {
+      if (i > 0) await pause(SOUND_GAP_MS);
       setLit(i);
       await sound(q.letters[i], true);
     }
@@ -144,7 +146,7 @@ export function CvcGame({ questions, say, sound, prepare, prepareSounds, onAgain
                 lit !== i &&
                   !(pair && i < 2) &&
                   (i < placed ? "border-emerald-400 bg-emerald-50 text-emerald-700" : "border-dashed border-slate-300 text-transparent"),
-                i < placed && isVowel(letter) && "text-red-600"
+                i < placed && isVowel(letter) && VOWEL_TEXT
               )}
             >
               {i < placed ? letter : "_"}
@@ -166,7 +168,7 @@ export function CvcGame({ questions, say, sound, prepare, prepareSounds, onAgain
             aria-label={`The sounds ${question.letters.join(", ")} make the word ${question.word}`}
           >
             {question.letters.map((l, i) => (
-              <span key={i} className={isVowel(l) ? "text-red-600" : "text-brand-700"}>
+              <span key={i} className={isVowel(l) ? VOWEL_TEXT : CONSONANT_TEXT}>
                 {phoneLabel(l)}
                 {i < question.letters.length - 1 ? <span className="px-1 text-slate-300"> · </span> : null}
               </span>
@@ -185,7 +187,7 @@ export function CvcGame({ questions, say, sound, prepare, prepareSounds, onAgain
               onClick={() => void tap(i)}
               className={cx(
                 "flex h-20 w-20 items-center justify-center rounded-2xl border-4 border-brand-200 bg-brand-50 text-5xl font-bold text-brand-800 shadow-sm transition active:scale-95 disabled:opacity-30",
-                shake === i && "kg-shake border-red-300 bg-red-50"
+                shake === i && cx("kg-shake", WRONG_CARD)
               )}
             >
               {letter}

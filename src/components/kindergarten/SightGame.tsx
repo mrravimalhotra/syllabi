@@ -1,5 +1,6 @@
 "use client";
 
+import { RIGHT_CARD, WRONG_CARD } from "@/components/kindergarten/feedback";
 import { useEffect, useState } from "react";
 import { RoundDone, RoundFrame } from "@/components/kindergarten/RoundFrame";
 import { cx } from "@/components/ui";
@@ -75,9 +76,9 @@ export function SightGame({ questions, say, prepare, onAgain, onExit }: Props) {
               className={cx(
                 "min-h-24 rounded-3xl border-4 bg-white text-6xl font-bold text-slate-800 shadow-sm transition active:scale-95",
                 right === word
-                  ? "border-emerald-400 bg-emerald-50"
+                  ? RIGHT_CARD
                   : shake === word
-                    ? "kg-shake border-red-300 bg-red-50"
+                    ? cx("kg-shake", WRONG_CARD)
                     : "border-brand-200"
               )}
             >

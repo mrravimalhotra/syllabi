@@ -35,9 +35,18 @@ export function cvcPool(settings: CvcSettings): CvcWord[] {
 
 export const DEFAULT_CVC: CvcSettings = { vowels: ["a"], questions: 5 };
 
-export function makeCvcQuiz(settings: CvcSettings, seed: number): CvcQuestion[] {
+const hasPicture = (w: { word: string; emoji: string | null }): w is { word: string; emoji: string } => w.emoji !== null;
+
+/** The words that have a clear picture; a family with none falls back to all the chosen vowels' picture words. */
+function picturePool(settings: CvcSettings) {
+  const familyPool = cvcPool(settings).filter(hasPicture);
+  return familyPool.length > 0 ? familyPool : cvcPool({ ...settings, family: undefined }).filter(hasPicture);
+}
+
+/** `pictures`: only words with a clear picture, so the child sees what to spell. */
+export function makeCvcQuiz(settings: CvcSettings, seed: number, pictures = false): CvcQuestion[] {
   const r = seeded(seed);
-  const order = r.shuffle(cvcPool(settings));
+  const order = r.shuffle(pictures ? picturePool(settings) : cvcPool(settings));
   const quiz: CvcQuestion[] = [];
   for (let i = 0; i < settings.questions; i++) {
     const entry = order[i % order.length];
@@ -139,11 +148,8 @@ export interface BlendQuestion {
  */
 export function makeBlendQuiz(settings: CvcSettings, seed: number): BlendQuestion[] {
   const r = seeded(seed);
-  const picture = (w: { word: string; emoji: string | null }): w is { word: string; emoji: string } => w.emoji !== null;
-  // A family with no picture words falls back to all the chosen vowels' picture words.
-  const familyPool = cvcPool(settings).filter(picture);
-  const pool = familyPool.length > 0 ? familyPool : cvcPool({ ...settings, family: undefined }).filter(picture);
-  const everything = VOWELS.flatMap((v) => CVC_WORDS[v]).filter(picture);
+  const pool = picturePool(settings);
+  const everything = VOWELS.flatMap((v) => CVC_WORDS[v]).filter(hasPicture);
   const order = r.shuffle(pool);
   const quiz: BlendQuestion[] = [];
   for (let i = 0; i < settings.questions; i++) {

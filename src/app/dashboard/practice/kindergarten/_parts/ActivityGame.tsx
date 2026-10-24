@@ -40,7 +40,7 @@ interface Props {
 export function ActivityGame({ kind, seed, cvc, sight, compare, place, voice, onAgain, onPlay, onExit }: Props) {
   const { say, sound, prepare, prepareSounds } = voice;
   const blendQuiz = useMemo(() => (kind === "blend" ? makeBlendQuiz(cvc, seed) : null), [kind, cvc, seed]);
-  const cvcQuiz = useMemo(() => (kind === "cvc" ? makeCvcQuiz(cvc, seed) : null), [kind, cvc, seed]);
+  const cvcQuiz = useMemo(() => (kind === "cvc" ? makeCvcQuiz(cvc, seed, true) : null), [kind, cvc, seed]);
   const sightQuiz = useMemo(() => (kind === "sight" ? makeSightQuiz(sight, seed) : null), [kind, sight, seed]);
   const compareQuiz = useMemo(() => (kind === "compare" ? makeCompareQuiz(compare, seed) : null), [kind, compare, seed]);
 

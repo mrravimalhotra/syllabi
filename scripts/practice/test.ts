@@ -194,6 +194,11 @@ for (const raw of [{ kind: "whole", digits: 4 }, { kind: "decimal", digits: 1, m
       check(quiz.length === 10 && quiz.every((q) => q.choices.length === 3 && new Set(q.choices.map((c) => c.word)).size === 3), `Blend quiz for family ${family}`);
       const spell = makeCvcQuiz({ vowels: ["a", "i", "u"], questions: 10, family }, seed);
       check(spell.length === 10 && spell.every((q) => q.tray.length === 5), `Spelling quiz for family ${family}`);
+      // Spell the word shows the picture of the word to spell, so every word it asks has one.
+      for (const vowels of [["a"], ["e"], ["o", "u"], [...VOWELS]] as const) {
+        const pictured = makeCvcQuiz({ vowels: [...vowels], questions: 10, family }, seed, true);
+        check(pictured.length === 10 && pictured.every((q) => q.emoji !== null), `Spell the word asked a word without a picture (${family}, ${vowels})`);
+      }
     }
   }
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { RIGHT_CARD, WRONG_CARD } from "@/components/kindergarten/feedback";
 import { useEffect, useState } from "react";
 import { PlaceBlocks } from "@/components/kindergarten/PlaceBlocks";
 import { RoundDone, RoundFrame } from "@/components/kindergarten/RoundFrame";
@@ -91,7 +92,7 @@ export function PlaceValueGame({ questions, say, prepare, onAgain, onExit }: Pro
               onClick={() => void choose(choice)}
               className={cx(
                 "min-h-24 rounded-3xl border-4 bg-white text-5xl font-bold text-slate-800 shadow-sm transition active:scale-95",
-                right === choice ? "border-emerald-400 bg-emerald-50" : shake === choice ? "kg-shake border-red-300 bg-red-50" : "border-brand-200"
+                right === choice ? RIGHT_CARD : shake === choice ? cx("kg-shake", WRONG_CARD) : "border-brand-200"
               )}
             >
               {choice}
