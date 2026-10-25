@@ -470,6 +470,15 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
   const bad = (r: { ok: boolean }) => !r.ok;
   check(bad(parseGenerationRequest(null, "solution", "auto")) && bad(parseGenerationRequest({}, "solution", "auto")) && bad(parseGenerationRequest({ prompt: "   " }, "solution", "auto")), "Answer: unreadable and empty questions are refused");
   check(bad(parseGenerationRequest({ prompt: "x", photos: "nope" }, "solution", "auto")), "Answer: photos that aren't a list are refused");
+  const askOf = (body: Record<string, unknown>) => {
+    const r = parseGenerationRequest(body, "solution", "auto");
+    return r.ok ? r.value.askedFor : "";
+  };
+  const worksheet = "Exercise 3\n1. What is a noun?\n2. Name three verbs.\n3. Underline the adjectives.";
+  check(askOf({ prompt: "Do all of Exercise 4.2" }).includes("Exercise 4.2"), "Whole exercise: typed words can ask for it");
+  check(!/exercise/i.test(askOf({ prompt: "Answer these", attachedText: worksheet })), "Whole exercise: an attached worksheet's heading doesn't switch it on");
+  check(askOf({ prompt: "Answer these", attachedText: "Do every question on page 12" }).includes("page 12"), "Whole exercise: a short attached instruction still counts");
+  check(askOf({ prompt: `Answer these:\n\n${worksheet}\n4. Spell "receive".` }) === "Answer these:", "Whole exercise: a long paste in the box counts only by its first line");
   const UUID = "123e4567-e89b-42d3-a456-426614174000";
   const a = parseGenerationRequest({ prompt: "  Explain light  ", documentIds: [UUID, "bad", 5], language: "mr", fresh: true, stream: true }, "notes", "hi");
   check(a.ok && a.value.prompt === "Explain light" && a.value.typedPrompt === "Explain light" && !a.value.hasAttachedText && JSON.stringify(a.value.documentIds) === `["${UUID}"]` && a.value.language === "mr" && a.value.fresh && a.value.stream, "Answer: a typed question with books, language, fresh and stream");

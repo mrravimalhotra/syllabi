@@ -1,5 +1,6 @@
 import { parseAttachedText, parsePhotos, textTooLong } from "@/lib/generation/attachments";
 import { isAnswerLanguage, type AnswerLanguage } from "@/lib/generation/language";
+import { askedFor } from "@/lib/rag/asked-for";
 import { isUuid } from "@/lib/validate";
 import type { CompletionImage } from "@/lib/llm/types";
 import type { GenerationTaskType } from "@/types/database";
@@ -20,6 +21,8 @@ export interface GenerationRequest {
   hasAttachedText: boolean;
   /** The question sent to the AI: the typed text (or a default for photos) plus the attached file's text. */
   prompt: string;
+  /** The words that can ask for a whole exercise or named pages: the typed text, plus attached text only if short. */
+  askedFor: string;
   photos: CompletionImage[];
   /** Which of the person's own books to search; undefined means all. */
   documentIds: string[] | undefined;
@@ -62,6 +65,7 @@ export function parseGenerationRequest(
       hasAttachedText: Boolean(attachedText),
       // The attached file's text (e.g. a worksheet's questions) travels with the request, so each question in it is also searched for separately.
       prompt: attachedText ? `${ask}\n\n---\n${attachedText}` : ask,
+      askedFor: askedFor(typedPrompt, attachedText),
       photos,
       // Retrieval is always limited to the caller's library, so ids of other people's books match nothing.
       documentIds: Array.isArray(b.documentIds) ? b.documentIds.filter(isUuid).slice(0, 200) : undefined,

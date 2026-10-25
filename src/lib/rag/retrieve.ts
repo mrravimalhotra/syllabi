@@ -14,6 +14,8 @@ export interface RetrievalScope {
   documentIds?: string[];
   /** The most characters of book text to pass whole: the selected books are passed in full when they fit within this. */
   fullContextChars?: number;
+  /** The words that can ask for a whole exercise or named pages (see askedFor); the whole query when omitted. */
+  askedFor?: string;
 }
 
 /** How the passages were found, for finding out why an answer scored low. */
@@ -80,7 +82,7 @@ async function searchContext(typed: string, scope: RetrievalScope): Promise<Retr
     const { embedding } = await embed(query);
     const found = await search(embedding, scope, MATCH_COUNT);
     const topSimilarity = found[0]?.similarity ?? 0;
-    return withSupport(await withWholePages(found, query, scope.ownerId), found.length === 0 || topSimilarity < COVERAGE_THRESHOLD, scope, found[0]?.similarity ?? null);
+    return withSupport(await withWholePages(found, scope.askedFor ?? query, scope.ownerId), found.length === 0 || topSimilarity < COVERAGE_THRESHOLD, scope, found[0]?.similarity ?? null);
   }
 
   const embeddings = await embedMany(questions);
@@ -102,7 +104,7 @@ async function searchContext(typed: string, scope: RetrievalScope): Promise<Retr
 
   // Coverage is low when at least half the questions found nothing close.
   const weak = perQuestion.filter((m) => (m[0]?.similarity ?? 0) < COVERAGE_THRESHOLD).length;
-  return withSupport(await withWholePages(chunks, query, scope.ownerId), chunks.length === 0 || weak * 2 >= perQuestion.length, scope, chunks[0]?.similarity ?? null);
+  return withSupport(await withWholePages(chunks, scope.askedFor ?? query, scope.ownerId), chunks.length === 0 || weak * 2 >= perQuestion.length, scope, chunks[0]?.similarity ?? null);
 }
 
 // Whole-exercise requests: how many of the exercise's questions are searched for support, how many passages each

@@ -51,6 +51,7 @@ async function makeAndSaveAnswer(
     student,
     taskType,
     prompt: req.prompt,
+    askedFor: req.askedFor,
     documentIds: req.documentIds,
     photos: req.photos,
     language: req.language,

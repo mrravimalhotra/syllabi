@@ -18,6 +18,8 @@ export interface GenerationInput {
   student: Student;
   taskType: GenerationTaskType;
   prompt: string;
+  /** The words that can ask for a whole exercise or named pages (not a long paste or the photos' text); the whole query when omitted. */
+  askedFor?: string;
   /** Search only these of the user's own books; all of their books when omitted. */
   documentIds?: string[];
   /**
@@ -108,6 +110,7 @@ export async function runGeneration({
   student,
   taskType,
   prompt,
+  askedFor,
   documentIds,
   photos = [],
   language = "auto",
@@ -160,6 +163,7 @@ export async function runGeneration({
       : await retrieveContext(searchQuery, {
           ownerId: student.id,
           documentIds,
+          askedFor,
           // The selected books are passed whole when they fit.
           fullContextChars: fullContextBudget(),
         });
