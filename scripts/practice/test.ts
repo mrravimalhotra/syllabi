@@ -1,4 +1,4 @@
-import { EMPTY_REWARDS, STICKERS, STARS_PER_STICKER, dayOf, earn, parseRewards, starsToNextSticker, stickersFor, streakOf } from "@/lib/rewards";
+import { EMPTY_REWARDS, STICKERS, STARS_PER_STICKER, dayOf, earn, parseRewards, parseRewardsSync, starsToNextSticker, stickersFor, streakOf } from "@/lib/rewards";
 import { describe, explain, worksheetMarkdown, makeQuiz, markOrder, normaliseSettings, parseSample, settingsProblem, type OrderSettings } from "@/lib/practice/order";
 import type { PracticeNumber } from "@/lib/practice/numbers";
 import { makeCompareQuiz, makeCvcQuiz, makeSightQuiz, type CompareSettings, type SightSettings } from "@/lib/kindergarten/quiz";
@@ -436,6 +436,9 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
     let many = EMPTY_REWARDS;
     for (let d = 1; d <= 90; d++) many = earn(many, 1, dayOf(new Date(2026, 0, d))).rewards;
     check(many.days.length === 60 && many.days[59] === "2026-03-31", "Rewards: only the last 60 days are kept");
+    const synced = parseRewardsSync({ stars: 4.6, days: ["2026-10-25", "x", "2026-10-24", "2026-10-25"], owner: "kid-1" });
+    check(synced.stars === 4 && synced.days.join() === "2026-10-24,2026-10-25" && synced.owner === "kid-1", "Rewards sync: whole stars, valid days once each, in order");
+    check(parseRewardsSync(null).stars === 0 && parseRewardsSync({ stars: -5, owner: 7 }).owner === null && parseRewardsSync({ stars: 1e9 }).stars === 100_000, "Rewards sync: nothing usable adds nothing, and one sync adds at most 100,000 stars");
   }
   {
     const ext = parseAccountUpdate({ id: UUID, extend_days: 30 });

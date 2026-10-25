@@ -120,6 +120,8 @@ const baseRoutes = async (ctx, extra = {}) => {
   // No recorded letter sounds unless a test says so (also stops a slow first compile of the real route).
   await ctx.route("**/api/sounds", (r) => json(r, { letters: [] }));
   await ctx.route("**/api/library*", (r) => (r.request().method() === "GET" ? json(r, { documents: extra.books ?? books }) : json(r, { error: "x" }, 500)));
+  // The star chart stays on the device unless a test gives the account one.
+  await ctx.route("**/api/rewards", (r) => (extra.rewards ? extra.rewards(r) : json(r, { error: "offline" }, 503)));
 };
 
 // Opens a kindergarten activity's own screen from the home tiles.
@@ -753,12 +755,35 @@ await test("Kindergarten: listen and blend - the sounds are heard, then the righ
     if (q < 4) await page.locator(`[data-word]:not([data-word="${word}"])`).waitFor({ timeout: 20000 });
   }
   await page.getByText("Well done!").first().waitFor({ timeout: 20000 });
-  // The stars are added to the child's star chart (kept on this device), with the first sticker at 10.
+  // The stars are added to the child's star chart (kept on this device while the account can't be reached), with the first sticker at 10.
   await page.getByText("+5 stars").waitFor();
   await tap(page.getByRole("button", { name: "Back to the menu" }));
   await tap(page.getByRole("button", { name: "← All activities" }));
   await page.getByRole("region", { name: "Stars and stickers" }).getByText("⭐ 5 stars").waitFor();
   await page.getByText("5 more for the next sticker").waitFor();
+});
+
+await test("Stars: the account's star chart shows on a new device, and this device's stars are added to it once", async (page, ctx) => {
+  const account = { stars: 40, days: [] };
+  const sent = [];
+  await baseRoutes(ctx, {
+    rewards: (r) => {
+      const body = r.request().postDataJSON();
+      sent.push(body);
+      if (body.owner === null || body.owner === "kid-1") account.stars += body.stars;
+      return json(r, { owner: "kid-1", ...account });
+    },
+  });
+  // Stars this device earned before it was linked to the account.
+  await ctx.addInitScript(() => {
+    if (!localStorage.getItem("syllabi.rewards.owner")) localStorage.setItem("syllabi.rewards", JSON.stringify({ stars: 3, days: [] }));
+  });
+  await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
+  await page.getByRole("region", { name: "Stars and stickers" }).getByText("⭐ 43 stars").waitFor();
+  await page.reload({ waitUntil: "networkidle" });
+  await page.getByRole("region", { name: "Stars and stickers" }).getByText("⭐ 43 stars").waitFor();
+  if (sent[0]?.owner !== null || sent[0]?.stars !== 3) throw new Error(`The first sync should add this device's 3 stars: ${JSON.stringify(sent[0])}`);
+  if (sent.slice(1).some((b) => b.owner !== "kid-1" || b.stars !== 0)) throw new Error(`Later syncs should add nothing new: ${JSON.stringify(sent)}`);
 });
 
 await test("Kindergarten: place value lesson steps through and leads to the game", async (page, ctx) => {

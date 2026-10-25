@@ -41,6 +41,7 @@ import * as speech from "../../src/app/api/speech/route";
 import * as sounds from "../../src/app/api/sounds/route";
 import * as sound from "../../src/app/api/sounds/[letter]/route";
 import * as logError from "../../src/app/api/log-error/route";
+import * as rewards from "../../src/app/api/rewards/route";
 import { pageProgress, readQueuedPages } from "../../src/lib/ingestion/jobs";
 import type { Student } from "@/types/database";
 
@@ -784,6 +785,22 @@ failures.length = 0;
   page.next_attempt_at = new Date(0).toISOString();
   await readQueuedPages(null);
   check("page read: the next try saves it without asking the AI again", page.status === "done" && fakeAi.calls === 1, JSON.stringify({ status: page.status, calls: fakeAi.calls }));
+  fresh();
+}
+{
+  // The star chart follows the account.
+  fresh();
+  const added: { p_stars: number; p_days: string[] }[] = [];
+  rpcs.add_rewards = (args) => {
+    added.push(args as { p_stars: number; p_days: string[] });
+    return [{ stars: 40 + Number(args.p_stars), days: args.p_days }];
+  };
+  const first = await expect("rewards: a device's stars are added to the account", rewards.POST, 200, null, { stars: 3, days: ["2026-10-25"], owner: null });
+  check("rewards: the account's chart and its owner come back", first.json?.stars === 43 && first.json?.owner === ME && added[0]?.p_stars === 3, JSON.stringify(first.json));
+  await expect("rewards: a chart from another account adds nothing", rewards.POST, 200, null, { stars: 9, days: ["2026-10-25"], owner: "someone-else" });
+  check("rewards: nothing of the other account's is added", added[1]?.p_stars === 0 && added[1]?.p_days.length === 0, JSON.stringify(added[1]));
+  fresh(null);
+  await expect("rewards: a signed-out person is refused", rewards.POST, 401, null, { stars: 1, days: [], owner: null });
   fresh();
 }
 await expect("log-error: a crash report is accepted", logError.POST, 200, null, { where: "dashboard page", message: "boom", path: "/dashboard" });
