@@ -3,6 +3,7 @@
 import { EarnedStars } from "@/components/rewards/Rewards";
 import type { ReactNode } from "react";
 import { Burst } from "@/components/kindergarten/Burst";
+import { GamePanda, Panda } from "@/components/mascot/Panda";
 import { button, card, cx } from "@/components/ui";
 
 /** The play space every kindergarten screen sits in: a soft sky wash, the children's letter font, and room to breathe on a tablet. */
@@ -39,11 +40,14 @@ export function RoundFrame({
             )
           )}
         </div>
-        <span className="rounded-full bg-white/80 px-3 py-1 text-lg font-bold tabular-nums" aria-label={`${stars} stars`}>
-          <span key={stars} className={stars > 0 ? "kg-bump" : undefined} aria-hidden>
-            ⭐
-          </span>{" "}
-          {stars}
+        <span className="flex items-center gap-1">
+          <GamePanda />
+          <span className="rounded-full bg-white/80 px-3 py-1 text-lg font-bold tabular-nums" aria-label={`${stars} stars`}>
+            <span key={stars} className={stars > 0 ? "kg-bump" : undefined} aria-hidden>
+              ⭐
+            </span>{" "}
+            {stars}
+          </span>
         </span>
       </div>
       {children}
@@ -66,10 +70,11 @@ export function RoundDone({
 }) {
   return (
     <section className={cx(STAGE, "flex flex-col items-center justify-center gap-5 p-6 text-center")} aria-label="Well done">
-      <div className="relative">
+      <div className="relative flex items-end gap-2">
         <p className="kg-pop text-7xl sm:text-8xl" aria-hidden>
           🏆
         </p>
+        <Panda mood="clap" className="h-24 w-20 sm:h-28 sm:w-24" />
         <Burst />
       </div>
       <h2 className="kg-pop text-3xl font-bold text-slate-900 sm:text-4xl" style={{ animationDelay: "0.15s" }}>

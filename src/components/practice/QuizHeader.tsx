@@ -1,6 +1,7 @@
 "use client";
 
 import { VolumeIcon, VolumeOffIcon, XIcon } from "@/components/icons";
+import { GamePanda } from "@/components/mascot/Panda";
 import { button } from "@/components/ui";
 
 interface Props {
@@ -41,6 +42,7 @@ export function QuizHeader({
         >
           {finished ? "All done" : `Question ${index + 1} of ${total}`}
         </p>
+        <GamePanda />
         <button
           type="button"
           onClick={onToggleSound}

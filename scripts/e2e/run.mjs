@@ -754,11 +754,13 @@ await test("Kindergarten: listen and blend - the sounds are heard, then the righ
     const others = page.getByRole("button", { name: /^[a-z]{3}$/ }).and(page.locator(`:not([aria-label="${word}"])`));
     if (q === 0 && (await others.count()) > 0) {
       await tap(others.first());
-      // A wrong picture stays marked with a cross until the question changes.
+      // A wrong picture stays marked with a cross until the question changes, and the panda looks thoughtful (never sad).
       await page.getByRole("button", { name: /^[a-z]{3}$/ }).getByText("✗").first().waitFor({ timeout: 5000 });
+      await page.locator('svg[data-mood="think"]').waitFor({ timeout: 5000 });
     }
     await tap(page.getByRole("button", { name: word, exact: true }));
     if (q === 0) {
+      await page.locator('svg[data-mood="happy"]').waitFor({ timeout: 5000 });
       await page.getByText("=", { exact: true }).first().waitFor({ timeout: 15000 });
       // The question stays after the right picture: the sounds can be heard again before Next.
       const again = page.getByRole("button", { name: /Play again/ });
@@ -769,12 +771,15 @@ await test("Kindergarten: listen and blend - the sounds are heard, then the righ
     if (q < 4) await page.locator(`[data-word]:not([data-word="${word}"])`).waitFor({ timeout: 20000 });
   }
   await page.getByText("Well done!").first().waitFor({ timeout: 20000 });
+  await page.locator('svg[data-mood="clap"]').waitFor();
   // The stars are added to the child's star chart (kept on this device while the account can't be reached), with the first sticker at 10.
   await page.getByText("+5 stars").waitFor();
   await tap(page.getByRole("button", { name: "Back to the menu" }));
   await tap(page.getByRole("button", { name: "← All activities" }));
   await page.getByRole("region", { name: "Stars and stickers" }).getByText("⭐ 5 stars").waitFor();
   await page.getByText("5 more for the next sticker").waitFor();
+  // The panda waves hello beside the star chart.
+  await page.getByRole("region", { name: "Stars and stickers" }).locator('svg[data-mood="wave"]').waitFor();
 });
 
 await test("My books: View pages shows each page's picture and the text read from it", async (page, ctx) => {

@@ -29,7 +29,7 @@ function tone(c: AudioContext, type: OscillatorType, frequency: number, start: n
 }
 
 /** A rising C-major arpeggio with a little sparkle on top. */
-export function playCorrect() {
+function playCorrect() {
   const c = audio();
   if (!c) return;
   const t = c.currentTime;
@@ -38,7 +38,7 @@ export function playCorrect() {
 }
 
 /** A gentle falling "hmm": not alarming. */
-export function playWrong() {
+function playWrong() {
   const c = audio();
   if (!c) return;
   const t = c.currentTime;
@@ -75,12 +75,22 @@ export function onSoundEffectsChange(listener: () => void) {
   return () => void listeners.delete(listener);
 }
 
-/** The right-answer chime, when sound effects are on. */
+/** Sent on window after each answer (even with sounds off), so the panda can react to it. */
+export const ANSWER_EVENT = "syllabi:answer";
+export type AnswerResult = "right" | "wrong";
+
+function announce(result: AnswerResult) {
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent<AnswerResult>(ANSWER_EVENT, { detail: result }));
+}
+
+/** A right answer: the chime (when sound effects are on), and the panda cheers. */
 export function cheer() {
+  announce("right");
   if (soundEffectsOn()) playCorrect();
 }
 
-/** The gentle try-again tone, when sound effects are on. */
+/** A wrong answer: the gentle try-again tone (when sound effects are on), and the panda thinks. */
 export function oops() {
+  announce("wrong");
   if (soundEffectsOn()) playWrong();
 }

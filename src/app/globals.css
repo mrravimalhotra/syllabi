@@ -305,3 +305,22 @@ body {
 /* A gentle bob for the big picture of the word. */
 @keyframes kg-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
 .kg-bob { animation: kg-bob 2.8s ease-in-out infinite; }
+
+/* The panda guide (components/mascot/Panda.tsx): each mood has its own small movement. */
+.panda { overflow: visible; }
+.panda g { transform-box: fill-box; }
+.panda-eyes { transform-origin: center; animation: panda-blink 4.5s infinite; }
+@keyframes panda-blink { 0%, 94%, 100% { transform: scaleY(1); } 97% { transform: scaleY(0.1); } }
+.panda-wave .panda-arm-right { transform-origin: 30% 20%; animation: panda-wave 1.4s ease-in-out infinite; }
+@keyframes panda-wave { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-150deg); } 50% { transform: rotate(-115deg); } 75% { transform: rotate(-150deg); } }
+.panda-happy { animation: panda-hop 0.5s ease-out 2; }
+@keyframes panda-hop { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-14%); } }
+.panda-think .panda-head { transform-origin: 50% 100%; animation: panda-tilt 0.4s ease-out both; }
+@keyframes panda-tilt { to { transform: rotate(-9deg); } }
+.panda-clap .panda-arm-left { transform-origin: 30% 20%; animation: panda-clap-left 0.5s ease-in-out infinite; }
+.panda-clap .panda-arm-right { transform-origin: 70% 20%; animation: panda-clap-right 0.5s ease-in-out infinite; }
+@keyframes panda-clap-left { 50% { transform: rotate(-55deg) translateX(6px); } }
+@keyframes panda-clap-right { 50% { transform: rotate(55deg) translateX(-6px); } }
+@media (prefers-reduced-motion: reduce) {
+  .panda, .panda * { animation: none !important; }
+}

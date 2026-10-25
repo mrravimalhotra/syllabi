@@ -8,7 +8,7 @@ import { QuestionBoard } from "@/components/practice/QuestionBoard";
 import { QuizHeader } from "@/components/practice/QuizHeader";
 import { QuizResults } from "@/components/practice/QuizResults";
 import type { QuizResult } from "@/components/practice/quiz-types";
-import { playCorrect, playWrong } from "@/components/practice/sounds";
+import { cheer, oops } from "@/components/practice/sounds";
 import { useSoundEffects } from "@/components/practice/useSoundEffects";
 import { markOrder, type OrderQuestion } from "@/lib/practice/order";
 
@@ -66,8 +66,8 @@ export function OrderQuiz({
     const result = { question: q, picked: answer, marks, correct: marks.every(Boolean) };
     if (result.correct) {
       setBurst((b) => b + 1);
-      if (sound) playCorrect();
-    } else if (sound) playWrong();
+      cheer();
+    } else oops();
     setResults((r) => [...r, result]);
     setFeedback(result);
     setShowWhy(!result.correct);
