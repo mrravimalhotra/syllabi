@@ -122,6 +122,9 @@ const baseRoutes = async (ctx, extra = {}) => {
   await ctx.route("**/api/library*", (r) => (r.request().method() === "GET" ? json(r, { documents: extra.books ?? books }) : json(r, { error: "x" }, 500)));
 };
 
+// Opens a kindergarten activity's own screen from the home tiles.
+const openActivity = (page, title) => tap(page.getByRole("button", { name: title, exact: true }));
+
 await waitForServer();
 // A fake microphone, so the sound recorder can be tried without a real one.
 browser = await chromium.launch({ executablePath: CHROMIUM, args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"] });
@@ -704,7 +707,8 @@ await test("Kindergarten: spelling a word with letters, a full round ends in sta
   await baseRoutes(ctx);
   await speechOk(ctx);
   await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
-  await tap(page.getByRole("button", { name: /Play/ }).nth(1));
+  await openActivity(page, "Spell the word");
+  await tap(page.getByRole("button", { name: "▶ Play" }));
   for (let q = 0; q < 5; q++) {
     const box = page.locator("[data-word]");
     await box.waitFor();
@@ -724,7 +728,8 @@ await test("Kindergarten: listen and blend - the sounds are heard, then the righ
   await baseRoutes(ctx);
   await speechOk(ctx);
   await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
-  await tap(page.getByRole("button", { name: /Play/ }).first());
+  await openActivity(page, "Listen and blend");
+  await tap(page.getByRole("button", { name: "▶ Play" }));
   for (let q = 0; q < 5; q++) {
     const box = page.locator("[data-word]");
     await box.waitFor({ timeout: 15000 });
@@ -754,6 +759,7 @@ await test("Kindergarten: place value lesson steps through and leads to the game
   await baseRoutes(ctx);
   await speechOk(ctx);
   await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
+  await openActivity(page, "Place value");
   await tap(page.getByRole("button", { name: /Learn first/ }));
   await page.getByLabel("Place value lesson").waitFor();
   for (let i = 0; i < 4; i++) await tap(page.getByRole("button", { name: "Next →", exact: true }));
@@ -766,8 +772,8 @@ await test("Kindergarten: place value game - a wrong answer is not accepted, a f
   await baseRoutes(ctx);
   await speechOk(ctx);
   await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
-  await page.getByRole("button", { name: "▶ Play" }).nth(5).waitFor();
-  await tap(page.getByRole("button", { name: "▶ Play" }).nth(5));
+  await openActivity(page, "Place value");
+  await tap(page.getByRole("button", { name: "▶ Play" }));
   for (let q = 0; q < 5; q++) {
     const box = page.locator("[data-answer]");
     await box.waitFor({ timeout: 15000 });
@@ -787,9 +793,10 @@ await test("Kindergarten: word explorer - tap a letter, slide to blend, next wor
   await baseRoutes(ctx);
   await speechOk(ctx);
   await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
+  await openActivity(page, "Word explorer");
   // Only the -at family: every word rhymes.
   await tap(page.getByRole("group", { name: "Word family" }).getByRole("button", { name: "-at", exact: true }));
-  await tap(page.getByRole("button", { name: "▶ Play" }).nth(3));
+  await tap(page.getByRole("button", { name: "▶ Play" }));
   const tiles = page.locator("[data-word]");
   await tiles.waitFor();
   const word = await tiles.getAttribute("data-word");
@@ -829,7 +836,8 @@ await test("Kindergarten: a recorded sound is played instead of the voice", asyn
   await ctx.route("**/api/sounds", (r) => json(r, { letters: "abcdefghijklmnopqrstuvwxyz".split("") }));
   await ctx.route(/\/api\/sounds\/[a-z]$/, (r) => { fetched++; return r.fulfill({ status: 200, contentType: "audio/wav", body: silentWav }); });
   await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
-  await tap(page.getByRole("button", { name: /Play/ }).first());
+  await openActivity(page, "Listen and blend");
+  await tap(page.getByRole("button", { name: "▶ Play" }));
   await page.locator("[data-word]").waitFor({ timeout: 15000 });
   for (let i = 0; i < 60 && fetched < 3; i++) await page.waitForTimeout(250);
   if (fetched < 3) throw new Error(`Expected the recorded sounds to be fetched, saw ${fetched}.`);
@@ -849,7 +857,8 @@ await test("Kindergarten: letter sounds play the pure-sound files, not the speec
     if (m) files.add(m[1]);
   });
   await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
-  await tap(page.getByRole("button", { name: /Play/ }).first());
+  await openActivity(page, "Listen and blend");
+  await tap(page.getByRole("button", { name: "▶ Play" }));
   await page.locator("[data-word]").waitFor({ timeout: 15000 });
   for (let i = 0; i < 60 && !(files.size && kinds.has("phrase")); i++) await page.waitForTimeout(250);
   if (!files.size) throw new Error("Expected the letter sound files in /sounds to be used.");
@@ -867,16 +876,34 @@ await test("Kindergarten: without the sound files, letter sounds are asked for i
     return r.fulfill({ status: 200, contentType: "audio/wav", body: silentWav });
   });
   await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
-  await tap(page.getByRole("button", { name: /Play/ }).first());
+  await openActivity(page, "Listen and blend");
+  await tap(page.getByRole("button", { name: "▶ Play" }));
   await page.locator("[data-word]").waitFor({ timeout: 15000 });
   for (let i = 0; i < 60 && !(kinds.has("sound") && kinds.has("phrase")); i++) await page.waitForTimeout(250);
   if (!kinds.has("sound") || !kinds.has("phrase")) throw new Error(`Expected both phrase and sound requests, saw ${[...kinds]}.`);
 });
 
+await test("Kindergarten: home tiles open each activity's screen, and leaving a game goes back to it", async (page, ctx) => {
+  await baseRoutes(ctx);
+  await speechOk(ctx);
+  await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
+  // The tile says what is chosen now.
+  await page.getByRole("button", { name: "Spell the word", exact: true }).getByText(/words$/).waitFor();
+  await openActivity(page, "Spell the word");
+  await page.getByRole("heading", { name: "Spell the word" }).waitFor();
+  await tap(page.getByRole("group", { name: "Questions in a round" }).getByRole("button", { name: "10 words" }));
+  await tap(page.getByRole("button", { name: "▶ Play" }));
+  await page.locator("[data-word]").waitFor({ timeout: 15000 });
+  await tap(page.getByRole("button", { name: "← Menu" }));
+  await page.getByRole("heading", { name: "Spell the word" }).waitFor();
+  await tap(page.getByRole("button", { name: "← All activities" }));
+  await page.getByRole("button", { name: "Spell the word", exact: true }).getByText(/10 words/).waitFor();
+});
+
 await test("Kindergarten: the grown-up guide explains how to say the sounds", async (page, ctx) => {
   await baseRoutes(ctx);
   await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
-  await page.getByText("How to say the sounds (for grown-ups)").click();
+  await openActivity(page, "How to say the sounds");
   await page.getByText(/not “buh”|not "buh"/).first().waitFor();
   await page.getByText(/Lips together and hum/).first().waitFor();
 });
@@ -885,7 +912,8 @@ await test("Kindergarten: a wrong letter says try again and does not place it", 
   await baseRoutes(ctx);
   await speechOk(ctx);
   await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
-  await tap(page.getByRole("button", { name: /Play/ }).nth(1));
+  await openActivity(page, "Spell the word");
+  await tap(page.getByRole("button", { name: "▶ Play" }));
   const box = page.locator("[data-word]");
   await box.waitFor();
   const word = await box.getAttribute("data-word");
@@ -901,7 +929,8 @@ await test("Kindergarten: sight words round works when the natural voice is unav
   await baseRoutes(ctx);
   await ctx.route("**/api/speech", (r) => json(r, { error: "no voice" }, 503));
   await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
-  await tap(page.getByRole("button", { name: /Play/ }).nth(2));
+  await openActivity(page, "Find the word");
+  await tap(page.getByRole("button", { name: "▶ Play" }));
   for (let q = 0; q < 5; q++) {
     const box = page.locator("[data-word]");
     await box.waitFor({ timeout: 15000 });
@@ -916,7 +945,8 @@ await test("Kindergarten: more, fewer or same - tapping the right group earns a 
   await baseRoutes(ctx);
   await speechOk(ctx);
   await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
-  await tap(page.getByRole("button", { name: /Play/ }).nth(4));
+  await openActivity(page, "More or fewer");
+  await tap(page.getByRole("button", { name: "▶ Play" }));
   for (let q = 0; q < 5; q++) {
     const box = page.locator("[data-answer]");
     await box.waitFor({ timeout: 8000 });

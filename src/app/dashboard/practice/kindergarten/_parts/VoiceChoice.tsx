@@ -1,13 +1,11 @@
 "use client";
 
 import { Chip } from "@/app/dashboard/practice/kindergarten/_parts/Chip";
-import { card, cx } from "@/components/ui";
 
 /** Which voice reads to the child: the friendly one made by the app, or the phone's own. */
 export function VoiceChoice({ voice, onChoose }: { voice: "natural" | "phone"; onChoose: (next: "natural" | "phone") => void }) {
   return (
-    <section className={cx(card, "space-y-2 p-4 text-sm text-slate-600")}>
-      <p className="font-medium text-slate-900">Voice</p>
+    <section className="space-y-2 text-sm text-slate-600">
       <div className="flex flex-wrap gap-2" role="group" aria-label="Voice">
         <Chip on={voice === "natural"} onClick={() => onChoose("natural")}>
           Friendly voice

@@ -2,39 +2,27 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ActivityCard, MenuGroup, MenuLink } from "@/app/dashboard/practice/kindergarten/_parts/ActivityCard";
+import { ActivityTile, LinkTile, MenuGroup } from "@/app/dashboard/practice/kindergarten/_parts/ActivityCard";
 import { ActivityGame, type Activity } from "@/app/dashboard/practice/kindergarten/_parts/ActivityGame";
-import { Chip } from "@/app/dashboard/practice/kindergarten/_parts/Chip";
-import { SoundGuide } from "@/app/dashboard/practice/kindergarten/_parts/SoundGuide";
-import { VoiceChoice } from "@/app/dashboard/practice/kindergarten/_parts/VoiceChoice";
 import { isCompare, isCvc, isPlace, isSight } from "@/app/dashboard/practice/kindergarten/_parts/prefs";
+import { KindergartenScreen, SCREENS, type Screen } from "@/app/dashboard/practice/kindergarten/_parts/Screens";
+import { summary } from "@/app/dashboard/practice/kindergarten/_parts/Settings";
 import { useSay, useVoiceChoice } from "@/components/kindergarten/useSay";
 import { PageHeader } from "@/components/ui";
-import { DEFAULT_PLACE, PLACE_MAX } from "@/lib/kindergarten/place-value";
-import { DEFAULT_COMPARE, DEFAULT_CVC, DEFAULT_SIGHT, ROUND_SIZES } from "@/lib/kindergarten/quiz";
-import { SIGHT_LEVELS, SIGHT_LEVEL_LABELS, VOWELS, familiesOf, type Vowel } from "@/lib/kindergarten/words";
+import { DEFAULT_PLACE } from "@/lib/kindergarten/place-value";
+import { DEFAULT_COMPARE, DEFAULT_CVC, DEFAULT_SIGHT } from "@/lib/kindergarten/quiz";
 import { newSeed } from "@/lib/practice/random";
 import { usePref } from "@/lib/use-pref";
-
-/** The picture word for each vowel, shown on its chip ("a as in cat"). */
-const VOWEL_WORD: Record<Vowel, string> = {
-  a: "cat",
-  e: "hen",
-  i: "pig",
-  o: "dog",
-  u: "sun",
-};
 
 /**
  * Kindergarten: short, picture-led activities for the youngest learners,
  * made entirely by code (no AI), read aloud to the child, with no scores to
- * fail. Grown-ups choose what to practise under each activity.
+ * fail. The home is a set of tiles; each opens the activity's own screen,
+ * where the grown-up chooses what to practise and presses Play.
  */
 export default function KindergartenPage() {
-  const [activity, setActivity] = useState<{
-    kind: Activity;
-    seed: number;
-  } | null>(null);
+  const [activity, setActivity] = useState<{ kind: Activity; seed: number } | null>(null);
+  const [screen, setScreen] = useState<Screen | null>(null);
   const [cvc, setCvc] = usePref("syllabi-kg-cvc", DEFAULT_CVC, isCvc);
   const [sight, setSight] = usePref("syllabi-kg-sight", DEFAULT_SIGHT, isSight);
   const [compare, setCompare] = usePref("syllabi-kg-compare", DEFAULT_COMPARE, isCompare);
@@ -43,6 +31,7 @@ export default function KindergartenPage() {
   const speaker = useSay();
 
   const start = (kind: Activity) => setActivity({ kind, seed: newSeed() });
+  // Leaving a game goes back to its screen, so it can be played again with one tap.
   const exit = () => {
     speaker.stop();
     setActivity(null);
@@ -66,161 +55,63 @@ export default function KindergartenPage() {
     );
   }
 
-  const toggleVowel = (v: Vowel) => {
-    const next = cvc.vowels.includes(v) ? cvc.vowels.filter((x) => x !== v) : [...cvc.vowels, v];
-    if (next.length === 0) return;
-    const vowels = VOWELS.filter((x) => next.includes(x));
-    // A family that no chosen vowel has any more is dropped.
-    const family = cvc.family && vowels.some((x) => familiesOf(x).includes(cvc.family!)) ? cvc.family : undefined;
-    setCvc({ ...cvc, vowels, family });
+  if (screen) {
+    return (
+      <KindergartenScreen
+        screen={screen}
+        {...{ cvc, setCvc, sight, setSight, compare, setCompare, place, setPlace, voice }}
+        chooseVoice={choose}
+        start={start}
+        onBack={() => setScreen(null)}
+      />
+    );
+  }
+
+  const tile = (id: Screen, chosen?: string) => {
+    const { emoji, tone, title, hint, badge } = SCREENS[id];
+    return <ActivityTile {...{ emoji, tone, title, hint, badge, chosen }} onOpen={() => setScreen(id)} />;
   };
-  const families = cvc.vowels.flatMap(familiesOf);
-  const roundSizes = (current: number, set: (n: 5 | 10) => void, label: string) =>
-    ROUND_SIZES.map((n) => (
-      <Chip key={n} on={current === n} onClick={() => set(n)}>
-        {n} {label}
-      </Chip>
-    ));
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="animate-fade-in space-y-7">
       <PageHeader
         title="Kindergarten"
-        description="Short activities for little learners. Each is read aloud, uses pictures, and has no scores to fail: a wrong tap just says “try again”. Hand the phone to your child, and choose what to practise below."
+        description="Short activities for little learners, read aloud, with pictures and no scores to fail: a wrong tap just says “try again”. Choose an activity, then hand the phone to your child."
       />
-      <Link href="/dashboard/practice" className="text-sm font-medium text-brand-700 hover:underline">
+      <Link href="/dashboard/practice" className="block w-fit text-sm font-medium text-brand-700 hover:underline">
         ← Back to Practice
       </Link>
 
       <MenuGroup title="Letters and sounds">
-        <ActivityCard
-          emoji="👂"
-          tone="letters"
-          title="Listen and blend"
-          description="Start here. Hear the sounds of a word one at a time (m… a… p…), put them together, and tap the picture. Uses the same vowels as Spell the word below."
-          onPlay={() => start("blend")}
-        />
-
-        <ActivityCard
-          emoji="🐱"
-          tone="letters"
-          title="Spell the word (CVC words)"
-          description="See a picture, hear the word, tap the three letters in order: c-a-t, d-o-g, s-u-n."
-          onPlay={() => start("cvc")}
-        >
-          <div className="space-y-2">
-            <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">Vowel sounds to practise</p>
-            <div className="flex flex-wrap gap-2" role="group" aria-label="Vowel sounds to practise">
-              {VOWELS.map((v) => (
-                <Chip key={v} on={cvc.vowels.includes(v)} onClick={() => toggleVowel(v)}>
-                  {v} <span className="text-slate-400">as in {VOWEL_WORD[v]}</span>
-                </Chip>
-              ))}
-            </div>
-            <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">Word family (rhyming words)</p>
-            <div className="flex flex-wrap gap-2" role="group" aria-label="Word family">
-              <Chip on={!cvc.family} onClick={() => setCvc({ ...cvc, family: undefined })}>
-                All words
-              </Chip>
-              {families.map((rime) => (
-                <Chip key={rime} on={cvc.family === rime} onClick={() => setCvc({ ...cvc, family: rime })}>
-                  -{rime}
-                </Chip>
-              ))}
-            </div>
-            <div className="flex flex-wrap gap-2" role="group" aria-label="Questions in a round">
-              {roundSizes(cvc.questions, (n) => setCvc({ ...cvc, questions: n }), "words")}
-            </div>
-          </div>
-        </ActivityCard>
-
-        <ActivityCard
-          emoji="👀"
-          tone="letters"
-          title="Find the word (sight words)"
-          description="Hear a common word like “the” or “you”, then find it among three words."
-          onPlay={() => start("sight")}
-        >
-          <div className="flex flex-wrap gap-2" role="group" aria-label="Which words">
-            {SIGHT_LEVELS.map((level) => (
-              <Chip key={level} on={sight.level === level} onClick={() => setSight({ ...sight, level })}>
-                {SIGHT_LEVEL_LABELS[level]}
-              </Chip>
-            ))}
-            {roundSizes(sight.questions, (n) => setSight({ ...sight, questions: n }), "words")}
-          </div>
-        </ActivityCard>
-
-        <ActivityCard
-          emoji="🔍"
-          tone="letters"
-          title="Word explorer (CVC words)"
-          description="No questions, no scores. Tap each letter to hear its pure sound, then slide from the first letter to the last to blend them into the word. Uses the vowels and word family chosen under Spell the word."
-          onPlay={() => start("explore")}
-        />
+        {tile("blend", summary.cvc(cvc))}
+        {tile("cvc", summary.cvc(cvc))}
+        {tile("explore", summary.cvc(cvc))}
+        {tile("sight", summary.sight(sight))}
       </MenuGroup>
 
       <MenuGroup title="Numbers">
-        <ActivityCard
-          emoji="🍎"
-          tone="numbers"
-          title="More, fewer or the same"
-          description="Look at two groups of pictures and tap the one with more (or fewer), or “the same”."
-          onPlay={() => start("compare")}
-        >
-          <div className="flex flex-wrap gap-2" role="group" aria-label="How big the groups are">
-            {([5, 10, 20] as const).map((max) => (
-              <Chip key={max} on={compare.max === max} onClick={() => setCompare({ ...compare, max })}>
-                Up to {max}
-              </Chip>
-            ))}
-            {roundSizes(compare.questions, (n) => setCompare({ ...compare, questions: n }), "questions")}
-          </div>
-        </ActivityCard>
-
-        <ActivityCard
-          emoji="🔟"
-          tone="numbers"
-          title="Place value and face value"
-          description="Learn what a digit is, and what it is worth where it sits (the 4 in 47 is worth 40), with tens and ones blocks. Then play the quiz."
-          onLearn={() => start("place-learn")}
-          onPlay={() => start("place")}
-        >
-          <div className="flex flex-wrap gap-2" role="group" aria-label="How big the numbers are">
-            {PLACE_MAX.map((max) => (
-              <Chip key={max} on={place.max === max} onClick={() => setPlace({ ...place, max })}>
-                Up to {max}
-              </Chip>
-            ))}
-            {roundSizes(place.questions, (n) => setPlace({ ...place, questions: n }), "questions")}
-          </div>
-        </ActivityCard>
+        {tile("compare", summary.compare(compare))}
+        {tile("place", summary.place(place))}
       </MenuGroup>
 
-      <GrownUpTools voice={voice} onChoose={choose} />
+      <MenuGroup title="For grown-ups">
+        <LinkTile
+          href="/dashboard/practice/kindergarten/sounds"
+          emoji="🎤"
+          tone="grownups"
+          title="Record the sounds"
+          hint="Use your own voice, the way the school teacher says them"
+        />
+        <LinkTile
+          href="/dashboard/practice/kindergarten/worksheets"
+          emoji="🖨️"
+          tone="grownups"
+          title="Printable worksheets"
+          hint="Word families and picture matching"
+        />
+        {tile("guide")}
+        {tile("voice", voice === "natural" ? "Friendly voice" : "This phone's voice")}
+      </MenuGroup>
     </div>
-  );
-}
-
-/** Tools for the grown-up: their own recordings, worksheets, how to say the sounds, and which voice reads. */
-function GrownUpTools({ voice, onChoose }: { voice: "natural" | "phone"; onChoose: (voice: "natural" | "phone") => void }) {
-  return (
-    <MenuGroup title="For grown-ups">
-      <MenuLink
-        href="/dashboard/practice/kindergarten/sounds"
-        emoji="🎤"
-        title="Record the sounds"
-        description="Record each letter sound the way the school teacher says it (m, a, p… k, a, t), and the activities will use your voice."
-      />
-      <MenuLink
-        href="/dashboard/practice/kindergarten/worksheets"
-        emoji="🖨️"
-        title="Printable worksheets"
-        description="Complete each word family, and match pictures to CVC words."
-      />
-
-      <SoundGuide />
-      <VoiceChoice voice={voice} onChoose={onChoose} />
-    </MenuGroup>
   );
 }

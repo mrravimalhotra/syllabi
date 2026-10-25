@@ -1,14 +1,12 @@
 "use client";
 
 import { IPA, PHONEMES, TEACHING_ORDER } from "@/lib/kindergarten/phonics";
-import { card, cx } from "@/components/ui";
 
-/** "How to say the sounds (for grown-ups)": the method, then each sound with its symbol, picture word and mouth tip. */
+/** How to say the sounds, for grown-ups: the method, then each sound with its symbol, picture word and mouth tip. */
 export function SoundGuide() {
   return (
-    <details className={cx(card, "p-4 text-sm text-slate-600 sm:p-5")}>
-      <summary className="cursor-pointer text-base font-semibold text-slate-900">How to say the sounds (for grown-ups)</summary>
-      <div className="mt-3 space-y-4">
+    <div className="text-sm text-slate-600">
+      <div className="space-y-4">
         <ul className="list-disc space-y-1.5 pl-5">
           <li>
             Say the <strong>sound</strong> a letter makes, not its name: <strong>m</strong> says “mmm”, not “em”.
@@ -22,7 +20,9 @@ export function SoundGuide() {
             <strong>2. Slide:</strong> join the first two sounds (“ma…”). <strong>3. Finish:</strong> add the last sound and slide a finger
             under the whole word: “map”.
           </li>
-          <li>The vowels are red. Each has a picture word: a as in apple, e as in egg, i as in ink, o as in octopus, u as in umbrella.</li>
+          <li>
+            The vowels are amber. Each has a picture word: a as in apple, e as in egg, i as in ink, o as in octopus, u as in umbrella.
+          </li>
         </ul>
         <div className="grid grid-cols-1 gap-x-6 gap-y-1.5 sm:grid-cols-2">
           {Object.entries(PHONEMES)
@@ -44,6 +44,6 @@ export function SoundGuide() {
           played instead. See <code>public/sounds/README.md</code>.
         </p>
       </div>
-    </details>
+    </div>
   );
 }

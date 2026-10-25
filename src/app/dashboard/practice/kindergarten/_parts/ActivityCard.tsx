@@ -5,30 +5,26 @@ import type { ReactNode } from "react";
 import { card, cx } from "@/components/ui";
 
 /** The colour behind an activity's picture: sky for letters, sunshine for numbers, grey for the grown-up's tools. */
-const TILE = {
-  letters: "bg-sky-100",
-  numbers: "bg-amber-100",
-  grownups: "bg-slate-100",
-} as const;
-type Tone = keyof typeof TILE;
+const TILE = { letters: "bg-sky-100", numbers: "bg-amber-100", grownups: "bg-slate-100" } as const;
+export type Tone = keyof typeof TILE;
 
-/** A group of activities on the menu, under its own heading. */
+/** A group of tiles on the kindergarten home, under its own heading. */
 export function MenuGroup({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="space-y-3" aria-label={title}>
-      <h2 className="pt-2 text-sm font-semibold tracking-wide text-slate-500 uppercase">{title}</h2>
-      {children}
+      <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">{title}</h2>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{children}</div>
     </section>
   );
 }
 
-function Picture({ emoji, tone, small }: { emoji: string; tone: Tone; small?: boolean }) {
+function Picture({ emoji, tone, size = "md" }: { emoji: string; tone: Tone; size?: "md" | "lg" }) {
   return (
     <span
       className={cx(
         "flex shrink-0 items-center justify-center rounded-2xl",
         TILE[tone],
-        small ? "h-14 w-14 text-3xl" : "h-16 w-16 text-4xl"
+        size === "lg" ? "h-20 w-20 text-5xl" : "h-14 w-14 text-3xl"
       )}
       aria-hidden
     >
@@ -37,12 +33,62 @@ function Picture({ emoji, tone, small }: { emoji: string; tone: Tone; small?: bo
   );
 }
 
-/** One activity on the menu: a big picture, what it is, the grown-up's choices (children), and a Play button. */
-export function ActivityCard({
+interface TileProps {
+  emoji: string;
+  tone: Tone;
+  title: string;
+  /** One short line on what it is. */
+  hint: string;
+  /** What is chosen now, when the activity has choices. */
+  chosen?: string;
+  /** A small label in the corner ("Start here"). */
+  badge?: string;
+}
+
+const TILE_CLASS = cx(
+  card,
+  "relative flex h-full flex-col items-start gap-2 p-4 text-left transition hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-md active:scale-[0.98]"
+);
+
+function TileBody({ emoji, tone, title, hint, chosen, badge }: TileProps) {
+  return (
+    <>
+      {badge && (
+        <span className="absolute top-3 right-3 rounded-full bg-brand-600 px-2 py-0.5 text-[11px] font-semibold text-white">{badge}</span>
+      )}
+      <Picture emoji={emoji} tone={tone} />
+      <span className="text-base leading-snug font-semibold text-slate-900">{title}</span>
+      <span className="text-sm text-slate-500">{hint}</span>
+      {chosen && <span className="mt-auto pt-1 text-xs font-medium text-brand-700">{chosen}</span>}
+    </>
+  );
+}
+
+/** A tile on the kindergarten home that opens an activity's own screen. */
+export function ActivityTile({ onOpen, ...props }: TileProps & { onOpen: () => void }) {
+  return (
+    <button type="button" onClick={onOpen} aria-label={props.title} className={TILE_CLASS}>
+      <TileBody {...props} />
+    </button>
+  );
+}
+
+/** A tile that opens another page (recording the sounds, worksheets). */
+export function LinkTile({ href, ...props }: TileProps & { href: string }) {
+  return (
+    <Link href={href} aria-label={props.title} className={TILE_CLASS}>
+      <TileBody {...props} />
+    </Link>
+  );
+}
+
+/** One activity's own screen: what it is, the grown-up's choices (children), and the big buttons to start. */
+export function ActivityScreen({
   emoji,
   tone,
   title,
   description,
+  onBack,
   onPlay,
   onLearn,
   children,
@@ -51,53 +97,58 @@ export function ActivityCard({
   tone: Tone;
   title: string;
   description: string;
-  onPlay: () => void;
+  onBack: () => void;
+  /** Absent for screens with nothing to play (the grown-up's guide, the voice). */
+  onPlay?: () => void;
   /** A lesson before the game, when the activity has one. */
   onLearn?: () => void;
   children?: ReactNode;
 }) {
   return (
-    <section className={cx(card, "space-y-4 p-4 sm:p-6")}>
-      <div className="flex items-start gap-4">
-        <Picture emoji={emoji} tone={tone} />
-        <div>
-          <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
-          <p className="text-sm text-slate-500">{description}</p>
-        </div>
-      </div>
-      {children}
-      {onLearn && (
-        <button
-          type="button"
-          onClick={onLearn}
-          className="min-h-14 w-full rounded-2xl border-4 border-brand-200 bg-white px-6 text-xl font-semibold text-brand-800 active:scale-95"
-        >
-          📖 Learn first
-        </button>
-      )}
-      <button
-        type="button"
-        onClick={onPlay}
-        className="min-h-14 w-full rounded-2xl bg-brand-600 px-6 text-xl font-semibold text-white shadow-sm active:scale-95"
-      >
-        ▶ Play
+    <div className="animate-fade-in space-y-5">
+      <button type="button" onClick={onBack} className="text-sm font-medium text-brand-700 hover:underline">
+        ← All activities
       </button>
-    </section>
-  );
-}
-
-/** A menu entry that opens another page. */
-export function MenuLink({ href, emoji, title, description }: { href: string; emoji: string; title: string; description: string }) {
-  return (
-    <Link href={href} className={cx(card, "flex items-center gap-4 p-4 transition hover:border-brand-300 sm:p-5")}>
-      <Picture emoji={emoji} tone="grownups" small />
-      <span>
-        <span className="block text-base font-semibold text-slate-900">{title}</span>
-        <span className="block text-sm text-slate-500">{description}</span>
-      </span>
-      <span className="ml-auto text-slate-400" aria-hidden>
-        →
-      </span>
-    </Link>
+      <section className={cx(card, "space-y-6 p-5 sm:p-7")} aria-label={title}>
+        <div className="flex items-start gap-4">
+          <Picture emoji={emoji} tone={tone} size="lg" />
+          <div className="space-y-1">
+            <h2 className="text-2xl font-semibold text-slate-900">{title}</h2>
+            <p className="text-sm text-slate-600">{description}</p>
+          </div>
+        </div>
+        {(onLearn || onPlay) && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {onLearn && (
+              <button
+                type="button"
+                onClick={onLearn}
+                className="min-h-16 rounded-2xl border-4 border-brand-200 bg-white px-6 text-xl font-semibold text-brand-800 active:scale-95"
+              >
+                📖 Learn first
+              </button>
+            )}
+            {onPlay && (
+              <button
+                type="button"
+                onClick={onPlay}
+                className={cx(
+                  "min-h-16 rounded-2xl bg-brand-600 px-6 text-xl font-semibold text-white shadow-sm active:scale-95",
+                  !onLearn && "sm:col-span-2"
+                )}
+              >
+                ▶ Play
+              </button>
+            )}
+          </div>
+        )}
+        {children && (
+          <div className="space-y-5 border-t border-slate-100 pt-5">
+            {(onLearn || onPlay) && <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">Choose what to practise</p>}
+            {children}
+          </div>
+        )}
+      </section>
+    </div>
   );
 }
