@@ -47,8 +47,15 @@ export function QuizResults({
           className="text-3xl tracking-widest text-amber-400"
           aria-label={`${stars} out of 5 stars`}
         >
-          {"★".repeat(stars)}
-          <span className="text-slate-200">{"★".repeat(5 - stars)}</span>
+          {Array.from({ length: 5 }, (_, i) => (
+            <span
+              key={i}
+              className={cx("kg-star inline-block", i >= stars && "text-slate-200")}
+              style={{ animationDelay: `${i * 0.12}s` }}
+            >
+              ★
+            </span>
+          ))}
         </p>
         <p className="text-5xl font-bold text-slate-900 tabular-nums">
           {score}

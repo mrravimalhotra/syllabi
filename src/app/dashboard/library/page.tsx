@@ -143,6 +143,25 @@ export default function LibraryPage() {
 
   if (loading) return <PageSkeleton rows={2} />;
 
+  // A returning parent sees their books first; someone with none sees the form to add one first.
+  const bookList = (
+    <BookList
+      documents={documents}
+      loadFailed={loadFailed}
+      deleting={books.deleting}
+      downloading={downloads.downloading}
+      checking={scans.checking}
+      errors={{ ...books.errors, ...downloads.errors, ...scans.errors }}
+      isUnfinished={books.unfinished}
+      onRename={list.rename}
+      onDelete={books.deleteBook}
+      onDownload={(d) => void downloads.download(d.id, d.title)}
+      onCheckScan={(d) => void scans.check(d.id)}
+      onRetry={books.retryPages}
+      onRemoveUnfinished={books.removeUnfinished}
+    />
+  );
+
   return (
     <div className="space-y-8">
       <PageHeader
@@ -154,6 +173,8 @@ export default function LibraryPage() {
           </>
         }
       />
+
+      {documents.length > 0 && bookList}
 
       <AddBookForm
         values={values}
@@ -171,21 +192,7 @@ export default function LibraryPage() {
         onStop={() => stopRef.current?.abort()}
       />
 
-      <BookList
-        documents={documents}
-        loadFailed={loadFailed}
-        deleting={books.deleting}
-        downloading={downloads.downloading}
-        checking={scans.checking}
-        errors={{ ...books.errors, ...downloads.errors, ...scans.errors }}
-        isUnfinished={books.unfinished}
-        onRename={list.rename}
-        onDelete={books.deleteBook}
-        onDownload={(d) => void downloads.download(d.id, d.title)}
-        onCheckScan={(d) => void scans.check(d.id)}
-        onRetry={books.retryPages}
-        onRemoveUnfinished={books.removeUnfinished}
-      />
+      {documents.length === 0 && bookList}
     </div>
   );
 }

@@ -103,12 +103,12 @@ export function PracticeTest({
             <p
               role="status"
               className={cx(
-                "flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium",
+                "kg-pop flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium",
                 autoResult ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-900"
               )}
             >
               {autoResult ? <CheckIcon className="h-4 w-4" /> : <AlertIcon className="h-4 w-4" />}
-              {autoResult ? "Correct!" : "Not quite. See the answer below."}
+              {autoResult ? "Correct! 🎉" : "Not quite. See the answer below."}
             </p>
           )}
           <AnswerBlock q={q} section="practiceQuestions" index={index} answerId={answerId} speech={speech} onChange={onChange} />

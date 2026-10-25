@@ -36,7 +36,6 @@ export function PackHeader({ pack, pdfUrl, meta, actions, copied, onCopy, speech
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
-          {actions}
           <button type="button" onClick={onCopy} className={button.small}>
             {copied ? <CheckIcon className="h-4 w-4 text-emerald-600" /> : <CopyIcon className="h-4 w-4" />}
             {copied ? "Copied" : "Copy"}
@@ -47,6 +46,8 @@ export function PackHeader({ pack, pdfUrl, meta, actions, copied, onCopy, speech
               <DownloadIcon className="h-4 w-4" /> PDF
             </PdfButton>
           )}
+          {/* Last, so the first button reached is never Delete. */}
+          {actions}
         </div>
       </div>
       {pack.overview && <p className="text-[15px] leading-7 text-slate-700">{pack.overview}</p>}

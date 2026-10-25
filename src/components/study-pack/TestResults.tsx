@@ -1,5 +1,6 @@
 "use client";
 
+import { Confetti } from "@/components/practice/Confetti";
 import { button, card, cx } from "@/components/ui";
 import type { PackQuestion } from "@/lib/study-pack/types";
 
@@ -17,6 +18,10 @@ export function TestResults({
   const missed = questions.map((qq, i) => ({ qq, i })).filter(({ i }) => marks[i] === false);
   return (
     <section className={cx(card, "space-y-5 p-6 text-center")}>
+      <Confetti burst={score >= questions.length * 0.7 ? 1 : 0} />
+      <p className="kg-pop text-6xl" aria-hidden>
+        {score === questions.length ? "🏆" : score >= questions.length * 0.7 ? "🌟" : "💪"}
+      </p>
       <p className="text-sm font-medium text-slate-500">Practice test finished</p>
       <p className="text-5xl font-semibold tracking-tight text-slate-900 tabular-nums">
         {score}

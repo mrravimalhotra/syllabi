@@ -52,7 +52,6 @@ export function AnswerView({ answer, actions, meta }: { answer: Answer; actions?
           <ConfidenceBadge confidence={answer.confidence} />
         </div>
         <div className="flex shrink-0 flex-wrap gap-2 print:hidden">
-          {actions}
           <CopyButton text={answer.text} />
           <PrintButton pdfUrl={answer.pdfUrl} name={answer.title} />
           {answer.pdfUrl && hasAnswerKey(answer.text) && (
@@ -65,6 +64,8 @@ export function AnswerView({ answer, actions, meta }: { answer: Answer; actions?
               <DownloadIcon className="h-4 w-4" /> PDF
             </PdfButton>
           )}
+          {/* Last, so the first button reached is never Delete. */}
+          {actions}
         </div>
       </header>
 
