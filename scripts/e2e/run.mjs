@@ -607,6 +607,23 @@ await test("Admin accounts: lists accounts and explains a refused change", async
   await page.getByText("Meera").first().waitFor();
 });
 
+await test("Admin accounts: an ended guest login can be turned on again for more days", async (page, ctx) => {
+  let sent = null;
+  const guest = { id: "u3", email: "guest@example.com", full_name: "Guest", role: "student", active: true, token_quota: 20000, monthly_usage: 0, created_at: now, account_type: "parent", guest_until: "2026-01-01T00:00:00Z" };
+  await ctx.route("**/api/admin/students", (r) => {
+    if (r.request().method() === "GET") return json(r, { students: [guest] });
+    sent = JSON.parse(r.request().postData() ?? "{}");
+    return json(r, { student: { ...guest, guest_until: "2099-02-01T00:00:00Z" } });
+  });
+  await page.goto(`${BASE}/admin/students`, { waitUntil: "networkidle" });
+  await page.getByText(/Guest, ended on/).first().waitFor();
+  await page.getByRole("combobox", { name: "More days for Guest" }).selectOption("30");
+  await tap(page.getByRole("button", { name: "Turn on again" }));
+  await page.getByText(/can sign in for 30 more days/).first().waitFor();
+  await page.getByText(/Guest, signs in until/).first().waitFor();
+  if (sent?.id !== "u3" || sent?.extend_days !== 30) throw new Error(`Expected 30 more days for u3, sent ${JSON.stringify(sent)}.`);
+});
+
 await test("Admin accounts: a guest with a user ID and a chosen password needs no email", async (page, ctx) => {
   await ctx.route("**/api/admin/students", (r) => json(r, { students: [] }));
   let sent = null;

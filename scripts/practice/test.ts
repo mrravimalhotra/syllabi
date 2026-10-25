@@ -27,7 +27,7 @@ import { pdfDisposition } from "@/lib/pdf/disposition";
 import { signUpProblem, signUpRefusal } from "@/lib/signup-check";
 import { parseGenerationRequest } from "@/lib/generation/request";
 import { parseProfileUpdate } from "@/lib/profile-update";
-import { parseAccountUpdate } from "@/lib/account-update";
+import { extendedGuestUntil, parseAccountUpdate } from "@/lib/account-update";
 import { parseStudyPackRequest } from "@/lib/study-pack/request";
 import { parseProblem } from "@/lib/worked/parse";
 import { describeOutcome } from "@/app/dashboard/library/_parts/upload-book";
@@ -410,6 +410,14 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
   // Admin account change
   check(bad(parseAccountUpdate(null)) && bad(parseAccountUpdate({ id: "nope", active: false })) && bad(parseAccountUpdate({ id: UUID })), "Account: no id, a bad id or nothing to change is refused");
   check(bad(parseAccountUpdate({ id: UUID, role: "owner" })) && bad(parseAccountUpdate({ id: UUID, token_quota: -1 })) && bad(parseAccountUpdate({ id: UUID, token_quota: 1.5 })) && bad(parseAccountUpdate({ id: UUID, token_quota: "5" })), "Account: a bad role or allowance is refused");
+  {
+    const ext = parseAccountUpdate({ id: UUID, extend_days: 30 });
+    check(ext.ok && ext.value.extendDays === 30 && Object.keys(ext.value.updates).length === 0, "Account: more days for a guest is accepted on its own");
+    check(bad(parseAccountUpdate({ id: UUID, extend_days: 0 })) && bad(parseAccountUpdate({ id: UUID, extend_days: 366 })) && bad(parseAccountUpdate({ id: UUID, extend_days: 2.5 })) && bad(parseAccountUpdate({ id: UUID, extend_days: "7" })), "Account: a bad number of extra days is refused");
+    const now = Date.parse("2026-10-25T10:00:00Z");
+    check(extendedGuestUntil("2026-10-01T00:00:00Z", 7, now) === "2026-11-01T10:00:00.000Z", "Guest: an ended login gets its days from today");
+    check(extendedGuestUntil("2026-10-30T00:00:00Z", 7, now) === "2026-11-06T00:00:00.000Z", "Guest: a running login gets its days added to its end date");
+  }
   const acc = parseAccountUpdate({ id: UUID, active: false, role: "admin", token_quota: 0, extra: "ignored" });
   check(acc.ok && acc.value.id === UUID && JSON.stringify(acc.value.updates) === '{"active":false,"role":"admin","token_quota":0}', "Account: only the editable fields are kept");
   // Study pack

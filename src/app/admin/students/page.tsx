@@ -27,7 +27,7 @@ export default function AccountsPage() {
   }, []);
 
   /** Saves a change to one account; `done` says what happened, for the message under the heading. */
-  async function change(account: Account, updates: Partial<Student>, done: string) {
+  async function change(account: Account, updates: Partial<Student> | { extend_days: number }, done: string) {
     setError(null);
     setNotice(null);
     setBusy(account.id);
@@ -116,6 +116,7 @@ export default function AccountsPage() {
                 onRole={(role) => change(a, { role }, role === "admin" ? "is now an admin." : "is now a parent or tutor.")}
                 onQuota={(text) => setQuota(a, text)}
                 onAccess={() => setAccess(a)}
+                onExtend={(days) => change(a, { extend_days: days }, `can sign in for ${days} more days.`)}
               />
             ))}
             {accounts.length === 0 && (
