@@ -1,166 +1,127 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
-import { PrinterIcon } from "@/components/icons";
-import { Alert, Field, PageHeader, Spinner, button, card, cx, input } from "@/components/ui";
-import { KindPicker } from "@/app/dashboard/practice/_parts/KindPicker";
-import { SettingsFields } from "@/app/dashboard/practice/_parts/SettingsFields";
-import { NumberView } from "@/components/practice/NumberView";
-import { OrderQuiz } from "@/components/practice/OrderQuiz";
-import { TutorialsCard } from "@/components/practice/TutorialsCard";
-import {
-  describe,
-  makeQuiz,
-  normaliseSettings,
-  parseSample,
-  presetFor,
-  settingsProblem,
-  type OrderQuestion,
-  type OrderSettings,
-} from "@/lib/practice/order";
-import type { NumberKind } from "@/lib/practice/numbers";
-import { newSeed, shuffled } from "@/lib/practice/random";
-import { usePdfOpener } from "@/components/PdfButton";
+import { OrderPractice } from "@/app/dashboard/practice/_parts/OrderPractice";
+import { ActivityScreen, ActivityTile, LinkTile, MenuGroup, type Tone } from "@/components/menu/Tiles";
+import { TUTORIALS, TutorialsCard } from "@/components/practice/TutorialsCard";
+import { PageHeader } from "@/components/ui";
+import { describe, presetFor, type OrderSettings } from "@/lib/practice/order";
 
+/** The picture and one-line hint on each tutorial's tile, and the line under its title. */
+const TUTORIAL_TILES: Record<string, { emoji: string; hint: string; description: string }> = {
+  division: {
+    emoji: "➗",
+    hint: "Divide, step by step",
+    description: "Divide one number by another step by step, stopping with a remainder or carrying on into decimals.",
+  },
+  "lcm-hcf": {
+    emoji: "🪜",
+    hint: "The ladder method",
+    description: "Find the LCM and HCF of 2 to 6 whole numbers with the ladder (division) method.",
+  },
+  add: {
+    emoji: "➕",
+    hint: "Carry across columns",
+    description: "Add 2 to 4 numbers in columns, carrying tens to the next column. Decimals are fine.",
+  },
+  subtract: {
+    emoji: "➖",
+    hint: "Borrow from the next column",
+    description: "Take one number from another in columns, borrowing from the next column when needed.",
+  },
+  multiply: {
+    emoji: "✖️",
+    hint: "One digit at a time, then add",
+    description: "Multiply by each digit of the second number in turn, then add the rows.",
+  },
+  fractions: {
+    emoji: "🍕",
+    hint: "Add, take away, simplify",
+    description: "Work with fractions step by step: common bottoms, the working, and the simplest form.",
+  },
+  units: {
+    emoji: "📏",
+    hint: "km, m, cm · kg, g · l, ml",
+    description: "Change between metric units of length, mass and capacity on a place-value chart.",
+  },
+};
+const TUTORIAL_TONE: Tone = "violet";
 
-function worksheetUrl(settings: OrderSettings, seed: number, answers = true) {
-  return `/api/practice/worksheet?settings=${encodeURIComponent(JSON.stringify(settings))}&seed=${seed}${answers ? "" : "&answers=0"}`;
-}
+type Screen = { kind: "order" } | { kind: "tutorial"; id: string };
 
 /**
- * Practice: quizzes worked out entirely by code (no AI). The first one is
- * putting numbers in order; the level starts from the child's class and can
- * be set from an example number. The class comes from the server with the
- * page, so the menu shows at once instead of waiting for a second request.
+ * Practice: quizzes and maths tutorials worked out entirely by code (no AI).
+ * The home is a set of tiles; each opens its own screen. The ordering quiz's
+ * level starts from the child's class, which comes from the server with the
+ * page, so nothing waits on a second request.
  */
 export function PracticeView({ classLevel }: { classLevel: string | null }) {
-  const [settings, setSettings] = useState<OrderSettings>(() => presetFor("whole", classLevel));
-  const [sample, setSample] = useState("");
-  const [sampleError, setSampleError] = useState<string | null>(null);
-  const [run, setRun] = useState<{ quiz: OrderQuestion[]; seed: number | null; key: number } | null>(null);
-  const worksheet = usePdfOpener("Practice worksheet");
+  const [screen, setScreen] = useState<Screen | null>(null);
+  // Kept here, so the choices stay when the quiz's screen is left and opened again.
+  const [order, setOrder] = useState<OrderSettings>(() => presetFor("whole", classLevel));
+  const back = { onBack: () => setScreen(null), backLabel: "← All practice" };
 
-  const update = (changes: Partial<OrderSettings>) => setSettings(normaliseSettings({ ...settings, ...changes }));
-  const chooseKind = (kind: NumberKind) => {
-    setSample("");
-    setSampleError(null);
-    setSettings({ ...presetFor(kind, classLevel), questions: settings.questions });
-  };
-  const onSample = (text: string) => {
-    setSample(text);
-    const parsed = parseSample(text);
-    if (!parsed) return setSampleError(null);
-    if ("error" in parsed) return setSampleError(parsed.error);
-    setSampleError(null);
-    const kind = parsed.settings.kind ?? settings.kind;
-    const base = kind === settings.kind ? settings : presetFor(kind, classLevel);
-    setSettings(normaliseSettings({ ...base, spread: kind === "fraction" ? null : base.spread, questions: settings.questions, ...parsed.settings }));
-  };
-
-  const problem = settingsProblem(settings);
-  const example = problem ? null : makeQuiz({ ...settings, questions: 1 }, 1)[0];
-  const start = () => {
-    const seed = newSeed();
-    setRun({ quiz: makeQuiz(settings, seed), seed, key: seed });
-  };
-  const printNew = (answers: boolean) => void worksheet.open(worksheetUrl(settings, newSeed(), answers));
+  if (screen?.kind === "order") {
+    return (
+      <ActivityScreen
+        emoji="🔢"
+        tone="amber"
+        title="Put the numbers in order"
+        description={`Each question has ${order.size} numbers to arrange from smallest to biggest, or biggest to smallest.`}
+        {...back}
+      >
+        <OrderPractice settings={order} setSettings={setOrder} classLevel={classLevel} />
+      </ActivityScreen>
+    );
+  }
+  if (screen?.kind === "tutorial") {
+    const label = TUTORIALS.find((t) => t.id === screen.id)?.label ?? "Maths tutorial";
+    const tile = TUTORIAL_TILES[screen.id];
+    return (
+      <ActivityScreen emoji={tile?.emoji ?? "📐"} tone={TUTORIAL_TONE} title={label} description={tile?.description ?? ""} {...back}>
+        <p className="text-sm text-slate-600">
+          Type the numbers, or tap &ldquo;Give me an example&rdquo;, and watch it worked out step by step on the chalkboard, read aloud.
+        </p>
+        <TutorialsCard topic={screen.id} />
+      </ActivityScreen>
+    );
+  }
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="animate-fade-in space-y-7">
       <PageHeader
         title="Practice"
         description="Quizzes and maths tutorials for your child, worked out by the app itself: always correct, and no AI used."
       />
-
-      <Link
-        href="/dashboard/practice/kindergarten"
-        className={cx(card, "flex items-center gap-4 p-4 transition hover:border-brand-300 sm:p-5")}
-      >
-        <span className="text-4xl" aria-hidden>
-          🧸
-        </span>
-        <span className="min-w-0">
-          <span className="block text-base font-semibold text-slate-900">Kindergarten</span>
-          <span className="block text-sm text-slate-500">Spell simple words, find sight words, and compare small numbers. Picture-led and read aloud.</span>
-        </span>
-        <span className="ml-auto text-slate-400" aria-hidden>
-          →
-        </span>
-      </Link>
-
-      <TutorialsCard />
-
-      <section className={cx(card, "space-y-5 p-4 sm:p-6")}>
-        <div>
-          <h2 className="text-base font-semibold text-slate-900">Put the numbers in order</h2>
-          <p className="text-sm text-slate-500">Each question has {settings.size} numbers to arrange from smallest to biggest, or biggest to smallest.</p>
-        </div>
-
-        <KindPicker kind={settings.kind} onChoose={chooseKind} />
-
-        <Field
-          label="Example number (optional)"
-          htmlFor="sample"
-          hint={sampleError ? undefined : "Type a number like the ones in your child's book (456, 3.14, 3/7 or 1 3/4) and the quiz will use numbers like it."}
-        >
-          <input
-            id="sample"
-            value={sample}
-            onChange={(e) => onSample(e.target.value)}
-            placeholder="e.g. 4,507 or 3.14 or 3/7"
-            inputMode="decimal"
-            autoComplete="off"
-            className={cx(input, sampleError && "border-red-400")}
-            aria-invalid={Boolean(sampleError)}
-          />
-          {sampleError && <p className="text-sm text-red-600">{sampleError}</p>}
-        </Field>
-
-        <SettingsFields settings={settings} update={update} />
-
-        {problem ? (
-          <Alert tone="warning">{problem}</Alert>
-        ) : (
-          example && (
-            <div className="rounded-xl bg-slate-50 px-4 py-3">
-              <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">{describe(settings)}. For example:</p>
-              <p className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-2 text-lg font-semibold text-slate-800">
-                {example.numbers.map((n, i) => (
-                  <NumberView key={i} n={n} />
-                ))}
-              </p>
-            </div>
-          )
-        )}
-
-        <div className="flex flex-wrap items-center gap-2">
-          <button type="button" onClick={start} disabled={Boolean(problem)} className={button.primary}>
-            Start the quiz
-          </button>
-          <button type="button" onClick={() => printNew(true)} disabled={Boolean(problem) || worksheet.state === "preparing"} className={button.secondary}>
-            {worksheet.state === "preparing" ? <Spinner className="h-4 w-4" /> : <PrinterIcon className="h-4 w-4" />}
-            {worksheet.state === "ready" ? "Tap to share the worksheet" : "Worksheet with answers (PDF)"}
-          </button>
-          <button type="button" onClick={() => printNew(false)} disabled={Boolean(problem)} className={button.ghost}>
-            Worksheet without answers (PDF)
-          </button>
-        </div>
-      </section>
-
-      {run && (
-        <OrderQuiz
-          key={run.key}
-          quiz={run.quiz}
-          canPrint={run.seed !== null}
-          onPrint={() => run.seed !== null && void worksheet.open(worksheetUrl(settings, run.seed))}
-          onExit={() => setRun(null)}
-          onNewQuiz={start}
-          onRetry={(questions) =>
-            setRun({ quiz: questions.map((q) => ({ ...q, numbers: shuffled(q.numbers) })), seed: null, key: newSeed() })
-          }
+      <MenuGroup title="Practise">
+        <LinkTile
+          href="/dashboard/practice/kindergarten"
+          emoji="🧸"
+          tone="sky"
+          title="Kindergarten"
+          hint="Letter sounds, spelling, sight words and counting, read aloud"
         />
-      )}
+        <ActivityTile
+          emoji="🔢"
+          tone="amber"
+          title="Put the numbers in order"
+          hint="Smallest to biggest, or biggest to smallest"
+          chosen={describe(order)}
+          onOpen={() => setScreen({ kind: "order" })}
+        />
+      </MenuGroup>
+      <MenuGroup title="Step-by-step maths tutorials">
+        {TUTORIALS.map((t) => (
+          <ActivityTile
+            key={t.id}
+            emoji={TUTORIAL_TILES[t.id]?.emoji ?? "📐"}
+            tone={TUTORIAL_TONE}
+            title={t.label}
+            hint={TUTORIAL_TILES[t.id]?.hint ?? "Worked out on the chalkboard"}
+            onOpen={() => setScreen({ kind: "tutorial", id: t.id })}
+          />
+        ))}
+      </MenuGroup>
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ActivityTile, LinkTile, MenuGroup } from "@/app/dashboard/practice/kindergarten/_parts/ActivityCard";
+import { ActivityTile, LinkTile, MenuGroup } from "@/components/menu/Tiles";
 import { ActivityGame, type Activity } from "@/app/dashboard/practice/kindergarten/_parts/ActivityGame";
 import { isCompare, isCvc, isPlace, isSight } from "@/app/dashboard/practice/kindergarten/_parts/prefs";
 import { KindergartenScreen, SCREENS, type Screen } from "@/app/dashboard/practice/kindergarten/_parts/Screens";
@@ -98,14 +98,14 @@ export default function KindergartenPage() {
         <LinkTile
           href="/dashboard/practice/kindergarten/sounds"
           emoji="🎤"
-          tone="grownups"
+          tone="slate"
           title="Record the sounds"
           hint="Use your own voice, the way the school teacher says them"
         />
         <LinkTile
           href="/dashboard/practice/kindergarten/worksheets"
           emoji="🖨️"
-          tone="grownups"
+          tone="slate"
           title="Printable worksheets"
           hint="Word families and picture matching"
         />

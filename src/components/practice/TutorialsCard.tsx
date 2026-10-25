@@ -84,7 +84,12 @@ const TOPICS: Topic[] = [
     id: "lcm-hcf",
     label: "LCM and HCF",
     fields: [
-      { key: "numbers", label: "Numbers to find the LCM or HCF of", hint: "Type 2 to 6 whole numbers, separated by commas.", placeholder: "e.g. 12, 18, 30" },
+      {
+        key: "numbers",
+        label: "Numbers to find the LCM or HCF of",
+        hint: "Type 2 to 6 whole numbers, separated by commas.",
+        placeholder: "e.g. 12, 18, 30",
+      },
       {
         key: "want",
         label: "Find",
@@ -112,10 +117,18 @@ const TOPICS: Topic[] = [
   {
     id: "add",
     label: "Column addition",
-    fields: [{ key: "numbers", label: "Numbers to add", hint: "Type 2 to 4 numbers, separated by commas. Decimals are fine.", placeholder: "e.g. 4567, 789" }],
+    fields: [
+      {
+        key: "numbers",
+        label: "Numbers to add",
+        hint: "Type 2 to 4 numbers, separated by commas. Decimals are fine.",
+        placeholder: "e.g. 4567, 789",
+      },
+    ],
     problem: (v) => {
       const numbers = numberList(v.numbers ?? "");
-      if (!numbers || numbers.length < 2) return "Type two to four numbers separated by commas, for example 4567, 789. Check that each one is a number.";
+      if (!numbers || numbers.length < 2)
+        return "Type two to four numbers separated by commas, for example 4567, 789. Check that each one is a number.";
       return { kind: "column", op: "add", numbers };
     },
     example: () => ({ numbers: Array.from({ length: rand(2, 3) }, () => rand(100, 9999)).join(", ") }),
@@ -208,7 +221,8 @@ const TOPICS: Topic[] = [
       const value = cleanNumber(v.value ?? "");
       if (!value) return "Type the amount to convert.";
       if (!v.from || !v.to || v.from === v.to) return "Choose two different units.";
-      if (familyOf(v.from) !== familyOf(v.to)) return `${v.from} and ${v.to} measure different things; choose two units of ${familyOf(v.from)?.toLowerCase()}.`;
+      if (familyOf(v.from) !== familyOf(v.to))
+        return `${v.from} and ${v.to} measure different things; choose two units of ${familyOf(v.from)?.toLowerCase()}.`;
       return { kind: "convert", value, from: v.from, to: v.to };
     },
     example: () => {
@@ -221,7 +235,10 @@ const TOPICS: Topic[] = [
         [base, small],
         [small, base],
       ]);
-      const value = from === big || from === base && to === small ? pick(["3.45", "2.5", "0.75", "12", "6.08"]) : pick(["2500", "450", "75", "1200", "4050"]);
+      const value =
+        from === big || (from === base && to === small)
+          ? pick(["3.45", "2.5", "0.75", "12", "6.08"])
+          : pick(["2500", "450", "75", "1200", "4050"]);
       return { value, from, to };
     },
   },
@@ -249,15 +266,20 @@ function tooLargeMessage(p: WorkedProblem): string {
   }
 }
 
+/** The methods, for a menu of tiles: each opens the card on that method alone. */
+export const TUTORIALS: { id: string; label: string }[] = TOPICS.map(({ id, label }) => ({ id, label }));
+
 const DEFAULTS: Values = { decimals: "no", want: "both", op: "add", from: "km", to: "m" };
 
 /**
  * Maths tutorials: pick a method, type the numbers (or ask for an example),
  * and the chalkboard works it out step by step with read-aloud. Worked out by
- * code, so it is always right and uses no AI.
+ * code, so it is always right and uses no AI. Given a `topic`, it shows that
+ * method alone, without its own card, heading or method chips (it sits on the
+ * method's own screen).
  */
-export function TutorialsCard() {
-  const [topicId, setTopicId] = useState(TOPICS[0].id);
+export function TutorialsCard({ topic: fixedTopic }: { topic?: string } = {}) {
+  const [topicId, setTopicId] = useState(fixedTopic ?? TOPICS[0].id);
   const [values, setValues] = useState<Values>(DEFAULTS);
   const [problemError, setProblemError] = useState<string | null>(null);
   const [shown, setShown] = useState<{ example: WorkedExample; savedId: string | null; saving: boolean } | null>(null);
@@ -300,15 +322,18 @@ export function TutorialsCard() {
   };
 
   return (
-    <section className={cx(card, "space-y-5 p-4 sm:p-6")}>
-      <div>
-        <h2 className="text-base font-semibold text-slate-900">Maths tutorials</h2>
-        <p className="text-sm text-slate-500">
-          Choose a method, type the numbers or tap &ldquo;Give me an example&rdquo;, and watch it worked out step by step on the chalkboard, read aloud.
-        </p>
-      </div>
+    <section className={cx(!fixedTopic && card, "space-y-5", !fixedTopic && "p-4 sm:p-6")}>
+      {!fixedTopic && (
+        <div>
+          <h2 className="text-base font-semibold text-slate-900">Maths tutorials</h2>
+          <p className="text-sm text-slate-500">
+            Choose a method, type the numbers or tap &ldquo;Give me an example&rdquo;, and watch it worked out step by step on the
+            chalkboard, read aloud.
+          </p>
+        </div>
+      )}
 
-      <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Method">
+      <div className={cx("flex flex-wrap gap-2", fixedTopic && "hidden")} role="radiogroup" aria-label="Method">
         {TOPICS.map((t) => (
           <button
             key={t.id}
@@ -321,7 +346,9 @@ export function TutorialsCard() {
             }}
             className={cx(
               "min-h-10 rounded-full border px-3.5 text-sm font-medium transition-colors",
-              t.id === topicId ? "border-brand-500 bg-brand-50 text-brand-800" : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+              t.id === topicId
+                ? "border-brand-500 bg-brand-50 text-brand-800"
+                : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
             )}
           >
             {t.label}

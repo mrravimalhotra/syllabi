@@ -1,6 +1,6 @@
 "use client";
 
-import { ActivityScreen, type Tone } from "@/app/dashboard/practice/kindergarten/_parts/ActivityCard";
+import { ActivityScreen, type Tone } from "@/components/menu/Tiles";
 import type { Activity } from "@/app/dashboard/practice/kindergarten/_parts/ActivityGame";
 import { CompareChoices, CvcChoices, PlaceChoices, SightChoices } from "@/app/dashboard/practice/kindergarten/_parts/Settings";
 import { SoundGuide } from "@/app/dashboard/practice/kindergarten/_parts/SoundGuide";
@@ -14,7 +14,7 @@ export type Screen = "blend" | "cvc" | "explore" | "sight" | "compare" | "place"
 export const SCREENS: Record<Screen, { emoji: string; tone: Tone; title: string; hint: string; description: string; badge?: string }> = {
   blend: {
     emoji: "👂",
-    tone: "letters",
+    tone: "sky",
     title: "Listen and blend",
     hint: "Hear the sounds, find the picture",
     badge: "Start here",
@@ -22,14 +22,14 @@ export const SCREENS: Record<Screen, { emoji: string; tone: Tone; title: string;
   },
   cvc: {
     emoji: "🐱",
-    tone: "letters",
+    tone: "sky",
     title: "Spell the word",
     hint: "Tap the letters: c-a-t",
     description: "See a picture, hear the word, and tap its three letters in order: c-a-t, d-o-g, s-u-n.",
   },
   explore: {
     emoji: "🔍",
-    tone: "letters",
+    tone: "sky",
     title: "Word explorer",
     hint: "Tap a letter, hear its sound",
     description:
@@ -37,21 +37,21 @@ export const SCREENS: Record<Screen, { emoji: string; tone: Tone; title: string;
   },
   sight: {
     emoji: "👀",
-    tone: "letters",
+    tone: "sky",
     title: "Find the word",
     hint: "Words like “the” and “you”",
     description: "Hear a common word like “the” or “you”, then find it among three words.",
   },
   compare: {
     emoji: "🍎",
-    tone: "numbers",
+    tone: "amber",
     title: "More or fewer",
     hint: "Which group has more?",
     description: "Look at two groups of pictures and tap the one with more (or fewer), or “the same”.",
   },
   place: {
     emoji: "🔟",
-    tone: "numbers",
+    tone: "amber",
     title: "Place value",
     hint: "Tens and ones",
     description:
@@ -59,14 +59,14 @@ export const SCREENS: Record<Screen, { emoji: string; tone: Tone; title: string;
   },
   guide: {
     emoji: "🗣️",
-    tone: "grownups",
+    tone: "slate",
     title: "How to say the sounds",
     hint: "Pure sounds, no “uh”",
     description: "How phonics teachers say each sound: the sound a letter makes, not its name, and with no “uh” after it.",
   },
   voice: {
     emoji: "🔊",
-    tone: "grownups",
+    tone: "slate",
     title: "Voice",
     hint: "Who reads to your child",
     description: "Choose which voice reads the words and sounds to your child.",

@@ -1411,9 +1411,23 @@ await test("Account: shows the signed-in details", async (page, ctx) => {
   await page.getByText("parent@example.com").first().waitFor();
 });
 
+await test("Practice: each tutorial tile opens that method alone and works an example", async (page, ctx) => {
+  await baseRoutes(ctx);
+  await page.goto(`${BASE}/dashboard/practice`, { waitUntil: "networkidle" });
+  await openActivity(page, "Long division");
+  await page.getByRole("heading", { name: "Long division" }).waitFor();
+  // Only this method: the method chips are not shown.
+  if (await page.getByRole("radiogroup", { name: "Method" }).isVisible()) throw new Error("The method chips should be hidden on a method's own screen.");
+  await tap(page.getByRole("button", { name: /Give me an example/ }));
+  await page.getByRole("button", { name: /Save to Documents/ }).waitFor({ timeout: 15000 });
+  await tap(page.getByRole("button", { name: "← All practice" }));
+  await page.getByRole("button", { name: "Metric conversion", exact: true }).waitFor();
+});
+
 await test("Practice: the choices follow the kind of numbers", async (page, ctx) => {
   await baseRoutes(ctx);
   await page.goto(`${BASE}/dashboard/practice`, { waitUntil: "networkidle" });
+  await openActivity(page, "Put the numbers in order");
   await page.getByLabel("Size of numbers").waitFor();
   const kinds = page.getByRole("radiogroup", { name: "Kind of numbers" });
   await kinds.getByRole("radio", { name: /Decimal/i }).click();
@@ -1429,6 +1443,7 @@ await test("Practice: the choices follow the kind of numbers", async (page, ctx)
 await test("Practice: an example number sets the kind, and a bad one says why", async (page, ctx) => {
   await baseRoutes(ctx);
   await page.goto(`${BASE}/dashboard/practice`, { waitUntil: "networkidle" });
+  await openActivity(page, "Put the numbers in order");
   const sample = page.getByLabel("Example number (optional)");
   await sample.fill("3.141");
   await page.getByLabel("After the point").waitFor({ timeout: 5000 });
@@ -1446,6 +1461,7 @@ await test("Practice: an example number sets the kind, and a bad one says why", 
 await test("Practice: starts a quiz", async (page, ctx) => {
   await baseRoutes(ctx);
   await page.goto(`${BASE}/dashboard/practice`, { waitUntil: "networkidle" });
+  await openActivity(page, "Put the numbers in order");
   await page.getByRole("button", { name: /start/i }).first().click();
   await page.getByText(/put .* in order|smallest|largest|order/i).first().waitFor({ timeout: 8000 });
 });
@@ -1453,6 +1469,7 @@ await test("Practice: starts a quiz", async (page, ctx) => {
 await test("Practice: plays a whole quiz to the results screen", async (page, ctx) => {
   await baseRoutes(ctx);
   await page.goto(`${BASE}/dashboard/practice`, { waitUntil: "networkidle" });
+  await openActivity(page, "Put the numbers in order");
   await page.getByRole("button", { name: /start/i }).first().click();
   const dialog = page.getByRole("dialog", { name: "Practice quiz" });
   await dialog.waitFor({ timeout: 8000 });
@@ -1481,6 +1498,7 @@ await test("Practice: plays a whole quiz to the results screen", async (page, ct
 await test("Practice: leaving a quiz midway asks first", async (page, ctx) => {
   await baseRoutes(ctx);
   await page.goto(`${BASE}/dashboard/practice`, { waitUntil: "networkidle" });
+  await openActivity(page, "Put the numbers in order");
   await page.getByRole("button", { name: /start/i }).first().click();
   const dialog = page.getByRole("dialog", { name: "Practice quiz" });
   await dialog.waitFor({ timeout: 8000 });

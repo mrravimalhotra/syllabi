@@ -4,16 +4,22 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { card, cx } from "@/components/ui";
 
-/** The colour behind an activity's picture: sky for letters, sunshine for numbers, grey for the grown-up's tools. */
-const TILE = { letters: "bg-sky-100", numbers: "bg-amber-100", grownups: "bg-slate-100" } as const;
+/** The colour behind a tile's picture; each menu gives its groups their own colour. */
+const TILE = {
+  sky: "bg-sky-100",
+  amber: "bg-amber-100",
+  slate: "bg-slate-100",
+  violet: "bg-violet-100",
+  emerald: "bg-emerald-100",
+} as const;
 export type Tone = keyof typeof TILE;
 
-/** A group of tiles on the kindergarten home, under its own heading. */
+/** A group of tiles on a menu home, under its own heading. An odd last tile spans the row on narrow screens, so none sits alone. */
 export function MenuGroup({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="space-y-3" aria-label={title}>
       <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">{title}</h2>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{children}</div>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 max-lg:[&>*:last-child:nth-child(odd)]:col-span-2">{children}</div>
     </section>
   );
 }
@@ -64,7 +70,7 @@ function TileBody({ emoji, tone, title, hint, chosen, badge }: TileProps) {
   );
 }
 
-/** A tile on the kindergarten home that opens an activity's own screen. */
+/** A tile on a menu home that opens an activity's own screen. */
 export function ActivityTile({ onOpen, ...props }: TileProps & { onOpen: () => void }) {
   return (
     <button type="button" onClick={onOpen} aria-label={props.title} className={TILE_CLASS}>
@@ -89,6 +95,7 @@ export function ActivityScreen({
   title,
   description,
   onBack,
+  backLabel = "← All activities",
   onPlay,
   onLearn,
   children,
@@ -98,6 +105,7 @@ export function ActivityScreen({
   title: string;
   description: string;
   onBack: () => void;
+  backLabel?: string;
   /** Absent for screens with nothing to play (the grown-up's guide, the voice). */
   onPlay?: () => void;
   /** A lesson before the game, when the activity has one. */
@@ -107,7 +115,7 @@ export function ActivityScreen({
   return (
     <div className="animate-fade-in space-y-5">
       <button type="button" onClick={onBack} className="text-sm font-medium text-brand-700 hover:underline">
-        ← All activities
+        {backLabel}
       </button>
       <section className={cx(card, "space-y-6 p-5 sm:p-7")} aria-label={title}>
         <div className="flex items-start gap-4">
