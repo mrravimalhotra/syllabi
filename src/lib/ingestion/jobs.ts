@@ -42,6 +42,8 @@ interface Job {
   hint: string | null;
   source_type: DocumentRow["source_type"] | null;
   attempts: number;
+  /** What the AI read from the picture on an earlier try (undefined before migration 28). */
+  read_text?: string | null;
 }
 
 /** Stores the pages of a book and queues them for reading. A page queued again replaces the earlier one. */
@@ -74,6 +76,14 @@ export async function queuePages(documentId: string, ownerId: string, pages: Upl
   );
   const { error } = await admin.from("page_jobs").upsert(rows, { onConflict: "document_id,page_number" });
   if (error) throw error;
+  // A page uploaded again is read afresh, not from what the AI read of the earlier picture. Kept apart
+  // from the upsert so the upload still works if the column isn't there yet.
+  const { error: clearError } = await admin
+    .from("page_jobs")
+    .update({ read_text: null })
+    .eq("document_id", documentId)
+    .in("page_number", rows.map((r) => r.page_number));
+  if (clearError) console.error("[jobs] clearing earlier reads", clearError);
   const { error: statusError } = await admin.from("documents").update({ status: "processing" }).eq("id", documentId);
   if (statusError) throw statusError;
 }
@@ -194,7 +204,13 @@ async function readOne(job: Job): Promise<void> {
   try {
     const page = await pageToRead(job);
     // A page keeps its own kind (e.g. the exercises after a chapter) within its book.
-    await ingestPage({ documentId: book.id, ownerId: book.owner_id, sourceType: job.source_type ?? book.source_type }, page, job.image_path ?? undefined);
+    await ingestPage({ documentId: book.id, ownerId: book.owner_id, sourceType: job.source_type ?? book.source_type }, page, job.image_path ?? undefined, {
+      text: job.read_text ?? null,
+      keep: async (text) => {
+        const { error } = await admin.from("page_jobs").update({ read_text: text }).eq("id", job.id);
+        if (error) console.error("[jobs] keeping what the AI read", job.id, error);
+      },
+    });
     const { error: doneError } = await admin.from("page_jobs").update({ status: "done", error: null, locked_at: null }).eq("id", job.id);
     if (doneError) console.error("[jobs] marking a page done", job.id, doneError);
   } catch (err) {

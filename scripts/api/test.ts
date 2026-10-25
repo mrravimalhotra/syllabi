@@ -745,12 +745,13 @@ failures.length = 0;
   tables.documents = [{ id: BOOK, owner_id: ME, title: "Big book", status: "processing", source_type: "textbook" }];
   const job = (page: number, status: string) => ({ id: `job-${page}`, document_id: BOOK, owner_id: ME, page_number: page, status, attempts: 0, error: null, page_text: "Some text", image_path: null, mime_type: null, hint: null, source_type: null, next_attempt_at: new Date(0).toISOString() });
   tables.page_jobs = [job(1, "done"), job(2, "pending")];
-  rpcs.claim_page_job = () => {
+  const claim = () => {
     const next = (tables.page_jobs ?? []).find((j) => j.status === "pending" && String(j.next_attempt_at) <= new Date().toISOString());
     if (!next) return [];
     Object.assign(next, { status: "working", attempts: Number(next.attempts) + 1 });
     return [{ ...next }];
   };
+  rpcs.claim_page_job = claim;
   await readQueuedPages(null);
   const waiting = (tables.page_jobs ?? [])[1];
   check("allowance: a page over the monthly allowance waits, without counting a try", waiting.status === "pending" && waiting.attempts === 0 && Date.parse(String(waiting.next_attempt_at)) > Date.now() + 30 * 60_000, JSON.stringify(waiting));
@@ -763,6 +764,26 @@ failures.length = 0;
   waiting.next_attempt_at = new Date(0).toISOString();
   await readQueuedPages(null);
   check("allowance: once there is allowance again, the page is read", waiting.status === "done", JSON.stringify(waiting));
+
+  // A page the AI read but that couldn't be saved is saved again on the next try without a second read.
+  fresh();
+  tables.documents = [{ id: BOOK, owner_id: ME, title: "Big book", status: "processing", source_type: "textbook" }];
+  const png = await sharp({ create: { width: 40, height: 40, channels: 3, background: "#fff" } }).png().toBuffer();
+  files.set("sources/c1/page-1.png", { data: png, contentType: "image/png" });
+  tables.page_jobs = [{ ...job(1, "pending"), page_text: null, image_path: "sources/c1/page-1.png", mime_type: "image/png" }];
+  rpcs.claim_page_job = claim;
+  fakeAi.calls = 0;
+  fakeAi.reply = () => ({ text: "Plants make food in their leaves." });
+  rpcs.replace_page_chunks = () => {
+    throw new Error("database hiccup");
+  };
+  await readQueuedPages(null);
+  const page = (tables.page_jobs ?? [])[0];
+  check("page read: a page that couldn't be saved keeps what the AI read", page.status === "pending" && page.read_text === "Plants make food in their leaves." && fakeAi.calls === 1, JSON.stringify({ ...page, calls: fakeAi.calls }));
+  rpcs.replace_page_chunks = () => null;
+  page.next_attempt_at = new Date(0).toISOString();
+  await readQueuedPages(null);
+  check("page read: the next try saves it without asking the AI again", page.status === "done" && fakeAi.calls === 1, JSON.stringify({ status: page.status, calls: fakeAi.calls }));
   fresh();
 }
 await expect("log-error: a crash report is accepted", logError.POST, 200, null, { where: "dashboard page", message: "boom", path: "/dashboard" });

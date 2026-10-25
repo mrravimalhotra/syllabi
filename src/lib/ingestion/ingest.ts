@@ -72,6 +72,14 @@ export interface PageContext {
   sourceType: SourceType;
 }
 
+/** What the AI read from a page picture before: kept so a retry after a saving failure doesn't read (and pay for) the page again. */
+export interface EarlierRead {
+  /** The AI's reply from an earlier try, if any; used instead of reading the page again. */
+  text: string | null;
+  /** Keeps a fresh reply until the page is saved. */
+  keep: (text: string) => Promise<void>;
+}
+
 /** Where a failure happened, logged in full and reported as the page and step. */
 function failAt(label: string, pageNumber: number, err: unknown): never {
   console.error(`[ingest] page ${pageNumber} (${label})`, err);
@@ -86,7 +94,7 @@ function failAt(label: string, pageNumber: number, err: unknown): never {
  * before is replaced in one step, so a failure never leaves it missing from
  * search, and it is never duplicated.
  */
-export async function ingestPage(ctx: PageContext, page: IngestPage, storedImagePath?: string): Promise<void> {
+export async function ingestPage(ctx: PageContext, page: IngestPage, storedImagePath?: string, earlier?: EarlierRead): Promise<void> {
   const admin = createAdminClient();
   let imagePath: string | null = storedImagePath ?? null;
 
@@ -107,6 +115,9 @@ export async function ingestPage(ctx: PageContext, page: IngestPage, storedImage
   let readFromPicture = false;
   if (page.text !== undefined) {
     pageText = page.text;
+  } else if (earlier?.text) {
+    ({ text: pageText, legibility } = takeLegibility(earlier.text));
+    readFromPicture = true;
   } else {
     const extraction = await extractPageText(page.imageBase64, page.mimeType, page.hint).catch((err) =>
       failAt("reading the page", page.pageNumber, err)
@@ -120,6 +131,7 @@ export async function ingestPage(ctx: PageContext, page: IngestPage, storedImage
     });
     // The reader says "[EMPTY PAGE]" for a blank page: an empty reply is a failed read (a backup service answering nothing), not a blank page.
     if (!extraction.text.trim()) failAt("reading the page", page.pageNumber, new Error("The reader returned no text"));
+    await earlier?.keep(extraction.text);
     ({ text: pageText, legibility } = takeLegibility(extraction.text));
     readFromPicture = true;
   }
