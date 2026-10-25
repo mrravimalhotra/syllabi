@@ -50,6 +50,10 @@ export const TABS: {
   description: string;
   icon: typeof ListCheckIcon;
   placeholder: string;
+  /** What comes back, in a parent's words (shown under the picker). */
+  gets: string;
+  /** What to give it. */
+  gives: string;
 }[] = [
   {
     value: "solution",
@@ -57,6 +61,8 @@ export const TABS: {
     description: "Step by step",
     icon: ListCheckIcon,
     placeholder: "Type or paste the question, or attach a photo or PDF of the worksheet",
+    gets: "step-by-step answers in the way your child’s book teaches them, checked for mistakes",
+    gives: "a question, or a photo or PDF of the worksheet",
   },
   {
     value: "notes",
@@ -64,6 +70,8 @@ export const TABS: {
     description: "Revision notes",
     icon: NotesIcon,
     placeholder: "Which chapter or topic should the notes cover?",
+    gets: "revision notes for a chapter or topic, from your books",
+    gives: "the chapter or topic",
   },
   {
     value: "sample_paper",
@@ -71,6 +79,8 @@ export const TABS: {
     description: "Practice tests",
     icon: ClipboardIcon,
     placeholder: "Which chapters or topics should the paper cover?",
+    gets: "a practice paper with marks for each question, and an answer key",
+    gives: "the chapters, and the total marks",
   },
   {
     value: "ad_hoc",
@@ -78,6 +88,8 @@ export const TABS: {
     description: "Any question",
     icon: ChatIcon,
     placeholder: "Ask any study question",
+    gets: "a short, clear answer to any study question",
+    gives: "your question",
   },
   {
     value: "study_pack",
@@ -85,13 +97,18 @@ export const TABS: {
     description: "A whole chapter",
     icon: LayersIcon,
     placeholder: "Optional: what to focus on, for example “keep the language simple” or “extra practice on dates”",
+    gets: "a walk-through of one chapter, its textbook questions answered, extra practice and a word list",
+    gives: "the chapter (and, if you like, what to focus on)",
   },
   {
     value: "paper_check",
     label: "Check paper",
     description: "Marks maths sums",
     icon: PencilIcon,
-    placeholder: "Attach photos or a PDF of the solved paper (several sums are fine), or type the sums with the student's working. Add the marks here if the paper doesn't show them.",
+    placeholder:
+      "Attach photos or a PDF of the solved paper (several sums are fine), or type the sums with the student's working. Add the marks here if the paper doesn't show them.",
+    gets: "marks, a grade and tips for each sum, like a teacher’s marking",
+    gives: "photos or a PDF of the solved sheet",
   },
 ];
 

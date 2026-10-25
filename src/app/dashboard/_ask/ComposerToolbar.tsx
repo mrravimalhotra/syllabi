@@ -122,7 +122,8 @@ export function ComposerToolbar(p: Props) {
         </label>
       )}
 
-      <div className="ml-auto flex items-center gap-3">
+      {/* On a phone the language and Generate get their own row, so Generate is never squeezed. */}
+      <div className="flex w-full items-center gap-3 sm:ml-auto sm:w-auto">
         <label className="inline-flex items-center gap-1.5 text-xs text-slate-500">
           <span className="hidden sm:inline">Answer in</span>
           <select
@@ -144,7 +145,7 @@ export function ComposerToolbar(p: Props) {
           type="submit"
           disabled={loading || readingFiles || noBookSelected || overQuota}
           aria-describedby={blocked ? "generate-blocked" : undefined}
-          className={button.primary}
+          className={cx(button.primary, "min-h-11 flex-1 justify-center sm:flex-none")}
         >
           {loading ? <Spinner /> : <SparklesIcon className="h-4.5 w-4.5" />}
           {loading ? "Generating..." : "Generate"}

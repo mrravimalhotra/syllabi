@@ -7,6 +7,7 @@ import { PACK_WAIT_STEPS, ROUTE_BY_TASK, TABS, WAIT_STEPS, type MeResponse, uses
 import { AskHeader } from "@/app/dashboard/_ask/AskHeader";
 import { AttachmentList } from "@/app/dashboard/_ask/AttachmentList";
 import { BookPicker } from "@/app/dashboard/_ask/BookPicker";
+import { BooksInUse } from "@/app/dashboard/_ask/BooksInUse";
 import { DropForm } from "@/app/dashboard/_ask/DropForm";
 import { Messages } from "@/app/dashboard/_ask/Messages";
 import { QuickCommands } from "@/app/dashboard/_ask/QuickCommands";
@@ -23,6 +24,12 @@ import { useAttachments } from "@/app/dashboard/_ask/useAttachments";
 import { useBooks } from "@/app/dashboard/_ask/useBooks";
 import { useGeneration } from "@/app/dashboard/_ask/useGeneration";
 import type { GenerationTaskType } from "@/types/database";
+
+/** Under the question: the book picker when it is open, else which books the answer comes from (none for kinds that use no books). */
+function bookAreaFor(tab: GenerationTaskType, bookCount: number, open: boolean): "picker" | "names" | null {
+  if (!usesBooks(tab) || bookCount === 0) return null;
+  return open ? "picker" : "names";
+}
 
 export default function DashboardPage() {
   const [me, setMe] = useState<MeResponse | null>(() => peek<MeResponse>("me") ?? null);
@@ -123,6 +130,7 @@ export default function DashboardPage() {
   const noBookSelected = usesBooks(tab) && books.books.length > 0 && books.activeIds.length === 0;
   const overQuota = me?.quota.overQuota ?? false;
   const blocked = blockedReason({ overQuota, noBookSelected, readingFiles, choosingPages: attachments.longPdfs.length > 0 });
+  const bookArea = bookAreaFor(tab, books.books.length, showBooks);
   const showCommands = commandsInView(tab, prompt, photos.length > 0 || docs.length > 0);
 
   return (
@@ -163,7 +171,7 @@ export default function DashboardPage() {
           />
         ))}
 
-        {books.books.length > 0 && showBooks && usesBooks(tab) && (
+        {bookArea === "picker" && (
           <BookPicker
             books={books.books}
             activeIds={books.activeIds}
@@ -172,6 +180,10 @@ export default function DashboardPage() {
             onKind={(kind) => books.selectOnly(booksOfKinds(books.books, [kind]))}
             onToggle={books.toggle}
           />
+        )}
+
+        {bookArea === "names" && (
+          <BooksInUse books={books.books} activeIds={books.activeIds} onChange={() => setShowBooks(true)} />
         )}
 
         <ComposerToolbar
