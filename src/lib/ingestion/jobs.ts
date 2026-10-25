@@ -12,6 +12,7 @@ import { summariseBook, type BookScan, type PageReadSummary } from "@/lib/ingest
 import { downloadFile, uploadSourceFile } from "@/lib/storage";
 import { IngestError, ingestPage, type IngestPage } from "@/lib/ingestion/ingest";
 import type { UploadPage } from "@/lib/ingestion/upload-pages";
+import { checkQuota } from "@/lib/quota";
 import type { DocumentRow } from "@/types/database";
 
 /** Pages read at the same time across the whole app (the AI's free tier allows few requests a minute). */
@@ -22,6 +23,11 @@ const STOP_TAKING_PAGES_AFTER_MS = 150_000;
 // A failing page is tried this many times in all, waiting longer each time.
 export const MAX_ATTEMPTS = 5;
 const RETRY_AFTER_MINUTES = [1, 3, 10, 30];
+// A book whose owner has used this month's allowance waits, and is checked
+// again this often (so a raised limit, or the 1st of the month, lets it carry on).
+const ALLOWANCE_RECHECK_MINUTES = 60;
+/** The saved reason on a page waiting for the monthly allowance (shown as its own message, not a problem). */
+const ALLOWANCE_PAUSE = "Waiting for next month's allowance.";
 
 const EXTENSIONS: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
 
@@ -168,6 +174,23 @@ async function readOne(job: Job): Promise<void> {
     return;
   }
 
+  if (await allowanceUsed(book.owner_id)) {
+    // Not a try: the page simply waits, and the pages already read stay usable.
+    const { error } = await admin
+      .from("page_jobs")
+      .update({
+        status: "pending",
+        error: ALLOWANCE_PAUSE,
+        locked_at: null,
+        attempts: Math.max(0, job.attempts - 1),
+        next_attempt_at: new Date(Date.now() + ALLOWANCE_RECHECK_MINUTES * 60_000).toISOString(),
+      })
+      .eq("id", job.id);
+    if (error) console.error("[jobs] pausing a page for the allowance", job.id, error);
+    await readyWhilePaused(book.id);
+    return;
+  }
+
   try {
     const page = await pageToRead(job);
     // A page keeps its own kind (e.g. the exercises after a chapter) within its book.
@@ -178,6 +201,25 @@ async function readOne(job: Job): Promise<void> {
     await recordPageFailure(job, err);
   }
   await finishBookIfDone(job.document_id);
+}
+
+/** Whether the book's owner has used this month's allowance (a failed check lets reading go on). */
+async function allowanceUsed(ownerId: string): Promise<boolean> {
+  try {
+    return (await checkQuota(ownerId)).overQuota;
+  } catch (err) {
+    console.error("[jobs] checking the allowance", err);
+    return false;
+  }
+}
+
+/** A paused book with pages already read can be used meanwhile; the rest join it when read. */
+async function readyWhilePaused(documentId: string): Promise<void> {
+  const admin = createAdminClient();
+  const { count, error } = await admin.from("page_jobs").select("id", { count: "exact", head: true }).eq("document_id", documentId).eq("status", "done");
+  if (error || !count) return;
+  const { error: readyError } = await admin.from("documents").update({ status: "ready" }).eq("id", documentId).eq("status", "processing");
+  if (readyError) console.error("[jobs] making a paused book usable", documentId, readyError);
 }
 
 /** A book with no pages left to read is ready (if any page was read) or failed. */
@@ -248,6 +290,8 @@ export interface PageProgress {
   problems: string[];
   /** Pages waiting for the AI's daily allowance, and when it resets. */
   waitingUntil: string | null;
+  /** Pages waiting because the owner has used this month's allowance. */
+  allowancePaused: boolean;
 }
 
 /** Reading progress of each of an owner's books that has queued pages. */
@@ -268,7 +312,7 @@ export async function pageProgress(ownerId: string): Promise<Record<string, Page
   if (troubled.error) throw troubled.error;
 
   const out: Record<string, PageProgress> = {};
-  const entry = (id: string) => (out[id] ??= { total: 0, done: 0, failed: 0, problems: [], waitingUntil: null });
+  const entry = (id: string) => (out[id] ??= { total: 0, done: 0, failed: 0, problems: [], waitingUntil: null, allowancePaused: false });
   for (const c of (counts.data ?? []) as { document_id: string; status: string; jobs: number }[]) {
     const p = entry(c.document_id);
     p.total += Number(c.jobs);
@@ -278,6 +322,10 @@ export async function pageProgress(ownerId: string): Promise<Record<string, Page
   const soon = Date.now() + 2 * 3600_000;
   for (const j of troubled.data ?? []) {
     const p = entry(j.document_id);
+    if (j.error === ALLOWANCE_PAUSE) {
+      if (j.status === "pending") p.allowancePaused = true;
+      continue;
+    }
     const reason = (j.error ?? "").replace(/^Page \d+: /, "");
     if (reason && !p.problems.includes(reason)) p.problems.push(reason);
     if (j.status === "pending" && Date.parse(j.next_attempt_at) > soon) p.waitingUntil = j.next_attempt_at;

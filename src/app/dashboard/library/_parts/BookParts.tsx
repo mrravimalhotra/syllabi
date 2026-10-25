@@ -7,6 +7,15 @@ import { SOURCE_TYPE_OPTIONS, type DocumentRowView, type PageProgress, type Pend
 import type { SourceType } from "@/types/database";
 
 export function StatusBadge({ status, unfinished, pages }: { status: DocumentRowView["status"]; unfinished: boolean; pages: PageProgress | null }) {
+  if (pages?.allowancePaused && status !== "failed") {
+    const usable = status === "ready" ? "Ready to use with" : "Paused at";
+    return (
+      <Badge tone="warning">
+        {usable} {pages.done} of {pages.total} pages: this month&apos;s allowance is used up. The rest are read by themselves on the 1st, or
+        sooner if the person who runs Syllabi raises your limit
+      </Badge>
+    );
+  }
   if (status === "ready") return <Badge tone="success">Ready</Badge>;
   if (unfinished) return <Badge tone="danger">Upload incomplete: delete this book and upload it again</Badge>;
   if (status === "failed") return <Badge tone="danger">No page could be read: check the photos are clear, then try again or upload again</Badge>;

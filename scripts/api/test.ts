@@ -41,6 +41,7 @@ import * as speech from "../../src/app/api/speech/route";
 import * as sounds from "../../src/app/api/sounds/route";
 import * as sound from "../../src/app/api/sounds/[letter]/route";
 import * as logError from "../../src/app/api/log-error/route";
+import { pageProgress, readQueuedPages } from "../../src/lib/ingestion/jobs";
 import type { Student } from "@/types/database";
 
 process.env.OPEN_SIGNUPS = "true";
@@ -732,6 +733,34 @@ tables.job_runner = [{ id: 1, token: "secret-token" }];
 await expect("jobs: no token is refused", jobs.POST, 403, null, {}, {});
 await expect("jobs: a wrong token (any length) is refused without crashing", jobs.POST, 403, null, {}, { headers: { "x-job-token": "x" } });
 failures.length = 0;
+{
+  // A book whose owner has used this month's allowance waits instead of going over it.
+  const BOOK = "00000000-0000-4000-8000-0000000000c1";
+  fresh(person({ token_quota: 1000 }));
+  rpcs.student_monthly_usage = () => 1000;
+  tables.documents = [{ id: BOOK, owner_id: ME, title: "Big book", status: "processing", source_type: "textbook" }];
+  const job = (page: number, status: string) => ({ id: `job-${page}`, document_id: BOOK, owner_id: ME, page_number: page, status, attempts: 0, error: null, page_text: "Some text", image_path: null, mime_type: null, hint: null, source_type: null, next_attempt_at: new Date(0).toISOString() });
+  tables.page_jobs = [job(1, "done"), job(2, "pending")];
+  rpcs.claim_page_job = () => {
+    const next = (tables.page_jobs ?? []).find((j) => j.status === "pending" && String(j.next_attempt_at) <= new Date().toISOString());
+    if (!next) return [];
+    Object.assign(next, { status: "working", attempts: Number(next.attempts) + 1 });
+    return [{ ...next }];
+  };
+  await readQueuedPages(null);
+  const waiting = (tables.page_jobs ?? [])[1];
+  check("allowance: a page over the monthly allowance waits, without counting a try", waiting.status === "pending" && waiting.attempts === 0 && Date.parse(String(waiting.next_attempt_at)) > Date.now() + 30 * 60_000, JSON.stringify(waiting));
+  check("allowance: the pages already read can be used meanwhile (the book is Ready)", tables.documents[0].status === "ready");
+  rpcs.page_job_counts = () => [{ document_id: BOOK, status: "done", jobs: 1 }, { document_id: BOOK, status: "pending", jobs: 1 }];
+  const progress = (await pageProgress(ME))[BOOK];
+  check("allowance: the book says it is paused for the allowance, not that a page has a problem", progress?.allowancePaused === true && progress.problems.length === 0, JSON.stringify(progress));
+  rpcs.student_monthly_usage = () => 0;
+  rpcs.replace_page_chunks = () => null;
+  waiting.next_attempt_at = new Date(0).toISOString();
+  await readQueuedPages(null);
+  check("allowance: once there is allowance again, the page is read", waiting.status === "done", JSON.stringify(waiting));
+  fresh();
+}
 await expect("log-error: a crash report is accepted", logError.POST, 200, null, { where: "dashboard page", message: "boom", path: "/dashboard" });
 check("log-error: it is saved without secrets", (tables.error_log ?? []).length === 1);
 await expect("log-error: an unreadable report is refused", logError.POST, 400, null, undefined, { raw: "nope" });

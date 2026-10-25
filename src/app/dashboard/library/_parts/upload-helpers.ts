@@ -53,6 +53,8 @@ export interface PageProgress {
   failed: number;
   problems: string[];
   waitingUntil: string | null;
+  /** Waiting because this month's allowance is used up. Optional: older replies don't send it. */
+  allowancePaused?: boolean;
 }
 
 export interface DocumentRowView {

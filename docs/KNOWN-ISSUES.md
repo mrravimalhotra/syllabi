@@ -72,7 +72,7 @@ what works.
 
 | # | Item | Why it needs a decision |
 |---|---|---|
-| D1 | Background page reading ignores the monthly allowance after upload starts (`lib/ingestion/jobs.ts`) | Pause or fail pages mid-book, or let a started upload finish? |
+| D1 | Background page reading ignores the monthly allowance after upload starts (`lib/ingestion/jobs.ts`) | **Done 2026-10-25 (owner: pause):** pages wait once the owner's monthly allowance is used, checked again every hour; the pages already read can be used meanwhile. |
 | D2 | An expired guest can't be re-enabled: "Grant access" says done but `guest_until` is unchanged (`lib/access.ts`, `lib/account-update.ts`) | **Done 2026-10-25:** Admin → Accounts → Extend / Turn on again gives a guest more days. |
 | D3 | "Exercise/worksheet/revision" words inside pasted or attached text switch on whole-exercise mode (`rag/whole-pages.ts`) | Which part of the request counts as the ask? |
 | D4 | Reused answers (60 days) can be stale after a book is uploaded or re-read (`generation/handler.ts` cache key) | **Done 2026-10-25 (owner: shorter reuse):** answers and study packs are reused for 7 days, and never once a page of a book they could use has been read or re-read since. |

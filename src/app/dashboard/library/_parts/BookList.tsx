@@ -94,7 +94,7 @@ export function BookList({
                     </button>
                   </p>
                 )}
-                {d.pages && d.status === "processing" && d.pages.problems.length > 0 && !d.pages.waitingUntil && (
+                {d.pages && d.status === "processing" && d.pages.problems.length > 0 && !d.pages.waitingUntil && !d.pages.allowancePaused && (
                   <p className="text-xs text-amber-700">
                     Some pages are taking longer and will be tried again shortly. Reason: {d.pages.problems[0]}
                   </p>
