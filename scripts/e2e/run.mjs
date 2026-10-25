@@ -1571,6 +1571,17 @@ await test("Report a problem: the button is on every screen", async (page, ctx) 
   }
 });
 
+await test("Report a problem: the reporter sees what was done about their earlier report", async (page, ctx) => {
+  await baseRoutes(ctx);
+  await ctx.route("**/api/bug-reports", (r) =>
+    json(r, { reports: [{ id: "r1", number: 7, title: "Answer skipped a question", status: "fixed", resolution: "Fixed: every question of the exercise is now answered." }] })
+  );
+  await page.goto(`${BASE}/dashboard/practice`, { waitUntil: "networkidle" });
+  await tap(page.getByRole("button", { name: "Report a problem" }).first());
+  await page.getByText("#7 Answer skipped a question").waitFor();
+  await page.getByText("Fixed: every question of the exercise is now answered.").waitFor();
+});
+
 await test("Report a problem: it captures what was typed, sent and received, shows it, and sends a clean ticket", async (page, ctx) => {
   await baseRoutes(ctx);
   await ctx.route("**/api/generate/**", (r) => json(r, { ...answer, text: "The answer is forty two." }));

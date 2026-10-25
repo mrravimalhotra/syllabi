@@ -10,6 +10,8 @@ export interface MyReport {
   number: number;
   title: string;
   status: string;
+  /** What was done about it, written by an admin for the reporter to read. */
+  resolution?: string | null;
 }
 
 interface Props {
@@ -101,11 +103,14 @@ export function ReportForm({
           <p className="mb-1 text-xs font-medium text-slate-500">Your recent reports</p>
           <ul className="space-y-1 text-xs text-slate-600">
             {mine.map((r) => (
-              <li key={r.id} className="flex justify-between gap-3">
-                <span className="truncate">
-                  #{r.number} {r.title}
+              <li key={r.id} className="space-y-0.5">
+                <span className="flex justify-between gap-3">
+                  <span className="truncate">
+                    #{r.number} {r.title}
+                  </span>
+                  <span className="shrink-0 text-slate-500">{statusLabel(r.status)}</span>
                 </span>
-                <span className="shrink-0 text-slate-500">{statusLabel(r.status)}</span>
+                {r.resolution && <span className="block rounded-lg bg-emerald-50 px-2 py-1 text-emerald-900">{r.resolution}</span>}
               </li>
             ))}
           </ul>

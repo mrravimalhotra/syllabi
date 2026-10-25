@@ -87,7 +87,7 @@ export function ReportDetail({ id, onChanged }: { id: string; onChanged: (id: st
         </button>
       </div>
       <label className="block text-xs font-medium text-slate-500">
-        What was done (shown to nobody else; paste the summary from Claude here)
+        What was done (the reporter sees this under their reports, so write it for them)
         <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={5000} className={cx(input, "mt-1")} />
       </label>
       {message && <Alert tone="success">{message}</Alert>}
