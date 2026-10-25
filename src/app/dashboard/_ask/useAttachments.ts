@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { DownscaledImage } from "@/lib/downscale-image";
 import { pagesLeft, readAttachments, readPdfRange, type LongPdf } from "@/app/dashboard/_ask/attachments";
 
@@ -18,39 +18,62 @@ export function useAttachments(onError: (message: string | null) => void, onNoti
   // PDFs too long for one question, waiting for the person to choose their pages.
   const [longPdfs, setLongPdfs] = useState<LongPdf[]>([]);
 
-  async function add(files: FileList | File[] | null) {
-    if (!files || files.length === 0) return;
+  // Reads run one after another, each starting from the photos attached by then, so files added while
+  // others are still being read are all kept (two reads at once used to overwrite each other).
+  const photosNow = useRef<DownscaledImage[]>([]);
+  const changePhotos = (change: (prev: DownscaledImage[]) => DownscaledImage[]) => {
+    photosNow.current = change(photosNow.current);
+    setPhotos(photosNow.current);
+  };
+  const queue = useRef<Promise<void>>(Promise.resolve());
+  const waiting = useRef(0);
+
+  function enqueue(work: (current: DownscaledImage[]) => Promise<void>) {
+    waiting.current++;
+    setReading(true);
+    queue.current = queue.current
+      .then(() => work(photosNow.current))
+      .catch(() => onError("Couldn't read that file. Try attaching it again."))
+      .finally(() => {
+        if (--waiting.current === 0) setReading(false);
+      });
+    return queue.current;
+  }
+
+  /** Adds the photos a read made after `before`: a photo removed meanwhile stays removed. */
+  function addNew(before: DownscaledImage[], after: DownscaledImage[]) {
+    const added = after.slice(before.length);
+    changePhotos((prev) => [...prev, ...added]);
+  }
+
+  function add(files: FileList | File[] | null) {
+    if (!files || files.length === 0) return Promise.resolve();
+    const chosen = Array.from(files);
     onError(null);
     onNotice(null);
-    setReading(true);
-    const read = await readAttachments(Array.from(files), photos);
-    if ("error" in read) {
-      onError(read.error);
-    } else {
-      setPhotos(read.photos);
+    return enqueue(async (current) => {
+      const read = await readAttachments(chosen, current);
+      if ("error" in read) return onError(read.error);
+      addNew(current, read.photos);
       setDocs((prev) => [...prev, ...read.docs]);
       setLongPdfs((prev) => [...prev, ...read.longPdfs]);
       if (read.notes.length) onNotice(read.notes.join(" "));
-    }
-    setReading(false);
+    });
   }
 
   /** Attaches the chosen pages of the long PDF at `index`. */
-  async function attachPages(index: number, first: number, last: number) {
+  function attachPages(index: number, first: number, last: number) {
     const pdf = longPdfs[index];
-    if (!pdf) return;
+    if (!pdf) return Promise.resolve();
     onError(null);
     onNotice(null);
-    setReading(true);
-    const read = await readPdfRange(pdf.file, first, last, photos);
-    if ("error" in read) {
-      onError(read.error);
-    } else {
-      setPhotos(read.photos);
-      setLongPdfs((prev) => prev.filter((_, j) => j !== index));
+    return enqueue(async (current) => {
+      const read = await readPdfRange(pdf.file, first, last, current);
+      if ("error" in read) return onError(read.error);
+      addNew(current, read.photos);
+      setLongPdfs((prev) => prev.filter((p) => p !== pdf));
       if (read.notes.length) onNotice(read.notes.join(" "));
-    }
-    setReading(false);
+    });
   }
 
   return {
@@ -62,10 +85,10 @@ export function useAttachments(onError: (message: string | null) => void, onNoti
     docs,
     reading,
     add,
-    removePhoto: (index: number) => setPhotos((prev) => prev.filter((_, j) => j !== index)),
+    removePhoto: (index: number) => changePhotos((prev) => prev.filter((_, j) => j !== index)),
     removeDoc: (index: number) => setDocs((prev) => prev.filter((_, j) => j !== index)),
     clear: () => {
-      setPhotos([]);
+      changePhotos(() => []);
       setDocs([]);
       setLongPdfs([]);
     },

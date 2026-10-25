@@ -823,6 +823,9 @@ failures.length = 0;
   check("book pages: a page shows its picture, its text in order and its problems in plain words", one.page.imageUrl?.includes("page-2.jpg") && one.page.text === "first part\n\nsecond part" && one.page.issues.join() === "out of focus", JSON.stringify(one.page));
   const five = await (await bookPages.GET(new Request(`http://test/api/library/${PAGES_BOOK}/pages?page=5`), { params: Promise.resolve({ id: PAGES_BOOK }) })).json();
   check("book pages: a chosen page without a picture shows its text", five.page.number === 5 && five.page.imageUrl === null && five.page.text === "page five", JSON.stringify(five.page));
+  // Next's after() (background reading) only works inside a real server; the pages are queued before it is called.
+  const upload = await call(bookPages.POST, { pages: [{ text: "A typed page." }], startPageNumber: 7 }, { id: PAGES_BOOK }).catch((err: Error) => ({ status: /outside a request scope/.test(err.message) ? 200 : 500, json: null }));
+  check("book pages: pages can still be uploaded to the book, and are queued for reading", upload.status === 200 && (tables.page_jobs ?? []).some((j) => j.document_id === PAGES_BOOK && j.page_number === 7), `${upload.status} ${JSON.stringify(upload.json)}`);
   tables.documents[0].owner_id = "someone-else";
   const theirs = await bookPages.GET(new Request(`http://test/api/library/${PAGES_BOOK}/pages`), { params: Promise.resolve({ id: PAGES_BOOK }) });
   check("book pages: someone else's book is not found", theirs.status === 404);

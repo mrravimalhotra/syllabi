@@ -385,6 +385,20 @@ await test("Ask: an attached photo shows, can be removed, and goes with the ques
 });
 
 
+await test("Ask: photos attached one after another, before the first is read, are all kept", async (page, ctx) => {
+  await baseRoutes(ctx);
+  // A big, detailed first photo takes a moment to shrink, so the second arrives while it is still being read.
+  const bigJpeg = await sharp({ create: { width: 3000, height: 4000, channels: 3, noise: { type: "gaussian", mean: 128, sigma: 60 } } }).jpeg({ quality: 95 }).toBuffer();
+  const otherJpeg = await sharp({ create: { width: 320, height: 420, channels: 3, background: "#ffe0a0" } }).jpeg().toBuffer();
+  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  const input = page.locator("input[type=file]");
+  // The second is chosen straight away, while the first is still being read.
+  await input.setInputFiles({ name: "first.jpg", mimeType: "image/jpeg", buffer: bigJpeg });
+  await input.setInputFiles({ name: "second.jpg", mimeType: "image/jpeg", buffer: otherJpeg });
+  await page.getByRole("button", { name: "Remove page 2" }).waitFor({ timeout: 15000 });
+  await page.getByRole("button", { name: "Remove page 1" }).waitFor();
+});
+
 // A plain PDF with `count` simple pages, written by hand (with its own cross-reference table).
 function blankPdf(count) {
   // Each page draws a rectangle of its own width, so no two pages look the same.
