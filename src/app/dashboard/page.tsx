@@ -63,8 +63,8 @@ export default function DashboardPage() {
   }, []);
 
   const language: AnswerLanguage = answerLanguage ?? me?.student.answer_language ?? "auto";
-  // The chapter for a study pack: the one picked, else the newest book.
-  const chosenPackBook = packBookId ?? books.books[0]?.id ?? "";
+  // The chapter for a study pack: the book picked (none is pre-chosen). Attached pages win over it (see buildRequestBody).
+  const chosenPackBook = packBookId ?? "";
   const currentTab = TABS.find((t) => t.value === tab)!;
   const isPack = tab === "study_pack";
   // Marking a paper uses no book.
@@ -140,7 +140,7 @@ export default function DashboardPage() {
       <TabPicker tab={tab} onChoose={chooseTab} />
 
       <DropForm onSubmit={submit} onFiles={(files) => void attachments.add(files)}>
-        {isPack && <PackChapter books={books.books} value={chosenPackBook} onChange={setPackBookId} />}
+        {isPack && <PackChapter books={books.books} value={chosenPackBook} onChange={setPackBookId} attachedPages={photos.length} />}
 
         <PromptBox
           value={prompt}

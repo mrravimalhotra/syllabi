@@ -13,7 +13,7 @@ export interface Question {
   /** Paper checker: marks for each question ("" = use the marks on the paper, or 5). */
   marksEach: string;
   language: AnswerLanguage;
-  /** Study packs: the chapter chosen from My books ("" = use the attached pages). */
+  /** Study packs: the chapter chosen from My books ("" = none). Attached pages, if any, are used instead. */
   packBookId: string;
   /** Answers search only these books. */
   bookIds: string[];
@@ -51,9 +51,11 @@ function promptFor(q: Question): string {
 /** The request body for the question: a study pack from a chapter, or an answer from the ticked books. */
 export function buildRequestBody(q: Question): Record<string, unknown> {
   if (q.task === "study_pack") {
+    // Pages attached for a pack are the chapter the parent means, so they win over a chosen book.
+    const fromPages = q.photos.length > 0;
     return {
-      documentId: q.packBookId || undefined,
-      photos: q.packBookId ? [] : toPhotos(q.photos),
+      documentId: fromPages ? undefined : q.packBookId || undefined,
+      photos: fromPages ? toPhotos(q.photos) : [],
       focus: q.prompt.trim(),
       language: q.language,
     };

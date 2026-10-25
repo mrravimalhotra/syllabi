@@ -391,6 +391,8 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
   check(questionProblem({ ...q, prompt: "y".repeat(9_000) })?.includes("too long") === true, "A too-long question is refused with a reason");
   const pack = buildRequestBody({ ...q, task: "study_pack", packBookId: "b1", prompt: " focus " });
   check(pack.documentId === "b1" && pack.focus === "focus" && JSON.stringify(pack.photos) === "[]" && !("documentIds" in pack), "A study pack request names the chapter");
+  const fromPages = buildRequestBody({ ...q, task: "study_pack", packBookId: "b1", photos: [{ imageBase64: "AAAA", mimeType: "image/jpeg" } as Question["photos"][number]] });
+  check(fromPages.documentId === undefined && (fromPages.photos as unknown[]).length === 1, "Attached pages win over a chosen book for a study pack");
   check(blockedReason({ overQuota: true, noBookSelected: true, readingFiles: true, choosingPages: false })?.includes("allowance") === true, "Over the allowance is the first reason given");
   check(blockedReason({ overQuota: false, noBookSelected: true, readingFiles: true, choosingPages: false })?.includes("no book is selected") === true && blockedReason({ overQuota: false, noBookSelected: false, readingFiles: true, choosingPages: false })?.includes("attachment") === true, "Then no book, then still reading a file");
   check(blockedReason({ overQuota: false, noBookSelected: false, readingFiles: false, choosingPages: false }) === null, "Nothing blocking means no message");
