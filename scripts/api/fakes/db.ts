@@ -101,7 +101,8 @@ class Query implements PromiseLike<Result> {
         }
         return 0;
       });
-      result = sorted.slice(this.from, this.from + this.max);
+      // Copies, as from a real database: changing a row read back must not change what is stored.
+      result = structuredClone(sorted.slice(this.from, this.from + this.max));
     }
 
     const count = this.wantCount ? matches().length : null;

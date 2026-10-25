@@ -39,12 +39,37 @@ async function target(request: Request, params: Params["params"]) {
   return { user, saved, pack: saved.pack, section, index: index as number, question, body };
 }
 
+/** Tries this many times when another edit saves the pack at the same moment. */
+const SAVE_TRIES = 4;
+
 /**
- * Saves one changed question. The pack is read again just before writing and
- * only this question is replaced, so two quick changes to different questions
- * don't undo each other.
+ * Saves one changed question. The pack is read again just before writing and only this question is
+ * replaced; the write only lands if the pack's version is unchanged, else it reads again and retries,
+ * so two quick changes to different questions never undo each other.
  */
 async function save(id: string, section: PackSection, index: number, question: PackQuestion): Promise<StudyPack> {
+  const admin = createAdminClient();
+  for (let attempt = 1; ; attempt++) {
+    const { data, error: readError } = await admin.from("generated_documents").select("pack, pack_version").eq("id", id).single();
+    // Before the version column exists (migration 30 not applied yet), save as before.
+    if (readError && /pack_version/.test(readError.message)) return saveUnversioned(id, section, index, question);
+    if (readError || !data?.pack) throw readError ?? new Error("Study pack not found");
+    const fresh = data.pack as StudyPack;
+    fresh[section][index] = question;
+    const version = Number(data.pack_version ?? 0);
+    const { data: written, error } = await admin
+      .from("generated_documents")
+      .update({ pack: fresh, content: packToMarkdown(fresh), pack_version: version + 1 })
+      .eq("id", id)
+      .eq("pack_version", version)
+      .select("id");
+    if (error) throw error;
+    if (written?.length) return fresh;
+    if (attempt >= SAVE_TRIES) throw new Error("The study pack kept changing while saving");
+  }
+}
+
+async function saveUnversioned(id: string, section: PackSection, index: number, question: PackQuestion): Promise<StudyPack> {
   const admin = createAdminClient();
   const { data, error: readError } = await admin.from("generated_documents").select("pack").eq("id", id).single();
   if (readError || !data?.pack) throw readError ?? new Error("Study pack not found");

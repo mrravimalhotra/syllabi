@@ -43,6 +43,7 @@ import * as sound from "../../src/app/api/sounds/[letter]/route";
 import * as logError from "../../src/app/api/log-error/route";
 import * as rewards from "../../src/app/api/rewards/route";
 import * as bookPages from "../../src/app/api/library/[id]/pages/route";
+import * as packEdit from "../../src/app/api/documents/[id]/pack/route";
 import { pageProgress, readQueuedPages } from "../../src/lib/ingestion/jobs";
 import type { Student } from "@/types/database";
 
@@ -786,6 +787,22 @@ failures.length = 0;
   page.next_attempt_at = new Date(0).toISOString();
   await readQueuedPages(null);
   check("page read: the next try saves it without asking the AI again", page.status === "done" && fakeAi.calls === 1, JSON.stringify({ status: page.status, calls: fakeAi.calls }));
+  fresh();
+}
+{
+  // Two quick edits to different questions of a study pack both stay.
+  fresh();
+  const PACK = "00000000-0000-4000-8000-0000000000e1";
+  const q = (n: number) => ({ question: `Q${n}`, answer: `A${n}`, type: "short", options: [] as string[] });
+  const pack = { version: 1, title: "Plants", subject: "Science", kind: "information", language: "en", overview: "", themes: [], characters: [], walkthrough: [], textbookQuestions: [q(1), q(2)], textbookQuestionsWritten: true, practiceQuestions: [], glossary: [], source: "", sourceDocumentId: null };
+  tables.generated_documents = [{ id: PACK, student_id: ME, task_type: "study_pack", pack, content: "", pack_version: 0 }];
+  const [one, two] = await Promise.all([
+    call(packEdit.PATCH, { section: "textbookQuestions", index: 0, answer: "New first" }, { id: PACK }),
+    call(packEdit.PATCH, { section: "textbookQuestions", index: 1, answer: "New second" }, { id: PACK }),
+  ]);
+  const stored = tables.generated_documents[0] as { pack: typeof pack; pack_version: number; content: string };
+  check("pack edits: two edits at once both succeed", one.status === 200 && two.status === 200, `${one.status} ${two.status}`);
+  check("pack edits: neither undoes the other", stored.pack.textbookQuestions[0].answer === "New first" && stored.pack.textbookQuestions[1].answer === "New second" && stored.pack_version === 2, JSON.stringify(stored.pack.textbookQuestions));
   fresh();
 }
 {
