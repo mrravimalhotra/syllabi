@@ -798,6 +798,25 @@ await test("My books: View pages shows each page's picture and the text read fro
   if (!(await page.getByRole("button", { name: "Next", exact: true }).isDisabled())) throw new Error("Next should be off on the last page.");
 });
 
+await test("Dark mode: grown-up screens go dark with the device, children's screens stay bright", async (page, ctx) => {
+  await baseRoutes(ctx);
+  await page.emulateMedia({ colorScheme: "dark" });
+  // Lightness (0 dark to 255 light) of the page background.
+  const pageLight = () => page.evaluate(() => {
+    const [r, g, b] = getComputedStyle(document.body).backgroundColor.match(/[\d.]+/g).map(Number);
+    // lab(), oklab() and oklch() give lightness first (0 to 100, or 0 to 1); rgb() gives three 0 to 255 channels.
+    if (/^(ok)?l(ab|ch)/.test(getComputedStyle(document.body).backgroundColor)) return r <= 1 ? r * 255 : r * 2.55;
+    return (r + g + b) / 3;
+  });
+  await page.goto(`${BASE}/dashboard/library`, { waitUntil: "networkidle" });
+  if ((await pageLight()) > 80) throw new Error(`My books should be dark, background lightness ${await pageLight()}.`);
+  await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
+  if ((await pageLight()) < 200) throw new Error(`Kindergarten should stay bright, background lightness ${await pageLight()}.`);
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.goto(`${BASE}/dashboard/library`, { waitUntil: "networkidle" });
+  if ((await pageLight()) < 200) throw new Error(`In light mode My books should be light, background lightness ${await pageLight()}.`);
+});
+
 await test("Stars: the account's star chart shows on a new device, and this device's stars are added to it once", async (page, ctx) => {
   const account = { stars: 40, days: [] };
   const sent = [];

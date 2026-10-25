@@ -23,7 +23,11 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#ffffff",
+  // The phone's bar matches the page: dark on grown-up screens when the device is in dark mode.
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b1120" },
+  ],
   // Lets the phone tab bar sit above the iPhone home indicator.
   viewportFit: "cover",
 };
