@@ -7,6 +7,9 @@ import { button, card, cx } from "@/components/ui";
 import { OFFLINE_MESSAGE, failedRequestMessage } from "@/lib/http-errors";
 import type { Student } from "@/types/database";
 
+// One answer from a small book passed whole can use about 100,000 tokens, so a guest can try a couple of those.
+const GUEST_ALLOWANCE = 200_000;
+
 export type Account = Student & { monthly_usage: number };
 
 interface Props {
@@ -19,7 +22,7 @@ interface Props {
 
 /** "Add a guest": a temporary login made with a user ID and a chosen password, or with an email and a made-up one. */
 export function GuestForm({ onStart, onError, onMade }: Props) {
-  const [guest, setGuest] = useState<GuestValues>({ byId: true, loginId: "", password: "", email: "", name: "", days: "14", allowance: "20000" });
+  const [guest, setGuest] = useState<GuestValues>({ byId: true, loginId: "", password: "", email: "", name: "", days: "14", allowance: String(GUEST_ALLOWANCE) });
   const [making, setMaking] = useState(false);
   const [made, setMade] = useState<MadeGuest | null>(null);
 
@@ -58,7 +61,7 @@ export function GuestForm({ onStart, onError, onMade }: Props) {
       <div>
         <h2 className="text-base font-semibold text-slate-900">Add a guest</h2>
         <p className="text-sm text-slate-500">
-          A temporary login for a reviewer, tester or visitor. It works while sign-ups are closed, has its own small monthly allowance, and
+          A temporary login for a reviewer, tester or visitor. It works while sign-ups are closed, has its own monthly allowance, and
           stops working by itself.
         </p>
       </div>
