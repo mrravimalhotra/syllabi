@@ -75,7 +75,7 @@ what works.
 | D1 | Background page reading ignores the monthly allowance after upload starts (`lib/ingestion/jobs.ts`) | Pause or fail pages mid-book, or let a started upload finish? |
 | D2 | An expired guest can't be re-enabled: "Grant access" says done but `guest_until` is unchanged (`lib/access.ts`, `lib/account-update.ts`) | **Done 2026-10-25:** Admin → Accounts → Extend / Turn on again gives a guest more days. |
 | D3 | "Exercise/worksheet/revision" words inside pasted or attached text switch on whole-exercise mode (`rag/whole-pages.ts`) | Which part of the request counts as the ask? |
-| D4 | Reused answers (60 days) can be stale after a book is uploaded or re-read (`generation/handler.ts` cache key) | Instant reuse vs freshness |
+| D4 | Reused answers (60 days) can be stale after a book is uploaded or re-read (`generation/handler.ts` cache key) | **Done 2026-10-25 (owner: shorter reuse):** answers and study packs are reused for 7 days, and never once a page of a book they could use has been read or re-read since. |
 | D5 | Thousands separators in the Practice tutorials: "4,567, 789" is split into 4, 567, 789 (`TutorialsCard.tsx`) | **Decided 2026-10-25 (owner: leave as it is):** every comma separates numbers; the form hints now say to write big numbers without commas. |
 | D6 | Study pack: attached pages are ignored when a book is chosen, and the newest book is chosen by default (`build-request.ts`) | Changes the default chapter choice |
 | D7 | Deleting a book removes the row before its images; a failed image delete leaves orphans (`api/library/[id]`) | Which failure is preferable |

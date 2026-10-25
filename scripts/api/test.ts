@@ -254,8 +254,12 @@ check("generate: it is saved with a fingerprint for reuse", (tables.generated_do
 const again = await expect("generate: the same question again returns the saved answer", adhoc.POST, 200, null, { prompt: "Explain photosynthesis" });
 check("generate: a reused answer keeps its confidence", (again.json?.confidence as { fromBook: number } | undefined)?.fromBook === 88, JSON.stringify(again.json?.confidence));
 check("generate: no second AI call, and it says it was reused", pipeline.calls === 1 && Boolean(again.json?.reusedFrom));
+tables.chunks = [{ owner_id: person().id, document_id: "b1", content: "Re-read page", page_number: 1, created_at: new Date(Date.now() + 60_000).toISOString() }];
+const afterReread = await expect("generate: after a book page is re-read, the same question is answered again", adhoc.POST, 200, null, { prompt: "Explain photosynthesis" });
+check("generate: an answer older than the re-read is not reused", pipeline.calls === 2 && !afterReread.json?.reusedFrom);
+tables.chunks = [];
 await expect("generate: a fresh answer can be asked for", adhoc.POST, 200, null, { prompt: "Explain photosynthesis", fresh: true });
-check("generate: fresh makes a second AI call and a second copy", pipeline.calls === 2 && (tables.generated_documents ?? []).length === 2);
+check("generate: fresh makes another AI call and another copy", pipeline.calls === 3 && (tables.generated_documents ?? []).length === 3);
 const streamed = await adhoc.POST(new Request("http://test/api", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ prompt: "A different question", stream: true }) }));
 const lines = (await streamed.text()).trim().split("\n").map((l) => JSON.parse(l));
 check("generate: a streamed answer sends text pieces, then the finished answer", streamed.headers.get("content-type")?.includes("ndjson") === true && lines.filter((l) => l.type === "text").map((l) => l.delta).join("") === "Plants make food." && lines.at(-1)?.type === "done" && lines.at(-1)?.answer?.text === "Plants make food.");
@@ -335,8 +339,11 @@ pipeline.fail = false;
   check("study pack: it is saved, with its fingerprint, and uses two AI calls", (tables.generated_documents ?? []).length === 1 && (tables.generated_documents ?? [])[0].task_type === "study_pack" && Boolean((tables.generated_documents ?? [])[0].cache_key) && fakeAi.calls === 2, `${(tables.generated_documents ?? []).length} ${fakeAi.calls}`);
   const reused = await expect("study pack: the same chapter again returns the saved pack", studyPack.POST, 200, null, { documentId: BOOK });
   check("study pack: no new AI calls, and it says it was reused", fakeAi.calls === 2 && Boolean(reused.json?.reusedFrom));
+  tables.chunks = tables.chunks.map((c) => ({ ...c, owner_id: person().id, created_at: new Date(Date.now() + 60_000).toISOString() }));
+  const reread = await expect("study pack: after the chapter is re-read, the pack is made again", studyPack.POST, 200, null, { documentId: BOOK });
+  check("study pack: a pack older than the re-read is not reused", fakeAi.calls === 4 && !reread.json?.reusedFrom);
   await expect("study pack: a fresh pack can be asked for", studyPack.POST, 200, null, { documentId: BOOK, fresh: true });
-  check("study pack: fresh makes two more AI calls and a second copy", fakeAi.calls === 4 && (tables.generated_documents ?? []).length === 2);
+  check("study pack: fresh makes two more AI calls and another copy", fakeAi.calls === 6 && (tables.generated_documents ?? []).length === 3);
 
   setup("processing");
   await expect("study pack: a book still being read is explained", studyPack.POST, 400, /still being read/i, { documentId: BOOK });

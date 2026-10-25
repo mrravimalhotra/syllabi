@@ -66,7 +66,7 @@ export async function POST(request: Request) {
       instructions: [WALKTHROUGH_SYSTEM, QUESTIONS_SYSTEM],
     });
     if (!fresh) {
-      const saved = await findReusable(student.id, cacheKey);
+      const saved = await findReusable(student.id, cacheKey, documentId ? [documentId] : null);
       if (saved?.pack) {
         return NextResponse.json({
           id: saved.id,

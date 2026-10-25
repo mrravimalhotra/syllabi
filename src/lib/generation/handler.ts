@@ -170,7 +170,7 @@ export function createGenerationRoute(taskType: GenerationTaskType) {
         instructions: systemInstructionsFor(taskType, levelLine(student), req.language),
       });
       if (!req.fresh) {
-        const saved = await findReusable(student.id, cacheKey);
+        const saved = await findReusable(student.id, cacheKey, req.documentIds ?? []);
         if (saved) return NextResponse.json(await savedAnswerResponse(saved));
       }
 
