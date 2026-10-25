@@ -16,7 +16,7 @@ if [ "$(id -u)" = "0" ]; then chown -R postgres "$DATA"; RUN_AS=(runuser -u post
 cleanup() { "${RUN_AS[@]}" "$PG_BIN/pg_ctl" -D "$DATA" stop -m immediate >/dev/null 2>&1 || true; rm -rf "$DATA"; }
 trap cleanup EXIT
 
-"${RUN_AS[@]}" "$PG_BIN/initdb" -D "$DATA" -U postgres -A trust >/dev/null
+"${RUN_AS[@]}" "$PG_BIN/initdb" -D "$DATA" -U postgres -A trust --encoding=UTF8 --locale=C.UTF-8 >/dev/null
 "${RUN_AS[@]}" "$PG_BIN/pg_ctl" -D "$DATA" -o "-p $PORT -k $DATA -c listen_addresses=''" -l "$LOG" start >/dev/null
 
 PSQL=("${RUN_AS[@]}" psql -h "$DATA" -p "$PORT" -U postgres -d postgres -v ON_ERROR_STOP=1 -q -X)

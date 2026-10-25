@@ -77,7 +77,7 @@ Input for BMAD planning (PRD, epics, stories). Written 2026-10-17 from a read of
 ### C. AI quality
 | # | Standard | Status | Note |
 |---|---|---|---|
-| C1 | Hybrid retrieval (vector + Postgres full-text) | ❌ | Exact refs like "Ex 3.2 Q5" match poorly on vectors alone |
+| C1 | Hybrid retrieval (vector + Postgres full-text) | ✅ 2026-10-25 | Exact refs like "Ex 3.2 Q5" match poorly on vectors alone |
 | C2 | Eval set: golden questions per subject, run on every prompt/model change | ❌ | |
 | C3 | Prompt versioning (stored with each answer) | ❌ | |
 | C4 | Child-safety guardrails: age-appropriate refusals, self-harm escalation text | ⚠️ | Relies on provider defaults |

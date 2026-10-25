@@ -136,6 +136,8 @@ export const fakeAdmin = {
       const mine = (tables.chunks ?? []).filter((c) => c.owner_id === args.p_owner_id && (!wanted || wanted.includes(c.document_id as string)));
       return { data: [{ chars: mine.reduce((n, c) => n + String(c.content ?? "").length, 0), chunks: mine.length }], error: null };
     }
+    // The exact-word search finds nothing unless a test gives it results.
+    if (name === "match_owner_chunks_text" && !rpcs[name]) return { data: [], error: null };
     const fn = rpcs[name];
     if (!fn) return { data: null, error: { message: `no fake for rpc ${name}` } };
     return { data: fn(args), error: null };

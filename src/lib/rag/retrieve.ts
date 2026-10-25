@@ -3,6 +3,7 @@ import { embed, embedMany } from "@/lib/llm";
 import { handwritingIn, withoutHandwriting } from "@/lib/rag/handwriting";
 import { splitQuestions } from "@/lib/rag/split-questions";
 import { withWholePages } from "@/lib/rag/whole-pages";
+import { bestSimilarity, fuse, keyWords } from "@/lib/rag/key-words";
 import { downloadFile } from "@/lib/storage";
 import type { CompletionImage } from "@/lib/llm/types";
 import type { MatchedChunk } from "@/types/database";
@@ -80,13 +81,13 @@ async function searchContext(typed: string, scope: RetrievalScope): Promise<Retr
   const questions = splitQuestions(query);
   if (questions.length === 0) {
     const { embedding } = await embed(query);
-    const found = await search(embedding, scope, MATCH_COUNT);
-    const topSimilarity = found[0]?.similarity ?? 0;
-    return withSupport(await withWholePages(found, scope.askedFor ?? query, scope.ownerId), found.length === 0 || topSimilarity < COVERAGE_THRESHOLD, scope, found[0]?.similarity ?? null);
+    const found = await search(embedding, scope, MATCH_COUNT, query);
+    const topSimilarity = bestSimilarity(found);
+    return withSupport(await withWholePages(found, scope.askedFor ?? query, scope.ownerId), found.length === 0 || topSimilarity < COVERAGE_THRESHOLD, scope, found.length ? topSimilarity : null);
   }
 
   const embeddings = await embedMany(questions);
-  const perQuestion = await Promise.all(embeddings.map((e) => search(e.embedding, scope, MATCHES_PER_QUESTION)));
+  const perQuestion = await Promise.all(embeddings.map((e, i) => search(e.embedding, scope, MATCHES_PER_QUESTION, questions[i])));
 
   // Interleave (each question's best match first, then second best, ...) so
   // the total cap never starves later questions; drop duplicates.
@@ -103,8 +104,9 @@ async function searchContext(typed: string, scope: RetrievalScope): Promise<Retr
   }
 
   // Coverage is low when at least half the questions found nothing close.
-  const weak = perQuestion.filter((m) => (m[0]?.similarity ?? 0) < COVERAGE_THRESHOLD).length;
-  return withSupport(await withWholePages(chunks, scope.askedFor ?? query, scope.ownerId), chunks.length === 0 || weak * 2 >= perQuestion.length, scope, chunks[0]?.similarity ?? null);
+  const weak = perQuestion.filter((m) => bestSimilarity(m) < COVERAGE_THRESHOLD).length;
+  const first = perQuestion[0] ?? [];
+  return withSupport(await withWholePages(chunks, scope.askedFor ?? query, scope.ownerId), chunks.length === 0 || weak * 2 >= perQuestion.length, scope, first.length ? bestSimilarity(first) : null);
 }
 
 // Whole-exercise requests: how many of the exercise's questions are searched for support, how many passages each
@@ -132,7 +134,7 @@ async function withSupport(chunks: MatchedChunk[], coverageLow: boolean, scope: 
   const embeddings = await embedMany(questions);
   const have = new Set(chunks.map((c) => c.id));
   // Exercise passages are already there whole: only lessons and notes can support an answer.
-  const lessons = (await Promise.all(embeddings.map((e) => search(e.embedding, scope, SUPPORT_SEARCH)))).map((found) =>
+  const lessons = (await Promise.all(embeddings.map((e, i) => search(e.embedding, scope, SUPPORT_SEARCH, questions[i])))).map((found) =>
     found.filter((c) => c.source_type !== "exercise")
   );
   const perQuestion = lessons.map((found) => found.filter((c) => !have.has(c.id)).slice(0, SUPPORT_PER_QUESTION));
@@ -149,7 +151,7 @@ async function withSupport(chunks: MatchedChunk[], coverageLow: boolean, scope: 
   }
   // The books cover the exercise when most of its questions found a close lesson passage.
   // A passage already in the context still counts as the question's best match.
-  const weak = lessons.filter((m) => (m[0]?.similarity ?? 0) < COVERAGE_THRESHOLD).length;
+  const weak = lessons.filter((m) => bestSimilarity(m) < COVERAGE_THRESHOLD).length;
   return {
     chunks: [...chunks, ...added],
     coverageLow: weak * 2 >= lessons.length,
@@ -157,9 +159,14 @@ async function withSupport(chunks: MatchedChunk[], coverageLow: boolean, scope: 
   };
 }
 
-async function search(embedding: number[], scope: RetrievalScope, count: number): Promise<MatchedChunk[]> {
-  const admin = createAdminClient();
-  const { data, error } = await admin.rpc("match_owner_chunks", {
+/** The `count` best passages for a question: by meaning (vector search) and by its key words, merged. */
+async function search(embedding: number[], scope: RetrievalScope, count: number, text: string): Promise<MatchedChunk[]> {
+  const [byMeaning, byWords] = await Promise.all([searchByMeaning(embedding, scope, count), searchByWords(embedding, keyWords(text), scope, count)]);
+  return fuse(byMeaning, byWords, count);
+}
+
+async function searchByMeaning(embedding: number[], scope: RetrievalScope, count: number): Promise<MatchedChunk[]> {
+  const { data, error } = await createAdminClient().rpc("match_owner_chunks", {
     query_embedding: embedding,
     match_owner_id: scope.ownerId,
     match_document_ids: scope.documentIds?.length ? scope.documentIds : null,
@@ -167,6 +174,25 @@ async function search(embedding: number[], scope: RetrievalScope, count: number)
   });
   if (error) throw new Error(`Vector search failed: ${error.message}`);
   return (data ?? []) as MatchedChunk[];
+}
+
+/** Passages holding the question's key words. Never fails the answer: without it, the meaning-based search is used alone. */
+async function searchByWords(embedding: number[], words: string[], scope: RetrievalScope, count: number): Promise<MatchedChunk[]> {
+  if (words.length === 0) return [];
+  try {
+    const { data, error } = await createAdminClient().rpc("match_owner_chunks_text", {
+      query_embedding: embedding,
+      query_words: words,
+      match_owner_id: scope.ownerId,
+      match_document_ids: scope.documentIds?.length ? scope.documentIds : null,
+      match_count: count,
+    });
+    if (error) throw new Error(error.message);
+    return (data ?? []) as MatchedChunk[];
+  } catch (err) {
+    console.error("[retrieve] word search", err instanceof Error ? err.message : err);
+    return [];
+  }
 }
 
 /** How many books and how many characters of text the selected books hold. */

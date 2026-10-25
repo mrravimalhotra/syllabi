@@ -26,6 +26,7 @@ import { made as madePdfs } from "./fakes/book-pdf";
 import { arrangeBookPages } from "../../src/lib/pdf/book-pages";
 import { formatContext, loadSourceImages, retrieveContext } from "../../src/lib/rag/retrieve";
 import { namedPages, wantsWholeSection } from "../../src/lib/rag/whole-pages";
+import { fuse, keyWords } from "../../src/lib/rag/key-words";
 import * as scanCheck from "../../src/app/api/library/[id]/scan/route";
 import { countWeakPages } from "../../src/lib/ingestion/page-read";
 import * as reports from "../../src/app/api/bug-reports/route";
@@ -440,6 +441,22 @@ fresh();
   rpcs.match_owner_chunks = () => [{ ...tables.chunks[0], similarity: 0.8 }];
   const ids = async (q: string) => (await retrieveContext(q, { ownerId: ME })).chunks.map((c) => c.id).join();
   check("whole exercise: a plain question gets only the closest passage", (await ids("What is a prime number?")) === "p4a");
+
+  // Exact words: a passage the meaning-based search missed, holding the question's exact reference, is found too.
+  const askedWords: string[][] = [];
+  rpcs.match_owner_chunks_text = (args) => {
+    askedWords.push(args.query_words as string[]);
+    return [{ ...tables.chunks.find((c) => c.id === "p6a")!, similarity: 0.4 }];
+  };
+  const both = await retrieveContext("Explain Ex 3.2 Q5 about primes", { ownerId: ME });
+  check("word search: the question's key words are searched for exactly", askedWords[0]?.join() === "3.2,q5,primes", JSON.stringify(askedWords));
+  check("word search: a passage found only by its words joins the closest one", both.chunks.map((c) => c.id).sort().join() === "p4a,p6a", both.chunks.map((c) => c.id).join());
+  check("word search: how sure the search was still comes from the closest match", both.stats.topSimilarity === 0.8 && !both.coverageLow, JSON.stringify(both.stats));
+  rpcs.match_owner_chunks_text = () => {
+    throw new Error("word index missing");
+  };
+  check("word search: if it fails, the meaning-based search is used alone", (await ids("Explain Ex 3.2 Q5")) === "p4a");
+  delete rpcs.match_owner_chunks_text;
   check("whole exercise: with no pages marked as Exercise, the match's page and the next five are added, in order, none of anyone else's", (await ids("Solve Exercise 4.1")) === "p4a,p4b,p4c,p5a,p5b,p6a", await ids("Solve Exercise 4.1"));
   check("whole exercise: a named page is fetched whole", (await ids("Do page 6")) === "p4a,p6a", await ids("Do page 6"));
 
@@ -721,6 +738,16 @@ pipeline.calls = 0;
   check("paper check: it is answered by the paper checker, not the book pipeline", pipeline.calls === 1 && typeof marked.json?.text === "string");
   fresh(null);
   await expect("paper check: a signed-out person is refused", paperCheck.POST, 401, null, { prompt: "x" });
+}
+
+// ---- Key words and merging ----
+{
+  check("key words: references, names and terms, without everyday words", keyWords("Explain the answer to Ex. 3.2 Q5: what did Akbar do in 1556?").join() === "3.2,q5,akbar,1556", keyWords("Explain the answer to Ex. 3.2 Q5: what did Akbar do in 1556?").join());
+  check("key words: each word once, Hindi kept", keyWords("प्रकाश संश्लेषण क्या है? प्रकाश").join() === "प्रकाश,संश्लेषण", keyWords("प्रकाश संश्लेषण क्या है? प्रकाश").join());
+  check("key words: a question of only everyday words searches nothing", keyWords("Explain this in simple words please").length === 0);
+  const c = (id: string) => ({ id, similarity: 0.5 }) as never;
+  check("merging: a passage in both lists comes first, then the tops of each", fuse([c("a"), c("b"), c("c")], [c("x"), c("b")], 3).map((m: { id: string }) => m.id).join() === "b,a,x");
+  check("merging: no word results leaves the meaning-based list as it was", fuse([c("a"), c("b")], [], 1).map((m: { id: string }) => m.id).join() === "a");
 }
 
 // ---- Rules page ----
