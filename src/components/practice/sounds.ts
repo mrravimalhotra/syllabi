@@ -44,3 +44,43 @@ export function playWrong() {
   const t = c.currentTime;
   [330, 262].forEach((f, i) => tone(c, "triangle", f, t + i * 0.16, 0.22, 0.18));
 }
+
+// ---- The one sound-effects switch for every game (on unless turned off; kept on this device) ----
+
+const SOUND_KEY = "syllabi.practice.sound";
+const listeners = new Set<() => void>();
+
+/** Whether sound effects are on (they are unless turned off on this device). */
+export function soundEffectsOn(): boolean {
+  try {
+    return localStorage.getItem(SOUND_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+/** Turns sound effects on or off for every game on this device. */
+export function setSoundEffects(on: boolean) {
+  try {
+    localStorage.setItem(SOUND_KEY, on ? "on" : "off");
+  } catch {
+    // Not saved; it still applies until the page closes.
+  }
+  listeners.forEach((l) => l());
+}
+
+/** Subscribes a component to the switch (for useSyncExternalStore). */
+export function onSoundEffectsChange(listener: () => void) {
+  listeners.add(listener);
+  return () => void listeners.delete(listener);
+}
+
+/** The right-answer chime, when sound effects are on. */
+export function cheer() {
+  if (soundEffectsOn()) playCorrect();
+}
+
+/** The gentle try-again tone, when sound effects are on. */
+export function oops() {
+  if (soundEffectsOn()) playWrong();
+}

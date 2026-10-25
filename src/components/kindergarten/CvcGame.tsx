@@ -1,5 +1,6 @@
 "use client";
 
+import { cheer, oops } from "@/components/practice/sounds";
 import { Burst } from "@/components/kindergarten/Burst";
 import { CONSONANT_TEXT, pause, SOUND_GAP_MS, VOWEL_TEXT, WRONG_CARD } from "@/components/kindergarten/feedback";
 import { useEffect, useRef, useState } from "react";
@@ -81,7 +82,10 @@ export function CvcGame({ questions, say, sound, prepare, prepareSounds, onAgain
       setShake(trayIndex);
       setTimeout(() => setShake(null), 450);
       // The tapped letter still says its sound, so every click is heard.
-      void sound(letter).then(() => say("Try again!"));
+      void sound(letter).then(() => {
+        oops();
+        return say("Try again!");
+      });
       return;
     }
     setUsed((u) => [...u, trayIndex]);
@@ -93,6 +97,7 @@ export function CvcGame({ questions, say, sound, prepare, prepareSounds, onAgain
     } else {
       setCelebrating(true);
       setStars((s) => s + 1);
+      cheer();
       if (mistakeMade.current) setHelped((h) => [...h, question.word]);
       // The last letter is heard at once, like the others, before the whole word is sounded out.
       await sound(letter);

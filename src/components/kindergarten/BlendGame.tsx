@@ -1,5 +1,6 @@
 "use client";
 
+import { cheer, oops } from "@/components/practice/sounds";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Burst } from "@/components/kindergarten/Burst";
 import { CONSONANT_TEXT, pause, RIGHT_CARD, SOUND_GAP_MS, VOWEL_TEXT, WRONG_CARD } from "@/components/kindergarten/feedback";
@@ -94,11 +95,13 @@ export function BlendGame({ questions, say, sound, prepare, prepareSounds, onAga
       setWrong((w) => (w.includes(word) ? w : [...w, word]));
       setShake(word);
       setTimeout(() => setShake(null), 450);
+      oops();
       void say("Try again!");
       return;
     }
     setRight(word);
     setStars((s) => s + 1);
+    cheer();
     if (wrong.length) setHelped((h) => [...h, question.word]);
     void say(`${question.word}. Great job!`);
   }

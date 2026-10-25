@@ -1,5 +1,6 @@
 "use client";
 
+import { EarnedStars } from "@/components/rewards/Rewards";
 import type { ReactNode } from "react";
 import { Burst } from "@/components/kindergarten/Burst";
 import { button, card, cx } from "@/components/ui";
@@ -81,6 +82,7 @@ export function RoundDone({
           </span>
         ))}
       </p>
+      <EarnedStars stars={stars} />
       {helped.length > 0 && (
         <p className="max-w-md font-sans text-sm text-slate-600">
           For the grown-up: needed another go on <span className="font-medium text-slate-800">{helped.join(", ")}</span>. Try this activity

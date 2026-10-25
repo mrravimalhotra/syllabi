@@ -1,3 +1,4 @@
+import { EMPTY_REWARDS, STICKERS, STARS_PER_STICKER, dayOf, earn, parseRewards, starsToNextSticker, stickersFor, streakOf } from "@/lib/rewards";
 import { describe, explain, worksheetMarkdown, makeQuiz, markOrder, normaliseSettings, parseSample, settingsProblem, type OrderSettings } from "@/lib/practice/order";
 import type { PracticeNumber } from "@/lib/practice/numbers";
 import { makeCompareQuiz, makeCvcQuiz, makeSightQuiz, type CompareSettings, type SightSettings } from "@/lib/kindergarten/quiz";
@@ -410,6 +411,30 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
   // Admin account change
   check(bad(parseAccountUpdate(null)) && bad(parseAccountUpdate({ id: "nope", active: false })) && bad(parseAccountUpdate({ id: UUID })), "Account: no id, a bad id or nothing to change is refused");
   check(bad(parseAccountUpdate({ id: UUID, role: "owner" })) && bad(parseAccountUpdate({ id: UUID, token_quota: -1 })) && bad(parseAccountUpdate({ id: UUID, token_quota: 1.5 })) && bad(parseAccountUpdate({ id: UUID, token_quota: "5" })), "Account: a bad role or allowance is refused");
+  {
+    // Stars, streaks and stickers for the child's games.
+    check(dayOf(new Date(2026, 0, 5)) === "2026-01-05", "Rewards: a day is written YYYY-MM-DD");
+    check(streakOf(["2026-10-23", "2026-10-24", "2026-10-25"], "2026-10-25") === 3, "Rewards: three days in a row ending today");
+    check(streakOf(["2026-10-23", "2026-10-24"], "2026-10-25") === 2, "Rewards: the streak holds until a whole day is missed");
+    check(streakOf(["2026-10-22", "2026-10-24"], "2026-10-25") === 1, "Rewards: a missed day breaks the streak");
+    check(streakOf(["2026-10-20"], "2026-10-25") === 0 && streakOf([], "2026-10-25") === 0, "Rewards: no recent play is no streak");
+    check(streakOf(["2026-02-28", "2026-03-01"], "2026-03-01") === 2 && streakOf(["2025-12-31", "2026-01-01"], "2026-01-01") === 2, "Rewards: streaks run across months and years");
+    let r = EMPTY_REWARDS;
+    let got: string[] = [];
+    ({ rewards: r, newStickers: got } = earn(r, 7, "2026-10-24"));
+    check(r.stars === 7 && got.length === 0 && r.days.join() === "2026-10-24", "Rewards: 7 stars, no sticker yet");
+    ({ rewards: r, newStickers: got } = earn(r, 5, "2026-10-24"));
+    check(r.stars === 12 && got.join() === STICKERS[0] && r.days.length === 1, "Rewards: the 10th star wins the first sticker; the same day counts once");
+    ({ rewards: r, newStickers: got } = earn(r, 20, "2026-10-25"));
+    check(r.stars === 32 && got.join() === STICKERS.slice(1, 3).join() && streakOf(r.days, "2026-10-25") === 2, "Rewards: two more stickers at once, and a two-day streak");
+    check(starsToNextSticker(32) === 8 && starsToNextSticker(STICKERS.length * STARS_PER_STICKER) === null, "Rewards: stars to the next sticker, none when all are won");
+    check(stickersFor(10_000).length === STICKERS.length && new Set(STICKERS).size === STICKERS.length, "Rewards: stickers stop at the last one and are all different");
+    check(earn(r, -3, "2026-10-25").rewards.stars === 32 && earn(r, 2.7, "2026-10-25").rewards.stars === 34, "Rewards: no negative or part stars");
+    check(parseRewards(JSON.stringify(r)).stars === 32 && parseRewards("not json").stars === 0 && parseRewards('{"stars":-1,"days":[]}').stars === 0 && parseRewards('{"stars":5,"days":["x","2026-10-25"]}').days.join() === "2026-10-25", "Rewards: saved state is read back, bad state is ignored");
+    let many = EMPTY_REWARDS;
+    for (let d = 1; d <= 90; d++) many = earn(many, 1, dayOf(new Date(2026, 0, d))).rewards;
+    check(many.days.length === 60 && many.days[59] === "2026-03-31", "Rewards: only the last 60 days are kept");
+  }
   {
     const ext = parseAccountUpdate({ id: UUID, extend_days: 30 });
     check(ext.ok && ext.value.extendDays === 30 && Object.keys(ext.value.updates).length === 0, "Account: more days for a guest is accepted on its own");

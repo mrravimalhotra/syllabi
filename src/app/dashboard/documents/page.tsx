@@ -72,10 +72,10 @@ export default function MyDocumentsPage() {
         <EmptyState
           icon={<SparklesIcon className="h-6 w-6" />}
           title="Nothing saved yet"
-          description="Solve a worksheet, make notes or a sample paper on the Generate page, and it is saved here automatically."
+          description="Solve a worksheet, make notes or a sample paper on the Ask Syllabi page, and it is saved here automatically."
           action={
             <Link href="/dashboard" className={button.primary}>
-              Go to Generate
+              Go to Ask Syllabi
             </Link>
           }
         />

@@ -8,7 +8,7 @@ Syllabi is a progressive web app (PWA): the installed app is the website in its 
 2. Click the **install icon** at the right end of the address bar (a small monitor with a down arrow), then **Install**.
    - If you don't see it: Chrome → ⋮ menu → **Cast, save and share** → **Install page as app**. Edge → ⋯ menu → **Apps** → **Install this site as an app**.
 3. The app opens in its own window and gets a Start menu / desktop shortcut. Right-click its taskbar icon → **Pin to taskbar** to keep it there.
-4. In the app's window menu (⋮) there are shortcuts too: right-click the icon for **Generate**, **My books**, **My documents**.
+4. In the app's window menu (⋮) there are shortcuts too: right-click the icon for **Ask Syllabi**, **My books**, **My documents**.
 
 Safari on a Mac: File → **Add to Dock**.
 

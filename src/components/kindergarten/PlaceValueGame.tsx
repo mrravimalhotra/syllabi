@@ -1,5 +1,6 @@
 "use client";
 
+import { cheer, oops } from "@/components/practice/sounds";
 import { Burst } from "@/components/kindergarten/Burst";
 import { RIGHT_CARD, WRONG_CARD } from "@/components/kindergarten/feedback";
 import { useEffect, useState } from "react";
@@ -58,11 +59,13 @@ export function PlaceValueGame({ questions, say, prepare, onAgain, onExit }: Pro
       setMistake(true);
       setShake(choice);
       setTimeout(() => setShake(null), 450);
+      oops();
       void say("Try again!");
       return;
     }
     setRight(choice);
     setStars((s) => s + 1);
+    cheer();
     if (mistake) setHelped((h) => [...h, String(question.number)]);
     await say("Great job!");
     setRight(null);

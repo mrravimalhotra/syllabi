@@ -10,7 +10,7 @@ import { BookIcon, DocumentIcon, LogoutIcon, ShieldIcon, SparklesIcon, TargetIco
 import { Logo, button, cx } from "@/components/ui";
 
 const NAV = [
-  { href: "/dashboard", label: "Generate", icon: SparklesIcon, exact: true },
+  { href: "/dashboard", label: "Ask Syllabi", icon: SparklesIcon, exact: true },
   { href: "/dashboard/practice", label: "Practice", icon: TargetIcon },
   { href: "/dashboard/library", label: "My books", icon: BookIcon },
   { href: "/dashboard/documents", label: "My Documents", short: "Documents", icon: DocumentIcon },

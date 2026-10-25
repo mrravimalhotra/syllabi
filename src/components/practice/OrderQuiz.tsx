@@ -9,17 +9,8 @@ import { QuizHeader } from "@/components/practice/QuizHeader";
 import { QuizResults } from "@/components/practice/QuizResults";
 import type { QuizResult } from "@/components/practice/quiz-types";
 import { playCorrect, playWrong } from "@/components/practice/sounds";
+import { useSoundEffects } from "@/components/practice/useSoundEffects";
 import { markOrder, type OrderQuestion } from "@/lib/practice/order";
-
-const SOUND_KEY = "syllabi.practice.sound";
-
-function readSoundSetting(): boolean {
-  try {
-    return localStorage.getItem(SOUND_KEY) !== "off";
-  } catch {
-    return true;
-  }
-}
 
 /**
  * A quiz on the whole screen (the menus hidden, so a child can be handed the
@@ -47,7 +38,8 @@ export function OrderQuiz({
   const [feedback, setFeedback] = useState<QuizResult | null>(null);
   const [showWhy, setShowWhy] = useState(false);
   const [burst, setBurst] = useState(0);
-  const [sound, setSound] = useState(readSoundSetting);
+  // The sound-effects switch shared by every game.
+  const [sound, setSound] = useSoundEffects();
   const feedbackTitle = useRef<HTMLParagraphElement>(null);
   const finished = results.length === quiz.length && !feedback;
   const q = quiz[index];
@@ -61,16 +53,7 @@ export function OrderQuiz({
     };
   }, []);
 
-  const toggleSound = () => {
-    setSound((on) => {
-      try {
-        localStorage.setItem(SOUND_KEY, on ? "off" : "on");
-      } catch {
-        // Not saved; the switch still works for this visit.
-      }
-      return !on;
-    });
-  };
+  const toggleSound = () => setSound(!sound);
 
   const exit = () => {
     const midway = !finished && (results.length > 0 || picked.length > 0);

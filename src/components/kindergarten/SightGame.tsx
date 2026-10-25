@@ -1,5 +1,6 @@
 "use client";
 
+import { cheer, oops } from "@/components/practice/sounds";
 import { Burst } from "@/components/kindergarten/Burst";
 import { RIGHT_CARD, WRONG_CARD } from "@/components/kindergarten/feedback";
 import { useEffect, useState } from "react";
@@ -44,11 +45,13 @@ export function SightGame({ questions, say, prepare, onAgain, onExit }: Props) {
       setMistake(true);
       setShake(word);
       setTimeout(() => setShake(null), 450);
+      oops();
       void say("Try again!");
       return;
     }
     setRight(word);
     setStars((s) => s + 1);
+    cheer();
     if (mistake) setHelped((h) => [...h, question.word]);
     await say("Great job!");
     setRight(null);

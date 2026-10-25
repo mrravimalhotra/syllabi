@@ -753,6 +753,12 @@ await test("Kindergarten: listen and blend - the sounds are heard, then the righ
     if (q < 4) await page.locator(`[data-word]:not([data-word="${word}"])`).waitFor({ timeout: 20000 });
   }
   await page.getByText("Well done!").first().waitFor({ timeout: 20000 });
+  // The stars are added to the child's star chart (kept on this device), with the first sticker at 10.
+  await page.getByText("+5 stars").waitFor();
+  await tap(page.getByRole("button", { name: "Back to the menu" }));
+  await tap(page.getByRole("button", { name: "← All activities" }));
+  await page.getByRole("region", { name: "Stars and stickers" }).getByText("⭐ 5 stars").waitFor();
+  await page.getByText("5 more for the next sticker").waitFor();
 });
 
 await test("Kindergarten: place value lesson steps through and leads to the game", async (page, ctx) => {
@@ -898,6 +904,18 @@ await test("Kindergarten: home tiles open each activity's screen, and leaving a 
   await page.getByRole("heading", { name: "Spell the word" }).waitFor();
   await tap(page.getByRole("button", { name: "← All activities" }));
   await page.getByRole("button", { name: "Spell the word", exact: true }).getByText(/10 words/).waitFor();
+});
+
+await test("Kindergarten: sound effects can be turned off for every game", async (page, ctx) => {
+  await baseRoutes(ctx);
+  await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Voice and sounds", exact: true }).getByText(/sounds on/).waitFor();
+  await openActivity(page, "Voice and sounds");
+  await tap(page.getByRole("group", { name: "Sound effects" }).getByRole("button", { name: "Off" }));
+  await tap(page.getByRole("button", { name: "← All activities" }));
+  await page.getByRole("button", { name: "Voice and sounds", exact: true }).getByText(/sounds off/).waitFor();
+  const saved = await page.evaluate(() => localStorage.getItem("syllabi.practice.sound"));
+  if (saved !== "off") throw new Error(`Expected the switch to be saved as off, got ${saved}.`);
 });
 
 await test("Kindergarten: the grown-up guide explains how to say the sounds", async (page, ctx) => {

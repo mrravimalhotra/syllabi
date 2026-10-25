@@ -22,7 +22,7 @@ export default function manifest(): MetadataRoute.Manifest {
       { src: "/icon.svg", sizes: "any", type: "image/svg+xml" },
     ],
     shortcuts: [
-      { name: "Generate", url: "/dashboard", icons: [{ src: "/icon-192.png", sizes: "192x192", type: "image/png" }] },
+      { name: "Ask Syllabi", url: "/dashboard", icons: [{ src: "/icon-192.png", sizes: "192x192", type: "image/png" }] },
       { name: "My books", url: "/dashboard/library", icons: [{ src: "/icon-192.png", sizes: "192x192", type: "image/png" }] },
       { name: "My documents", url: "/dashboard/documents", icons: [{ src: "/icon-192.png", sizes: "192x192", type: "image/png" }] },
     ],

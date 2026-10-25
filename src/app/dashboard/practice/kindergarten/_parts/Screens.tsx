@@ -4,7 +4,7 @@ import { ActivityScreen, type Tone } from "@/components/menu/Tiles";
 import type { Activity } from "@/app/dashboard/practice/kindergarten/_parts/ActivityGame";
 import { CompareChoices, CvcChoices, PlaceChoices, SightChoices } from "@/app/dashboard/practice/kindergarten/_parts/Settings";
 import { SoundGuide } from "@/app/dashboard/practice/kindergarten/_parts/SoundGuide";
-import { VoiceChoice } from "@/app/dashboard/practice/kindergarten/_parts/VoiceChoice";
+import { SoundEffectsChoice, VoiceChoice } from "@/app/dashboard/practice/kindergarten/_parts/VoiceChoice";
 import type { PlaceSettings } from "@/lib/kindergarten/place-value";
 import type { CompareSettings, CvcSettings, SightSettings } from "@/lib/kindergarten/quiz";
 
@@ -67,9 +67,9 @@ export const SCREENS: Record<Screen, { emoji: string; tone: Tone; title: string;
   voice: {
     emoji: "🔊",
     tone: "slate",
-    title: "Voice",
-    hint: "Who reads to your child",
-    description: "Choose which voice reads the words and sounds to your child.",
+    title: "Voice and sounds",
+    hint: "Who reads, and the game sounds",
+    description: "Choose which voice reads the words and sounds to your child, and whether games play a chime for right answers.",
   },
 };
 
@@ -130,6 +130,7 @@ export function KindergartenScreen({ screen, start, onBack, ...p }: Props) {
       return (
         <ActivityScreen {...base}>
           <VoiceChoice voice={p.voice} onChoose={p.chooseVoice} />
+          <SoundEffectsChoice />
         </ActivityScreen>
       );
   }

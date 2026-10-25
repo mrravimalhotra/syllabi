@@ -1,5 +1,6 @@
 "use client";
 
+import { cheer, oops } from "@/components/practice/sounds";
 import { Burst } from "@/components/kindergarten/Burst";
 import { RIGHT_CARD, WRONG_CARD } from "@/components/kindergarten/feedback";
 import { useEffect, useState } from "react";
@@ -62,10 +63,12 @@ export function CompareGame({ questions, say, prepare, onAgain, onExit }: Props)
     if (!ok) {
       setMistake(true);
       setTimeout(() => setPicked((p) => (p && !p.ok ? null : p)), 450);
+      oops();
       void say("Try again!");
       return;
     }
     setStars((s) => s + 1);
+    cheer();
     if (mistake) setHelped((h) => [...h, `${question.left} and ${question.right}`]);
     await say(side === "same" ? "They are the same!" : "Great job!");
     setPicked(null);

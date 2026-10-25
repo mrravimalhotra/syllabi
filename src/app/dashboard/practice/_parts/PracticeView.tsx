@@ -1,5 +1,6 @@
 "use client";
 
+import { RewardsBar } from "@/components/rewards/Rewards";
 import { useState } from "react";
 import { OrderPractice } from "@/app/dashboard/practice/_parts/OrderPractice";
 import { ActivityScreen, ActivityTile, LinkTile, MenuGroup, type Tone } from "@/components/menu/Tiles";
@@ -93,6 +94,7 @@ export function PracticeView({ classLevel }: { classLevel: string | null }) {
         title="Practice"
         description="Quizzes and maths tutorials for your child, worked out by the app itself: always correct, and no AI used."
       />
+      <RewardsBar />
       <MenuGroup title="Practise">
         <LinkTile
           href="/dashboard/practice/kindergarten"

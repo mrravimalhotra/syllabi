@@ -1,5 +1,6 @@
 "use client";
 
+import { EarnedStars } from "@/components/rewards/Rewards";
 import { useState } from "react";
 import { PrinterIcon } from "@/components/icons";
 import { OrderRow } from "@/components/practice/OrderRow";
@@ -65,6 +66,7 @@ export function QuizResults({
           </span>
         </p>
         <p className="text-lg font-medium text-slate-700">{message}</p>
+        <EarnedStars stars={score} />
       </div>
 
       <div className="flex flex-wrap justify-center gap-2">

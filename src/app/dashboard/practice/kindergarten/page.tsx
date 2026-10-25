@@ -1,5 +1,6 @@
 "use client";
 
+import { RewardsBar } from "@/components/rewards/Rewards";
 import Link from "next/link";
 import { useState } from "react";
 import { ActivityTile, LinkTile, MenuGroup } from "@/components/menu/Tiles";
@@ -8,6 +9,7 @@ import { isCompare, isCvc, isPlace, isSight } from "@/app/dashboard/practice/kin
 import { KindergartenScreen, SCREENS, type Screen } from "@/app/dashboard/practice/kindergarten/_parts/Screens";
 import { summary } from "@/app/dashboard/practice/kindergarten/_parts/Settings";
 import { useSay, useVoiceChoice } from "@/components/kindergarten/useSay";
+import { useSoundEffects } from "@/components/practice/useSoundEffects";
 import { PageHeader } from "@/components/ui";
 import { DEFAULT_PLACE } from "@/lib/kindergarten/place-value";
 import { DEFAULT_COMPARE, DEFAULT_CVC, DEFAULT_SIGHT } from "@/lib/kindergarten/quiz";
@@ -28,6 +30,7 @@ export default function KindergartenPage() {
   const [compare, setCompare] = usePref("syllabi-kg-compare", DEFAULT_COMPARE, isCompare);
   const [place, setPlace] = usePref("syllabi-kg-place", DEFAULT_PLACE, isPlace);
   const { voice, choose } = useVoiceChoice();
+  const [soundsOn] = useSoundEffects();
   const speaker = useSay();
 
   const start = (kind: Activity) => setActivity({ kind, seed: newSeed() });
@@ -82,6 +85,8 @@ export default function KindergartenPage() {
         ← Back to Practice
       </Link>
 
+      <RewardsBar />
+
       <MenuGroup title="Letters and sounds">
         {tile("blend", summary.cvc(cvc))}
         {tile("cvc", summary.cvc(cvc))}
@@ -110,7 +115,7 @@ export default function KindergartenPage() {
           hint="Word families and picture matching"
         />
         {tile("guide")}
-        {tile("voice", voice === "natural" ? "Friendly voice" : "This phone's voice")}
+        {tile("voice", `${voice === "natural" ? "Friendly voice" : "This phone's voice"} · sounds ${soundsOn ? "on" : "off"}`)}
       </MenuGroup>
     </div>
   );

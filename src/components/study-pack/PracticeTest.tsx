@@ -1,5 +1,6 @@
 "use client";
 
+import { cheer, oops } from "@/components/practice/sounds";
 import { useState } from "react";
 import { AlertIcon, CheckIcon, ChevronRightIcon, LightbulbIcon } from "@/components/icons";
 import { button, card, cx } from "@/components/ui";
@@ -45,6 +46,8 @@ export function PracticeTest({
 
   /** The child answered an objective question: marked at once by comparing with the key. */
   function respond(correct: boolean) {
+    if (correct) cheer();
+    else oops();
     setAutoResult(correct);
     setRevealed(true);
   }

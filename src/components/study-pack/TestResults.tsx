@@ -1,5 +1,6 @@
 "use client";
 
+import { EarnedStars } from "@/components/rewards/Rewards";
 import { Confetti } from "@/components/practice/Confetti";
 import { button, card, cx } from "@/components/ui";
 import type { PackQuestion } from "@/lib/study-pack/types";
@@ -34,6 +35,7 @@ export function TestResults({
             ? "Great effort. Go over the ones marked Not yet."
             : "Good start. Read the chapter parts again, then try the ones marked Not yet."}
       </p>
+      <EarnedStars stars={score} />
       {missed.length > 0 && (
         <ul className="space-y-1.5 text-left">
           {missed.map(({ qq, i }) => (
