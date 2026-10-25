@@ -78,7 +78,7 @@ what works.
 | D4 | Reused answers (60 days) can be stale after a book is uploaded or re-read (`generation/handler.ts` cache key) | **Done 2026-10-25 (owner: shorter reuse):** answers and study packs are reused for 7 days, and never once a page of a book they could use has been read or re-read since. |
 | D5 | Thousands separators in the Practice tutorials: "4,567, 789" is split into 4, 567, 789 (`TutorialsCard.tsx`) | **Decided 2026-10-25 (owner: leave as it is):** every comma separates numbers; the form hints now say to write big numbers without commas. |
 | D6 | Study pack: attached pages are ignored when a book is chosen, and the newest book is chosen by default (`build-request.ts`) | Changes the default chapter choice |
-| D7 | Deleting a book removes the row before its images; a failed image delete leaves orphans (`api/library/[id]`) | Which failure is preferable |
+| D7 | Deleting a book removes the row before its images; a failed image delete leaves orphans (`api/library/[id]`) | **Done 2026-10-25 (owner: images first):** the page images are removed first and the book only once they are gone; if storage fails, the book stays listed with "try again". |
 | D8 | Tapping a page-read's embedding/saving failure re-runs the AI reading and its token cost (`ingest.ts`) | Saving the read text needs a new column; and who pays |
 | D9 | Bug-report resolution note is labelled "shown to nobody else" but the reporter's own list returns it | **Done 2026-10-25 (owner: show it):** the reporter sees the note under Your recent reports; the admin label says so. |
 | D10 | Attachments read while another read is running can overwrite each other (`_ask/useAttachments.ts`) | Larger change to the attach flow; no owner decision, but not done yet |

@@ -2,7 +2,7 @@
 // signed-in person, and checks status codes and messages for signed-out,
 // not-allowed, bad input, over-allowance and not-found cases.
 import { session } from "./fakes/auth";
-import { deleted, files } from "./fakes/storage";
+import { deleted, files, storageState } from "./fakes/storage";
 import { resetDb, tables, rpcs, failures } from "./fakes/db";
 import * as me from "../../src/app/api/me/route";
 import * as library from "../../src/app/api/library/route";
@@ -137,6 +137,10 @@ await expect("book PATCH: someone else's book is a 404", book.PATCH, 404, /no lo
 await expect("book PATCH: an empty title is refused", book.PATCH, 400, /title/i, { title: " " }, { id: BOOK });
 await expect("book PATCH: a rename is saved", book.PATCH, 200, null, { title: "Maths 6" }, { id: BOOK });
 await expect("book DELETE: someone else's book is a 404", book.DELETE, 404, null, undefined, { id: "55555555-5555-4555-8555-555555555555" });
+storageState.failDeletes = true;
+await expect("book DELETE: if its page images can't be removed, it says the book is still there", book.DELETE, 500, /still in My books/i, undefined, { id: BOOK });
+check("book DELETE: the book stays listed, to delete again", (tables.documents ?? []).some((d) => d.id === BOOK));
+storageState.failDeletes = false;
 await expect("book DELETE: your own book is deleted", book.DELETE, 200, null, undefined, { id: BOOK });
 check("book DELETE: the record is gone and its page images are cleared", !(tables.documents ?? []).some((d) => d.id === BOOK) && deleted.includes(`sources/${BOOK}/`));
 failures.push({ table: "documents", message: "boom" });

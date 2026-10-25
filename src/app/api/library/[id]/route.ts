@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { apiError, authenticate, errorResponse } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { logError } from "@/lib/error-log";
 import { deletePrefix } from "@/lib/storage";
 import { cleanText, isUuid } from "@/lib/validate";
 
@@ -40,7 +41,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   return NextResponse.json({ document: data });
 }
 
-/** Deletes one of the caller's books: its page images, its search index (chunks cascade), and the record. */
+/** Deletes one of the caller's books: its page images, then the record (its search index cascades). */
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await authenticate();
   if ("response" in auth) return auth.response;
@@ -58,11 +59,19 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   if (lookupError) return errorResponse(lookupError, "library DELETE lookup", "Couldn't delete this book. Nothing was deleted. Try again in a moment.");
   if (!doc) return apiError(404, NOT_FOUND);
 
-  // The record first (its search index and reading queue go with it), so a
-  // storage hiccup can never leave a book that is listed but has lost its pages.
-  const { error } = await admin.from("documents").delete().eq("id", id);
-  if (error) return errorResponse(error, "library DELETE row", "Couldn't delete this book. Nothing was deleted. Try again in a moment.");
+  // The page images first, and the record only once they are gone: a storage failure then
+  // leaves the book listed (to delete again) instead of images nobody can see or remove.
+  try {
+    await deletePrefix(`sources/${id}/`);
+  } catch (err) {
+    // Always a storage problem (not the AI's), whatever words its message uses.
+    void logError({ source: "server", context: "library DELETE images", error: err, studentId: user.id });
+    return apiError(500, "Couldn't delete this book. It is still in My books: try again in a moment.");
+  }
 
-  await deletePrefix(`sources/${id}/`).catch((err) => console.error("[library DELETE] page images left behind", id, err));
+  // Its search index and reading queue go with the record.
+  const { error } = await admin.from("documents").delete().eq("id", id);
+  if (error) return errorResponse(error, "library DELETE row", "Couldn't finish deleting this book: its page pictures were removed. Try deleting it again.");
+
   return NextResponse.json({ ok: true });
 }

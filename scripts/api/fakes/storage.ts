@@ -1,8 +1,11 @@
 // An in-memory stand-in for the file storage (R2).
 export const files = new Map<string, { data: Buffer; contentType: string }>();
 export const deleted: string[] = [];
+/** Set by a test to make the next deletes fail, as if storage were down. */
+export const storageState = { failDeletes: false };
 
 export async function deletePrefix(prefix: string) {
+  if (storageState.failDeletes) throw new Error("storage unavailable");
   deleted.push(prefix);
   for (const key of [...files.keys()]) if (key.startsWith(prefix)) files.delete(key);
 }
