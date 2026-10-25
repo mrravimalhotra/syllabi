@@ -87,7 +87,7 @@ const TOPICS: Topic[] = [
       {
         key: "numbers",
         label: "Numbers to find the LCM or HCF of",
-        hint: "Type 2 to 6 whole numbers, separated by commas.",
+        hint: "Type 2 to 6 whole numbers, separated by commas. Write big numbers without commas (1000, not 1,000).",
         placeholder: "e.g. 12, 18, 30",
       },
       {
@@ -121,7 +121,7 @@ const TOPICS: Topic[] = [
       {
         key: "numbers",
         label: "Numbers to add",
-        hint: "Type 2 to 4 numbers, separated by commas. Decimals are fine.",
+        hint: "Type 2 to 4 numbers, separated by commas. Decimals are fine. Write big numbers without commas (4567, not 4,567).",
         placeholder: "e.g. 4567, 789",
       },
     ],
