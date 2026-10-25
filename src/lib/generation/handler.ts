@@ -9,6 +9,7 @@ import { getLlmSetting } from "@/lib/llm/config";
 import { systemInstructionsFor } from "@/lib/generation/prompts";
 import { answerKey, findReusable } from "@/lib/generation/reuse";
 import { parseGenerationRequest, type GenerationRequest } from "@/lib/generation/request";
+import { parseFollowUps } from "@/lib/generation/follow-up";
 import type { GeneratedDocumentRow, Student } from "@/types/database";
 
 const GENERATE_FAILED = "Couldn't make your answer. Wait a minute and try again. If it keeps happening, tell the person who runs Syllabi.";
@@ -25,6 +26,7 @@ async function savedAnswerResponse(saved: GeneratedDocumentRow) {
     pdfUrl: `/api/documents/${saved.id}/pdf`,
     checks: saved.checks ?? [],
     confidence: saved.confidence ?? null,
+    followUps: parseFollowUps(saved.follow_ups),
     reusedFrom: saved.created_at,
   };
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { apiError, authenticate, errorResponse } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { findAnswer } from "@/lib/generation/answers";
+import { parseFollowUps } from "@/lib/generation/follow-up";
 import { withImageUrls } from "@/lib/generation/sources";
 import { deletePrefix } from "@/lib/storage";
 import { cleanText } from "@/lib/validate";
@@ -33,6 +34,7 @@ export async function GET(_request: Request, { params }: Params) {
       checks: answer.checks ?? [],
       confidence: answer.confidence ?? null,
       worked: answer.worked ?? null,
+      followUps: parseFollowUps(answer.follow_ups),
       pdfUrl: `/api/documents/${answer.id}/pdf`,
     },
   });

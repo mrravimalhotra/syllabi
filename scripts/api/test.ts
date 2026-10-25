@@ -45,6 +45,7 @@ import * as logError from "../../src/app/api/log-error/route";
 import * as rewards from "../../src/app/api/rewards/route";
 import * as bookPages from "../../src/app/api/library/[id]/pages/route";
 import * as packEdit from "../../src/app/api/documents/[id]/pack/route";
+import * as followUp from "../../src/app/api/documents/[id]/follow-up/route";
 import { pageProgress, readQueuedPages } from "../../src/lib/ingestion/jobs";
 import type { Student } from "@/types/database";
 
@@ -830,6 +831,45 @@ failures.length = 0;
   const stored = tables.generated_documents[0] as { pack: typeof pack; pack_version: number; content: string };
   check("pack edits: two edits at once both succeed", one.status === 200 && two.status === 200, `${one.status} ${two.status}`);
   check("pack edits: neither undoes the other", stored.pack.textbookQuestions[0].answer === "New first" && stored.pack.textbookQuestions[1].answer === "New second" && stored.pack_version === 2, JSON.stringify(stored.pack.textbookQuestions));
+  fresh();
+}
+{
+  // Follow-up questions on a saved answer.
+  fresh();
+  const ANSWER = "00000000-0000-4000-8000-0000000000f9";
+  tables.generated_documents = [{ id: ANSWER, student_id: ME, task_type: "solution", title: "What is 12 x 15?", content: "Step 1: 12 x 10 = 120\nStep 2: 12 x 5 = 60\nStep 3: 120 + 60 = 180", follow_ups: [] }];
+  rpcs.match_owner_chunks = () => [];
+  rpcs.add_follow_up = (args) => {
+    const row = tables.generated_documents.find((d) => d.id === args.p_id) as { follow_ups: unknown[] } | undefined;
+    if (!row || row.follow_ups.length >= Number(args.p_max)) return null;
+    row.follow_ups = [...row.follow_ups, args.p_item];
+    return row.follow_ups.length;
+  };
+  let seen = "";
+  fakeAi.calls = 0;
+  fakeAi.reply = (req) => {
+    seen = (req as unknown as { prompt: string }).prompt;
+    return { text: "In step 3 we add the two parts: 120 + 60 = 180." };
+  };
+  const asked = await expect("follow-up: a question about the answer is answered", followUp.POST, 200, null, { question: "Explain step 3 again" }, { id: ANSWER });
+  check("follow-up: the AI sees the original question, the answer and the follow-up", seen.includes("What is 12 x 15?") && seen.includes("Step 3: 120 + 60 = 180") && seen.includes("Explain step 3 again"), seen.slice(0, 200));
+  const stored = (tables.generated_documents[0] as { follow_ups: { question: string; answer: string }[] }).follow_ups;
+  check("follow-up: the reply comes back and is kept with the answer", (asked.json?.followUp as { answer: string })?.answer.startsWith("In step 3") && stored.length === 1 && stored[0].question === "Explain step 3 again", JSON.stringify(stored));
+  await expect("follow-up: the next one sees the earlier follow-ups", followUp.POST, 200, null, { question: "And step 2?" }, { id: ANSWER });
+  check("follow-up: earlier follow-ups are in the prompt", seen.includes("Follow-up 1: Explain step 3 again") && seen.includes("New follow-up: And step 2?"), seen.slice(-200));
+  await expect("follow-up: an empty question is refused", followUp.POST, 400, /Type your follow-up/i, { question: "  " }, { id: ANSWER });
+  await expect("follow-up: a too-long question is refused", followUp.POST, 400, /under 1000/i, { question: "x".repeat(1001) }, { id: ANSWER });
+  (tables.generated_documents[0] as { follow_ups: unknown[] }).follow_ups = Array.from({ length: 10 }, () => ({ question: "q", answer: "a", createdAt: "2026-10-25" }));
+  await expect("follow-up: an answer with 10 follow-ups asks for a new question", followUp.POST, 400, /already has 10/i, { question: "One more?" }, { id: ANSWER });
+  (tables.generated_documents[0] as { follow_ups: unknown[] }).follow_ups = [];
+  rpcs.student_monthly_usage = () => 5000;
+  await expect("follow-up: over the monthly allowance is refused", followUp.POST, 429, /allowance/i, { question: "Why?" }, { id: ANSWER });
+  rpcs.student_monthly_usage = () => 0;
+  tables.generated_documents[0].student_id = "someone-else";
+  await expect("follow-up: someone else's answer is not found", followUp.POST, 404, /no longer exists/i, { question: "Why?" }, { id: ANSWER });
+  tables.generated_documents[0] = { ...tables.generated_documents[0], student_id: ME, pack: { title: "x" } };
+  await expect("follow-up: a study pack points to its own tools", followUp.POST, 400, /Change this answer/i, { question: "Why?" }, { id: ANSWER });
+  delete rpcs.match_owner_chunks;
   fresh();
 }
 {

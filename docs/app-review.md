@@ -39,7 +39,7 @@ Input for BMAD planning (PRD, epics, stories). Written 2026-10-17 from a read of
 | A2 | PDF supports math symbols and Hindi | ✅ | 2026-10-17: embedded Noto Sans → Noto Sans Math → Noto Sans Devanagari fallback; lists, tables, page numbers; footer bug fixed |
 | A3 | Streaming answers | ❌ | 10–30 s blank wait today |
 | A4 | Inline citations `[Source n, p.x]` linking to the page image | ⚠️ | Sources listed below the answer, not cited inline |
-| A5 | Follow-up chat on an answer | ❌ | Every request is one-shot |
+| A5 | Follow-up chat on an answer | ✅ 2026-10-25 | Every request is one-shot |
 | A6 | Snap/upload a photo of the question | ✅ | 2026-10-17: up to 3 photos per request, downscaled in the browser; sent to the model directly and transcribed to search the knowledge base |
 | A7 | Hint mode (hint → next step → full solution) | ❌ | Admin can make it the default per school |
 | A8 | Subject picker | ❌ | Locked to `subject_ids[0]` |

@@ -803,6 +803,26 @@ await test("My books: View pages shows each page's picture and the text read fro
   if (!(await page.getByRole("button", { name: "Next", exact: true }).isDisabled())) throw new Error("Next should be off on the last page.");
 });
 
+await test("Answer: follow-up questions are answered under it, with one-tap suggestions", async (page, ctx) => {
+  await baseRoutes(ctx);
+  await ctx.route("**/api/documents/a1", (r) => json(r, { answer: { ...answer, id: "a1", taskType: "solution", createdAt: now, followUps: [] } }));
+  const asked = [];
+  await ctx.route("**/api/documents/a1/follow-up", (r) => {
+    const { question } = r.request().postDataJSON();
+    asked.push(question);
+    return json(r, { followUp: { question, answer: question.startsWith("Explain it") ? "Think of 12 x 15 as 12 tens and 12 fives." : "Because 120 + 60 = 180.", createdAt: now } });
+  });
+  await page.goto(`${BASE}/dashboard/documents/a1`, { waitUntil: "networkidle" });
+  await tap(page.getByRole("button", { name: "Explain it more simply" }));
+  await page.getByText("Think of 12 x 15 as 12 tens and 12 fives.").waitFor();
+  // After the first, the suggestions make way for the box; another follow-up is typed.
+  await page.getByLabel("Ask another follow-up").fill("Why 180?");
+  await tap(page.getByRole("button", { name: "Ask", exact: true }));
+  await page.getByText("Because 120 + 60 = 180.").waitFor();
+  if (asked.join("|") !== "Explain it more simply|Why 180?") throw new Error(`Asked: ${asked.join("|")}`);
+  if ((await page.getByLabel("Ask another follow-up").inputValue()) !== "") throw new Error("The box should be empty after asking.");
+});
+
 await test("Dark mode: grown-up screens go dark with the device, children's screens stay bright", async (page, ctx) => {
   await baseRoutes(ctx);
   await page.emulateMedia({ colorScheme: "dark" });

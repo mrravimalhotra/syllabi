@@ -12,6 +12,8 @@ import type { AnswerConfidence } from "@/lib/generation/confidence";
 import type { AnswerCheck } from "@/types/database";
 import { button, card, cx } from "@/components/ui";
 import { hasAnswerKey } from "@/lib/format";
+import { FollowUps } from "@/components/FollowUps";
+import type { FollowUp } from "@/lib/generation/follow-up";
 
 interface AnswerSource {
   id: string;
@@ -36,6 +38,10 @@ export interface Answer {
   checks?: AnswerCheck[];
   /** How sure we are it is correct and grounded, and how much comes from the books. */
   confidence?: AnswerConfidence | null;
+  /** The saved answer's id, which follow-up questions need; null or missing when it couldn't be saved. */
+  id?: string | null;
+  /** Follow-up questions already asked about it. */
+  followUps?: FollowUp[];
 }
 
 /**
@@ -104,6 +110,7 @@ export function AnswerView({ answer, actions, meta }: { answer: Answer; actions?
           <SourceImages sources={answer.sources} />
         </footer>
       )}
+      {answer.id && <FollowUps key={answer.id} answerId={answer.id} initial={answer.followUps} />}
     </article>
   );
 }

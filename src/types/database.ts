@@ -117,5 +117,7 @@ export interface GeneratedDocumentRow {
   confidence: AnswerConfidence | null;
   /** Worked examples only: the problem; its steps are recomputed when opened. */
   worked: WorkedProblem | null;
+  /** Follow-up questions asked about this answer, and their replies (see lib/generation/follow-up.ts). */
+  follow_ups?: unknown;
   created_at: string;
 }
