@@ -1,6 +1,6 @@
 "use client";
 
-import { StatusBadge } from "@/app/dashboard/library/_parts/BookParts";
+import { StatusBadge, ViewPagesLink } from "@/app/dashboard/library/_parts/BookParts";
 import { ScanQuality } from "@/app/dashboard/library/_parts/ScanQuality";
 import type { DocumentRowView } from "@/app/dashboard/library/_parts/upload-helpers";
 import { EditableName } from "@/components/EditableName";
@@ -81,6 +81,7 @@ export function BookList({
                 </p>
                 <StatusBadge status={d.status} unfinished={isUnfinished(d)} pages={d.pages} />
                 <ScanQuality scan={d.scan ?? null} />
+                <ViewPagesLink doc={d} />
                 {d.status === "ready" && !d.scan && (
                   <button type="button" onClick={() => onCheckScan(d)} disabled={checking.includes(d.id)} className={cx(link, "text-xs")}>
                     {checking.includes(d.id) ? "Checking the scan..." : "Check scan quality"}

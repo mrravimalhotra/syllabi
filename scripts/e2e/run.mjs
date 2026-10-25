@@ -477,7 +477,7 @@ await test("Study pack: parts, picture, tabs and questions", async (page, ctx) =
   await page.goto(`${BASE}/dashboard/documents/a2`, { waitUntil: "networkidle" });
   await page.getByText("The seed wakes up").first().waitFor();
   await page.getByRole("img", { name: "A seedling grows in the sun" }).waitFor();
-  await tap(page.getByRole("button", { name: /Next/ }).first());
+  await tap(page.getByRole("button", { name: "Next", exact: true }).first());
   await page.getByText("Leaves use sunlight to make food.").first().waitFor();
   await tap(page.getByRole("tab", { name: /Textbook Q&A/ }).first());
   await page.getByText("What does a seed need to grow?").first().waitFor();
@@ -761,6 +761,27 @@ await test("Kindergarten: listen and blend - the sounds are heard, then the righ
   await tap(page.getByRole("button", { name: "← All activities" }));
   await page.getByRole("region", { name: "Stars and stickers" }).getByText("⭐ 5 stars").waitFor();
   await page.getByText("5 more for the next sticker").waitFor();
+});
+
+await test("My books: View pages shows each page's picture and the text read from it", async (page, ctx) => {
+  await baseRoutes(ctx);
+  const shown = { 2: "Plants make food.", 3: "Roots take in water." };
+  await ctx.route("**/api/library/b1/pages*", (r) => {
+    const n = Number(new URL(r.request().url()).searchParams.get("page") ?? 2) || 2;
+    return json(r, {
+      title: "Maths Chapter 3",
+      pages: [{ number: 2, score: 91 }, { number: 3, score: 50 }],
+      page: { number: n, text: shown[n], imageUrl: null, score: n === 2 ? 91 : 50, issues: n === 3 ? ["out of focus"] : [] },
+    });
+  });
+  await page.goto(`${BASE}/dashboard/library`, { waitUntil: "networkidle" });
+  await tap(page.getByRole("link", { name: "View pages" }).first());
+  await page.getByText("Plants make food.").waitFor();
+  await page.getByText("Scan quality 91%").waitFor();
+  await tap(page.getByRole("button", { name: "Next", exact: true }));
+  await page.getByText("Roots take in water.").waitFor();
+  await page.getByText("out of focus").waitFor();
+  if (!(await page.getByRole("button", { name: "Next", exact: true }).isDisabled())) throw new Error("Next should be off on the last page.");
 });
 
 await test("Stars: the account's star chart shows on a new device, and this device's stars are added to it once", async (page, ctx) => {

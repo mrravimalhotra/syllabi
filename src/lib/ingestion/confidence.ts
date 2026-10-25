@@ -151,6 +151,11 @@ const ISSUE_WORDS: Record<PageIssue, string> = {
   reader_unsure: "hard to read",
 };
 
+/** A page's saved issues in plain words ("out of focus", "too dark"); unknown ones are left out. */
+export function issueWords(issues: string[]): string[] {
+  return issues.flatMap((i) => (i in ISSUE_WORDS ? [ISSUE_WORDS[i as PageIssue]] : []));
+}
+
 export const MEDIUM_SCORE = 80;
 export const LOW_SCORE = 65;
 /** When this share of the pages (or more) are weak the book as a whole is called low. */

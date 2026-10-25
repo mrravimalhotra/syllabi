@@ -42,6 +42,7 @@ import * as sounds from "../../src/app/api/sounds/route";
 import * as sound from "../../src/app/api/sounds/[letter]/route";
 import * as logError from "../../src/app/api/log-error/route";
 import * as rewards from "../../src/app/api/rewards/route";
+import * as bookPages from "../../src/app/api/library/[id]/pages/route";
 import { pageProgress, readQueuedPages } from "../../src/lib/ingestion/jobs";
 import type { Student } from "@/types/database";
 
@@ -785,6 +786,29 @@ failures.length = 0;
   page.next_attempt_at = new Date(0).toISOString();
   await readQueuedPages(null);
   check("page read: the next try saves it without asking the AI again", page.status === "done" && fakeAi.calls === 1, JSON.stringify({ status: page.status, calls: fakeAi.calls }));
+  fresh();
+}
+{
+  // A book's saved pages, one at a time.
+  fresh();
+  const PAGES_BOOK = "00000000-0000-4000-8000-0000000000d1";
+  tables.documents = [{ id: PAGES_BOOK, owner_id: ME, title: "Science", status: "ready" }];
+  files.set(`sources/${PAGES_BOOK}/page-2.jpg`, { data: Buffer.from("x"), contentType: "image/jpeg" });
+  tables.chunks = [
+    { document_id: PAGES_BOOK, page_number: 2, chunk_index: 1, content: "second part" },
+    { document_id: PAGES_BOOK, page_number: 2, chunk_index: 0, content: "first part" },
+    { document_id: PAGES_BOOK, page_number: 5, chunk_index: 0, content: "page five" },
+  ];
+  tables.page_reads = [{ document_id: PAGES_BOOK, page_number: 2, confidence: 52, issues: ["blurry"] }];
+  const first = await bookPages.GET(new Request(`http://test/api/library/${PAGES_BOOK}/pages`), { params: Promise.resolve({ id: PAGES_BOOK }) });
+  const one = await first.json();
+  check("book pages: every page is listed with its score, and the first is shown", first.status === 200 && JSON.stringify(one.pages) === JSON.stringify([{ number: 2, score: 52 }, { number: 5, score: null }]) && one.page.number === 2, JSON.stringify(one));
+  check("book pages: a page shows its picture, its text in order and its problems in plain words", one.page.imageUrl?.includes("page-2.jpg") && one.page.text === "first part\n\nsecond part" && one.page.issues.join() === "out of focus", JSON.stringify(one.page));
+  const five = await (await bookPages.GET(new Request(`http://test/api/library/${PAGES_BOOK}/pages?page=5`), { params: Promise.resolve({ id: PAGES_BOOK }) })).json();
+  check("book pages: a chosen page without a picture shows its text", five.page.number === 5 && five.page.imageUrl === null && five.page.text === "page five", JSON.stringify(five.page));
+  tables.documents[0].owner_id = "someone-else";
+  const theirs = await bookPages.GET(new Request(`http://test/api/library/${PAGES_BOOK}/pages`), { params: Promise.resolve({ id: PAGES_BOOK }) });
+  check("book pages: someone else's book is not found", theirs.status === 404);
   fresh();
 }
 {
