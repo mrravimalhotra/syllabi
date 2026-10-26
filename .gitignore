@@ -50,3 +50,6 @@ __pycache__/
 
 # processed phonics WAVs for checking (scripts/phonics)
 /temp_raw_audio/
+
+# quality test runs (the baseline is kept)
+/scripts/quality/results/

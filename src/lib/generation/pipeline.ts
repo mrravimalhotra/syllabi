@@ -183,46 +183,21 @@ export async function runGeneration({
   const { images: sourcePageImages, byPath: sourceImages } = await loadSourceImages(retrieval.chunks, retrieval.stats.mode === "search" ? undefined : MAX_PAGE_IMAGES);
   timings.loadingImagesMs = Date.now() - imagesStart;
 
-  const photoNote =
-    photos.length > 0
-      ? `\n\n(The first ${photos.length} attached image(s) are photos from the user — the question to work on. Any further images are reference-material pages.)`
-      : "";
-
-  const request = {
+  const { result, checks } = await writeAndCheck({
     taskType,
-    systemInstructions: systemInstructionsFor(taskType, levelLine(student), language),
-    prompt: `${prompt}${photoNote}`,
-    context: taskType === "paper_check" ? "(No reference material is needed: mark the student's work with your own mathematical knowledge.)" : formatContext(retrieval.chunks),
-    images: [...photos, ...sourcePageImages],
-    // Search grounding is opt-in per the RAG-first policy: only fires when
-    // coverage from the books is weak.
-    allowSearchGrounding: retrieval.coverageLow,
-    temperature: TEMPERATURE[taskType],
-  };
-  const writingStart = Date.now();
-  let result = await generateCompletion({
-    ...request,
-    onText:
-      onText &&
-      ((delta) => {
-        timings.firstWordsMs ??= Date.now() - writingStart;
-        onText(delta);
-      }),
+    student,
+    prompt,
+    language,
+    chunks: retrieval.chunks,
+    coverageLow: retrieval.coverageLow,
+    photos,
+    sourcePageImages,
+    searchQuery,
+    timings,
+    onText,
     onRestart,
+    onStage,
   });
-  timings.writingMs = Date.now() - writingStart;
-  timings.model = `${result.provider} / ${result.model}${result.standInFor ? ` (stand-in: ${result.standInFor} was busy)` : ""}`;
-  await recordTokenUsage({
-    studentId: student.id,
-    taskType,
-    provider: result.provider,
-    model: result.model,
-    usage: result.usage,
-  });
-
-  const checked = await checkAndRepair({ taskType, studentId: student.id, request, result, photos, searchQuery, prompt, timings, onStage });
-  result = checked.result;
-  const checks = checked.checks;
 
   // How much of a marking comes from the books is not a question: there are no books in it.
   const confidence =
@@ -275,6 +250,68 @@ async function transcribePhotos(studentId: string, photos: CompletionImage[]): P
     usage: result.usage,
   });
   return result.text.trim();
+}
+
+
+/**
+ * Writes the answer from the passages found and checks it (see checkAndRepair): the core of every answer,
+ * also run by the quality test set (scripts/quality) on fixed questions and passages.
+ */
+export async function writeAndCheck(input: {
+  taskType: GenerationTaskType;
+  student: Pick<Student, "id" | "class_level" | "board">;
+  prompt: string;
+  language: AnswerLanguage;
+  chunks: MatchedChunk[];
+  coverageLow: boolean;
+  photos: CompletionImage[];
+  sourcePageImages: CompletionImage[];
+  searchQuery: string;
+  timings: GenerationTimings;
+  onText?: (delta: string) => void;
+  onRestart?: () => void;
+  onStage?: (stage: AnswerStage) => void;
+}): Promise<{ result: CompletionResult; checks: AnswerCheck[] }> {
+  const { taskType, student, prompt, language, chunks, coverageLow, photos, sourcePageImages, searchQuery, timings, onText, onRestart, onStage } = input;
+  const photoNote =
+    photos.length > 0
+      ? `\n\n(The first ${photos.length} attached image(s) are photos from the user — the question to work on. Any further images are reference-material pages.)`
+      : "";
+
+  const request = {
+    taskType,
+    systemInstructions: systemInstructionsFor(taskType, levelLine(student), language),
+    prompt: `${prompt}${photoNote}`,
+    context: taskType === "paper_check" ? "(No reference material is needed: mark the student's work with your own mathematical knowledge.)" : formatContext(chunks),
+    images: [...photos, ...sourcePageImages],
+    // Search grounding is opt-in per the RAG-first policy: only fires when
+    // coverage from the books is weak.
+    allowSearchGrounding: coverageLow,
+    temperature: TEMPERATURE[taskType],
+  };
+  const writingStart = Date.now();
+  const result = await generateCompletion({
+    ...request,
+    onText:
+      onText &&
+      ((delta) => {
+        timings.firstWordsMs ??= Date.now() - writingStart;
+        onText(delta);
+      }),
+    onRestart,
+  });
+  timings.writingMs = Date.now() - writingStart;
+  timings.model = `${result.provider} / ${result.model}${result.standInFor ? ` (stand-in: ${result.standInFor} was busy)` : ""}`;
+  await recordTokenUsage({
+    studentId: student.id,
+    taskType,
+    provider: result.provider,
+    model: result.model,
+    usage: result.usage,
+  });
+
+  const checked = await checkAndRepair({ taskType, studentId: student.id, request, result, photos, searchQuery, prompt, timings, onStage });
+  return { result: checked.result, checks: checked.checks };
 }
 
 type DraftRequest = Parameters<typeof generateCompletion>[0] & { prompt: string; context: string };

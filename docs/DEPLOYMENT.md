@@ -98,3 +98,11 @@ Admin → Health tests each one. Any of them can also be chosen for a task in
 Admin → AI settings (embeddings stay on Gemini: the database stores 768-number
 Gemini vectors). Free tiers may use requests to train their models; check
 each service's terms before using real children's material.
+
+## Answer quality test set
+
+`npm run test:quality` (needs `GOOGLE_API_KEY`) answers 50 fixed questions with the real instructions and
+checker, and grades them; see `scripts/quality/run.mjs`. On GitHub: add the repository secret
+`GOOGLE_API_KEY` (Settings → Secrets and variables → Actions), then Actions → **Answer quality** → Run
+workflow. Run it before changing a prompt or a model; `-- --save-baseline` keeps a run to compare with.
+

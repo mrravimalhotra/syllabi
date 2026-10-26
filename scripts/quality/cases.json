@@ -1,0 +1,867 @@
+[
+ {
+  "id": "sci-photosynthesis",
+  "subject": "Science",
+  "class": "Class 7",
+  "task": "solution",
+  "question": "What is photosynthesis? Write the word equation.",
+  "passages": [
+   {
+    "page": 14,
+    "label": "Chapter 1: Nutrition in Plants",
+    "text": "Green plants make their own food by photosynthesis. In the leaves, chlorophyll traps the energy of sunlight. Using this energy, plants combine carbon dioxide from the air and water from the soil to make glucose (a sugar). Oxygen is released as a by-product."
+   }
+  ],
+  "expected": "Process by which green plants make food (glucose) from carbon dioxide and water using sunlight energy trapped by chlorophyll; oxygen released. Word equation: carbon dioxide + water → (sunlight, chlorophyll) → glucose + oxygen.",
+  "must": [
+   "carbon dioxide",
+   "water",
+   "glucose",
+   "oxygen",
+   "chlorophyll",
+   "sunlight"
+  ]
+ },
+ {
+  "id": "sci-stomata",
+  "subject": "Science",
+  "class": "Class 7",
+  "task": "solution",
+  "question": "What are stomata? Give any two functions.",
+  "passages": [
+   {
+    "page": 16,
+    "label": "Chapter 1: Nutrition in Plants",
+    "text": "Tiny pores called stomata are found mostly on the underside of leaves. Each pore is surrounded by two guard cells that open and close it. Carbon dioxide enters the leaf and oxygen leaves through the stomata. Water vapour is also lost through them; this is called transpiration."
+   }
+  ],
+  "expected": "Stomata: tiny pores on leaves (mostly underside), each surrounded by two guard cells. Two functions from: exchange of gases (CO2 in, O2 out), transpiration (loss of water vapour).",
+  "must": [
+   "pore",
+   "guard cell",
+   "transpiration|water vapour",
+   "carbon dioxide|gases"
+  ]
+ },
+ {
+  "id": "sci-acid-base",
+  "subject": "Science",
+  "class": "Class 7",
+  "task": "solution",
+  "question": "What happens when an acid reacts with a base? Name this reaction and give one example from daily life.",
+  "passages": [
+   {
+    "page": 52,
+    "label": "Chapter 4: Acids, Bases and Salts",
+    "text": "When an acid and a base react, they cancel each other's effect. This reaction is called neutralisation. A salt and water are formed, and heat is given out. Example: an ant's sting injects formic acid; rubbing moist baking soda (a base) on it gives relief."
+   }
+  ],
+  "expected": "Neutralisation: acid + base → salt + water (heat released). Example: baking soda on an ant sting (formic acid); or antacid for indigestion.",
+  "must": [
+   "neutralisation|neutralization",
+   "salt",
+   "water"
+  ]
+ },
+ {
+  "id": "sci-speed",
+  "subject": "Science",
+  "class": "Class 7",
+  "task": "solution",
+  "question": "A car covers 150 km in 3 hours. What is its average speed in km/h and in m/s?",
+  "passages": [
+   {
+    "page": 110,
+    "label": "Chapter 9: Motion and Time",
+    "text": "Speed is the distance covered by an object in unit time. Speed = total distance ÷ total time. The SI unit of speed is metre per second (m/s); km/h is also used. To change km/h to m/s, multiply by 5/18."
+   }
+  ],
+  "expected": "Speed = 150 ÷ 3 = 50 km/h. In m/s: 50 × 5/18 = 13.89 m/s (about 13.9 m/s).",
+  "must": [
+   "50 km/h",
+   "13.8|13.9"
+  ]
+ },
+ {
+  "id": "sci-circuit-series",
+  "subject": "Science",
+  "class": "Class 7",
+  "task": "solution",
+  "question": "Three identical bulbs are joined in series to a battery. If one bulb fuses, what happens to the other two? Give the reason.",
+  "passages": [
+   {
+    "page": 128,
+    "label": "Chapter 10: Electric Current",
+    "text": "In a series circuit, components are joined one after another, so the current has only one path. If any part of a series circuit breaks, for example a bulb's filament snaps, the circuit becomes open and current stops flowing everywhere."
+   }
+  ],
+  "expected": "The other two bulbs go off. In series there is only one path for the current; a fused bulb opens (breaks) the circuit, so no current flows.",
+  "must": [
+   "one path|only path|single path",
+   "open|broken|breaks"
+  ]
+ },
+ {
+  "id": "sci-states",
+  "subject": "Science",
+  "class": "Class 6",
+  "task": "solution",
+  "question": "Why does ice float on water? Answer in 2-3 sentences.",
+  "passages": [
+   {
+    "page": 70,
+    "label": "Chapter 6: Changes Around Us",
+    "text": "Water expands when it freezes. So ice takes up more space than the same mass of water, which makes ice lighter than an equal volume of water. That is why ice floats and ponds freeze from the top."
+   }
+  ],
+  "expected": "Water expands on freezing, so ice has more volume for the same mass, i.e. lower density than water; so ice floats.",
+  "must": [
+   "expand",
+   "lighter|less dense|density"
+  ]
+ },
+ {
+  "id": "sci-food-chain",
+  "subject": "Science",
+  "class": "Class 7",
+  "task": "solution",
+  "question": "In the food chain grass → grasshopper → frog → snake, name the producer and the secondary consumer.",
+  "passages": [
+   {
+    "page": 170,
+    "label": "Chapter 13: Forests",
+    "text": "Green plants are producers because they make their own food. Animals that eat plants are primary consumers. Animals that eat primary consumers are secondary consumers, and those that eat secondary consumers are tertiary consumers."
+   }
+  ],
+  "expected": "Producer: grass. Secondary consumer: frog (eats the primary consumer, grasshopper).",
+  "must": [
+   "grass",
+   "frog"
+  ],
+  "mustNot": [
+   "secondary consumer: snake",
+   "secondary consumer is the snake",
+   "secondary consumer is snake"
+  ]
+ },
+ {
+  "id": "sci-mcq-unit",
+  "subject": "Science",
+  "class": "Class 6",
+  "task": "solution",
+  "question": "Choose the correct option: The SI unit of length is (a) centimetre (b) metre (c) kilometre (d) foot",
+  "passages": [
+   {
+    "page": 98,
+    "label": "Chapter 8: Measurement",
+    "text": "Scientists all over the world use the International System of Units (SI units). The SI unit of length is the metre (m). 1 km = 1000 m and 1 m = 100 cm."
+   }
+  ],
+  "expected": "(b) metre.",
+  "must": [
+   "(b)",
+   "metre|meter"
+  ]
+ },
+ {
+  "id": "sci-tf",
+  "subject": "Science",
+  "class": "Class 7",
+  "task": "solution",
+  "question": "True or false: Sound can travel through a vacuum. Correct the statement if it is false.",
+  "passages": [
+   {
+    "page": 140,
+    "label": "Chapter 11: Sound",
+    "text": "Sound needs a medium to travel, such as air, water or solids. It cannot travel through a vacuum. That is why astronauts on the Moon talk using radios."
+   }
+  ],
+  "expected": "False. Sound needs a medium (solid, liquid or gas) to travel and cannot travel through a vacuum.",
+  "must": [
+   "false",
+   "medium"
+  ]
+ },
+ {
+  "id": "sci-respiration-compare",
+  "subject": "Science",
+  "class": "Class 7",
+  "task": "solution",
+  "question": "Differentiate between aerobic and anaerobic respiration (any three points).",
+  "passages": [
+   {
+    "page": 80,
+    "label": "Chapter 7: Respiration in Organisms",
+    "text": "In aerobic respiration, glucose is broken down using oxygen into carbon dioxide and water, and a lot of energy is released. In anaerobic respiration, glucose is broken down without oxygen. Yeast makes alcohol and carbon dioxide this way, and our muscles make lactic acid during hard exercise; less energy is released."
+   }
+  ],
+  "expected": "Aerobic: uses oxygen; products CO2 + water; more energy. Anaerobic: no oxygen; products alcohol + CO2 (yeast) or lactic acid (muscles); less energy.",
+  "must": [
+   "oxygen",
+   "lactic acid|alcohol",
+   "more energy|less energy"
+  ]
+ },
+ {
+  "id": "sci-fill-blank",
+  "subject": "Science",
+  "class": "Class 6",
+  "task": "solution",
+  "question": "Fill in the blank: The process of changing water vapour into water is called ________.",
+  "passages": [
+   {
+    "page": 72,
+    "label": "Chapter 6: Changes Around Us",
+    "text": "When water is heated it changes into water vapour; this is evaporation. When water vapour cools, it changes back into water; this is condensation. Drops on a cold glass of water are formed by condensation."
+   }
+  ],
+  "expected": "Condensation.",
+  "must": [
+   "condensation"
+  ],
+  "mustNot": [
+   "evaporation."
+  ]
+ },
+ {
+  "id": "sci-magnet",
+  "subject": "Science",
+  "class": "Class 6",
+  "task": "solution",
+  "question": "Give two properties of magnets.",
+  "passages": [
+   {
+    "page": 122,
+    "label": "Chapter 10: Fun with Magnets",
+    "text": "A magnet attracts objects made of iron, nickel and cobalt. Every magnet has two poles, a north pole and a south pole. Like poles repel and unlike poles attract. A freely suspended magnet always comes to rest in the north-south direction."
+   }
+  ],
+  "expected": "Any two: attracts iron/nickel/cobalt; has two poles; like poles repel, unlike attract; freely suspended magnet points north-south.",
+  "must": [
+   "attract|repel|north"
+  ]
+ },
+ {
+  "id": "math-lcm",
+  "subject": "Maths",
+  "class": "Class 6",
+  "task": "solution",
+  "question": "Find the LCM of 12, 18 and 30.",
+  "passages": [],
+  "expected": "LCM = 180 (12 = 2²×3, 18 = 2×3², 30 = 2×3×5; LCM = 2²×3²×5 = 180).",
+  "must": [
+   "180"
+  ]
+ },
+ {
+  "id": "math-hcf",
+  "subject": "Maths",
+  "class": "Class 6",
+  "task": "solution",
+  "question": "Find the HCF of 36 and 48 by prime factorisation.",
+  "passages": [],
+  "expected": "36 = 2²×3², 48 = 2⁴×3; HCF = 2²×3 = 12.",
+  "must": [
+   "12"
+  ]
+ },
+ {
+  "id": "math-percent",
+  "subject": "Maths",
+  "class": "Class 7",
+  "task": "solution",
+  "question": "A shirt costs ₹800. It is sold at a discount of 15%. Find the selling price.",
+  "passages": [],
+  "expected": "Discount = 15% of 800 = ₹120; selling price = 800 − 120 = ₹680.",
+  "must": [
+   "680",
+   "120"
+  ]
+ },
+ {
+  "id": "math-si",
+  "subject": "Maths",
+  "class": "Class 7",
+  "task": "solution",
+  "question": "Find the simple interest on ₹5,000 at 8% per annum for 3 years. Also find the amount.",
+  "passages": [
+   {
+    "page": 140,
+    "label": "Chapter 8: Comparing Quantities",
+    "text": "Simple Interest (SI) = (P × R × T) ÷ 100, where P is the principal, R the rate per cent per annum and T the time in years. Amount = Principal + Interest."
+   }
+  ],
+  "expected": "SI = 5000×8×3/100 = ₹1,200; Amount = ₹6,200.",
+  "must": [
+   "1200|1,200",
+   "6200|6,200"
+  ]
+ },
+ {
+  "id": "math-linear",
+  "subject": "Maths",
+  "class": "Class 7",
+  "task": "solution",
+  "question": "Solve: 3x + 7 = 25.",
+  "passages": [],
+  "expected": "3x = 18, x = 6.",
+  "must": [
+   "x = 6|x=6"
+  ]
+ },
+ {
+  "id": "math-area-circle",
+  "subject": "Maths",
+  "class": "Class 7",
+  "task": "solution",
+  "question": "Find the area of a circle of radius 7 cm. (Take π = 22/7.)",
+  "passages": [],
+  "expected": "Area = πr² = 22/7 × 7 × 7 = 154 cm².",
+  "must": [
+   "154"
+  ]
+ },
+ {
+  "id": "math-perimeter",
+  "subject": "Maths",
+  "class": "Class 6",
+  "task": "solution",
+  "question": "The length of a rectangle is 12 m and its breadth is 7.5 m. Find its perimeter and area.",
+  "passages": [],
+  "expected": "Perimeter = 2(12 + 7.5) = 39 m; area = 12 × 7.5 = 90 m².",
+  "must": [
+   "39",
+   "90"
+  ]
+ },
+ {
+  "id": "math-fraction",
+  "subject": "Maths",
+  "class": "Class 6",
+  "task": "solution",
+  "question": "Simplify: 3/4 + 5/6 − 1/3.",
+  "passages": [],
+  "expected": "LCM 12: 9/12 + 10/12 − 4/12 = 15/12 = 5/4 = 1 1/4.",
+  "must": [
+   "5/4|1 1/4|1¼|1.25"
+  ]
+ },
+ {
+  "id": "math-ratio",
+  "subject": "Maths",
+  "class": "Class 6",
+  "task": "solution",
+  "question": "Divide ₹960 between Asha and Ravi in the ratio 5 : 3.",
+  "passages": [],
+  "expected": "Total parts 8; Asha 5/8×960 = ₹600, Ravi 3/8×960 = ₹360.",
+  "must": [
+   "600",
+   "360"
+  ]
+ },
+ {
+  "id": "math-angles",
+  "subject": "Maths",
+  "class": "Class 7",
+  "task": "solution",
+  "question": "Two angles of a triangle are 48° and 67°. Find the third angle.",
+  "passages": [],
+  "expected": "Sum of angles = 180°; third = 180 − (48 + 67) = 65°.",
+  "must": [
+   "65"
+  ]
+ },
+ {
+  "id": "math-word-age",
+  "subject": "Maths",
+  "class": "Class 7",
+  "task": "solution",
+  "question": "Ravi's father is three times as old as Ravi. After 12 years, he will be twice as old as Ravi. Find their present ages.",
+  "passages": [],
+  "expected": "Ravi x, father 3x; 3x + 12 = 2(x + 12) → x = 12. Ravi 12 years, father 36 years.",
+  "must": [
+   "12",
+   "36"
+  ]
+ },
+ {
+  "id": "math-integers",
+  "subject": "Maths",
+  "class": "Class 7",
+  "task": "solution",
+  "question": "Evaluate: (−8) × (−5) + (−36) ÷ 4.",
+  "passages": [],
+  "expected": "40 + (−9) = 31.",
+  "must": [
+   "31"
+  ]
+ },
+ {
+  "id": "his-akbar",
+  "subject": "History",
+  "class": "Class 7",
+  "task": "solution",
+  "question": "When did Akbar become emperor and how old was he? Who acted as his regent?",
+  "passages": [
+   {
+    "page": 36,
+    "label": "Chapter 4: The Mughal Empire",
+    "text": "Akbar became emperor in 1556 when he was only 13 years old. In the early years his regent was Bairam Khan, who looked after the empire on his behalf. By 1560 Akbar began to rule on his own."
+   }
+  ],
+  "expected": "1556, at 13 years; regent Bairam Khan.",
+  "must": [
+   "1556",
+   "13",
+   "Bairam Khan"
+  ]
+ },
+ {
+  "id": "his-sulh",
+  "subject": "History",
+  "class": "Class 7",
+  "task": "solution",
+  "question": "What was sulh-i kul? Answer in about 40 words.",
+  "passages": [
+   {
+    "page": 42,
+    "label": "Chapter 4: The Mughal Empire",
+    "text": "Akbar's idea of sulh-i kul means 'universal peace'. It did not discriminate between people of different religions; it focused on ethics such as honesty, justice and peace that were common to all. Abul Fazl helped frame this idea."
+   }
+  ],
+  "expected": "Sulh-i kul = universal peace: Akbar's policy of tolerance not discriminating between religions; based on common ethics (honesty, justice, peace); framed with Abul Fazl.",
+  "must": [
+   "universal peace",
+   "religion"
+  ]
+ },
+ {
+  "id": "his-revolt-1857",
+  "subject": "History",
+  "class": "Class 8",
+  "task": "solution",
+  "question": "Give any two causes of the revolt of 1857.",
+  "passages": [
+   {
+    "page": 60,
+    "label": "Chapter 5: When People Rebel",
+    "text": "Sepoys were unhappy about their pay and conditions of service. A new rule required sepoys to serve overseas if asked, which offended some. In 1857 rumours spread that the new cartridges were greased with the fat of cows and pigs, which hurt the religious feelings of Hindu and Muslim soldiers. Rulers also resented the policy by which the Company took over kingdoms where a ruler died without a male heir."
+   }
+  ],
+  "expected": "Any two: greased cartridges (cow and pig fat) hurting religious feelings; poor pay/service conditions and overseas service rule; Company annexing kingdoms (no male heir policy).",
+  "must": [
+   "cartridge|pay|heir|overseas"
+  ]
+ },
+ {
+  "id": "his-not-covered",
+  "subject": "History",
+  "class": "Class 7",
+  "task": "solution",
+  "question": "Who built the Qutb Minar and in which century?",
+  "passages": [
+   {
+    "page": 36,
+    "label": "Chapter 4: The Mughal Empire",
+    "text": "Akbar became emperor in 1556 when he was only 13 years old. In the early years his regent was Bairam Khan."
+   }
+  ],
+  "expected": "The passages (about Akbar) do not cover the Qutb Minar. A good answer says so, and may add general knowledge clearly marked: begun by Qutbuddin Aibak, completed by Iltutmish, 13th century (around 1199-1230).",
+  "must": [
+   "general knowledge|not in|does not|doesn't"
+  ]
+ },
+ {
+  "id": "his-timeline",
+  "subject": "History",
+  "class": "Class 8",
+  "task": "solution",
+  "question": "Arrange in order: (i) Battle of Plassey (ii) Revolt of 1857 (iii) Battle of Buxar",
+  "passages": [
+   {
+    "page": 10,
+    "label": "Chapter 2: From Trade to Territory",
+    "text": "The Battle of Plassey was fought in 1757; Robert Clive led the Company's army against Sirajuddaulah. In 1764 the Company won the Battle of Buxar.",
+    "type": "textbook"
+   },
+   {
+    "page": 60,
+    "label": "Chapter 5: When People Rebel",
+    "text": "The revolt began at Meerut in May 1857."
+   }
+  ],
+  "expected": "Plassey (1757) → Buxar (1764) → Revolt (1857): (i), (iii), (ii).",
+  "must": [
+   "1757",
+   "1764",
+   "1857"
+  ]
+ },
+ {
+  "id": "geo-weathering",
+  "subject": "Geography",
+  "class": "Class 7",
+  "task": "solution",
+  "question": "What is weathering? How is it different from erosion?",
+  "passages": [
+   {
+    "page": 18,
+    "label": "Chapter 3: Our Changing Earth",
+    "text": "Weathering is the breaking up of rocks on the earth's surface by heat, water, frost and living things; the pieces stay in place. Erosion is the wearing away of the landscape by agents such as running water, wind, ice and sea waves, which also carry the material away."
+   }
+  ],
+  "expected": "Weathering: breaking up of rocks in place. Erosion: wearing away and carrying away of material by agents (water, wind, ice, waves). Difference: erosion moves the material.",
+  "must": [
+   "breaking|break",
+   "carry|carried|removed|transport"
+  ]
+ },
+ {
+  "id": "geo-layers-atmosphere",
+  "subject": "Geography",
+  "class": "Class 7",
+  "task": "solution",
+  "question": "Name the layer of the atmosphere in which we live and the one where aeroplanes usually fly.",
+  "passages": [
+   {
+    "page": 26,
+    "label": "Chapter 4: Air",
+    "text": "The troposphere is the lowest layer of the atmosphere; almost all weather happens here and we live in it. Above it is the stratosphere, which is almost free of clouds, so aeroplanes usually fly here. The ozone layer is in the stratosphere."
+   }
+  ],
+  "expected": "We live in the troposphere; aeroplanes fly in the stratosphere.",
+  "must": [
+   "troposphere",
+   "stratosphere"
+  ]
+ },
+ {
+  "id": "geo-latitude",
+  "subject": "Geography",
+  "class": "Class 6",
+  "task": "solution",
+  "question": "What is the latitude of the Equator, and what are the latitudes of the Tropic of Cancer and the Tropic of Capricorn?",
+  "passages": [
+   {
+    "page": 12,
+    "label": "Chapter 2: Globe: Latitudes and Longitudes",
+    "text": "The Equator is 0° latitude. The Tropic of Cancer is at 23½° N and the Tropic of Capricorn at 23½° S. The Arctic Circle is at 66½° N."
+   }
+  ],
+  "expected": "Equator 0°; Tropic of Cancer 23½° N; Tropic of Capricorn 23½° S.",
+  "must": [
+   "0°",
+   "23½|23.5|23 1/2"
+  ]
+ },
+ {
+  "id": "geo-map-figure",
+  "subject": "Geography",
+  "class": "Class 6",
+  "task": "solution",
+  "question": "Look at the map in Figure 4.2 and name the three countries marked A, B and C.",
+  "passages": [
+   {
+    "page": 30,
+    "label": "Chapter 4: Maps",
+    "text": "Figure 4.2 shows a map of south Asia with three countries marked A, B and C."
+   }
+  ],
+  "expected": "The figure is not available (only its caption). A correct answer says the map is needed and does not guess.",
+  "must": [
+   "figure|map"
+  ],
+  "mustNot": [
+   "A is",
+   "A:"
+  ]
+ },
+ {
+  "id": "geo-monsoon",
+  "subject": "Geography",
+  "class": "Class 7",
+  "task": "solution",
+  "question": "Why does most of India get rain in the months of June to September?",
+  "passages": [
+   {
+    "page": 48,
+    "label": "Chapter 7: Our Country: Climate",
+    "text": "In summer the land heats up more than the sea, forming low pressure over the land. Moist south-west monsoon winds blow from the Indian Ocean towards the land and bring heavy rain to most of India from June to September."
+   }
+  ],
+  "expected": "In summer land heats more than the sea → low pressure over land → moist south-west monsoon winds from the Indian Ocean blow in and bring rain (June-September).",
+  "must": [
+   "monsoon",
+   "low pressure|heats"
+  ]
+ },
+ {
+  "id": "civ-equality",
+  "subject": "Civics",
+  "class": "Class 7",
+  "task": "solution",
+  "question": "What does the Indian Constitution say about equality? Give two points.",
+  "passages": [
+   {
+    "page": 8,
+    "label": "Chapter 1: On Equality",
+    "text": "The Indian Constitution recognises every person as equal: every individual, man or woman, from any caste, religion or background, is equal before the law. No person can be discriminated against on the basis of religion, race, caste, place of birth or sex. Every person has access to all public places such as playgrounds, hotels, shops and markets."
+   }
+  ],
+  "expected": "Any two: all are equal before the law; no discrimination by religion, race, caste, place of birth or sex; access to all public places.",
+  "must": [
+   "equal",
+   "discriminat|public places"
+  ]
+ },
+ {
+  "id": "civ-mla",
+  "subject": "Civics",
+  "class": "Class 7",
+  "task": "solution",
+  "question": "Who is an MLA and how is an MLA chosen?",
+  "passages": [
+   {
+    "page": 30,
+    "label": "Chapter 3: How the State Government Works",
+    "text": "Every state has a Legislative Assembly. Each state is divided into constituencies. The people of each constituency elect one representative, called a Member of the Legislative Assembly (MLA), through elections."
+   }
+  ],
+  "expected": "MLA = Member of the Legislative Assembly; elected by the people (voters) of a constituency in elections.",
+  "must": [
+   "Member of the Legislative Assembly",
+   "constituency",
+   "elect"
+  ]
+ },
+ {
+  "id": "civ-media",
+  "subject": "Civics",
+  "class": "Class 7",
+  "task": "solution",
+  "question": "Why is an independent media important in a democracy?",
+  "passages": [
+   {
+    "page": 64,
+    "label": "Chapter 6: Understanding Media",
+    "text": "In a democracy the media gives news and discusses events so that citizens can learn how the government works and question its actions. For this, the media must be independent: no one should control or influence its coverage, so that it reports in a fair and balanced way."
+   }
+  ],
+  "expected": "So citizens get fair, balanced news about how the government works and can question it; independence means no one controls or influences coverage.",
+  "must": [
+   "balanced|fair",
+   "government",
+   "control|influence"
+  ]
+ },
+ {
+  "id": "eng-tense",
+  "subject": "English",
+  "class": "Class 6",
+  "task": "solution",
+  "question": "Change into past tense: She writes a letter to her friend every week.",
+  "passages": [],
+  "expected": "She wrote a letter to her friend every week.",
+  "must": [
+   "wrote"
+  ]
+ },
+ {
+  "id": "eng-passive",
+  "subject": "English",
+  "class": "Class 7",
+  "task": "solution",
+  "question": "Change into passive voice: The gardener planted the trees.",
+  "passages": [],
+  "expected": "The trees were planted by the gardener.",
+  "must": [
+   "were planted by the gardener"
+  ]
+ },
+ {
+  "id": "eng-synonym",
+  "subject": "English",
+  "class": "Class 6",
+  "task": "solution",
+  "question": "Give one synonym and one antonym of 'ancient'.",
+  "passages": [],
+  "expected": "Synonym: old (or antique); antonym: modern (or new).",
+  "must": [
+   "old|antique|aged",
+   "modern|new"
+  ]
+ },
+ {
+  "id": "eng-poem",
+  "subject": "English",
+  "class": "Class 7",
+  "task": "solution",
+  "question": "Read the lines and answer: Who is the speaker, and what does the speaker promise?",
+  "passages": [
+   {
+    "page": 22,
+    "label": "Unit 3: Poem 'The Old Tree'",
+    "text": "'I stood here when your grandfather played, / I'll stand here still when you are grey; / So climb, and rest within my shade, / I'll guard your dreams and games all day.' The poem is spoken by an old banyan tree to a child."
+   }
+  ],
+  "expected": "The speaker is the old banyan tree; it promises to keep standing as the child grows old and to shelter/guard the child's dreams and games (give shade).",
+  "must": [
+   "tree",
+   "shade|guard|dream"
+  ]
+ },
+ {
+  "id": "eng-word-limit",
+  "subject": "English",
+  "class": "Class 7",
+  "task": "solution",
+  "question": "In not more than 30 words, write why the old tree is happy to see the child.",
+  "passages": [
+   {
+    "page": 22,
+    "label": "Unit 3: Poem 'The Old Tree'",
+    "text": "'I stood here when your grandfather played, / I'll stand here still when you are grey; / So climb, and rest within my shade, / I'll guard your dreams and games all day.' The poem is spoken by an old banyan tree to a child."
+   }
+  ],
+  "expected": "Within 30 words: the tree has watched generations (the grandfather) play under it and loves sheltering the child; it enjoys guarding the child's games and dreams.",
+  "must": [
+   "grandfather|generation"
+  ]
+ },
+ {
+  "id": "hin-sangya",
+  "subject": "Hindi",
+  "class": "Class 6",
+  "task": "solution",
+  "question": "संज्ञा किसे कहते हैं? दो उदाहरण दीजिए।",
+  "passages": [],
+  "expected": "किसी व्यक्ति, वस्तु, स्थान या भाव के नाम को संज्ञा कहते हैं। उदाहरण: राम, दिल्ली, किताब, खुशी।",
+  "must": [
+   "नाम"
+  ]
+ },
+ {
+  "id": "hin-vilom",
+  "subject": "Hindi",
+  "class": "Class 6",
+  "task": "solution",
+  "question": "विलोम शब्द लिखिए: (क) दिन (ख) सुख",
+  "passages": [],
+  "expected": "(क) रात (ख) दुःख/दुख",
+  "must": [
+   "रात",
+   "दुख|दुःख"
+  ]
+ },
+ {
+  "id": "comp-html-list",
+  "subject": "Computers",
+  "class": "Class 6",
+  "task": "solution",
+  "question": "Write HTML code to show an ordered list of three fruits: Apple, Mango, Banana.",
+  "passages": [],
+  "expected": "<ol><li>Apple</li><li>Mango</li><li>Banana</li></ol> in a code block.",
+  "must": [
+   "<ol>",
+   "<li>",
+   "</ol>"
+  ]
+ },
+ {
+  "id": "comp-hardware",
+  "subject": "Computers",
+  "class": "Class 6",
+  "task": "solution",
+  "question": "Differentiate between hardware and software with one example each.",
+  "passages": [
+   {
+    "page": 8,
+    "label": "Chapter 1: Computer Basics",
+    "text": "Hardware is the physical parts of a computer that we can touch, such as the keyboard, mouse and monitor. Software is a set of programs that tells the hardware what to do; we cannot touch it. Examples are MS Word and Windows."
+   }
+  ],
+  "expected": "Hardware: physical parts we can touch (e.g. keyboard). Software: programs telling hardware what to do, cannot be touched (e.g. MS Word).",
+  "must": [
+   "touch",
+   "program"
+  ]
+ },
+ {
+  "id": "comp-binary",
+  "subject": "Computers",
+  "class": "Class 7",
+  "task": "solution",
+  "question": "Convert the decimal number 13 into binary.",
+  "passages": [],
+  "expected": "13 = 8 + 4 + 1 = 1101 (binary).",
+  "must": [
+   "1101"
+  ]
+ },
+ {
+  "id": "trap-handwriting",
+  "subject": "Science",
+  "class": "Class 7",
+  "task": "solution",
+  "question": "Answer the question on the worksheet: Which gas do plants take in during photosynthesis?",
+  "passages": [
+   {
+    "page": 3,
+    "label": "Worksheet 2",
+    "text": "Q1. Which gas do plants take in during photosynthesis? [Handwritten: oxygen]",
+    "type": "exercise"
+   },
+   {
+    "page": 14,
+    "label": "Chapter 1: Nutrition in Plants",
+    "text": "Plants combine carbon dioxide from the air and water from the soil to make glucose, releasing oxygen."
+   }
+  ],
+  "expected": "Carbon dioxide. (The student's handwritten 'oxygen' is wrong and must not be copied.)",
+  "must": [
+   "carbon dioxide"
+  ],
+  "mustNot": [
+   "Ans: oxygen",
+   "**Ans:** oxygen"
+  ]
+ },
+ {
+  "id": "trap-any-two",
+  "subject": "Geography",
+  "class": "Class 7",
+  "task": "solution",
+  "question": "Name any two agents of erosion.",
+  "passages": [
+   {
+    "page": 18,
+    "label": "Chapter 3: Our Changing Earth",
+    "text": "Erosion is the wearing away of the landscape by agents such as running water, wind, ice and sea waves."
+   }
+  ],
+  "expected": "Exactly two of: running water, wind, ice (glaciers), sea waves.",
+  "must": [
+   "water|wind|ice|wave"
+  ]
+ },
+ {
+  "id": "trap-multi-part",
+  "subject": "Science",
+  "class": "Class 7",
+  "task": "solution",
+  "question": "(a) Name the pigment that gives leaves their green colour. (b) Where is it found? (c) What does it do?",
+  "passages": [
+   {
+    "page": 14,
+    "label": "Chapter 1: Nutrition in Plants",
+    "text": "The green pigment chlorophyll is found in the chloroplasts of leaf cells. It traps the energy of sunlight, which plants use to make food."
+   }
+  ],
+  "expected": "(a) Chlorophyll (b) in chloroplasts of leaf cells (c) traps sunlight energy used to make food.",
+  "must": [
+   "chlorophyll",
+   "chloroplast",
+   "sunlight|light energy"
+  ]
+ }
+]

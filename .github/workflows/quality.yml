@@ -1,0 +1,42 @@
+# The quality test set (scripts/quality): 50 fixed questions answered by the real AI and graded.
+# Run by hand from the Actions tab (Run workflow) before changing a prompt or a model.
+# Needs the repository secret GOOGLE_API_KEY (Settings → Secrets and variables → Actions).
+name: Answer quality
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "Model that writes the answers (empty = gemini-flash-latest)"
+        required: false
+      judge_model:
+        description: "Model that grades them (empty = the same)"
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Answer and grade the 50 questions
+        run: npm run test:quality
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          QUALITY_MODEL: ${{ inputs.model }}
+          QUALITY_JUDGE_MODEL: ${{ inputs.judge_model }}
+      - name: Keep the full results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-results
+          path: scripts/quality/results/latest.json
+          if-no-files-found: ignore

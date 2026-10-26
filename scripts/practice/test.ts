@@ -34,6 +34,7 @@ import { parseProblem } from "@/lib/worked/parse";
 import { describeOutcome } from "@/app/dashboard/library/_parts/upload-book";
 import { LOGIN_ID, internalEmail, looksLikeLoginId, normaliseLoginId } from "@/lib/login-id";
 import { readAnswerStream } from "@/lib/answer-stream";
+import { factChecks, parseJudge, scoreCase } from "../quality/grade";
 import { BOARD_COLUMNS, BOARD_ROWS, makeBoardGame, makeFamilySheet, makeMatchSheet, schoolFamilySheet, schoolMatchSheet } from "@/lib/kindergarten/worksheets";
 import { BOARD_WORDS, CVC_WORDS, familiesOf, rimeOf, SIGHT_LEVELS, SIGHT_SETS, VOWELS } from "@/lib/kindergarten/words";
 
@@ -749,6 +750,18 @@ function q0(): Question {
   const seen: string[] = [];
   const answer = await readAnswerStream<{ text: string }>(body, { onText: (d) => seen.push(`text:${d}`), onReset: () => seen.push("reset"), onStage: (st) => seen.push(`stage:${st}`) });
   check(seen.join() === "text:Draft,stage:checking,stage:fixing" && answer.text === "Checked", "A streamed answer reports the checking stages, then gives the checked answer");
+}
+
+{
+  // The quality test set's grading (scripts/quality), without the AI.
+  const facts = factChecks("**Ans:** Akbar became emperor in 1556, aged 13.", ["1556", "thirteen|13", "Bairam"], ["1605"]);
+  check(facts.missing.join() === "Bairam" && facts.unwanted.length === 0, "Quality: missing must-have facts are found, and either spelling counts");
+  check(factChecks("It was 1605.", [], ["1605"]).unwanted.join() === "1605", "Quality: a known wrong answer is caught");
+  const judged = parseJudge('{"correct":2,"complete":2,"grounded":1,"notes":"adds an outside date"}');
+  check(judged?.grounded === 1 && parseJudge('{"correct":3}') === null && parseJudge("no") === null, "Quality: the examiner's scores are read, out-of-range ones refused");
+  check(scoreCase({ correct: 2, complete: 2, grounded: 2, notes: "" }, { missing: [], unwanted: [] }).score === 100, "Quality: a perfect answer scores 100 and passes");
+  const capped = scoreCase({ correct: 2, complete: 2, grounded: 2, notes: "" }, { missing: ["1556"], unwanted: [] });
+  check(!capped.pass && capped.score === 75, "Quality: a missing must-have fact fails the case even if the examiner liked it");
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
