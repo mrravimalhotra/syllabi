@@ -35,6 +35,7 @@ import { describeOutcome } from "@/app/dashboard/library/_parts/upload-book";
 import { LOGIN_ID, internalEmail, looksLikeLoginId, normaliseLoginId } from "@/lib/login-id";
 import { readAnswerStream } from "@/lib/answer-stream";
 import { factChecks, parseJudge, scoreCase } from "../quality/grade";
+import { disagreements, numbersIn, parseFinals } from "@/lib/generation/second-solve";
 import { BOARD_COLUMNS, BOARD_ROWS, makeBoardGame, makeFamilySheet, makeMatchSheet, schoolFamilySheet, schoolMatchSheet } from "@/lib/kindergarten/worksheets";
 import { BOARD_WORDS, CVC_WORDS, familiesOf, rimeOf, SIGHT_LEVELS, SIGHT_SETS, VOWELS } from "@/lib/kindergarten/words";
 
@@ -752,6 +753,16 @@ function q0(): Question {
   check(seen.join() === "text:Draft,stage:checking,stage:fixing" && answer.text === "Checked", "A streamed answer reports the checking stages, then gives the checked answer");
 }
 
+{
+  // Maths solved twice: the numbers in a final answer, and where two solutions disagree.
+  check(numbersIn("₹1,200 and 3/4, 1 1/4, −8, 23½").join() === "1200,0.75,1.25,-8,23.5", "Second solution: numbers are read as values (commas, fractions, mixed numbers, minus, ½)");
+  const draft = "Step 1: 150 ÷ 3 = 50\n**Answer:** 50 km/h, which is 13.9 m/s";
+  check(disagreements([{ where: "Q1", final: "50 km/h" }, { where: "Q1", final: "13.89 m/s" }], draft).length === 0, "Second solution: matching results (allowing for rounding) are not a problem");
+  const off = disagreements([{ where: "Q2", final: "x = 6" }], "**Answer:** x = 7");
+  check(off.length === 1 && off[0].where === "Q2" && off[0].fromSecondSolution === true && off[0].problem.includes("x = 6"), "Second solution: a different result is reported for the fix step");
+  check(disagreements([{ where: "Q3", final: "5/4" }], "**Ans:** 1 1/4") .length === 0, "Second solution: 5/4 and 1 1/4 are the same answer");
+  check(parseFinals('{"answers":[{"where":"Q1","final":"65°"},{"where":"Q2","final":""}]}')?.length === 1 && parseFinals("nope") === null, "Second solution: final answers are read, empty ones left out");
+}
 {
   // The quality test set's grading (scripts/quality), without the AI.
   const facts = factChecks("**Ans:** Akbar became emperor in 1556, aged 13.", ["1556", "thirteen|13", "Bairam"], ["1605"]);

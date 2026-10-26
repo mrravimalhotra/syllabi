@@ -50,6 +50,7 @@ import * as followUp from "../../src/app/api/documents/[id]/follow-up/route";
 import { runGeneration } from "../../src/lib/generation/pipeline";
 import { VERIFY_SYSTEM, parseProblems } from "../../src/lib/generation/verify";
 import { RERANK_SYSTEM, REWRITE_SYSTEM } from "../../src/lib/rag/refine";
+import { SECOND_SOLVE_SYSTEM } from "../../src/lib/generation/second-solve";
 import { pageProgress, readQueuedPages } from "../../src/lib/ingestion/jobs";
 import type { Student } from "@/types/database";
 
@@ -913,6 +914,21 @@ failures.length = 0;
   };
   await runGeneration({ student: person(), taskType: "paper_check", prompt: "Mark this" });
   check("checker: a marked paper is not sent to it (code checks the marks)", !calls.includes("check"), calls.join());
+
+  // Maths is solved a second time: a wrong method with right arithmetic (which the calculator can't see) is caught.
+  calls.length = 0;
+  fakeAi.reply = (req) => {
+    if (req.systemInstructions === REWRITE_SYSTEM) return { text: '{"queries":[]}' };
+    if (req.systemInstructions === VERIFY_SYSTEM) return (calls.push("check"), { text: '{"problems":[]}' });
+    if (req.systemInstructions === SECOND_SOLVE_SYSTEM) return (calls.push("solve again"), { text: '{"answers":[{"where":"Q1","final":"50 km/h"}]}' });
+    const fixing = (req as unknown as { prompt: string }).prompt.includes("Your draft answer below has these problems");
+    calls.push(fixing ? "fix" : "write");
+    return { text: fixing ? "Speed = 150 ÷ 3 = 50\n**Answer:** 50 km/h" : "Speed = 150 × 3 = 450\n**Answer:** 450 km/h" };
+  };
+  out = await runGeneration({ student: person(), taskType: "solution", prompt: "A car covers 150 km in 3 hours. Find its speed." });
+  check("maths twice: a second solution is made alongside the check", calls.slice(0, 3).sort().join() === "check,solve again,write", calls.join());
+  check("maths twice: a different result is fixed, and the fix agrees", calls.includes("fix") && out.text.includes("50 km/h") && !out.text.includes("450"), `${calls.join()} | ${out.text}`);
+  check("maths twice: the fixed answer shows no doubt", out.checks.filter((c) => c.kind === "review").every((c) => c.ok), JSON.stringify(out.checks));
 
   check("checker replies: problems are read, malformed ones left out", parseProblems('{"problems":[{"kind":"wrong","where":"Q2","problem":"x","fix":"y"},{"kind":"style","problem":"z"},{"kind":"missed","problem":""}]}')?.length === 1);
   check("checker replies: an unreadable reply is null, not an empty list", parseProblems("no json") === null && parseProblems('{"other":1}') === null);

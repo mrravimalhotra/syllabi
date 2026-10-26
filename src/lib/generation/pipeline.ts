@@ -7,6 +7,7 @@ import { retrieveContext, formatContext, loadSourceImages, type RetrievalResult 
 import { checkQuota, QuotaExceededError } from "@/lib/quota";
 import { systemInstructionsFor } from "@/lib/generation/prompts";
 import { problemForRepair, reviewChecks, verifyAnswer, type VerifyProblem } from "@/lib/generation/verify";
+import { disagreements, solveAgain, type FinalAnswer } from "@/lib/generation/second-solve";
 import { levelLine } from "@/lib/generation/level";
 import type { AnswerLanguage } from "@/lib/generation/language";
 import type { CompletionImage, CompletionResult } from "@/lib/llm/types";
@@ -350,10 +351,24 @@ async function checkAndRepair(input: {
     });
     return verified.problems;
   };
+  // Maths (an answer with calculations in it) is also solved a second time, independently; its final answers
+  // must match the answer's, and a mismatch is a problem like the examiner's.
+  const runSecondSolve = async (): Promise<FinalAnswer[] | null> => {
+    const second = await solveAgain({ taskType, question: request.prompt, context: request.context, photos });
+    if (!second) return null;
+    await recordTokenUsage({ studentId, taskType, provider: second.result.provider, model: second.result.model, usage: second.result.usage });
+    return second.finals;
+  };
   const reviewStart = Date.now();
   if (taskType !== "paper_check") onStage?.("checking");
   let checks = runChecks(result.text);
-  let review = await runReview(result.text);
+  const maths = (taskType === "solution" || taskType === "ad_hoc") && checks.some((c) => c.kind === "calculation");
+  const [firstReview, secondFinals] = await Promise.all([runReview(result.text), maths ? runSecondSolve() : Promise.resolve(null)]);
+  const withSecond = (found: VerifyProblem[] | null, text: string): VerifyProblem[] | null => {
+    const mismatches = secondFinals ? disagreements(secondFinals, text) : [];
+    return found === null && mismatches.length === 0 ? found : [...(found ?? []), ...mismatches];
+  };
+  let review = withSecond(firstReview, result.text);
   timings.reviewMs = Date.now() - reviewStart;
   const problems = checks.filter((c) => !c.ok);
   const problemCount = (failed: AnswerCheck[], found: VerifyProblem[] | null) => failed.length + (found?.length ?? 0);
@@ -362,7 +377,10 @@ async function checkAndRepair(input: {
     onStage?.("fixing");
     const found = [
       ...problems.map((c) => `- ${c.message} (found by Syllabi's exact calculator or marks counter)`),
-      ...(review ?? []).map((p) => `- ${problemForRepair(p)} (found by an independent examiner reading the answer against the books)`),
+      ...(review ?? []).map(
+        (p) =>
+          `- ${problemForRepair(p)} (${p.fromSecondSolution ? "found by solving the question again independently" : "found by an independent examiner reading the answer against the books"})`
+      ),
     ];
     const repaired = await generateCompletion({
       ...request,
@@ -381,7 +399,7 @@ async function checkAndRepair(input: {
       usage: repaired.usage,
     });
     const recheck = runChecks(repaired.text);
-    const rereview = await runReview(repaired.text);
+    const rereview = withSecond(await runReview(repaired.text), repaired.text);
     timings.repairMs = Date.now() - repairStart;
     // Keep the repair only if it really has fewer problems (a review that could not run counts as unchanged).
     if (

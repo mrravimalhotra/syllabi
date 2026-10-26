@@ -50,6 +50,8 @@ const SCHEMA = {
 
 export interface VerifyProblem {
   kind: "wrong" | "missed" | "unsupported";
+  /** Found by solving the question a second time, not by the examiner. */
+  fromSecondSolution?: boolean;
   where: string;
   problem: string;
   fix: string;
