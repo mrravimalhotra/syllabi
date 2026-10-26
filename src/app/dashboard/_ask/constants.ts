@@ -55,6 +55,11 @@ export const TABS: {
   gets: string;
   /** What to give it. */
   gives: string;
+  /** Its tile on the Ask Syllabi home: picture, colour, group and one short line. */
+  emoji: string;
+  group: "homework" | "revision";
+  tileTitle: string;
+  hint: string;
 }[] = [
   {
     value: "solution",
@@ -64,6 +69,10 @@ export const TABS: {
     placeholder: "Type or paste the question, or attach a photo or PDF of the worksheet",
     gets: "step-by-step answers in the way your child’s book teaches them, checked for mistakes",
     gives: "a question, or a photo or PDF of the worksheet",
+    emoji: "✏️",
+    group: "homework",
+    tileTitle: "Solve step by step",
+    hint: "Answers the way your child’s book teaches them",
   },
   {
     value: "notes",
@@ -73,6 +82,10 @@ export const TABS: {
     placeholder: "Which chapter or topic should the notes cover?",
     gets: "revision notes for a chapter or topic, from your books",
     gives: "the chapter or topic",
+    emoji: "📝",
+    group: "revision",
+    tileTitle: "Revision notes",
+    hint: "Key points of a chapter or topic",
   },
   {
     value: "sample_paper",
@@ -82,6 +95,10 @@ export const TABS: {
     placeholder: "Which chapters or topics should the paper cover?",
     gets: "a practice paper with marks for each question, and an answer key",
     gives: "the chapters, and the total marks",
+    emoji: "🗒️",
+    group: "revision",
+    tileTitle: "Sample paper",
+    hint: "A practice test with marks and an answer key",
   },
   {
     value: "ad_hoc",
@@ -91,6 +108,10 @@ export const TABS: {
     placeholder: "Ask any study question",
     gets: "a short, clear answer to any study question",
     gives: "your question",
+    emoji: "💬",
+    group: "homework",
+    tileTitle: "Ask anything",
+    hint: "Any study question, answered simply",
   },
   {
     value: "study_pack",
@@ -100,6 +121,10 @@ export const TABS: {
     placeholder: "Optional: what to focus on, for example “keep the language simple” or “extra practice on dates”",
     gets: "a walk-through of one chapter, its textbook questions answered, extra practice and a word list",
     gives: "the chapter (and, if you like, what to focus on)",
+    emoji: "📚",
+    group: "revision",
+    tileTitle: "Study pack",
+    hint: "A whole chapter: walk-through, answers, practice",
   },
   {
     value: "paper_check",
@@ -110,6 +135,10 @@ export const TABS: {
       "Attach photos or a PDF of the solved paper (several sums are fine), or type the sums with the student's working. Add the marks here if the paper doesn't show them.",
     gets: "marks, a grade and tips for each sum, like a teacher’s marking",
     gives: "photos or a PDF of the solved sheet",
+    emoji: "✅",
+    group: "homework",
+    tileTitle: "Check a paper",
+    hint: "Marks a solved maths sheet like a teacher",
   },
 ];
 

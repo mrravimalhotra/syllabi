@@ -1,39 +1,61 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { AnswerLanguage } from "@/lib/generation/language";
 import { keep, peek } from "@/lib/client-cache";
 import { PACK_WAIT_STEPS, ROUTE_BY_TASK, TABS, WAIT_STEPS, type MeResponse, usesBooks } from "@/app/dashboard/_ask/constants";
 import { AskHeader } from "@/app/dashboard/_ask/AskHeader";
-import { AttachmentList } from "@/app/dashboard/_ask/AttachmentList";
-import { BookPicker } from "@/app/dashboard/_ask/BookPicker";
-import { BooksInUse } from "@/app/dashboard/_ask/BooksInUse";
-import { DropForm } from "@/app/dashboard/_ask/DropForm";
 import { Messages } from "@/app/dashboard/_ask/Messages";
-import { QuickCommands } from "@/app/dashboard/_ask/QuickCommands";
-import { PromptBox } from "@/app/dashboard/_ask/PromptBox";
-import { ComposerToolbar } from "@/app/dashboard/_ask/ComposerToolbar";
 import { GeneratingCard } from "@/app/dashboard/_ask/Parts";
-import { PdfPagePicker } from "@/app/dashboard/_ask/PdfPagePicker";
-import { PackChapter } from "@/app/dashboard/_ask/PackChapter";
 import { ResultSection } from "@/app/dashboard/_ask/ResultSection";
-import { TabPicker } from "@/app/dashboard/_ask/TabPicker";
-import { COMMANDS, booksOfKinds, commandsInView, planCommand, type QuickCommand } from "@/app/dashboard/_ask/commands";
+import { AskHome } from "@/app/dashboard/_ask/AskHome";
+import { AskComposer } from "@/app/dashboard/_ask/AskComposer";
+import { ActivityScreen } from "@/components/menu/Tiles";
+import { PageSkeleton } from "@/components/ui";
+import { planCommand, type QuickCommand } from "@/app/dashboard/_ask/commands";
 import { blockedReason, buildRequestBody, calculationAnswer, questionProblem, type Question } from "@/app/dashboard/_ask/build-request";
 import { useAttachments } from "@/app/dashboard/_ask/useAttachments";
 import { useBooks } from "@/app/dashboard/_ask/useBooks";
 import { useGeneration } from "@/app/dashboard/_ask/useGeneration";
 import type { GenerationTaskType } from "@/types/database";
 
-/** Under the question: the book picker when it is open, else which books the answer comes from (none for kinds that use no books). */
-function bookAreaFor(tab: GenerationTaskType, bookCount: number, open: boolean): "picker" | "names" | null {
-  if (!usesBooks(tab) || bookCount === 0) return null;
-  return open ? "picker" : "names";
+
+/** The tool named in the address (/dashboard?tool=solution), or null for the home of tiles. */
+function toolFrom(value: string | null): GenerationTaskType | null {
+  return TABS.find((t) => t.value === value)?.value ?? null;
+}
+
+/** The answer to offer again on the home: one still being made, or the last one made, with its tool. */
+function lastAnswerOf(
+  task: GenerationTaskType | null,
+  generation: { loading: boolean; result: unknown; worked: unknown }
+): { task: GenerationTaskType; loading: boolean } | null {
+  if (task === null || !(generation.loading || generation.result || generation.worked)) return null;
+  return { task, loading: generation.loading };
 }
 
 export default function DashboardPage() {
+  // The tool comes from the address, which is only known in the browser.
+  return (
+    <Suspense fallback={<PageSkeleton />}>
+      <AskSyllabi />
+    </Suspense>
+  );
+}
+
+/**
+ * Ask Syllabi, laid out like Practice: a home of tiles (AskHome), and each kind of thing to make on its own
+ * screen with the question box. The screen is in the address, so the phone's back button returns to the tiles.
+ */
+function AskSyllabi() {
+  const router = useRouter();
+  const tool = toolFrom(useSearchParams().get("tool"));
+  const tab: GenerationTaskType = tool ?? "solution";
+  // The tool the answer on screen (or being made) belongs to, and the tool last opened.
+  const [answerTask, setAnswerTask] = useState<GenerationTaskType | null>(null);
+  const [lastTool, setLastTool] = useState<GenerationTaskType | null>(tool);
   const [me, setMe] = useState<MeResponse | null>(() => peek<MeResponse>("me") ?? null);
-  const [tab, setTab] = useState<GenerationTaskType>("solution");
   const [prompt, setPrompt] = useState("");
   // Sample papers: total marks to aim for (Indian school papers are often 80).
   const [totalMarks, setTotalMarks] = useState("80");
@@ -67,8 +89,6 @@ export default function DashboardPage() {
   const chosenPackBook = packBookId ?? "";
   const currentTab = TABS.find((t) => t.value === tab)!;
   const isPack = tab === "study_pack";
-  // Marking a paper uses no book.
-  const isCheck = tab === "paper_check";
 
   async function submit(e?: React.FormEvent) {
     e?.preventDefault();
@@ -97,16 +117,25 @@ export default function DashboardPage() {
       setError(problem);
       return;
     }
+    setAnswerTask(tab);
     if (await generation.send(ROUTE_BY_TASK[tab], buildRequestBody(question), tab)) attachments.clear();
   }
 
-  /** Switching kind starts that kind afresh: the text, attachments, messages and the last answer from the other kind are cleared. */
-  function chooseTab(next: GenerationTaskType) {
-    if (next === tab || generation.isBusy()) return;
-    setTab(next);
-    setPrompt("");
-    attachments.clear();
-    generation.clear();
+  /**
+   * Opens a tool's screen. Another tool starts afresh (its text and attachments are cleared, and the last
+   * answer too unless it is still being made, which carries on and can be reopened from the home).
+   */
+  function openTool(next: GenerationTaskType) {
+    if (next !== lastTool) {
+      setPrompt("");
+      attachments.clear();
+      if (!generation.isBusy() && next !== answerTask) {
+        generation.clear();
+        setAnswerTask(null);
+      }
+      setLastTool(next);
+    }
+    router.push(`/dashboard?tool=${next}`, { scroll: true });
   }
 
   /** A quick command: fills the question box and, when it names kinds of book, searches only those (and shows the picker so they can be changed). */
@@ -123,102 +152,74 @@ export default function DashboardPage() {
   async function makeNewAnswer() {
     const again = generation.resend();
     if (!again) return;
-    setTab(again.task);
+    setAnswerTask(again.task);
+    if (again.task !== tool) router.replace(`/dashboard?tool=${again.task}`, { scroll: false });
     if (await again.done) attachments.clear();
   }
 
   const noBookSelected = usesBooks(tab) && books.books.length > 0 && books.activeIds.length === 0;
   const overQuota = me?.quota.overQuota ?? false;
   const blocked = blockedReason({ overQuota, noBookSelected, readingFiles, choosingPages: attachments.longPdfs.length > 0 });
-  const bookArea = bookAreaFor(tab, books.books.length, showBooks);
-  const showCommands = commandsInView(tab, prompt, photos.length > 0 || docs.length > 0);
+
+  const header = (greeting: boolean) => (
+    <AskHeader me={me} overQuota={overQuota} booksFailed={books.failed} noBooks={books.loaded && books.books.length === 0} greeting={greeting} />
+  );
+  if (!tool) {
+    return (
+      <div className="space-y-6">
+        {header(true)}
+        <AskHome onOpen={openTool} lastAnswer={lastAnswerOf(answerTask, generation)} />
+      </div>
+    );
+  }
+  // The answer shown here is this tool's (an answer of another tool still being made waits on the home).
+  const answerHere = answerTask === null || answerTask === tab;
 
   return (
     <div className="space-y-6">
-      <AskHeader me={me} overQuota={overQuota} booksFailed={books.failed} noBooks={books.loaded && books.books.length === 0} />
+      <ActivityScreen
+        emoji={currentTab.emoji}
+        tone={currentTab.group === "homework" ? "sky" : "amber"}
+        title={currentTab.tileTitle}
+        description={`You'll get ${currentTab.gets}. Give ${currentTab.gives}.`}
+        onBack={() => router.push("/dashboard")}
+        backLabel="← All tools"
+      />
+      {header(false)}
 
-      <TabPicker tab={tab} onChoose={chooseTab} />
-
-      <DropForm onSubmit={submit} onFiles={(files) => void attachments.add(files)}>
-        {isPack && <PackChapter books={books.books} value={chosenPackBook} onChange={setPackBookId} attachedPages={photos.length} />}
-
-        <PromptBox
-          value={prompt}
-          onChange={setPrompt}
-          onSend={() => void submit()}
-          onPictures={(files) => void attachments.add(files)}
-          placeholder={currentTab.placeholder}
-        />
-
-        {showCommands && <QuickCommands commands={COMMANDS[tab]} onPick={runCommand} />}
-
-        <AttachmentList
-          photos={photos}
-          docs={docs}
-          reading={readingFiles}
-          onRemovePhoto={attachments.removePhoto}
-          onRemoveDoc={attachments.removeDoc}
-        />
-
-        {attachments.longPdfs.map((pdf, i) => (
-          <PdfPagePicker
-            key={pdf.file.name + i}
-            pdf={pdf}
-            room={attachments.pagesLeft}
-            busy={readingFiles}
-            onAttach={(first, last) => void attachments.attachPages(i, first, last)}
-            onSkip={() => attachments.skipPdf(i)}
-          />
-        ))}
-
-        {bookArea === "picker" && (
-          <BookPicker
-            books={books.books}
-            activeIds={books.activeIds}
-            onAll={books.selectAll}
-            onNone={books.selectNone}
-            onKind={(kind) => books.selectOnly(booksOfKinds(books.books, [kind]))}
-            onToggle={books.toggle}
-          />
-        )}
-
-        {bookArea === "names" && (
-          <BooksInUse books={books.books} activeIds={books.activeIds} onChange={() => setShowBooks(true)} />
-        )}
-
-        <ComposerToolbar
-          isPack={isPack}
-          isSamplePaper={tab === "sample_paper"}
-          isPaperCheck={isCheck}
-          photoCount={photos.length}
-          bookCount={books.books.length}
-          activeCount={books.activeIds.length}
-          booksOpen={showBooks}
-          totalMarks={totalMarks}
-          marksEach={marksEach}
-          language={language}
-          loading={generation.loading}
-          readingFiles={readingFiles}
-          noBookSelected={noBookSelected}
-          overQuota={overQuota}
-          blocked={blocked}
-          onAttach={(files) => void attachments.add(files)}
-          onToggleBooks={() => setShowBooks((v) => !v)}
-          onTotalMarks={setTotalMarks}
-          onMarksEach={setMarksEach}
-          onLanguage={setAnswerLanguage}
-        />
-      </DropForm>
+      <AskComposer
+        tab={tab}
+        prompt={prompt}
+        onPrompt={setPrompt}
+        onSubmit={submit}
+        attachments={attachments}
+        books={books}
+        showBooks={showBooks}
+        onShowBooks={setShowBooks}
+        packBookId={chosenPackBook}
+        onPackBook={setPackBookId}
+        onCommand={runCommand}
+        totalMarks={totalMarks}
+        onTotalMarks={setTotalMarks}
+        marksEach={marksEach}
+        onMarksEach={setMarksEach}
+        language={language}
+        onLanguage={setAnswerLanguage}
+        loading={generation.loading}
+        noBookSelected={noBookSelected}
+        overQuota={overQuota}
+        blocked={blocked}
+      />
 
       <Messages blocked={generation.loading ? null : blocked} error={error} notice={notice} />
 
-      {generation.loading && (
+      {answerHere && generation.loading && (
         <GeneratingCard steps={isPack ? PACK_WAIT_STEPS : WAIT_STEPS} draft={generation.draft} stage={generation.stage} onStop={generation.stop} />
       )}
 
       <ResultSection
-        worked={generation.worked}
-        result={generation.result}
+        worked={answerHere ? generation.worked : null}
+        result={answerHere ? generation.result : null}
         resultRef={generation.resultRef}
         workedInQuestion={generation.workedInQuestion}
         openWorked={generation.openWorked}

@@ -124,6 +124,13 @@ const baseRoutes = async (ctx, extra = {}) => {
   await ctx.route("**/api/rewards", (r) => (extra.rewards ? extra.rewards(r) : json(r, { error: "offline" }, 503)));
 };
 
+// Opens an Ask Syllabi tool from its home of tiles (going back to the tiles first when a tool is open).
+const openTool = async (page, title) => {
+  const back = page.getByRole("button", { name: "← All tools" });
+  if (await back.count()) await tap(back);
+  await tap(page.getByRole("button", { name: title, exact: true }));
+};
+
 // Opens a kindergarten activity's own screen from the home tiles.
 const openActivity = (page, title) => tap(page.getByRole("button", { name: title, exact: true }));
 
@@ -131,9 +138,31 @@ await waitForServer();
 // A fake microphone, so the sound recorder can be tried without a real one.
 browser = await chromium.launch({ executablePath: CHROMIUM, args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"] });
 
+await test("Ask Syllabi: a home of tiles like Practice; each tool opens its own screen, and the last answer can be reopened", async (page, ctx) => {
+  await baseRoutes(ctx);
+  await ctx.route("**/api/generate/**", (r) => json(r, { ...answer, text: "Plants make food from sunlight." }));
+  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  for (const group of ["Homework help", "Revision and tests", "Your library"]) await page.getByRole("region", { name: group }).waitFor();
+  if ((await page.locator("textarea").count()) !== 0) throw new Error("The home should show tiles, not the question box.");
+  await tap(page.getByRole("button", { name: "Ask anything", exact: true }));
+  await page.waitForURL(/tool=ad_hoc/);
+  await page.getByRole("heading", { name: "Ask anything" }).waitFor();
+  await page.getByPlaceholder("Ask any study question").fill("Explain photosynthesis");
+  await page.getByRole("button", { name: /^Generate$/ }).click();
+  await page.getByText("Plants make food from sunlight.").first().waitFor({ timeout: 10000 });
+  // Back to the tiles: the answer can be opened again from there.
+  await tap(page.getByRole("button", { name: "← All tools" }));
+  await page.getByRole("region", { name: "Your last answer" }).waitFor();
+  await tap(page.getByRole("region", { name: "Your last answer" }).getByRole("button"));
+  await page.getByText("Plants make food from sunlight.").first().waitFor();
+  // The phone's back button returns to the tiles too.
+  await page.goBack();
+  await page.getByRole("region", { name: "Homework help" }).waitFor();
+});
+
 await test("Ask: empty question is refused with a clear message", async (page, ctx) => {
   await baseRoutes(ctx);
-  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
   await page.getByText(/Your 1 book/).first().waitFor();
   await page.locator("textarea").fill("   ");
   const generate = page.getByRole("button", { name: /^Generate$/ });
@@ -145,7 +174,7 @@ await test("Ask: empty question is refused with a clear message", async (page, c
 await test("Ask: a question shows the answer and its checks", async (page, ctx) => {
   await baseRoutes(ctx);
   await ctx.route("**/api/generate/**", (r) => json(r, { ...answer, text: "Plants make food from sunlight." }));
-  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
   await page.locator("textarea").fill("Explain photosynthesis");
   await page.getByRole("button", { name: /^Generate$/ }).click();
   await page.getByText("Plants make food from sunlight.").first().waitFor({ timeout: 10000 });
@@ -154,7 +183,7 @@ await test("Ask: a question shows the answer and its checks", async (page, ctx) 
 await test("Ask: allowance used up says when it resets", async (page, ctx) => {
   await baseRoutes(ctx);
   await ctx.route("**/api/generate/**", (r) => json(r, { error: "You've used all of this month's allowance, so new answers are paused. It resets on the 1st.", quota: { used: 200000, quota: 200000, overQuota: true } }, 429));
-  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
   await page.locator("textarea").fill("Explain fractions");
   await page.getByRole("button", { name: /^Generate$/ }).click();
   await page.getByText(/resets on the 1st/).first().waitFor({ timeout: 10000 });
@@ -163,7 +192,7 @@ await test("Ask: allowance used up says when it resets", async (page, ctx) => {
 await test("Ask: service busy message is shown, not a blank screen", async (page, ctx) => {
   await baseRoutes(ctx);
   await ctx.route("**/api/generate/**", (r) => json(r, { error: "The AI service is busy right now. Wait a minute and try again." }, 503));
-  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
   await page.locator("textarea").fill("Explain fractions");
   await page.getByRole("button", { name: /^Generate$/ }).click();
   await page.getByText(/busy right now/).first().waitFor({ timeout: 10000 });
@@ -172,7 +201,7 @@ await test("Ask: service busy message is shown, not a blank screen", async (page
 await test("Ask: offline shows the connection message", async (page, ctx) => {
   await baseRoutes(ctx);
   await ctx.route("**/api/generate/**", (r) => r.abort("failed"));
-  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
   await page.locator("textarea").fill("Explain fractions");
   await page.getByRole("button", { name: /^Generate$/ }).click();
   await page.getByText(/Check your internet connection|reach Syllabi/i).first().waitFor({ timeout: 10000 });
@@ -185,7 +214,7 @@ await test("Ask: a streamed answer ends with the checked answer", async (page, c
   await ctx.route("**/api/generate/**", (r) =>
     r.fulfill(ndjson([{ type: "text", delta: "Plants make " }, { type: "text", delta: "food." }, { type: "done", answer: { ...answer, text: "Plants make food from sunlight (checked)." } }]))
   );
-  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
   await page.locator("textarea").fill("Explain photosynthesis");
   await page.getByRole("button", { name: /^Generate$/ }).click();
   await page.getByText("Plants make food from sunlight (checked).").first().waitFor({ timeout: 10000 });
@@ -196,7 +225,7 @@ await test("Ask: an error inside a streamed answer is shown", async (page, ctx) 
   await ctx.route("**/api/generate/**", (r) =>
     r.fulfill(ndjson([{ type: "text", delta: "Partial " }, { type: "error", status: 503, error: "The AI service is busy right now. Wait a minute and try again." }]))
   );
-  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
   await page.locator("textarea").fill("Explain photosynthesis");
   await page.getByRole("button", { name: /^Generate$/ }).click();
   await page.getByText(/busy right now/).first().waitFor({ timeout: 10000 });
@@ -205,7 +234,7 @@ await test("Ask: an error inside a streamed answer is shown", async (page, ctx) 
 await test("Ask: a stream that stops early says what to do", async (page, ctx) => {
   await baseRoutes(ctx);
   await ctx.route("**/api/generate/**", (r) => r.fulfill(ndjson([{ type: "text", delta: "Partial " }])));
-  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
   await page.locator("textarea").fill("Explain photosynthesis");
   await page.getByRole("button", { name: /^Generate$/ }).click();
   await page.getByText(/connection dropped before the answer finished/).first().waitFor({ timeout: 10000 });
@@ -214,12 +243,12 @@ await test("Ask: a stream that stops early says what to do", async (page, ctx) =
 await test("Ask: switching kind clears the text and the old answer", async (page, ctx) => {
   await baseRoutes(ctx);
   await ctx.route("**/api/generate/**", (r) => json(r, { ...answer, text: "Plants make food from sunlight.", timings: { totalMs: 6200, readingPhotosMs: 0, searchMs: 900, loadingImagesMs: 0, firstWordsMs: 2400, writingMs: 4800, repairMs: 0, savedMs: 100, model: "google / gemini-flash-latest" } }));
-  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
   await page.locator("textarea").fill("Explain photosynthesis");
   await page.getByRole("button", { name: /^Generate$/ }).click();
   await page.getByText("Plants make food from sunlight.").first().waitFor({ timeout: 10000 });
   await page.getByText(/Made in 6\.2s/).first().waitFor();
-  await page.getByRole("radio", { name: /Notes/ }).click();
+  await openTool(page, "Revision notes");
   await page.getByText("Plants make food from sunlight.").first().waitFor({ state: "detached", timeout: 5000 });
   if ((await page.locator("textarea").inputValue()) !== "") throw new Error("The text box was not cleared when switching kind.");
   await page.getByText("Quick commands").waitFor({ state: "detached", timeout: 3000 });
@@ -240,7 +269,7 @@ await test("Ask: a plain calculation is answered by code, with no AI request", a
     return json(r, answer);
   });
   await ctx.route("**/api/worked", (r) => json(r, { id: "w1" }));
-  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
   await page.locator("textarea").fill("Divide 5255 by 5");
   await page.getByRole("button", { name: /^Generate$/ }).click();
   await page.getByText(/5255 ÷ 5 = 1051/).first().waitFor({ state: "attached", timeout: 10000 });
@@ -254,7 +283,7 @@ await test("Ask: example questions fill the box, and Ctrl+Enter sends", async (p
     asked++;
     return json(r, answer);
   });
-  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
   const box = page.locator("textarea");
   await page.getByRole("button", { name: /^Solve all exercise questions/ }).click();
   if (!/Solve every question of every exercise/.test(await box.inputValue())) throw new Error("The quick command did not fill the box.");
@@ -276,7 +305,7 @@ await test("Ask: Solve all exercise questions fills the full request, picks exer
     sent = r.request().postDataJSON();
     return json(r, answer);
   });
-  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
   const box = page.locator("textarea");
   const pressed = async (title) => (await page.getByRole("button", { name: new RegExp(title) }).getAttribute("aria-pressed")) === "true";
   if ((await page.getByRole("button", { name: /Quick commands|Solve all test papers|Explain a method/ }).count()) !== 0) throw new Error("Only one command should be offered.");
@@ -300,7 +329,7 @@ await test("Ask: Solve all exercise questions fills the full request, picks exer
 await test("Ask: the command, with no exercise book or textbook uploaded, says so and keeps the selection", async (page, ctx) => {
   await ctx.route("**/api/me", (r) => json(r, me));
   await ctx.route("**/api/library**", (r) => json(r, { documents: [{ id: "p1", title: "Only Papers", subject: null, grade: null, source_type: "past_paper", status: "ready", created_at: now, pages: null }] }));
-  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: /^Solve all exercise questions/ }).click();
   await page.getByText(/You haven't uploaded any exercise books or textbooks yet/).waitFor();
   if (!/Solve every question of every exercise/.test(await page.locator("textarea").inputValue())) throw new Error("The request should still fill the box.");
@@ -308,10 +337,10 @@ await test("Ask: the command, with no exercise book or textbook uploaded, says s
 
 await test("Ask: only Solve has the command; the other kinds of answer have none yet", async (page, ctx) => {
   await baseRoutes(ctx);
-  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: /^Solve all exercise questions/ }).waitFor();
-  for (const tab of ["Notes", "Sample paper", "Ask", "Study pack"]) {
-    await page.getByRole("radio", { name: new RegExp(tab) }).click();
+  for (const tab of ["Revision notes", "Sample paper", "Ask anything", "Study pack"]) {
+    await openTool(page, tab);
     if ((await page.getByText("Quick commands").count()) !== 0) throw new Error(`${tab} should have no quick commands yet.`);
   }
 });
@@ -327,8 +356,8 @@ await test("Check paper: attach the solved paper, set marks per question, and ge
     route = r.request().url();
     return json(r, { ...answer, title: "Paper check", text: report, sources: [], checks: [], confidence: null });
   });
-  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
-  await page.getByRole("radio", { name: /Check paper/ }).click();
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
+  await openTool(page, "Check a paper");
   await page.getByPlaceholder(/Attach photos or a PDF of the solved paper/).waitFor();
   // No books are used to mark a paper.
   if ((await page.getByText("Search these books").count()) !== 0 || (await page.getByRole("button", { name: /Your 1 book|All 1 book/ }).count()) !== 0) throw new Error("The book picker should be hidden when checking a paper.");
@@ -355,8 +384,8 @@ await test("Check paper: with no marks given the request says 5 per question is 
     sent = r.request().postDataJSON();
     return json(r, { ...answer, text: "# Paper check: x\n\n**Total: 5 / 5 (100%) · Grade: A+**", sources: [], checks: [] });
   });
-  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
-  await page.getByRole("radio", { name: /Check paper/ }).click();
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
+  await openTool(page, "Check a paper");
   await page.locator("textarea").fill("1) 12 x 15 = 180");
   await page.getByRole("button", { name: /^Generate$/ }).click();
   await page.getByTestId("paper-score").waitFor({ timeout: 10000 });
@@ -371,7 +400,7 @@ await test("Ask: an attached photo shows, can be removed, and goes with the ques
     sentPhotos = (r.request().postDataJSON().photos ?? []).length;
     return json(r, { ...answer, text: "Plants make food from sunlight." });
   });
-  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
   await page.locator("input[type=file]").setInputFiles({ name: "homework.jpg", mimeType: "image/jpeg", buffer: tinyJpeg });
   await page.getByRole("button", { name: "Remove page 1" }).waitFor({ timeout: 15000 });
   await page.getByRole("button", { name: "Remove page 1" }).click();
@@ -390,7 +419,7 @@ await test("Ask: photos attached one after another, before the first is read, ar
   // A big, detailed first photo takes a moment to shrink, so the second arrives while it is still being read.
   const bigJpeg = await sharp({ create: { width: 3000, height: 4000, channels: 3, noise: { type: "gaussian", mean: 128, sigma: 60 } } }).jpeg({ quality: 95 }).toBuffer();
   const otherJpeg = await sharp({ create: { width: 320, height: 420, channels: 3, background: "#ffe0a0" } }).jpeg().toBuffer();
-  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
   const input = page.locator("input[type=file]");
   // The second is chosen straight away, while the first is still being read.
   await input.setInputFiles({ name: "first.jpg", mimeType: "image/jpeg", buffer: bigJpeg });
@@ -428,7 +457,7 @@ await test("Ask: a long PDF lets you choose its pages (say 11 to 16), and Genera
     sentPhotos = (r.request().postDataJSON().photos ?? []).length;
     return json(r, { ...answer, text: "Exercise answered." });
   });
-  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
   await page.locator("input[type=file]").setInputFiles({ name: "exercise.pdf", mimeType: "application/pdf", buffer: blankPdf(30) });
   const picker = page.getByRole("group", { name: "Choose pages of exercise.pdf" });
   await picker.getByText(/has 30 pages/).waitFor({ timeout: 30000 });
@@ -449,7 +478,7 @@ await test("Ask: a long PDF lets you choose its pages (say 11 to 16), and Genera
 
 await test("Ask: a long PDF can be skipped", async (page, ctx) => {
   await baseRoutes(ctx);
-  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
   await page.locator("input[type=file]").setInputFiles({ name: "big.pdf", mimeType: "application/pdf", buffer: blankPdf(14) });
   const picker = page.getByRole("group", { name: "Choose pages of big.pdf" });
   await picker.waitFor({ timeout: 30000 });
@@ -460,7 +489,7 @@ await test("Ask: a long PDF can be skipped", async (page, ctx) => {
 
 await test("Ask: turning every book off explains why Generate is off", async (page, ctx) => {
   await baseRoutes(ctx);
-  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: /Your 1 book/ }).click();
   await page.getByRole("button", { name: "None" }).click();
   await page.getByText(/no book is selected/i).first().waitFor({ timeout: 5000 });
@@ -1655,7 +1684,7 @@ await test("Install as an app: the manifest, icons, service worker and offline p
 await test("Install as an app: an open window says when a newer version is live, and Reload loads it", async (page, ctx) => {
   await baseRoutes(ctx);
   await ctx.route("**/api/version", (r) => json(r, { build: "a-newer-build" }));
-  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
   await page.getByText("A new version of Syllabi is ready.").waitFor({ timeout: 8000 });
   let loads = 0;
   page.on("load", () => loads++);
@@ -1697,7 +1726,7 @@ await test("Report a problem: it captures what was typed, sent and received, sho
     }
     return json(r, { reports: [{ id: "x1", number: 3, title: "An older report", status: "fixed" }] });
   });
-  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
   await page.locator("textarea").fill("What is six times seven? password=hunter2");
   await page.getByRole("button", { name: /^Generate$/ }).click();
   await page.getByText("The answer is forty two.").first().waitFor({ timeout: 10000 });
@@ -1739,7 +1768,7 @@ await test("Report a problem: leaving out what is on the screen is respected, an
     posted = r.request().postDataJSON();
     return refuse ? json(r, { error: "You have raised 20 reports today, which is the most for one day. Try again tomorrow." }, 429) : json(r, { id: "x", number: 1 });
   });
-  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
   await page.locator("textarea").fill("a private question");
   await page.getByRole("button", { name: "Report a problem" }).click();
   const dialog = page.getByRole("dialog", { name: "Report a problem" });
