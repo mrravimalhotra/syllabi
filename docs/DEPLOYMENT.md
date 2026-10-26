@@ -67,6 +67,18 @@ update students set role = 'admin', active = true where email = '<your email>';
 npm ci && npm run lint && npm run build
 ```
 
+## Checks on GitHub (before anything goes live)
+
+Every push and pull request runs `.github/workflows/checks.yml` on GitHub: types, lint, unused code
+(knip), the practice and API tests, the production build, the browser tests and the database tests
+(every migration on a fresh PostgreSQL 16 with pgvector). No secrets are needed; outside services
+are faked. Results show on the repository's **Actions** tab and next to each commit.
+
+Vercel deploys whatever reaches `main`, so the order is: push to the work branch, wait for **Checks**
+to pass there, then push the same commit to `main`. To make GitHub enforce it, add a branch rule
+(Settings → Rules → Rulesets → target `main` → *Require status checks to pass*, choosing the three
+Checks jobs); then `main` only accepts commits whose checks passed.
+
 
 ## Optional: free backup AI services
 

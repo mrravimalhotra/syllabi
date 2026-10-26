@@ -1,5 +1,7 @@
 # Syllabi
 
+[![Checks](https://github.com/mrravimalhotra/syllabi/actions/workflows/checks.yml/badge.svg)](https://github.com/mrravimalhotra/syllabi/actions/workflows/checks.yml)
+
 A RAG-powered study assistant for **parents and tutors** (adults only) to
 prepare study material for school students: step-by-step solutions, revision
 notes, sample papers, and ad-hoc Q&A — grounded first in the student's own
