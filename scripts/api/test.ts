@@ -49,6 +49,7 @@ import * as followUp from "../../src/app/api/documents/[id]/follow-up/route";
 // The real answer pipeline (the routes above use a stand-in), with the AI faked: for the answer checker.
 import { runGeneration } from "../../src/lib/generation/pipeline";
 import { VERIFY_SYSTEM, parseProblems } from "../../src/lib/generation/verify";
+import { RERANK_SYSTEM, REWRITE_SYSTEM } from "../../src/lib/rag/refine";
 import { pageProgress, readQueuedPages } from "../../src/lib/ingestion/jobs";
 import type { Student } from "@/types/database";
 
@@ -444,7 +445,7 @@ fresh();
   ];
   rpcs.match_owner_chunks = () => [{ ...tables.chunks[0], similarity: 0.8 }];
   const ids = async (q: string) => (await retrieveContext(q, { ownerId: ME })).chunks.map((c) => c.id).join();
-  check("whole exercise: a plain question gets only the closest passage", (await ids("What is a prime number?")) === "p4a");
+  check("whole exercise: a plain question gets the closest passage, the rest of its page and the start of the next, none of anyone else's", (await ids("What is a prime number?")) === "p4a,p4b,p4c,p5a", await ids("What is a prime number?"));
 
   // Exact words: a passage the meaning-based search missed, holding the question's exact reference, is found too.
   const askedWords: string[][] = [];
@@ -454,13 +455,37 @@ fresh();
   };
   const both = await retrieveContext("Explain Ex 3.2 Q5 about primes", { ownerId: ME });
   check("word search: the question's key words are searched for exactly", askedWords[0]?.join() === "3.2,q5,primes", JSON.stringify(askedWords));
-  check("word search: a passage found only by its words joins the closest one", both.chunks.map((c) => c.id).sort().join() === "p4a,p6a", both.chunks.map((c) => c.id).join());
+  check("word search: a passage found only by its words joins the closest one (with its neighbours)", both.chunks.map((c) => c.id).sort().join() === "p4a,p4b,p4c,p5a,p6a", both.chunks.map((c) => c.id).join());
   check("word search: how sure the search was still comes from the closest match", both.stats.topSimilarity === 0.8 && !both.coverageLow, JSON.stringify(both.stats));
   rpcs.match_owner_chunks_text = () => {
     throw new Error("word index missing");
   };
-  check("word search: if it fails, the meaning-based search is used alone", (await ids("Explain Ex 3.2 Q5")) === "p4a");
+  check("word search: if it fails, the meaning-based search is used alone", (await ids("Explain Ex 3.2 Q5")) === "p4a,p4b,p4c,p5a");
   delete rpcs.match_owner_chunks_text;
+
+  // Better finding: the question is also searched in fuller words, and the candidates re-ranked by the AI.
+  const searchedFor: string[] = [];
+  rpcs.match_owner_chunks = () => {
+    searchedFor.push("meaning");
+    return [{ ...tables.chunks[0], similarity: 0.8 }, { ...tables.chunks[5], similarity: 0.7 }, ...[1, 2, 3, 4].map((i) => ({ ...tables.chunks[i], similarity: 0.6 - i / 100 }))].concat(
+      [6, 7, 8].map((i) => ({ ...row(`x${i}`, BOOK, 20 + i, 0), similarity: 0.5 }))
+    );
+  };
+  const seenPrompts: string[] = [];
+  fakeAi.reply = (req) => {
+    if (req.systemInstructions === REWRITE_SYSTEM) return { text: '{"queries":["prime numbers factors divisibility"]}' };
+    if (req.systemInstructions === RERANK_SYSTEM) {
+      seenPrompts.push((req as unknown as { prompt: string }).prompt);
+      return { text: '{"best":[2]}' };
+    }
+    return { text: "{}" };
+  };
+  const refined = await retrieveContext("What is a prime number?", { ownerId: ME });
+  check("better finding: the question and its fuller rewrite are both searched", searchedFor.length === 2, String(searchedFor.length));
+  check("better finding: the passage the re-ranker chose comes first, with its neighbours", refined.chunks[0].id === "p6a" && refined.chunks.some((c) => c.id === "p4a"), refined.chunks.map((c) => c.id).join());
+  check("better finding: the re-ranker reads each candidate with its page", seenPrompts[0]?.includes("(p.6)") === true);
+  fakeAi.reply = () => ({ text: "{}" });
+  rpcs.match_owner_chunks = () => [{ ...tables.chunks[0], similarity: 0.8 }];
   check("whole exercise: with no pages marked as Exercise, the match's page and the next five are added, in order, none of anyone else's", (await ids("Solve Exercise 4.1")) === "p4a,p4b,p4c,p5a,p5b,p6a", await ids("Solve Exercise 4.1"));
   check("whole exercise: a named page is fetched whole", (await ids("Do page 6")) === "p4a,p6a", await ids("Do page 6"));
 
@@ -665,7 +690,7 @@ fresh();
   check("whole books: it is recorded, and the books are judged covered", whole.stats.mode === "full" && whole.stats.books === 2 && whole.stats.totalChars > 100 && whole.coverageLow === false, JSON.stringify(whole.stats));
   check("whole books: the text given to the AI names the book of each passage", formatContext(whole.chunks).includes("— Geography Exercises — Page 2, p.2 — exercise"), formatContext(whole.chunks).slice(0, 200));
   const tight = await retrieveContext("What are the layers of the Earth?", { ownerId: ME, documentIds: [BOOK, BOOK2], fullContextChars: 50 });
-  check("whole books: when they don't fit, the closest passages are used (with book titles) and the size is recorded", tight.stats.mode === "search" && tight.chunks.length === 1 && tight.chunks[0].book === "Geography Textbook" && tight.stats.totalChars > 100, JSON.stringify(tight.stats));
+  check("whole books: when they don't fit, the closest passages are used (with book titles) and the size is recorded", tight.stats.mode === "search" && tight.chunks.map((c) => c.id).join() === "t2b,t2a" && tight.chunks.every((c) => c.book === "Geography Textbook") && tight.stats.totalChars > 100, JSON.stringify(tight.stats));
   const off = await retrieveContext("What are the layers of the Earth?", { ownerId: ME, documentIds: [BOOK] });
   check("whole books: with no budget given, nothing changes", off.stats.mode === "search");
   tables.chunks = [];
@@ -844,6 +869,8 @@ failures.length = 0;
   const calls: string[] = [];
   let verdicts: string[] = [];
   fakeAi.reply = (req) => {
+    // Finding the pages (a rewrite of the question) is not part of what is counted here.
+    if (req.systemInstructions === REWRITE_SYSTEM) return { text: '{"queries":[]}' };
     if (req.systemInstructions === VERIFY_SYSTEM) {
       calls.push("check");
       return { text: verdicts.shift() ?? '{"problems":[]}' };
@@ -880,6 +907,7 @@ failures.length = 0;
 
   calls.length = 0;
   fakeAi.reply = (req) => {
+    if (req.systemInstructions === REWRITE_SYSTEM) return { text: '{"queries":[]}' };
     calls.push(req.systemInstructions === VERIFY_SYSTEM ? "check" : "write");
     return { text: "# Paper check: Maths\n\n**Total: 5 / 5 (100%) · Grade: A1**" };
   };

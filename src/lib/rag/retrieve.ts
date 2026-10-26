@@ -3,7 +3,8 @@ import { embed, embedMany } from "@/lib/llm";
 import { handwritingIn, withoutHandwriting } from "@/lib/rag/handwriting";
 import { splitQuestions } from "@/lib/rag/split-questions";
 import { withWholePages } from "@/lib/rag/whole-pages";
-import { bestSimilarity, fuse, keyWords } from "@/lib/rag/key-words";
+import { bestSimilarity, fuse, fuseAll, keyWords } from "@/lib/rag/key-words";
+import { rerank, searchQueries, withNeighbours } from "@/lib/rag/refine";
 import { downloadFile } from "@/lib/storage";
 import type { CompletionImage } from "@/lib/llm/types";
 import type { MatchedChunk } from "@/types/database";
@@ -44,6 +45,8 @@ export interface RetrievalResult {
 }
 
 export const MATCH_COUNT = 8;
+// A single question: candidates gathered per search query, then re-ranked down to MATCH_COUNT.
+const CANDIDATES = 20;
 // Worksheets: matches per question, and the most passages sent in total.
 const MATCHES_PER_QUESTION = 4;
 const MAX_TOTAL_MATCHES = 48;
@@ -80,10 +83,16 @@ async function searchContext(typed: string, scope: RetrievalScope): Promise<Retr
   const query = withoutHandwriting(typed);
   const questions = splitQuestions(query);
   if (questions.length === 0) {
-    const { embedding } = await embed(query);
-    const found = await search(embedding, scope, MATCH_COUNT, query);
+    // The question as asked, and up to two fuller rewrites of it; their candidates are merged, re-ranked, and given their neighbours.
+    const [{ embedding }, rewrites] = await Promise.all([embed(query), searchQueries(query, scope.ownerId)]);
+    const rewriteEmbeddings = rewrites.length ? await embedMany(rewrites).catch(() => []) : [];
+    const lists = await Promise.all([
+      search(embedding, scope, CANDIDATES, query),
+      ...rewriteEmbeddings.map((e, i) => search(e.embedding, scope, CANDIDATES, rewrites[i])),
+    ]);
+    const found = await rerank(query, fuseAll(lists, CANDIDATES + 4), MATCH_COUNT, scope.ownerId);
     const topSimilarity = bestSimilarity(found);
-    return withSupport(await withWholePages(found, scope.askedFor ?? query, scope.ownerId), found.length === 0 || topSimilarity < COVERAGE_THRESHOLD, scope, found.length ? topSimilarity : null);
+    return withSupport(await withContext(found, scope.askedFor ?? query, scope.ownerId), found.length === 0 || topSimilarity < COVERAGE_THRESHOLD, scope, found.length ? topSimilarity : null);
   }
 
   const embeddings = await embedMany(questions);
@@ -106,7 +115,7 @@ async function searchContext(typed: string, scope: RetrievalScope): Promise<Retr
   // Coverage is low when at least half the questions found nothing close.
   const weak = perQuestion.filter((m) => bestSimilarity(m) < COVERAGE_THRESHOLD).length;
   const first = perQuestion[0] ?? [];
-  return withSupport(await withWholePages(chunks, scope.askedFor ?? query, scope.ownerId), chunks.length === 0 || weak * 2 >= perQuestion.length, scope, first.length ? bestSimilarity(first) : null);
+  return withSupport(await withContext(chunks, scope.askedFor ?? query, scope.ownerId), chunks.length === 0 || weak * 2 >= perQuestion.length, scope, first.length ? bestSimilarity(first) : null);
 }
 
 // Whole-exercise requests: how many of the exercise's questions are searched for support, how many passages each
@@ -157,6 +166,12 @@ async function withSupport(chunks: MatchedChunk[], coverageLow: boolean, scope: 
     coverageLow: weak * 2 >= lessons.length,
     stats: { ...stats, mode: "exercise", questions: questions.length, supportChunks: added.length },
   };
+}
+
+/** Whole exercise or named pages when asked for; otherwise the passages next to the best ones (see withNeighbours). */
+async function withContext(chunks: MatchedChunk[], askedFor: string, ownerId: string): Promise<MatchedChunk[]> {
+  const whole = await withWholePages(chunks, askedFor, ownerId);
+  return whole === chunks ? withNeighbours(chunks, ownerId) : whole;
 }
 
 /** The `count` best passages for a question: by meaning (vector search) and by its key words, merged. */

@@ -40,8 +40,13 @@ const RANK_OFFSET = 60;
 /** The meaning-based and exact-word results merged into one list of `count`, best first. */
 export function fuse(byMeaning: MatchedChunk[], byWords: MatchedChunk[], count: number): MatchedChunk[] {
   if (byWords.length === 0) return byMeaning.slice(0, count);
+  return fuseAll([byMeaning, byWords], count);
+}
+
+/** Several result lists (e.g. one per search query) merged into one of `count`, best first. */
+export function fuseAll(lists: MatchedChunk[][], count: number): MatchedChunk[] {
   const scores = new Map<string, { chunk: MatchedChunk; score: number }>();
-  for (const list of [byMeaning, byWords]) {
+  for (const list of lists) {
     list.forEach((chunk, rank) => {
       const entry = scores.get(chunk.id) ?? { chunk, score: 0 };
       entry.score += 1 / (RANK_OFFSET + rank + 1);
