@@ -83,7 +83,7 @@ const ANSWER_STYLE = `Answer layout, for questions to be answered (an exercise, 
   answered like an exercise, labelled with its box (**Warm-up Q1**, **Source Analysis Q2**),
   in the book's page order, before the exercise at the end. For a poem, doha or passage in
   the box, answer from that text (give its meaning when it is not in English). "Research" or
-  "find out" questions follow the opinion rule below.
+  "find out" questions follow the research rule below.
 - Exercises and worksheets restart the numbering under every heading (1 to 4 under Q1,
   again under Q2, then Q.I and Q.II on a worksheet). Always give the heading with the
   number, **Q3.2** or **Q.II.4 (b)**, so no two answers look alike. Use one numbering
@@ -106,8 +106,9 @@ const ANSWER_STYLE = `Answer layout, for questions to be answered (an exercise, 
   reason and an example from the book. An "[Answer space: N lines]" note shows how much
   room the school left: about one sentence per two lines, at least N lines when marks are
   not shown.
-- Match the following: the pairs, one per line (A → 3). Research or "find out" questions:
-  a short answer from general knowledge, marked as not from the book.
+- Match the following: the pairs, one per line (A → 3). Research, opinion, "find out" or
+  internet-research questions: a short, simple, age-appropriate answer from general knowledge,
+  marked as not from the book.
 - A statement that is not in the reference material (general knowledge you add to
   complete an answer) ends with "(general knowledge)". Everything unmarked must be from
   the pages. Never add a fact the pages do not support just to make an answer longer.
@@ -127,8 +128,6 @@ const ANSWER_STYLE = `Answer layout, for questions to be answered (an exercise, 
   ("Key reasons:"); a single idea stays as one or two sentences.
 - Optional: after a tricky or easily confused answer, one line "**Tip:** ..." as a memory
   hook. Leave it out otherwise.
-- Opinion, "find out" or internet-research questions: answer with simple, age-appropriate
-  general knowledge and say it is not from the book.
 - Scanned pages may have OCR slips: read through obvious garbling using context, without
   comment.`;
 
@@ -201,9 +200,22 @@ Write math in plain Unicode, not LaTeX or dollar signs: × ÷ √ ² ₹ ½ and 
 
 Do not add anything outside this layout.`;
 
+// Last, because models follow the end of their instructions most closely: what matters most, in order.
+const PRIORITIES = `Before you finish, check your answer against these, in this order of importance:
+1. Correct: every fact, name, date, number and step is right. Recompute every calculation; re-read
+   each question to be sure you answered what it asks, not a similar question.
+2. From the books: the answer follows the reference material and its terms; anything you add from
+   general knowledge is marked "(general knowledge)", and nothing is invented to fill a gap.
+3. Complete: every question and every part of a question is answered, in order.
+4. Honest: if the material does not contain what is needed, a figure is missing, or the question is
+   unclear, say so plainly instead of guessing.
+5. Then layout and length, as set out above.`;
+
 /** System instructions for a generation task, with the answer language and the child's class and board when known. */
 export function systemInstructionsFor(taskType: GenerationTaskType, level = "", language: AnswerLanguage = "auto"): string {
-  return [baseInstructions(taskType), languageLine(language), level].filter(Boolean).join("\n\n");
+  // The paper checker has its own fixed report layout, which must stay the very last thing it reads.
+  const priorities = taskType === "paper_check" ? "" : PRIORITIES;
+  return [baseInstructions(taskType), languageLine(language), level, priorities].filter(Boolean).join("\n\n");
 }
 
 function baseInstructions(taskType: GenerationTaskType): string {
