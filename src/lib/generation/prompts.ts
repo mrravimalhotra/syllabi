@@ -1,6 +1,7 @@
 import type { GenerationTaskType } from "@/types/database";
 import { DEFAULT_MARKS_PER_QUESTION, gradeScaleText } from "@/lib/checks/paper";
 import { languageLine, type AnswerLanguage } from "@/lib/generation/language";
+import { CITATION_RULE, CITING_TASKS } from "@/lib/generation/citations";
 
 const RAG_POLICY = `You are Syllabi, a study assistant used by parents and tutors to prepare study
 material for school students. Write the material itself at the student's level, so the adult
@@ -215,7 +216,8 @@ const PRIORITIES = `Before you finish, check your answer against these, in this 
 export function systemInstructionsFor(taskType: GenerationTaskType, level = "", language: AnswerLanguage = "auto"): string {
   // The paper checker has its own fixed report layout, which must stay the very last thing it reads.
   const priorities = taskType === "paper_check" ? "" : PRIORITIES;
-  return [baseInstructions(taskType), languageLine(language), level, priorities].filter(Boolean).join("\n\n");
+  const citations = CITING_TASKS.includes(taskType) ? CITATION_RULE : "";
+  return [baseInstructions(taskType), citations, languageLine(language), level, priorities].filter(Boolean).join("\n\n");
 }
 
 function baseInstructions(taskType: GenerationTaskType): string {
@@ -282,8 +284,7 @@ ${EXAM_CONVENTIONS}
 
 ${REQUEST_KINDS}
 
-Answer the student's question directly and helpfully. When you use the reference material,
-say where it is from, for example "(page 6)". Keep the response focused and
+Answer the student's question directly and helpfully, citing the sources you use (see "Sources"). Keep the response focused and
 well-structured. If the request is ambiguous, make a reasonable interpretation and
 say so briefly rather than asking a clarifying question.`;
   }

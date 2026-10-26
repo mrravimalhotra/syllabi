@@ -36,6 +36,8 @@ import { LOGIN_ID, internalEmail, looksLikeLoginId, normaliseLoginId } from "@/l
 import { readAnswerStream } from "@/lib/answer-stream";
 import { factChecks, parseJudge, scoreCase } from "../quality/grade";
 import { disagreements, numbersIn, parseFinals } from "@/lib/generation/second-solve";
+import { checkCitations, withPageReferences } from "@/lib/generation/citations";
+import type { MatchedChunk } from "@/types/database";
 import { BOARD_COLUMNS, BOARD_ROWS, makeBoardGame, makeFamilySheet, makeMatchSheet, schoolFamilySheet, schoolMatchSheet } from "@/lib/kindergarten/worksheets";
 import { BOARD_WORDS, CVC_WORDS, familiesOf, rimeOf, SIGHT_LEVELS, SIGHT_SETS, VOWELS } from "@/lib/kindergarten/words";
 
@@ -762,6 +764,20 @@ function q0(): Question {
   check(off.length === 1 && off[0].where === "Q2" && off[0].fromSecondSolution === true && off[0].problem.includes("x = 6"), "Second solution: a different result is reported for the fix step");
   check(disagreements([{ where: "Q3", final: "5/4" }], "**Ans:** 1 1/4") .length === 0, "Second solution: 5/4 and 1 1/4 are the same answer");
   check(parseFinals('{"answers":[{"where":"Q1","final":"65°"},{"where":"Q2","final":""}]}')?.length === 1 && parseFinals("nope") === null, "Second solution: final answers are read, empty ones left out");
+}
+{
+  // Citations: each "[S2]" must point at a passage that holds what it says, and becomes a page reference.
+  const chunk = (id: string, page: number, content: string, book = "Science"): MatchedChunk =>
+    ({ id, document_id: book, content, section_label: `Chapter ${page}`, page_number: page, source_type: "textbook", image_path: null, similarity: 0.8, book }) as MatchedChunk;
+  const passages = [chunk("a", 14, "Plants make glucose from carbon dioxide and water using sunlight; oxygen is released."), chunk("b", 52, "Acids and bases react in neutralisation to form a salt and water.")];
+  const good = "**Q1. What is photosynthesis?**\n**Ans:** Plants make glucose from carbon dioxide and water using sunlight, releasing oxygen. [S1]";
+  check(checkCitations(good, passages).every((c) => c.ok) && checkCitations(good, passages)[0]?.message.includes("All 1 page reference"), "Citations: a citation whose page holds the answer passes");
+  const wrong = "**Q1. What is photosynthesis?**\n**Ans:** Plants make glucose from carbon dioxide and water using sunlight, releasing oxygen. [S2]";
+  const doubted = checkCitations(wrong, passages);
+  check(doubted.length === 1 && !doubted[0].ok && doubted[0].message.startsWith("Q1 cites p. 52"), "Citations: a citation of the wrong page is doubted, naming the question and the page");
+  check(checkCitations("**Ans:** Something. [S9]", passages).some((c) => !c.ok && c.message.includes("source 9")), "Citations: a source number that is not in the material is caught");
+  check(withPageReferences(good, passages).endsWith("releasing oxygen. (p. 14)"), "Citations: marks become page references");
+  check(withPageReferences("Fact. [S1, S2]", [passages[0], chunk("c", 7, "x", "History")]) === "Fact. (Science, p. 14; History, p. 7)", "Citations: with several books, the book is named");
 }
 {
   // The quality test set's grading (scripts/quality), without the AI.

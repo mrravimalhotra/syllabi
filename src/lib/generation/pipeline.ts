@@ -8,6 +8,7 @@ import { checkQuota, QuotaExceededError } from "@/lib/quota";
 import { systemInstructionsFor } from "@/lib/generation/prompts";
 import { problemForRepair, reviewChecks, verifyAnswer, type VerifyProblem } from "@/lib/generation/verify";
 import { disagreements, solveAgain, type FinalAnswer } from "@/lib/generation/second-solve";
+import { CITING_TASKS, checkCitations, withPageReferences } from "@/lib/generation/citations";
 import { levelLine } from "@/lib/generation/level";
 import type { AnswerLanguage } from "@/lib/generation/language";
 import type { CompletionImage, CompletionResult } from "@/lib/llm/types";
@@ -311,7 +312,7 @@ export async function writeAndCheck(input: {
     usage: result.usage,
   });
 
-  const checked = await checkAndRepair({ taskType, studentId: student.id, request, result, photos, searchQuery, prompt, timings, onStage });
+  const checked = await checkAndRepair({ taskType, studentId: student.id, request, result, chunks, photos, searchQuery, prompt, timings, onStage });
   return { result: checked.result, checks: checked.checks };
 }
 
@@ -328,15 +329,18 @@ async function checkAndRepair(input: {
   studentId: string;
   request: DraftRequest;
   result: CompletionResult;
+  /** The passages the answer was written from, for checking its citations. */
+  chunks: MatchedChunk[];
   photos: CompletionImage[];
   searchQuery: string;
   prompt: string;
   timings: GenerationTimings;
   onStage?: (stage: AnswerStage) => void;
 }): Promise<{ result: CompletionResult; checks: AnswerCheck[] }> {
-  const { taskType, studentId, request, photos, searchQuery, prompt, timings, onStage } = input;
+  const { taskType, studentId, request, chunks, photos, searchQuery, prompt, timings, onStage } = input;
   let result = input.result;
-  const runChecks = (text: string) => answerChecks(taskType, text, searchQuery, prompt);
+  const cites = CITING_TASKS.includes(taskType);
+  const runChecks = (text: string) => [...answerChecks(taskType, text, searchQuery, prompt), ...(cites ? checkCitations(text, chunks) : [])];
   const runReview = async (text: string): Promise<VerifyProblem[] | null> => {
     // The paper checker's marking is checked by code (lib/checks/paper.ts); it has no book to check against.
     if (taskType === "paper_check") return null;
@@ -415,5 +419,7 @@ async function checkAndRepair(input: {
   }
   // What the independent check still finds is shown with the answer, so the parent knows what to look at.
   if (review) checks = [...checks, ...reviewChecks(review)];
+  // The checked "[S2]" marks become page references the parent can follow.
+  if (cites) result = { ...result, text: withPageReferences(result.text, chunks) };
   return { result, checks };
 }

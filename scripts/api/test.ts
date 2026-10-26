@@ -930,6 +930,20 @@ failures.length = 0;
   check("maths twice: a different result is fixed, and the fix agrees", calls.includes("fix") && out.text.includes("50 km/h") && !out.text.includes("450"), `${calls.join()} | ${out.text}`);
   check("maths twice: the fixed answer shows no doubt", out.checks.filter((c) => c.kind === "review").every((c) => c.ok), JSON.stringify(out.checks));
 
+  // Citations in the real pipeline: a wrong page is fixed, and the marks become page references.
+  calls.length = 0;
+  fakeAi.reply = (req) => {
+    if (req.systemInstructions === REWRITE_SYSTEM) return { text: '{"queries":[]}' };
+    if (req.systemInstructions === VERIFY_SYSTEM) return (calls.push("check"), { text: '{"problems":[]}' });
+    const fixing = (req as unknown as { prompt: string }).prompt.includes("Your draft answer below has these problems");
+    calls.push(fixing ? "fix" : "write");
+    return { text: `**Ans:** Akbar became emperor in 1556 at the age of 13. ${fixing ? "[S1]" : "[S4]"}` };
+  };
+  out = await runGeneration({ student: person(), taskType: "solution", prompt: "When did Akbar become emperor?" });
+  check("citations: an answer citing a source that is not there is fixed", calls.join() === "write,check,fix,check", calls.join());
+  check("citations: the answer shows the page it came from", out.text.endsWith("at the age of 13. (p. 12)") && !out.text.includes("[S"), out.text);
+  check("citations: the checked citation is listed with the answer", out.checks.some((c) => c.kind === "citation" && c.ok), JSON.stringify(out.checks));
+
   check("checker replies: problems are read, malformed ones left out", parseProblems('{"problems":[{"kind":"wrong","where":"Q2","problem":"x","fix":"y"},{"kind":"style","problem":"z"},{"kind":"missed","problem":""}]}')?.length === 1);
   check("checker replies: an unreadable reply is null, not an empty list", parseProblems("no json") === null && parseProblems('{"other":1}') === null);
   delete rpcs.match_owner_chunks;

@@ -93,7 +93,8 @@ export function GeneratingCard({
       {draft ? (
         // The first draft as it is written; the checked answer replaces it when done.
         <div className="max-h-[60vh] overflow-y-auto border-t border-slate-100 pt-4">
-          <Markdown text={draft} />
+          {/* Source marks ("[S2]") become page references once the answer is checked; until then they are hidden. */}
+          <Markdown text={draft.replace(/\s?\[S\s*\d+(?:\s*,\s*S?\s*\d+)*\]/g, "")} />
           {stage && STAGE_TEXT[stage] ? (
             <p className="mt-3 flex items-center gap-2 text-sm font-medium text-brand-700" data-stage={stage}>
               <Spinner className="h-4 w-4" /> {STAGE_TEXT[stage]}
