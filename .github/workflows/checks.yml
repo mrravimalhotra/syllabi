@@ -1,0 +1,74 @@
+# Runs on every push and pull request: the same checks a change must pass before it goes live
+# (types, lint, unused code, unit and API tests, the production build, the browser tests and the
+# database tests). None of them needs a secret: every outside service is faked.
+name: Checks
+
+on:
+  push:
+  pull_request:
+
+# A newer push to the same branch replaces a run still going.
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  code:
+    name: Types, lint, tests and build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Types
+        run: npx tsc --noEmit
+      - name: Lint
+        run: npm run lint
+      - name: Unused code
+        run: npx knip
+      - name: Practice and maths tests
+        run: npm run test:practice
+      - name: API tests
+        run: npm run test:api
+      - name: Production build
+        run: npm run build
+
+  browser:
+    name: Browser tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install Chromium
+        run: |
+          npx playwright-core install --with-deps chromium
+          echo "CHROMIUM_PATH=$(node -e "console.log(require('playwright-core').chromium.executablePath())")" >> "$GITHUB_ENV"
+      - name: Browser tests
+        run: npm run test:e2e
+
+  database:
+    name: Database tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL 16 with pgvector
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q postgresql-16 postgresql-16-pgvector
+      - name: Database tests (every migration, then the test suites)
+        run: bash scripts/test-db.sh
+        env:
+          PG_BIN: /usr/lib/postgresql/16/bin
