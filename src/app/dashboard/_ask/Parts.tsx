@@ -31,6 +31,7 @@ export function TimingNote({ timings }: { timings: NonNullable<GenerationResult[
     timings.loadingImagesMs > 0 ? `page images ${seconds(timings.loadingImagesMs)}` : null,
     timings.firstWordsMs !== null ? `first words after ${seconds(timings.firstWordsMs)}` : null,
     `AI writing ${seconds(timings.writingMs)}`,
+    timings.reviewMs ? `checking ${seconds(timings.reviewMs)}` : null,
     timings.repairMs > 0 ? `fixing after checks ${seconds(timings.repairMs)}` : null,
     `saving ${seconds(timings.savedMs)}`,
     timings.model,
@@ -38,7 +39,23 @@ export function TimingNote({ timings }: { timings: NonNullable<GenerationResult[
   return <p className="text-xs text-slate-400 print:hidden">{parts.join(" · ")}</p>;
 }
 
-export function GeneratingCard({ steps, draft, onStop }: { steps: { after: number; text: string }[]; draft: string; onStop: () => void }) {
+/** What the screen says once the draft is written and is being checked or fixed. */
+const STAGE_TEXT: Record<string, string> = {
+  checking: "Checking the answer against your books...",
+  fixing: "The check found something to correct. Fixing it...",
+};
+
+export function GeneratingCard({
+  steps,
+  draft,
+  stage,
+  onStop,
+}: {
+  steps: { after: number; text: string }[];
+  draft: string;
+  stage?: string | null;
+  onStop: () => void;
+}) {
   const [seconds, setSeconds] = useState(0);
   useEffect(() => {
     const timer = setInterval(() => setSeconds((s) => s + 1), 1000);
@@ -77,7 +94,13 @@ export function GeneratingCard({ steps, draft, onStop }: { steps: { after: numbe
         // The first draft as it is written; the checked answer replaces it when done.
         <div className="max-h-[60vh] overflow-y-auto border-t border-slate-100 pt-4">
           <Markdown text={draft} />
-          <p className="mt-3 text-xs text-slate-400">Still writing. Syllabi checks the answer when it finishes.</p>
+          {stage && STAGE_TEXT[stage] ? (
+            <p className="mt-3 flex items-center gap-2 text-sm font-medium text-brand-700" data-stage={stage}>
+              <Spinner className="h-4 w-4" /> {STAGE_TEXT[stage]}
+            </p>
+          ) : (
+            <p className="mt-3 text-xs text-slate-400">Still writing. Syllabi checks the answer when it finishes.</p>
+          )}
         </div>
       ) : (
         <div className="space-y-2.5">

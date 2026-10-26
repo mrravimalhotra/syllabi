@@ -38,6 +38,7 @@ export type GenerationResult = Answer & {
     loadingImagesMs: number;
     firstWordsMs: number | null;
     writingMs: number;
+    reviewMs?: number;
     repairMs: number;
     savedMs: number;
     model: string;

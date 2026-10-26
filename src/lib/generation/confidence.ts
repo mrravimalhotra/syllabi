@@ -247,6 +247,10 @@ function correctness(input: ConfidenceInput, fromBook: number, reasons: string[]
     reasons.push("Every calculation was checked by an exact calculator.");
   }
   if (input.checks.some((c) => c.kind === "coverage" && c.ok)) correct += 3;
+  if (input.checks.some((c) => c.kind === "review" && c.ok)) {
+    correct += 5;
+    reasons.push("An independent AI check against your books found no mistakes.");
+  }
   if (input.coverageLow && input.context.length > 0) {
     correct -= 10;
     reasons.push("Your books matched the question only weakly.");

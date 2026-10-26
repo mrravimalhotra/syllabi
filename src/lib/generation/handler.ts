@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { apiError, authenticate, errorResponse } from "@/lib/api";
-import { runGeneration } from "@/lib/generation/pipeline";
+import { runGeneration, type GenerationInput } from "@/lib/generation/pipeline";
 import { withImageUrls } from "@/lib/generation/sources";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { GenerationTaskType, SavedSource } from "@/types/database";
@@ -11,6 +11,9 @@ import { answerKey, findReusable } from "@/lib/generation/reuse";
 import { parseGenerationRequest, type GenerationRequest } from "@/lib/generation/request";
 import { parseFollowUps } from "@/lib/generation/follow-up";
 import type { GeneratedDocumentRow, Student } from "@/types/database";
+
+/** How a streamed answer reports its progress: draft pieces, a restart, and the checking stages. */
+type StreamHooks = Pick<GenerationInput, "onText" | "onRestart" | "onStage">;
 
 const GENERATE_FAILED = "Couldn't make your answer. Wait a minute and try again. If it keeps happening, tell the person who runs Syllabi.";
 
@@ -46,8 +49,7 @@ async function makeAndSaveAnswer(
   req: GenerationRequest,
   cacheKey: string,
   requestStart: number,
-  onText?: (delta: string) => void,
-  onRestart?: () => void
+  hooks: StreamHooks = {}
 ) {
   const result = await runGeneration({
     student,
@@ -57,8 +59,7 @@ async function makeAndSaveAnswer(
     documentIds: req.documentIds,
     photos: req.photos,
     language: req.language,
-    onText,
-    onRestart,
+    ...hooks,
   });
   const title = titleFor(req.typedPrompt, req.hasAttachedText, taskType);
   const savedSources: SavedSource[] = result.sources.map((s) => ({
@@ -115,19 +116,17 @@ async function makeAndSaveAnswer(
  * object per line), then a final "done" line with the checked answer. Errors
  * after this point arrive as an "error" line.
  */
-function streamAnswer(
-  taskType: GenerationTaskType,
-  produce: (onText: (delta: string) => void, onRestart: () => void) => Promise<unknown>
-): Response {
+function streamAnswer(taskType: GenerationTaskType, produce: (hooks: StreamHooks) => Promise<unknown>): Response {
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const send = (line: Record<string, unknown>) => controller.enqueue(encoder.encode(`${JSON.stringify(line)}\n`));
       try {
-        const payload = await produce(
-          (delta) => send({ type: "text", delta }),
-          () => send({ type: "reset" })
-        );
+        const payload = await produce({
+          onText: (delta) => send({ type: "text", delta }),
+          onRestart: () => send({ type: "reset" }),
+          onStage: (stage) => send({ type: "stage", stage }),
+        });
         send({ type: "done", answer: payload });
       } catch (err) {
         const failure = errorResponse(err, `generate ${taskType}`, GENERATE_FAILED);
@@ -177,8 +176,7 @@ export function createGenerationRoute(taskType: GenerationTaskType) {
         if (saved) return NextResponse.json(await savedAnswerResponse(saved));
       }
 
-      const produce = (onText?: (delta: string) => void, onRestart?: () => void) =>
-        makeAndSaveAnswer(taskType, student, req, cacheKey, requestStart, onText, onRestart);
+      const produce = (hooks?: StreamHooks) => makeAndSaveAnswer(taskType, student, req, cacheKey, requestStart, hooks);
       return req.stream ? streamAnswer(taskType, produce) : NextResponse.json(await produce());
     } catch (err) {
       return errorResponse(err, `generate ${taskType}`, GENERATE_FAILED);

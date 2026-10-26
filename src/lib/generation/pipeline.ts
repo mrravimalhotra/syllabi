@@ -6,9 +6,10 @@ import { scoreAnswer, type AnswerConfidence } from "@/lib/generation/confidence"
 import { retrieveContext, formatContext, loadSourceImages, type RetrievalResult } from "@/lib/rag/retrieve";
 import { checkQuota, QuotaExceededError } from "@/lib/quota";
 import { systemInstructionsFor } from "@/lib/generation/prompts";
+import { problemForRepair, reviewChecks, verifyAnswer, type VerifyProblem } from "@/lib/generation/verify";
 import { levelLine } from "@/lib/generation/level";
 import type { AnswerLanguage } from "@/lib/generation/language";
-import type { CompletionImage } from "@/lib/llm/types";
+import type { CompletionImage, CompletionResult } from "@/lib/llm/types";
 import type { AnswerCheck, GenerationTaskType, MatchedChunk, Student } from "@/types/database";
 import { checkArithmetic } from "@/lib/checks/arithmetic";
 import { checkPaperMarks, withoutStudentWork } from "@/lib/checks/paper";
@@ -35,7 +36,12 @@ export interface GenerationInput {
   onText?: (delta: string) => void;
   /** The draft so far is discarded (the answer starts again). */
   onRestart?: () => void;
+  /** The finished draft is being checked, or being fixed after the checks, so a screen can say so. */
+  onStage?: (stage: AnswerStage) => void;
 }
+
+/** What happens after the first draft is written. */
+type AnswerStage = "checking" | "fixing";
 
 export interface GenerationOutput {
   text: string;
@@ -66,7 +72,9 @@ interface GenerationTimings {
   firstWordsMs: number | null;
   /** The AI writing the whole first draft. */
   writingMs: number;
-  /** Fixing a draft that failed Syllabi's checks (0 when it passed). */
+  /** The independent AI check of the draft. */
+  reviewMs: number;
+  /** Fixing a draft that failed Syllabi's checks, and checking the fix (0 when it passed). */
   repairMs: number;
   /** Which service and model wrote the answer. */
   model: string;
@@ -116,6 +124,7 @@ export async function runGeneration({
   language = "auto",
   onText,
   onRestart,
+  onStage,
 }: GenerationInput): Promise<GenerationOutput> {
   // The allowance check runs alongside the (cheap) photo reading and search
   // below instead of before them, and still stops the request before the
@@ -126,6 +135,7 @@ export async function runGeneration({
     loadingImagesMs: 0,
     firstWordsMs: null,
     writingMs: 0,
+    reviewMs: 0,
     repairMs: 0,
     model: "",
   };
@@ -210,37 +220,9 @@ export async function runGeneration({
     usage: result.usage,
   });
 
-  // Code checks every answer: calculations are recomputed, a paper's marks
-  // added up and its answer key compared, a worksheet's questions counted.
-  // Only when something is wrong is the AI asked (once) to correct it.
-  const runChecks = (text: string) => answerChecks(taskType, text, searchQuery, prompt);
-  let checks = runChecks(result.text);
-  const problems = checks.filter((c) => !c.ok);
-  if (problems.length > 0) {
-    const repairStart = Date.now();
-    const repaired = await generateCompletion({
-      ...request,
-      prompt:
-        `${request.prompt}\n\nYour draft answer below has these problems, found by Syllabi's checks (an exact calculator and a marks counter):\n` +
-        problems.map((c) => `- ${c.message}`).join("\n") +
-        "\nWrite the complete answer again with these fixed, and anything that follows from them. Keep everything else the same." +
-        `\n\nDraft answer:\n${result.text}`,
-    });
-    await recordTokenUsage({
-      studentId: student.id,
-      taskType,
-      provider: repaired.provider,
-      model: repaired.model,
-      usage: repaired.usage,
-    });
-    timings.repairMs = Date.now() - repairStart;
-    const recheck = runChecks(repaired.text);
-    // Keep the repair only if it really has fewer problems.
-    if (recheck.filter((c) => !c.ok).length < problems.length) {
-      result = { ...repaired, searchSuggestionsHtml: repaired.searchSuggestionsHtml ?? result.searchSuggestionsHtml };
-      checks = recheck;
-    }
-  }
+  const checked = await checkAndRepair({ taskType, studentId: student.id, request, result, photos, searchQuery, prompt, timings, onStage });
+  result = checked.result;
+  const checks = checked.checks;
 
   // How much of a marking comes from the books is not a question: there are no books in it.
   const confidence =
@@ -293,4 +275,90 @@ async function transcribePhotos(studentId: string, photos: CompletionImage[]): P
     usage: result.usage,
   });
   return result.text.trim();
+}
+
+type DraftRequest = Parameters<typeof generateCompletion>[0] & { prompt: string; context: string };
+
+/**
+ * Checks a finished draft and fixes it when needed. Every answer is checked twice over: by code (calculations recomputed, a paper's marks added up and its
+ * answer key compared, a worksheet's questions counted) and by a second, independent AI reading against
+ * the books (wrong facts, missed parts, unsupported claims). Only when something is wrong is the AI asked
+ * (once) to correct it; the correction is checked the same way and kept only if it has fewer problems.
+ */
+async function checkAndRepair(input: {
+  taskType: GenerationTaskType;
+  studentId: string;
+  request: DraftRequest;
+  result: CompletionResult;
+  photos: CompletionImage[];
+  searchQuery: string;
+  prompt: string;
+  timings: GenerationTimings;
+  onStage?: (stage: AnswerStage) => void;
+}): Promise<{ result: CompletionResult; checks: AnswerCheck[] }> {
+  const { taskType, studentId, request, photos, searchQuery, prompt, timings, onStage } = input;
+  let result = input.result;
+  const runChecks = (text: string) => answerChecks(taskType, text, searchQuery, prompt);
+  const runReview = async (text: string): Promise<VerifyProblem[] | null> => {
+    // The paper checker's marking is checked by code (lib/checks/paper.ts); it has no book to check against.
+    if (taskType === "paper_check") return null;
+    const verified = await verifyAnswer({ taskType, question: request.prompt, answer: text, context: request.context, photos });
+    if (!verified) return null;
+    await recordTokenUsage({
+      studentId,
+      taskType,
+      provider: verified.result.provider,
+      model: verified.result.model,
+      usage: verified.result.usage,
+    });
+    return verified.problems;
+  };
+  const reviewStart = Date.now();
+  if (taskType !== "paper_check") onStage?.("checking");
+  let checks = runChecks(result.text);
+  let review = await runReview(result.text);
+  timings.reviewMs = Date.now() - reviewStart;
+  const problems = checks.filter((c) => !c.ok);
+  const problemCount = (failed: AnswerCheck[], found: VerifyProblem[] | null) => failed.length + (found?.length ?? 0);
+  if (problemCount(problems, review) > 0) {
+    const repairStart = Date.now();
+    onStage?.("fixing");
+    const found = [
+      ...problems.map((c) => `- ${c.message} (found by Syllabi's exact calculator or marks counter)`),
+      ...(review ?? []).map((p) => `- ${problemForRepair(p)} (found by an independent examiner reading the answer against the books)`),
+    ];
+    const repaired = await generateCompletion({
+      ...request,
+      prompt:
+        `${request.prompt}\n\nYour draft answer below has these problems:\n${found.join("\n")}\n` +
+        "Check each one against the reference material. Fix every real problem, and anything that follows from it; for a claim the books do not support, " +
+        'remove it or mark it "(general knowledge)". If a reported problem is not actually a mistake, keep that part as it is. ' +
+        "Write the complete answer again, keeping everything else the same." +
+        `\n\nDraft answer:\n${result.text}`,
+    });
+    await recordTokenUsage({
+      studentId,
+      taskType,
+      provider: repaired.provider,
+      model: repaired.model,
+      usage: repaired.usage,
+    });
+    const recheck = runChecks(repaired.text);
+    const rereview = await runReview(repaired.text);
+    timings.repairMs = Date.now() - repairStart;
+    // Keep the repair only if it really has fewer problems (a review that could not run counts as unchanged).
+    if (
+      problemCount(
+        recheck.filter((c) => !c.ok),
+        rereview ?? review
+      ) < problemCount(problems, review)
+    ) {
+      result = { ...repaired, searchSuggestionsHtml: repaired.searchSuggestionsHtml ?? result.searchSuggestionsHtml };
+      checks = recheck;
+      review = rereview ?? review;
+    }
+  }
+  // What the independent check still finds is shown with the answer, so the parent knows what to look at.
+  if (review) checks = [...checks, ...reviewChecks(review)];
+  return { result, checks };
 }

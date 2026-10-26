@@ -33,6 +33,8 @@ export function useGeneration(onFinished: () => void) {
   const [lastBody, setLastBody] = useState<Record<string, unknown> | null>(null);
   // The answer as written so far (streamed), shown while it is still being made.
   const [draft, setDraft] = useState("");
+  // After the draft is written: "checking" it, or "fixing" what the checks found.
+  const [stage, setStage] = useState<string | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
   // A ref, not state: two quick triggers (double click, Ctrl+Enter) in the same moment would both still see the old state.
@@ -95,6 +97,7 @@ export function useGeneration(onFinished: () => void) {
           draftRef.current = "";
           setDraft("");
         },
+        onStage: setStage,
       });
     }
     const data = await res.json().catch(() => ({}));
@@ -111,6 +114,7 @@ export function useGeneration(onFinished: () => void) {
     setLastBody(body);
     draftRef.current = "";
     setDraft("");
+    setStage(null);
     const controller = new AbortController();
     abortRef.current = controller;
     let answered = false;
@@ -182,6 +186,7 @@ export function useGeneration(onFinished: () => void) {
     setOpenWorked,
     workedInQuestion,
     draft,
+    stage,
     resultRef,
     isBusy: () => busyRef.current,
     stop: () => abortRef.current?.abort(),

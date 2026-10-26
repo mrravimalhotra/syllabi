@@ -3,7 +3,7 @@ import type { WorkedProblem } from "@/lib/worked/types";
 
 /** One check Syllabi's own code made on an answer (no AI involved). */
 export interface AnswerCheck {
-  kind: "calculation" | "marks" | "coverage" | "options" | "answer-key";
+  kind: "calculation" | "marks" | "coverage" | "options" | "answer-key" | "review";
   ok: boolean;
   /** Plain-language result, e.g. "Marks add up to 80" or "12 × 15 = 180". */
   message: string;

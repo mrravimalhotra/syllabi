@@ -33,6 +33,7 @@ import { parseStudyPackRequest } from "@/lib/study-pack/request";
 import { parseProblem } from "@/lib/worked/parse";
 import { describeOutcome } from "@/app/dashboard/library/_parts/upload-book";
 import { LOGIN_ID, internalEmail, looksLikeLoginId, normaliseLoginId } from "@/lib/login-id";
+import { readAnswerStream } from "@/lib/answer-stream";
 import { BOARD_COLUMNS, BOARD_ROWS, makeBoardGame, makeFamilySheet, makeMatchSheet, schoolFamilySheet, schoolMatchSheet } from "@/lib/kindergarten/worksheets";
 import { BOARD_WORDS, CVC_WORDS, familiesOf, rimeOf, SIGHT_LEVELS, SIGHT_SETS, VOWELS } from "@/lib/kindergarten/words";
 
@@ -739,6 +740,15 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
 }
 function q0(): Question {
   return { task: "solution", prompt: "", totalMarks: "80", marksEach: "5", language: "auto", packBookId: "", bookIds: [], photos: [], docs: [] };
+}
+
+{
+  // A streamed answer: draft pieces, then the checking stages, then the checked answer.
+  const lines = [{ type: "text", delta: "Draft" }, { type: "stage", stage: "checking" }, { type: "stage", stage: "fixing" }, { type: "done", answer: { text: "Checked" } }];
+  const body = new Response(lines.map((l) => JSON.stringify(l)).join("\n") + "\n").body!;
+  const seen: string[] = [];
+  const answer = await readAnswerStream<{ text: string }>(body, { onText: (d) => seen.push(`text:${d}`), onReset: () => seen.push("reset"), onStage: (st) => seen.push(`stage:${st}`) });
+  check(seen.join() === "text:Draft,stage:checking,stage:fixing" && answer.text === "Checked", "A streamed answer reports the checking stages, then gives the checked answer");
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

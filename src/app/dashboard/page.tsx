@@ -213,7 +213,7 @@ export default function DashboardPage() {
       <Messages blocked={generation.loading ? null : blocked} error={error} notice={notice} />
 
       {generation.loading && (
-        <GeneratingCard steps={isPack ? PACK_WAIT_STEPS : WAIT_STEPS} draft={generation.draft} onStop={generation.stop} />
+        <GeneratingCard steps={isPack ? PACK_WAIT_STEPS : WAIT_STEPS} draft={generation.draft} stage={generation.stage} onStop={generation.stop} />
       )}
 
       <ResultSection

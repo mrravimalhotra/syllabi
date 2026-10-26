@@ -46,6 +46,9 @@ import * as rewards from "../../src/app/api/rewards/route";
 import * as bookPages from "../../src/app/api/library/[id]/pages/route";
 import * as packEdit from "../../src/app/api/documents/[id]/pack/route";
 import * as followUp from "../../src/app/api/documents/[id]/follow-up/route";
+// The real answer pipeline (the routes above use a stand-in), with the AI faked: for the answer checker.
+import { runGeneration } from "../../src/lib/generation/pipeline";
+import { VERIFY_SYSTEM, parseProblems } from "../../src/lib/generation/verify";
 import { pageProgress, readQueuedPages } from "../../src/lib/ingestion/jobs";
 import type { Student } from "@/types/database";
 
@@ -831,6 +834,61 @@ failures.length = 0;
   const stored = tables.generated_documents[0] as { pack: typeof pack; pack_version: number; content: string };
   check("pack edits: two edits at once both succeed", one.status === 200 && two.status === 200, `${one.status} ${two.status}`);
   check("pack edits: neither undoes the other", stored.pack.textbookQuestions[0].answer === "New first" && stored.pack.textbookQuestions[1].answer === "New second" && stored.pack_version === 2, JSON.stringify(stored.pack.textbookQuestions));
+  fresh();
+}
+{
+  // The independent answer checker, in the real pipeline.
+  fresh();
+  tables.documents = [{ id: "bk", owner_id: ME, title: "History", status: "ready" }];
+  rpcs.match_owner_chunks = () => [{ id: "c1", document_id: "bk", content: "Akbar became emperor in 1556 at the age of 13.", section_label: "Chapter 2", page_number: 12, source_type: "textbook", image_path: null, similarity: 0.82 }];
+  const calls: string[] = [];
+  let verdicts: string[] = [];
+  fakeAi.reply = (req) => {
+    if (req.systemInstructions === VERIFY_SYSTEM) {
+      calls.push("check");
+      return { text: verdicts.shift() ?? '{"problems":[]}' };
+    }
+    const fixing = (req as unknown as { prompt: string }).prompt.includes("Your draft answer below has these problems");
+    calls.push(fixing ? "fix" : "write");
+    return { text: fixing ? "**Ans:** Akbar became emperor in 1556." : "**Ans:** Akbar became emperor in 1605." };
+  };
+  const stages: string[] = [];
+  const ask = () => runGeneration({ student: person(), taskType: "solution", prompt: "When did Akbar become emperor?", onStage: (s) => stages.push(s) });
+
+  verdicts = ['{"problems":[]}'];
+  let out = await ask();
+  check("checker: a sound answer is checked once, and kept as written", calls.join() === "write,check" && out.text.includes("1605"), calls.join());
+  check("checker: its clean result is shown with the answer and raises confidence", out.checks.some((c) => c.kind === "review" && c.ok) && (out.confidence?.reasons ?? []).some((r) => r.includes("independent AI check")), JSON.stringify(out.checks));
+
+  calls.length = 0;
+  stages.length = 0;
+  verdicts = ['{"problems":[{"kind":"wrong","where":"Q1","problem":"The year is 1605, but the book says 1556.","fix":"1556"}]}', '{"problems":[]}'];
+  out = await ask();
+  check("checker: a wrong answer is fixed and the fix checked again", calls.join() === "write,check,fix,check" && out.text.includes("1556"), calls.join());
+  check("checker: the screen is told it is checking, then fixing", stages.join() === "checking,fixing", stages.join());
+  check("checker: the fixed answer shows a clean check", out.checks.filter((c) => c.kind === "review").every((c) => c.ok), JSON.stringify(out.checks));
+
+  calls.length = 0;
+  verdicts = ['{"problems":[{"kind":"missed","where":"Q1","problem":"The age is not given.","fix":"At 13."}]}', '{"problems":[{"kind":"missed","where":"Q1","problem":"The age is not given.","fix":"At 13."}]}'];
+  out = await ask();
+  check("checker: a fix that is no better is not kept, and the doubt is shown to the parent", out.text.includes("1605") && out.checks.some((c) => c.kind === "review" && !c.ok && c.message.includes("Not answered: Q1")), JSON.stringify(out.checks));
+
+  calls.length = 0;
+  verdicts = ["sorry, I can't"];
+  out = await ask();
+  check("checker: an unreadable check never holds the answer back", calls.join() === "write,check" && out.text.includes("1605") && !out.checks.some((c) => c.kind === "review"), calls.join());
+
+  calls.length = 0;
+  fakeAi.reply = (req) => {
+    calls.push(req.systemInstructions === VERIFY_SYSTEM ? "check" : "write");
+    return { text: "# Paper check: Maths\n\n**Total: 5 / 5 (100%) · Grade: A1**" };
+  };
+  await runGeneration({ student: person(), taskType: "paper_check", prompt: "Mark this" });
+  check("checker: a marked paper is not sent to it (code checks the marks)", !calls.includes("check"), calls.join());
+
+  check("checker replies: problems are read, malformed ones left out", parseProblems('{"problems":[{"kind":"wrong","where":"Q2","problem":"x","fix":"y"},{"kind":"style","problem":"z"},{"kind":"missed","problem":""}]}')?.length === 1);
+  check("checker replies: an unreadable reply is null, not an empty list", parseProblems("no json") === null && parseProblems('{"other":1}') === null);
+  delete rpcs.match_owner_chunks;
   fresh();
 }
 {

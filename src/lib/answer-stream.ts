@@ -6,7 +6,7 @@ class AnswerStreamError extends Error {}
 
 export async function readAnswerStream<T>(
   body: ReadableStream<Uint8Array>,
-  handlers: { onText: (delta: string) => void; onReset: () => void }
+  handlers: { onText: (delta: string) => void; onReset: () => void; onStage?: (stage: string) => void }
 ): Promise<T> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
@@ -15,7 +15,7 @@ export async function readAnswerStream<T>(
 
   const handleLine = (line: string) => {
     if (!line.trim()) return;
-    let event: { type?: string; delta?: string; answer?: T; error?: string };
+    let event: { type?: string; delta?: string; stage?: string; answer?: T; error?: string };
     try {
       event = JSON.parse(line);
     } catch {
@@ -23,6 +23,7 @@ export async function readAnswerStream<T>(
     }
     if (event.type === "text" && typeof event.delta === "string") handlers.onText(event.delta);
     else if (event.type === "reset") handlers.onReset();
+    else if (event.type === "stage" && typeof event.stage === "string") handlers.onStage?.(event.stage);
     else if (event.type === "done" && event.answer) done = event.answer;
     else if (event.type === "error") throw new AnswerStreamError(event.error || "Couldn't make your answer. Wait a minute and try again.");
   };
