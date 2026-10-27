@@ -65,6 +65,7 @@ export async function DELETE(request: Request) {
     await deletePrefix(`sources/${book.id}/`).catch((err) => console.error("[me DELETE] book images", book.id, err));
   }
   await deletePrefix(`generated/${student.id}/`).catch((err) => console.error("[me DELETE] old PDFs", err));
+  await deletePrefix(`homework/${student.id}/`).catch((err) => console.error("[me DELETE] class diary pages", err));
 
   // Finally the sign-in itself.
   const { error: authError } = await admin.auth.admin.deleteUser(student.id);

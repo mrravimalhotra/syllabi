@@ -24,6 +24,7 @@ class Query implements PromiseLike<Result> {
   private filters: ((r: Row) => boolean)[] = [];
   private op: "select" | "insert" | "upsert" | "update" | "delete" = "select";
   private conflict: string[] = ["id"];
+  private ignoreDuplicates = false;
   private from = 0;
   private sorts: { col: string; ascending: boolean }[] = [];
   private payload: Row | Row[] | null = null;
@@ -43,7 +44,13 @@ class Query implements PromiseLike<Result> {
     return this;
   }
   insert(p: Row | Row[]) { this.op = "insert"; this.payload = p; return this; }
-  upsert(p: Row | Row[], opts: { onConflict?: string } = {}) { this.op = "upsert"; this.payload = p; this.conflict = (opts.onConflict ?? "id").split(","); return this; }
+  upsert(p: Row | Row[], opts: { onConflict?: string; ignoreDuplicates?: boolean } = {}) {
+    this.op = "upsert";
+    this.payload = p;
+    this.conflict = (opts.onConflict ?? "id").split(",");
+    this.ignoreDuplicates = opts.ignoreDuplicates ?? false;
+    return this;
+  }
   update(p: Row) { this.op = "update"; this.payload = p; return this; }
   delete() { this.op = "delete"; return this; }
   eq(col: string, val: unknown) { this.filters.push((r) => r[col] === val); return this; }
@@ -80,10 +87,18 @@ class Query implements PromiseLike<Result> {
       rows.push(...result);
     } else if (this.op === "upsert") {
       const items = Array.isArray(this.payload) ? this.payload : [this.payload!];
+      // Like the database: a row already there is updated (or, with ignoreDuplicates, left alone and not returned).
       for (const item of items) {
         const same = rows.find((r) => this.conflict.every((k) => r[k] === item[k]));
-        if (same) Object.assign(same, item);
-        else rows.push({ ...item });
+        if (same && this.ignoreDuplicates) continue;
+        if (same) {
+          Object.assign(same, item);
+          result.push(same);
+        } else {
+          const row = { id: nextId(), created_at: new Date().toISOString(), ...item };
+          rows.push(row);
+          result.push(row);
+        }
       }
     } else if (this.op === "update") {
       result = matches();
