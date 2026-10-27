@@ -27,8 +27,9 @@ export function MenuGroup({ title, children }: { title: string; children: ReactN
 function Picture({ emoji, tone, size = "md" }: { emoji: string; tone: Tone; size?: "md" | "lg" }) {
   return (
     <span
+      data-tone={tone}
       className={cx(
-        "flex shrink-0 items-center justify-center rounded-2xl",
+        "tile-picture flex shrink-0 items-center justify-center rounded-2xl",
         TILE[tone],
         size === "lg" ? "h-20 w-20 text-5xl" : "h-14 w-14 text-3xl"
       )}
