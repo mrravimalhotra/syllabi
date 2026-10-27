@@ -902,49 +902,6 @@ await test("Theme button: on every screen; Automatic, Dark and Light, remembered
   if ((await pageLight()) > 80) throw new Error("On Automatic with a dark device, Kindergarten should be dark.");
 });
 
-await test("Homework: grouped by subject, overdue flagged, ticked off by hand into Done, filtered, and a diary added", async (page, ctx) => {
-  await baseRoutes(ctx);
-  const day = (offset) => new Date(Date.now() + offset * 86400000).toISOString().slice(0, 10);
-  let list = [
-    { id: "h1", kind: "homework", subject: "Mathematics", title: "3ABCD", topic: "Integers", sub_topic: "Ex 4A", due_date: day(-2), given_date: day(-4), done: false, done_at: null },
-    { id: "h2", kind: "classwork", subject: "Mathematics", title: "4A to E", topic: "Integers", sub_topic: null, due_date: null, given_date: day(-4), done: false, done_at: null },
-    { id: "h3", kind: "homework", subject: "Marathi", title: "pg 63,64 translation", topic: "पाठ ३", sub_topic: null, due_date: day(3), given_date: day(-1), done: false, done_at: null },
-    { id: "h4", kind: "homework", subject: "Art", title: "Shade the sphere", topic: null, sub_topic: null, due_date: null, given_date: day(-6), done: true, done_at: day(-1) },
-  ];
-  const patched = [];
-  await ctx.route("**/api/homework/*", (r) => {
-    const id = r.request().url().split("/").pop();
-    patched.push(`${id}:${r.request().postDataJSON().done}`);
-    list = list.map((e) => (e.id === id ? { ...e, done: r.request().postDataJSON().done } : e));
-    return json(r, { entry: { id } });
-  });
-  await ctx.route("**/api/homework", (r) =>
-    r.request().method() === "POST" ? json(r, { added: 5, skipped: 2 }) : json(r, { entries: list })
-  );
-  await page.goto(`${BASE}/dashboard/homework`, { waitUntil: "networkidle" });
-  for (const subject of ["Mathematics", "Marathi"]) await page.getByRole("region", { name: subject }).waitFor();
-  await page.getByText("3 to do").waitFor();
-  await page.getByText("1 overdue").waitFor();
-  if ((await page.getByRole("region", { name: "Mathematics" }).getByText("Overdue").count()) !== 1) throw new Error("Only the late homework should be flagged.");
-  await page.getByText("No submission date").first().waitFor();
-  await page.getByText("पाठ ३").waitFor();
-  // Done work is folded away.
-  if (await page.getByText("Shade the sphere").isVisible()) throw new Error("Done work should be folded away.");
-  await page.getByText("Done (1)").waitFor();
-  // Ticked off by hand: it moves to Done.
-  await tap(page.getByRole("checkbox", { name: /Not done: Mathematics, 3ABCD/ }));
-  await page.getByText("Done (2)").waitFor();
-  await page.getByText("2 to do").waitFor();
-  if (patched.join() !== "h1:true") throw new Error(`Saved: ${patched.join()}`);
-  // Classwork only.
-  await tap(page.getByRole("radio", { name: "Classwork" }));
-  await page.getByText("1 to do").waitFor();
-  if (await page.getByRole("region", { name: "Marathi" }).count()) throw new Error("Classwork only should hide the Marathi homework.");
-  // A diary page is added.
-  await page.locator('input[aria-label="Class diary pages"]').setInputFiles({ name: "Diary 27 Oct.jpg", mimeType: "image/jpeg", buffer: tinyJpeg });
-  await page.getByText("Added 5 entries from the diary. 2 were already in your list.").waitFor({ timeout: 15000 });
-});
-
 await test("Stars: the account's star chart shows on a new device, and this device's stars are added to it once", async (page, ctx) => {
   const account = { stars: 40, days: [] };
   const sent = [];

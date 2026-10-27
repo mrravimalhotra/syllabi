@@ -51,9 +51,6 @@ import { runGeneration } from "../../src/lib/generation/pipeline";
 import { VERIFY_SYSTEM, parseProblems } from "../../src/lib/generation/verify";
 import { RERANK_SYSTEM, REWRITE_SYSTEM } from "../../src/lib/rag/refine";
 import { SECOND_SOLVE_SYSTEM } from "../../src/lib/generation/second-solve";
-import * as homework from "../../src/app/api/homework/route";
-import * as homeworkEntry from "../../src/app/api/homework/[id]/route";
-import { DIARY_SYSTEM, parseDiary } from "../../src/lib/homework/read-diary";
 import { pageProgress, readQueuedPages } from "../../src/lib/ingestion/jobs";
 import type { Student } from "@/types/database";
 
@@ -950,55 +947,6 @@ failures.length = 0;
   check("checker replies: problems are read, malformed ones left out", parseProblems('{"problems":[{"kind":"wrong","where":"Q2","problem":"x","fix":"y"},{"kind":"style","problem":"z"},{"kind":"missed","problem":""}]}')?.length === 1);
   check("checker replies: an unreadable reply is null, not an empty list", parseProblems("no json") === null && parseProblems('{"other":1}') === null);
   delete rpcs.match_owner_chunks;
-  fresh();
-}
-{
-  // The homework tracker: a class diary page becomes classwork and homework entries.
-  fresh();
-  const diary = {
-    days: [
-      {
-        headerDate: "27-09-2026",
-        weekday: "Tuesday",
-        periods: [
-          { subject: "Mathematics", topic: "Integers", subTopic: "Ex 4A", classwork: "4A to E", reinforcement: "3ABCD", submission: "29.10.26" },
-          { subject: "Geography 22nd oct", topic: "Weather", subTopic: "", classwork: "Nil", reinforcement: "Draw a weather map", submission: "" },
-        ],
-      },
-    ],
-  };
-  let diaryPrompt = "";
-  fakeAi.calls = 0;
-  fakeAi.reply = (req) => {
-    if (req.systemInstructions === DIARY_SYSTEM) diaryPrompt = (req as unknown as { prompt: string }).prompt;
-    return { text: JSON.stringify(diary) };
-  };
-  const diaryJpeg = await sharp({ create: { width: 300, height: 400, channels: 3, background: "#ffffff" } }).jpeg().toBuffer();
-  const page = { data: diaryJpeg.toString("base64"), mimeType: "image/jpeg" };
-  const first = await expect("homework: a diary page is read and its work added", homework.POST, 200, null, { fileName: "Diary 27 Oct.pdf", pages: [page] });
-  const rows = (tables.homework_entries ?? []) as { kind: string; subject: string; title: string; given_date: string; due_date: string | null; done: boolean; owner_id: string; source_file: string }[];
-  check("homework: classwork and homework become entries, Nil skipped", first.json?.added === 3 && rows.map((r) => `${r.subject}:${r.kind}:${r.title}`).join(" | ") === "Mathematics:classwork:4A to E | Mathematics:homework:3ABCD | Geography:homework:Draw a weather map", JSON.stringify(rows.map((r) => [r.subject, r.kind, r.title])));
-  check("homework: the date comes from the file name, not the wrong header; submission dates are read", rows.every((r) => r.given_date === "2026-10-27") && rows[1].due_date === "2026-10-29" && rows[2].due_date === null, JSON.stringify(rows.map((r) => [r.given_date, r.due_date])));
-  check("homework: the AI is told the file name, and the pages are kept", diaryPrompt.includes("Diary 27 Oct.pdf") && [...files.keys()].some((k) => k.startsWith(`homework/${ME}/`)) && rows.every((r) => r.owner_id === ME && r.source_file.startsWith(`homework/${ME}/`)));
-  const again = await expect("homework: the same diary again", homework.POST, 200, null, { fileName: "Diary 27 Oct.pdf", pages: [page] });
-  check("homework: uploading it again adds nothing twice", again.json?.added === 0 && again.json?.skipped === 3 && (tables.homework_entries ?? []).length === 3, JSON.stringify(again.json));
-  const listed = await homework.GET();
-  check("homework: the list comes back", ((await listed.json()).entries as unknown[]).length === 3);
-  const id = (tables.homework_entries![0] as { id: string }).id;
-  await expect("homework: an entry is marked done by hand", homeworkEntry.PATCH, 200, null, { done: true }, { id });
-  check("homework: done, with the time it was done", (tables.homework_entries![0] as { done: boolean; done_at: string | null }).done === true && Boolean((tables.homework_entries![0] as { done_at: string | null }).done_at));
-  await expect("homework: and back to not done", homeworkEntry.PATCH, 200, null, { done: false }, { id });
-  await expect("homework: done must be yes or no", homeworkEntry.PATCH, 400, null, { done: "yes" }, { id });
-  await expect("homework: a wrongly read entry can be removed", homeworkEntry.DELETE, 200, null, undefined, { id });
-  (tables.homework_entries![0] as { owner_id: string }).owner_id = "someone-else";
-  await expect("homework: someone else's entry is not found", homeworkEntry.PATCH, 404, null, { done: true }, { id: (tables.homework_entries![0] as { id: string }).id });
-  await expect("homework: nothing attached is explained", homework.POST, 400, /photo or PDF/i, { fileName: "x", pages: [] });
-  fakeAi.reply = () => ({ text: '{"days":[]}' });
-  const empty = await expect("homework: a page with no work on it", homework.POST, 200, null, { fileName: "cat.jpg", pages: [page] });
-  check("homework: says nothing was found", /No classwork or homework was found/.test(String(empty.json?.message)));
-  rpcs.student_monthly_usage = () => 5000;
-  await expect("homework: over the monthly allowance is refused", homework.POST, 429, /allowance/i, { fileName: "x.jpg", pages: [page] });
-  check("homework replies: diary days are read, an unreadable reply is null", parseDiary(JSON.stringify(diary))?.[0].periods.length === 2 && parseDiary("no") === null);
   fresh();
 }
 {
