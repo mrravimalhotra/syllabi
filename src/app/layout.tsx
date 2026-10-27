@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AppUpdates } from "@/components/AppUpdates";
+import { THEME_SCRIPT } from "@/components/ThemeToggle";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -37,7 +38,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      // The saved theme is set on <html> before React starts (THEME_SCRIPT), so the server's copy differs.
+      suppressHydrationWarning
     >
+      <head>
+        {/* A chosen Light or Dark theme, applied before the first paint. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body className="flex min-h-full flex-col">
         {children}
         <AppUpdates />

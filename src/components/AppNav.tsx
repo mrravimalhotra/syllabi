@@ -7,6 +7,7 @@ import { useSyncExternalStore } from "react";
 import { signOut } from "@/lib/actions/auth";
 import { forgetAll } from "@/lib/client-cache";
 import { BookIcon, DocumentIcon, LogoutIcon, ShieldIcon, SparklesIcon, TargetIcon, UserIcon, WifiOffIcon } from "@/components/icons";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Logo, button, cx } from "@/components/ui";
 
 const NAV = [
@@ -88,6 +89,7 @@ export function AppNav({ name, isAdmin }: { name: string; isAdmin: boolean }) {
           </nav>
 
           <div className="ml-auto flex min-w-0 items-center gap-1">
+            <ThemeToggle />
             {isAdmin && (
               <Link href="/admin" className={button.ghost} title="Admin" aria-label="Admin">
                 <ShieldIcon className="h-4.5 w-4.5" />

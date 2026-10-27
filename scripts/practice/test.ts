@@ -780,6 +780,13 @@ function q0(): Question {
   check(withPageReferences("Fact. [S1, S2]", [passages[0], chunk("c", 7, "x", "History")]) === "Fact. (Science, p. 14; History, p. 7)", "Citations: with several books, the book is named");
 }
 {
+  // Dark mode: the automatic block and the chosen-Dark block in globals.css hold the same colours.
+  const { readFileSync } = await import("node:fs");
+  const css = readFileSync("src/app/globals.css", "utf8");
+  const blocks = [...css.matchAll(/:not\(:has\(\[data-kid-zone\]\)\) \{([\s\S]*?)\n {2}\}/g)].map((m) => m[1].trim());
+  check(blocks.length === 2 && blocks[0] === blocks[1] && blocks[0].includes("--color-white"), "Dark mode: the automatic and the chosen-Dark colours are the same");
+}
+{
   // The quality test set's grading (scripts/quality), without the AI.
   const facts = factChecks("**Ans:** Akbar became emperor in 1556, aged 13.", ["1556", "thirteen|13", "Bairam"], ["1605"]);
   check(facts.missing.join() === "Bairam" && facts.unwanted.length === 0, "Quality: missing must-have facts are found, and either spelling counts");
