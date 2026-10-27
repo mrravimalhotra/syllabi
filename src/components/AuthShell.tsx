@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BookIcon, PrinterIcon, ShieldIcon, SparklesIcon } from "@/components/icons";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Logo, card, cx } from "@/components/ui";
 
 const POINTS = [
@@ -53,7 +54,10 @@ export function AuthShell({
         <p className="relative text-xs text-brand-200">For parents and tutors (18+).</p>
       </aside>
 
-      <main className="flex flex-1 items-center justify-center px-4 py-10 sm:px-6">
+      <main className="relative flex flex-1 items-center justify-center px-4 py-10 sm:px-6">
+        <div className="absolute top-3 right-3">
+          <ThemeToggle />
+        </div>
         <div className="w-full max-w-sm animate-fade-in space-y-6">
           <Link href="/login" className="flex items-center gap-2 text-base font-semibold text-slate-900 lg:hidden">
             <Logo className="h-8 w-8" /> Syllabi

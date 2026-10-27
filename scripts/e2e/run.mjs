@@ -871,7 +871,7 @@ await test("Dark mode: grown-up screens go dark with the device, children's scre
   if ((await pageLight()) < 200) throw new Error(`In light mode My books should be light, background lightness ${await pageLight()}.`);
 });
 
-await test("Theme button: Automatic, Dark and Light, remembered after a reload; children's screens stay bright", async (page, ctx) => {
+await test("Theme button: on every screen; Automatic, Dark and Light, remembered, and a choice applies everywhere", async (page, ctx) => {
   await baseRoutes(ctx);
   const pageLight = () =>
     page.evaluate(() => {
@@ -886,14 +886,20 @@ await test("Theme button: Automatic, Dark and Light, remembered after a reload; 
   if ((await pageLight()) > 80) throw new Error("Dark should turn the page dark on a light device.");
   await page.reload({ waitUntil: "networkidle" });
   if ((await pageLight()) > 80 || (await page.locator("[data-theme-choice]").getAttribute("data-theme-choice")) !== "dark") throw new Error("Dark should be remembered after a reload.");
+  // A chosen Dark applies to every screen, children's included; the button is there too.
   await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
-  if ((await pageLight()) < 200) throw new Error("Kindergarten should stay bright with Dark chosen.");
+  if ((await pageLight()) > 80) throw new Error("Kindergarten should be dark with Dark chosen.");
+  await page.goto(`${BASE}/login`, { waitUntil: "networkidle" });
+  if ((await page.locator("[data-theme-choice]").getAttribute("data-theme-choice")) !== "dark" || (await pageLight()) > 80) throw new Error("The sign-in screen should have the button, and be dark.");
   await page.goto(`${BASE}/dashboard/library`, { waitUntil: "networkidle" });
   await page.emulateMedia({ colorScheme: "dark" });
   await tap(page.locator("[data-theme-choice]"));
   if ((await pageLight()) < 200) throw new Error("Light should keep the page light on a dark device.");
   await tap(page.locator("[data-theme-choice]"));
   if ((await page.locator("[data-theme-choice]").getAttribute("data-theme-choice")) !== "auto" || (await pageLight()) > 80) throw new Error("Back to automatic should follow the dark device.");
+  // Automatic keeps children's screens bright.
+  await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
+  if ((await pageLight()) < 200) throw new Error("On Automatic, Kindergarten should stay bright.");
 });
 
 await test("Stars: the account's star chart shows on a new device, and this device's stars are added to it once", async (page, ctx) => {

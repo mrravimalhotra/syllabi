@@ -4,6 +4,7 @@ import { signOut } from "@/lib/actions/auth";
 import { AdminTabs } from "@/components/AdminTabs";
 import { ReportProblem } from "@/components/ReportProblem";
 import { ChevronLeftIcon, LogoutIcon } from "@/components/icons";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Badge, Logo, button } from "@/components/ui";
 
 export const metadata = { title: "Admin" };
@@ -20,6 +21,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           </Link>
           <Badge tone="brand">Admin</Badge>
           <div className="ml-auto flex min-w-0 items-center gap-1">
+            <ThemeToggle />
             <span className="hidden max-w-48 truncate px-2 text-sm text-slate-500 lg:inline">{admin.email}</span>
             <Link href="/dashboard" className={button.ghost}>
               <ChevronLeftIcon className="h-4 w-4" /> App

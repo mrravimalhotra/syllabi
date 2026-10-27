@@ -190,10 +190,11 @@
   }
 }
 
-/* Chosen with the top bar's theme button (components/ThemeToggle.tsx): Dark whatever the device says.
-   The same values as the block above: keep the two in step (a test checks they match). */
+/* Chosen with the theme button (components/ThemeToggle.tsx): Dark on every screen whatever the device says,
+   children's screens included (Automatic keeps those bright). The same values as the block above: keep the
+   two in step (a test checks they match). */
 @media screen {
-  :root[data-theme="dark"]:not(:has([data-kid-zone])) {
+  :root[data-theme="dark"] {
     color-scheme: dark;
     --color-slate-50: oklch(12.9% 0.042 264.695);
     --color-slate-100: oklch(20.8% 0.042 265.755);
@@ -400,6 +401,17 @@ body {
 .kg-star { animation: kg-star 0.5s ease-out both; }
 
 /* Kindergarten play space: a soft sky-to-sunshine wash with a few faint balloons of colour. */
+/* With Dark chosen, the play space is a night sky with the same soft balloons of colour. */
+@media screen {
+  :root[data-theme="dark"] .kg-stage {
+    background:
+      radial-gradient(circle at 8% 12%, rgb(253 230 138 / 0.12) 0 56px, transparent 57px),
+      radial-gradient(circle at 94% 8%, rgb(186 230 253 / 0.14) 0 84px, transparent 85px),
+      radial-gradient(circle at 90% 92%, rgb(251 207 232 / 0.12) 0 64px, transparent 65px),
+      radial-gradient(circle at 4% 86%, rgb(187 247 208 / 0.12) 0 48px, transparent 49px),
+      linear-gradient(180deg, #0f1b33 0%, #1b1730 100%);
+  }
+}
 .kg-stage {
   background:
     radial-gradient(circle at 8% 12%, rgb(253 230 138 / 0.45) 0 56px, transparent 57px),

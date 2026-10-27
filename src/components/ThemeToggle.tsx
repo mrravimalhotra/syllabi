@@ -46,7 +46,10 @@ function subscribe(listener: () => void) {
   return () => void listeners.delete(listener);
 }
 
-/** The top bar's theme button: each tap goes Automatic → Dark → Light → Automatic. Children's screens stay bright. */
+/**
+ * The theme button, on every screen: each tap goes Automatic → Dark → Light → Automatic, and the choice
+ * applies to every screen. Automatic follows the device on grown-up screens and keeps children's screens bright.
+ */
 export function ThemeToggle() {
   const theme = useSyncExternalStore(subscribe, read, () => "auto" as Theme);
   const Icon = theme === "dark" ? MoonIcon : theme === "light" ? SunIcon : AutoThemeIcon;

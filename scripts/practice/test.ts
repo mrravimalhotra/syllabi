@@ -783,7 +783,7 @@ function q0(): Question {
   // Dark mode: the automatic block and the chosen-Dark block in globals.css hold the same colours.
   const { readFileSync } = await import("node:fs");
   const css = readFileSync("src/app/globals.css", "utf8");
-  const blocks = [...css.matchAll(/:not\(:has\(\[data-kid-zone\]\)\) \{([\s\S]*?)\n {2}\}/g)].map((m) => m[1].trim());
+  const blocks = [...css.matchAll(/(?::not\(:has\(\[data-kid-zone\]\)\)|:root\[data-theme="dark"\]) \{([\s\S]*?)\n {2}\}/g)].map((m) => m[1].trim());
   check(blocks.length === 2 && blocks[0] === blocks[1] && blocks[0].includes("--color-white"), "Dark mode: the automatic and the chosen-Dark colours are the same");
 }
 {
