@@ -852,7 +852,7 @@ await test("Answer: follow-up questions are answered under it, with one-tap sugg
   if ((await page.getByLabel("Ask another follow-up").inputValue()) !== "") throw new Error("The box should be empty after asking.");
 });
 
-await test("Dark mode: grown-up screens go dark with the device, children's screens stay bright", async (page, ctx) => {
+await test("Dark mode: every screen goes dark with the device, children's screens included", async (page, ctx) => {
   await baseRoutes(ctx);
   await page.emulateMedia({ colorScheme: "dark" });
   // Lightness (0 dark to 255 light) of the page background.
@@ -865,7 +865,7 @@ await test("Dark mode: grown-up screens go dark with the device, children's scre
   await page.goto(`${BASE}/dashboard/library`, { waitUntil: "networkidle" });
   if ((await pageLight()) > 80) throw new Error(`My books should be dark, background lightness ${await pageLight()}.`);
   await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
-  if ((await pageLight()) < 200) throw new Error(`Kindergarten should stay bright, background lightness ${await pageLight()}.`);
+  if ((await pageLight()) > 80) throw new Error(`Kindergarten should be dark too, background lightness ${await pageLight()}.`);
   await page.emulateMedia({ colorScheme: "light" });
   await page.goto(`${BASE}/dashboard/library`, { waitUntil: "networkidle" });
   if ((await pageLight()) < 200) throw new Error(`In light mode My books should be light, background lightness ${await pageLight()}.`);
@@ -897,9 +897,9 @@ await test("Theme button: on every screen; Automatic, Dark and Light, remembered
   if ((await pageLight()) < 200) throw new Error("Light should keep the page light on a dark device.");
   await tap(page.locator("[data-theme-choice]"));
   if ((await page.locator("[data-theme-choice]").getAttribute("data-theme-choice")) !== "auto" || (await pageLight()) > 80) throw new Error("Back to automatic should follow the dark device.");
-  // Automatic keeps children's screens bright.
+  // Automatic follows the device on children's screens too.
   await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
-  if ((await pageLight()) < 200) throw new Error("On Automatic, Kindergarten should stay bright.");
+  if ((await pageLight()) > 80) throw new Error("On Automatic with a dark device, Kindergarten should be dark.");
 });
 
 await test("Stars: the account's star chart shows on a new device, and this device's stars are added to it once", async (page, ctx) => {

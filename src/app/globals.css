@@ -62,18 +62,17 @@
   }
 }
 
-/* Dark mode, for grown-up screens only, when the phone or computer is set to dark. Rather than a
-   dark: class on every element, the colour scale is turned over: the lightest shade becomes the
-   darkest (slate-50 <-> slate-950, amber-100 <-> amber-900, ...) and white becomes the card colour,
-   so light backgrounds turn dark and dark text turns light everywhere at once. Screens for children
-   (Kindergarten and Practice, marked data-kid-zone) keep their bright colours, and printing stays light.
-   The top bar's theme button can choose Light or Dark instead of following the device (data-theme on <html>). */
+/* Dark mode, on every screen, when the phone or computer is set to dark. Rather than a dark: class on
+   every element, the colour scale is turned over: the lightest shade becomes the darkest (slate-50 <->
+   slate-950, amber-100 <-> amber-900, ...) and white becomes the card colour, so light backgrounds turn dark
+   and dark text turns light everywhere at once. Printing stays light. The theme button can choose Light or
+   Dark instead of following the device (data-theme on <html>). */
 :root {
   color-scheme: light;
 }
 
 @media screen and (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]):not(:has([data-kid-zone])) {
+  :root:not([data-theme="light"]) {
     color-scheme: dark;
     --color-slate-50: oklch(12.9% 0.042 264.695);
     --color-slate-100: oklch(20.8% 0.042 265.755);
@@ -190,9 +189,8 @@
   }
 }
 
-/* Chosen with the theme button (components/ThemeToggle.tsx): Dark on every screen whatever the device says,
-   children's screens included (Automatic keeps those bright). The same values as the block above: keep the
-   two in step (a test checks they match). */
+/* Chosen with the theme button (components/ThemeToggle.tsx): Dark whatever the device says. The same values
+   as the block above: keep the two in step (a test checks they match). */
 @media screen {
   :root[data-theme="dark"] {
     color-scheme: dark;
@@ -401,15 +399,23 @@ body {
 .kg-star { animation: kg-star 0.5s ease-out both; }
 
 /* Kindergarten play space: a soft sky-to-sunshine wash with a few faint balloons of colour. */
-/* With Dark chosen, the play space is a night sky with the same soft balloons of colour. */
+/* In dark mode (the device's, or chosen) the play space is a night sky with the same soft balloons of colour. */
+:root {
+  --kg-night:
+    radial-gradient(circle at 8% 12%, rgb(253 230 138 / 0.12) 0 56px, transparent 57px),
+    radial-gradient(circle at 94% 8%, rgb(186 230 253 / 0.14) 0 84px, transparent 85px),
+    radial-gradient(circle at 90% 92%, rgb(251 207 232 / 0.12) 0 64px, transparent 65px),
+    radial-gradient(circle at 4% 86%, rgb(187 247 208 / 0.12) 0 48px, transparent 49px),
+    linear-gradient(180deg, #0f1b33 0%, #1b1730 100%);
+}
+@media screen and (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .kg-stage {
+    background: var(--kg-night);
+  }
+}
 @media screen {
   :root[data-theme="dark"] .kg-stage {
-    background:
-      radial-gradient(circle at 8% 12%, rgb(253 230 138 / 0.12) 0 56px, transparent 57px),
-      radial-gradient(circle at 94% 8%, rgb(186 230 253 / 0.14) 0 84px, transparent 85px),
-      radial-gradient(circle at 90% 92%, rgb(251 207 232 / 0.12) 0 64px, transparent 65px),
-      radial-gradient(circle at 4% 86%, rgb(187 247 208 / 0.12) 0 48px, transparent 49px),
-      linear-gradient(180deg, #0f1b33 0%, #1b1730 100%);
+    background: var(--kg-night);
   }
 }
 .kg-stage {

@@ -4,7 +4,7 @@ import { useSyncExternalStore } from "react";
 import { AutoThemeIcon, MoonIcon, SunIcon } from "@/components/icons";
 import { button } from "@/components/ui";
 
-// The grown-up screens' theme, chosen on this device: follow the device (no attribute), or always Light or
+// The app's theme, chosen on this device: follow the device (no attribute), or always Light or
 // Dark (data-theme on <html>, read by globals.css). THEME_SCRIPT applies it before the first paint.
 const KEY = "syllabi.theme";
 type Theme = "auto" | "dark" | "light";
@@ -46,10 +46,7 @@ function subscribe(listener: () => void) {
   return () => void listeners.delete(listener);
 }
 
-/**
- * The theme button, on every screen: each tap goes Automatic → Dark → Light → Automatic, and the choice
- * applies to every screen. Automatic follows the device on grown-up screens and keeps children's screens bright.
- */
+/** The theme button, on every screen: each tap goes Automatic (follows the device) → Dark → Light, and the choice applies to every screen. */
 export function ThemeToggle() {
   const theme = useSyncExternalStore(subscribe, read, () => "auto" as Theme);
   const Icon = theme === "dark" ? MoonIcon : theme === "light" ? SunIcon : AutoThemeIcon;
