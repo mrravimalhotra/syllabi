@@ -8,7 +8,7 @@ import type { ImageStats } from "@/lib/ingestion/image-quality";
 // first is kept and the page is marked for a look, so the book asks for it to be scanned again.
 
 /** Pages scoring under this on the first reading are read again. */
-export const SECOND_READ_BELOW = 75;
+const SECOND_READ_BELOW = 75;
 
 /** The numbers in a reading, in order of size (where they sit on the page doesn't matter, only that they match). */
 export function numbersIn(text: string): string[] {
