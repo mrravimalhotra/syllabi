@@ -17,10 +17,13 @@ Rules:
 - Copy dates exactly as written ("27-09-2026", "29.10.26", "21st Oct"); do not convert them.
 - Copy "Nil", "NA", "-" and blanks as they are (an empty string for a blank cell). Do not invent values.
 - One entry per period row, in order, even when two rows repeat the same subject or text.
+- Anything written under "Additional Information" (or a notes box) is a notice for the family: give each
+  item separately in "notes", word for word (e.g. "Bring chart paper on Friday", "Unit test on 30-10-2026").
+  Leave out the date, weekday and class (e.g. "7F") printed there; leave "notes" empty when nothing is written.
 - If a page holds several days, give each day separately.
 Reply only with JSON:
 {"days": [{"headerDate": "...", "weekday": "...", "periods": [{"subject": "...", "topic": "...", "subTopic": "...",
-"classwork": "...", "reinforcement": "...", "submission": "..."}]}]}`;
+"classwork": "...", "reinforcement": "...", "submission": "..."}], "notes": ["..."]}]}`;
 
 const STRING = { type: "string" };
 const SCHEMA = {
@@ -33,6 +36,7 @@ const SCHEMA = {
         properties: {
           headerDate: STRING,
           weekday: STRING,
+          notes: { type: "array", items: STRING },
           periods: {
             type: "array",
             items: {
@@ -64,6 +68,7 @@ export function parseDiary(text: string): DiaryDay[] | null {
       return {
         headerDate: str(day.headerDate),
         weekday: str(day.weekday),
+        notes: Array.isArray(day.notes) ? day.notes.filter((n): n is string => typeof n === "string").slice(0, 10) : undefined,
         periods: periods.slice(0, 20).map((p) => {
           const r = (p ?? {}) as Record<string, unknown>;
           return {

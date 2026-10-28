@@ -860,6 +860,37 @@ function q0(): Question {
     typedEntries.join(" | ") === "Mathematics:classwork:3ABCD:2026-10-26 | Mathematics:homework:3ABCD:2026-10-26 | Art:classwork:Introduction:none | Geography:classwork:CW 1,2:none | Computer Science:classwork:Practical:none | History:homework:Write answers in the NB:2026-10-21",
     `Homework: the typed diary becomes the right entries, the double Art period once (${typedEntries.join(" | ")})`
   );
+  // Notices under "Additional Information": one per item, wrapped lines joined, the header's own date and weekday kept apart.
+  const withNotes = diaryFromText(
+    [
+      typedPage.replace("Additional Information\n\n16-10--2026\n\nFRIDAY 7F", ""),
+      "Additional Information",
+      "1. Bring chart paper and glue on Friday",
+      "2. Unit test of Maths (Ch 3) on 30-10-2026",
+      "3. Wear the house T-shirt tomorrow for the",
+      "sports day.",
+      "Revise Ex 4.2 at home.",
+      "22-10-2026 7F",
+      "THURSDAY",
+    ].join("\n")
+  );
+  check(
+    JSON.stringify(withNotes?.notes) === JSON.stringify(["Bring chart paper and glue on Friday", "Unit test of Maths (Ch 3) on 30-10-2026", "Wear the house T-shirt tomorrow for the sports day.", "Revise Ex 4.2 at home."]) &&
+      withNotes?.headerDate === "22-10-2026" && withNotes.weekday === "THURSDAY",
+    `Homework: notices are read one per item, apart from the header (${JSON.stringify(withNotes?.notes)}, ${withNotes?.weekday})`
+  );
+  const notices = entriesFrom([withNotes!], "diary.pdf", "2026-10-28").filter((e) => e.kind === "note").map((e) => `${e.title.slice(0, 12)}:${e.due_date ?? "none"}`);
+  check(
+    notices.join(" | ") === "Bring chart :2026-10-23 | Unit test of:2026-10-30 | Wear the hou:2026-10-23 | Revise Ex 4.:none",
+    `Homework: a notice is due on the day it names (Friday, a date, tomorrow), and "Ex 4.2" is not a date (${notices.join(" | ")})`
+  );
+  check(diaryFromText(typedPage)?.notes?.length === 0, "Homework: an empty Additional Information gives no notices");
+  check(diaryFromText(typedPage.replace("Additional Information", "Additional Information\n\nNil"))?.notes?.length === 0, "Homework: \"Nil\" there is no notice");
+  check(diaryFromText(typedPage.replace("Additional Information", "Additional Information\n\n="))?.notes?.length === 0, "Homework: a stray mark there is no notice");
+  check(diaryFromText(typedPage.replace("Additional Information\n\n16-10--2026\n\nFRIDAY 7F", "Additional Information\n\n23-10-2026-Grade7\n\nFRIDAY"))?.notes?.length === 0, "Homework: the class written as Grade7 is no notice");
+  check(diaryFromText(typedPage.replace("Additional Information\n\n16-10--2026\n\nFRIDAY 7F", "Additional Information\n\n=\n\n15-10-2026\n\nThursday 7F"))?.notes?.length === 0, "Homework: the header written under it is no notice");
+  check(diaryFromText(typedPage.replace("Additional Information\n\n16-10--2026\n\nFRIDAY 7F", "Additional Information\n\n19-10-2026 7F\n\nMonday"))?.notes?.length === 0, "Homework: the date and class on one line are no notice");
+  check(diaryFromText(`XYZ Public School Diary\n\n${typedPage}`)?.notes?.length === 0, "Homework: the school's name above the periods is no notice");
   check(diaryFromText("Q1. Find the profit.\nQ2. Find the loss.") === null && diaryFromPages([{ text: typedPage }, {}]) === null, "Homework: a page that isn't the typed diary, or a photo, goes to the AI");
   check(normaliseSubject("FRENCH") === "French" && normaliseSubject("BIOLOGY") === "Biology" && normaliseSubject("SPA") === "SPA" && normaliseSubject("Enrichment program") === "Enrichment Program", "Homework: subject names in one spelling whatever their case");
   check(helpQuestion({ subject: "Maths", title: "Ex 4B, Q1 to 5", topic: "Integers", sub_topic: null }) === "Maths homework (Integers): Ex 4B, Q1 to 5", "Homework: Get help asks about the work as written");

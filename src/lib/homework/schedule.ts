@@ -2,14 +2,14 @@
 // evening), or by subject. Plain code over YYYY-MM-DD dates, so it is the same on every device.
 
 export interface Scheduled {
-  kind: "classwork" | "homework";
+  kind: "classwork" | "homework" | "note";
   subject: string;
   title: string;
   due_date: string | null;
   given_date: string;
 }
 
-type Bucket = "overdue" | "today" | "tomorrow" | "week" | "later" | "none" | "class";
+type Bucket = "notice" | "overdue" | "today" | "tomorrow" | "week" | "later" | "none" | "class";
 
 const BUCKET_TITLES: Record<Bucket, string> = {
   overdue: "Overdue",
@@ -17,11 +17,12 @@ const BUCKET_TITLES: Record<Bucket, string> = {
   tomorrow: "Due tomorrow",
   week: "Later this week",
   later: "Later",
+  notice: "Notices from the diary",
   none: "No submission date: ask your teacher",
   class: "Classwork with no date: tick it once it's finished",
 };
 
-const ORDER: Bucket[] = ["overdue", "today", "tomorrow", "week", "later", "none", "class"];
+const ORDER: Bucket[] = ["notice", "overdue", "today", "tomorrow", "week", "later", "none", "class"];
 
 /** The date `days` after a YYYY-MM-DD date. */
 function addDays(date: string, days: number): string {
@@ -34,7 +35,7 @@ function addDays(date: string, days: number): string {
 function bucketOf(entry: Scheduled, today: string): Bucket {
   const due = entry.due_date;
   // Classwork with no date was done in class; only homework with no date needs asking about.
-  if (!due) return entry.kind === "classwork" ? "class" : "none";
+  if (!due) return entry.kind === "note" ? "notice" : entry.kind === "classwork" ? "class" : "none";
   if (due < today) return "overdue";
   if (due === today) return "today";
   if (due === addDays(today, 1)) return "tomorrow";

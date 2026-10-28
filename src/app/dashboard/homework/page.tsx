@@ -11,12 +11,13 @@ import { Alert, EmptyState, PageHeader, PageSkeleton, cx } from "@/components/ui
 import { byDueDate, bySubject, missingDiaryDay } from "@/lib/homework/schedule";
 import { usePref } from "@/lib/use-pref";
 
-type Filter = "all" | "homework" | "classwork";
+type Filter = "all" | "homework" | "classwork" | "note";
 type Layout = "due" | "subject";
 const FILTERS: { value: Filter; label: string }[] = [
   { value: "all", label: "All" },
   { value: "homework", label: "Homework" },
   { value: "classwork", label: "Classwork" },
+  { value: "note", label: "Notices" },
 ];
 const LAYOUTS: { value: Layout; label: string }[] = [
   { value: "due", label: "By due date" },

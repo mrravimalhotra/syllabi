@@ -2,7 +2,7 @@
 // (lib/homework/read-diary.ts); everything here is plain code, so the diary's quirks are handled the same
 // way every time: wrong header dates, subject names with dates in them, many date formats, Nil/NA, repeats.
 
-export type EntryKind = "classwork" | "homework";
+export type EntryKind = "classwork" | "homework" | "note";
 
 /** One period as read from the diary, word for word. */
 interface DiaryPeriod {
@@ -24,6 +24,8 @@ export interface DiaryDay {
   /** The weekday the page gives ("Monday"), which is usually right. */
   weekday?: string;
   periods: DiaryPeriod[];
+  /** Notices under "Additional Information" (bring chart paper, a test date), one per item, word for word. */
+  notes?: string[];
 }
 
 export interface NewEntry {
@@ -94,6 +96,28 @@ export function parseDiaryDate(raw: string | undefined, reference: string): stri
 }
 
 const weekdayOf = (date: string) => new Date(`${date}T00:00:00Z`).getUTCDay();
+
+const FULL_DATE = /\b\d{1,2}\s*[-./]+\s*\d{1,2}\s*[-./]+\s*\d{2,4}\b/;
+const NAMED_DATE = /\b\d{1,2}(?:st|nd|rd|th)?\s*(?:of\s+)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b|\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}(?:st|nd|rd|th)?\b/i;
+
+/**
+ * The date a notice is for, from its own words: a full date ("30-10-2026"), a named one ("31st Oct"),
+ * "tomorrow", or a weekday ("on Friday", the next one after the diary day). Bare numbers like "Ex 4.2" are
+ * not dates. Null when it names none.
+ */
+function noteDate(text: string, given: string): string | null {
+  const exact = FULL_DATE.exec(text) ?? NAMED_DATE.exec(text);
+  if (exact) return parseDiaryDate(exact[0], given);
+  const t = new Date(`${given}T00:00:00Z`);
+  if (/\btomorrow\b/i.test(text)) {
+    t.setUTCDate(t.getUTCDate() + 1);
+    return t.toISOString().slice(0, 10);
+  }
+  const day = WEEKDAYS.findIndex((w) => new RegExp(`\\b${w}\\b`, "i").test(text));
+  if (day === -1) return null;
+  t.setUTCDate(t.getUTCDate() + (((day - t.getUTCDay() + 6) % 7) + 1));
+  return t.toISOString().slice(0, 10);
+}
 
 /**
  * The diary day's date. Header dates can be wrong (the 27 Oct page said 27-09-2026), so the file name wins
@@ -172,6 +196,10 @@ const clean = (text: string | undefined, max: number) => (isNothing(text) ? null
 /** Every classwork and homework entry of the diary days read from one upload, each once. */
 export function entriesFrom(days: DiaryDay[], fileName: string, uploaded: string): NewEntry[] {
   const out = new Map<string, NewEntry>();
+  const add = (entry: NewEntry) => {
+    entry.dedup_key = dedupKey(entry);
+    if (!out.has(entry.dedup_key)) out.set(entry.dedup_key, entry);
+  };
   for (const day of days) {
     const given = givenDate(day, fileName, uploaded);
     for (const p of day.periods ?? []) {
@@ -184,11 +212,13 @@ export function entriesFrom(days: DiaryDay[], fileName: string, uploaded: string
       ];
       for (const [kind, text] of work) {
         const title = clean(text, 500);
-        if (!title) continue;
-        const entry: NewEntry = { ...base, kind, title, due_date: parseDiaryDate(p.submission, given), dedup_key: "" };
-        entry.dedup_key = dedupKey(entry);
-        if (!out.has(entry.dedup_key)) out.set(entry.dedup_key, entry);
+        if (title) add({ ...base, kind, title, due_date: parseDiaryDate(p.submission, given), dedup_key: "" });
       }
+    }
+    // A notice is due on the date it names, if it names one ("Unit test on 30-10-2026").
+    for (const note of day.notes ?? []) {
+      const title = clean(note, 500);
+      if (title) add({ kind: "note", subject: "Notice", title, topic: null, sub_topic: null, given_date: given, due_date: noteDate(title, given), dedup_key: "" });
     }
   }
   return [...out.values()];

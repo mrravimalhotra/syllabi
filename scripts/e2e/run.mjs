@@ -909,6 +909,7 @@ await test("Homework: tonight's work first, overdue flagged, by subject on reque
     { id: "h1", kind: "homework", subject: "Mathematics", title: "3ABCD", topic: "Integers", sub_topic: "Ex 4A", due_date: day(-2), given_date: day(-4), done: false, done_at: null, source: "diary" },
     { id: "h2", kind: "classwork", subject: "Mathematics", title: "4A to E", topic: "Integers", sub_topic: null, due_date: null, given_date: day(-4), done: false, done_at: null, source: "diary" },
     { id: "h3", kind: "homework", subject: "Marathi", title: "pg 63,64 translation", topic: "पाठ ३", sub_topic: null, due_date: day(0), given_date: day(-1), done: false, done_at: null, source: "diary" },
+    { id: "h5", kind: "note", subject: "Notice", title: "Bring chart paper", topic: null, sub_topic: null, due_date: null, given_date: day(-1), done: false, done_at: null, source: "diary" },
     { id: "h4", kind: "homework", subject: "Art", title: "Shade the sphere", topic: null, sub_topic: null, due_date: null, given_date: day(-6), done: true, done_at: day(-1), source: "diary" },
   ];
   const patched = [];
@@ -930,8 +931,8 @@ await test("Homework: tonight's work first, overdue flagged, by subject on reque
   await page.goto(`${BASE}/dashboard/homework`, { waitUntil: "networkidle" });
   // By due date first: overdue, then today's, and classwork with no date last.
   const headings = await page.locator("section[aria-label] h3").allInnerTexts();
-  if (!/^Overdue/.test(headings[0] ?? "") || !/^Due today/.test(headings[1] ?? "") || !/^Classwork with no date/.test(headings[2] ?? "")) throw new Error(`Order: ${headings.join(" / ")}`);
-  await page.getByText("3 to do").waitFor();
+  if (!/^Notices from the diary/.test(headings[0] ?? "") || !/^Overdue/.test(headings[1] ?? "") || !/^Due today/.test(headings[2] ?? "") || !/^Classwork with no date/.test(headings[3] ?? "")) throw new Error(`Order: ${headings.join(" / ")}`);
+  await page.getByText("4 to do").waitFor();
   await page.getByText("1 overdue").waitFor();
   await page.getByText("पाठ ३").waitFor();
   // Get help opens Ask Syllabi with the work typed in; classwork has none.
@@ -951,7 +952,7 @@ await test("Homework: tonight's work first, overdue flagged, by subject on reque
   await page.getByText("Done (1)").waitFor();
   await tap(page.getByRole("checkbox", { name: /Not done: Mathematics, 3ABCD/ }));
   await page.getByText("Done (2)").waitFor();
-  await page.getByText("2 to do").waitFor();
+  await page.getByText("3 to do").waitFor();
   if (patched.join() !== "h1:true") throw new Error(`Saved: ${patched.join()}`);
   // Classwork only.
   await tap(page.getByRole("radio", { name: "Classwork" }));

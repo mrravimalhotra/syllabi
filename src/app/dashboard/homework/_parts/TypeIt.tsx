@@ -47,7 +47,7 @@ export function TypeIt({ subjects, onAdded }: { subjects: string[]; onAdded: (e:
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="space-y-1 text-sm font-medium text-slate-700">
           Subject
-          <input className={input} list="homework-subjects" value={form.subject} onChange={set("subject")} placeholder="Mathematics" required maxLength={80} />
+          <input className={input} list="homework-subjects" value={form.subject} onChange={set("subject")} placeholder={form.kind === "note" ? "Notice" : "Mathematics"} required={form.kind !== "note"} maxLength={80} />
           <datalist id="homework-subjects">
             {subjects.map((s) => (
               <option key={s} value={s} />
@@ -67,6 +67,7 @@ export function TypeIt({ subjects, onAdded }: { subjects: string[]; onAdded: (e:
         <select className={cx(input, "w-auto")} value={form.kind} onChange={set("kind")} aria-label="Kind">
           <option value="homework">Homework</option>
           <option value="classwork">Classwork to finish</option>
+          <option value="note">A notice (bring something, a test date)</option>
         </select>
         <button type="submit" className={button.primary} disabled={busy}>
           {busy && <Spinner />} Add

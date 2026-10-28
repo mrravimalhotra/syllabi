@@ -8,7 +8,7 @@ import { helpQuestion } from "@/lib/homework/schedule";
 
 export interface Entry {
   id: string;
-  kind: "classwork" | "homework";
+  kind: "classwork" | "homework" | "note";
   subject: string;
   title: string;
   topic: string | null;
@@ -73,14 +73,21 @@ function DiaryPages({ id }: { id: string }) {
   );
 }
 
+const KIND_LABEL: Record<Entry["kind"], string> = { homework: "Homework", classwork: "Classwork", note: "Notice" };
+const KIND_TONE = { homework: "brand", classwork: "neutral", note: "warning" } as const;
+
 /** Its kind, whether it is late, and its dates. */
 function Dates({ entry, today }: { entry: Entry; today: string }) {
   const year = Number(today.slice(0, 4));
   return (
     <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
-      <Badge tone={entry.kind === "homework" ? "brand" : "neutral"}>{entry.kind === "homework" ? "Homework" : "Classwork"}</Badge>
+      <Badge tone={KIND_TONE[entry.kind]}>{KIND_LABEL[entry.kind]}</Badge>
       {isOverdue(entry, today) && <Badge tone="danger">Overdue</Badge>}
-      <span>{entry.due_date ? `Submit by ${shortDate(entry.due_date, year)}` : "No submission date"}</span>
+      {entry.kind === "note" ? (
+        entry.due_date && <span>For {shortDate(entry.due_date, year)}</span>
+      ) : (
+        <span>{entry.due_date ? `Submit by ${shortDate(entry.due_date, year)}` : "No submission date"}</span>
+      )}
       <span aria-hidden>·</span>
       <span>Given {shortDate(entry.given_date, year)}</span>
       {entry.source === "typed" && <span>· typed in</span>}

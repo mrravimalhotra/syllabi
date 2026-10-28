@@ -7,15 +7,15 @@ import { COLUMNS } from "@/app/api/homework/route";
 
 /**
  * Adds one piece of work typed in by the grown-up: work set out loud in class or on a parents' group, which
- * never reaches the diary. No AI is used.
+ * never reaches the diary, or a notice (bring something, a test date). No AI is used.
  */
 export async function POST(request: Request) {
   const auth = await authenticate();
   if ("response" in auth) return auth.response;
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
-  const subject = cleanText(body?.subject, 80);
+  const kind: EntryKind = body?.kind === "classwork" || body?.kind === "note" ? body.kind : "homework";
+  const subject = cleanText(body?.subject, 80) ?? (kind === "note" ? "Notice" : null);
   const title = cleanText(body?.title, 500);
-  const kind: EntryKind = body?.kind === "classwork" ? "classwork" : "homework";
   if (!subject) return apiError(400, "Type the subject, for example Mathematics.");
   if (!title) return apiError(400, "Type the work, for example “Ex 4B, Q1 to 5”.");
   const given = indiaToday();
