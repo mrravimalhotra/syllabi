@@ -236,7 +236,9 @@ function retrievalSummary(r: RetrievalNote | undefined): string {
 
 /** The first number: starts from the book share, then points are added and taken off, each with its reason. */
 function correctness(input: ConfidenceInput, fromBook: number, reasons: string[]): number {
-  const failed = input.checks.filter((c) => !c.ok);
+  // "Not double-checked" is not a problem found, only a check missing: it costs less, and says so.
+  const unchecked = input.checks.some((c) => c.kind === "review" && !c.ok && c.message.startsWith("Not double-checked"));
+  const failed = input.checks.filter((c) => !c.ok && !(c.kind === "review" && c.message.startsWith("Not double-checked")));
   const calculations = input.checks.filter((c) => c.kind === "calculation");
   let correct = 55 + 0.4 * fromBook;
   if (failed.length > 0) {
@@ -245,6 +247,10 @@ function correctness(input: ConfidenceInput, fromBook: number, reasons: string[]
   } else if (calculations.length > 0) {
     correct += 5;
     reasons.push("Every calculation was checked by an exact calculator.");
+  }
+  if (unchecked) {
+    correct -= 10;
+    reasons.push("It could not be double-checked by the independent AI check this time.");
   }
   if (input.checks.some((c) => c.kind === "coverage" && c.ok)) correct += 3;
   if (input.checks.some((c) => c.kind === "review" && c.ok)) {

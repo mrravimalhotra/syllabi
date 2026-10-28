@@ -38,6 +38,8 @@ jobs:
         run: npx knip
       - name: Practice and maths tests
         run: npm run test:practice
+      - name: AI service adapter tests
+        run: npm run test:llm
       - name: API tests
         run: npm run test:api
       - name: Production build

@@ -133,6 +133,20 @@ check("a plain error is reported, not hidden by switching models", /nonsense/.te
 setScenario((url) => (/models\/test-/.test(url) ? errorReply(503, "The model is overloaded", "UNAVAILABLE") : errorReply(500, "stand-in broke")));
 const both = await asked({ model: "test-model" }).then(() => null, (e) => e);
 check("when the stand-in fails too, the first model's problem is reported", /overloaded/.test(both?.message ?? ""), both?.message);
+
+// Thinking: the budget is sent, gets its own room on top of the answer's, and is counted as tokens used.
+setScenario(() => ok("Worked out.", {}));
+await asked({ model: "test-model", maxOutputTokens: 4096, thinking: 8192 });
+const thought = requests[0].body.generationConfig as SentBody["generationConfig"] & { thinkingConfig?: { thinkingBudget?: number } };
+check("a thinking budget is sent, with room for it on top of the answer", thought.thinkingConfig?.thinkingBudget === 8192 && thought.maxOutputTokens === 4096 + 8192, JSON.stringify(thought));
+await asked({ model: "test-model" });
+check("no thinking setting is sent unless asked for", !("thinkingConfig" in requests[1].body.generationConfig), JSON.stringify(requests[1].body.generationConfig));
+setScenario(() => reply({ content: { parts: [{ text: "Done." }], role: "model" }, finishReason: "STOP" }, { promptTokenCount: 10, candidatesTokenCount: 20, thoughtsTokenCount: 500, totalTokenCount: 530 }));
+const counted = await asked({ model: "test-model", thinking: 1024 });
+check("the thinking is counted with the answer's tokens", counted.usage.outputTokens === 520 && counted.usage.totalTokens === 530, JSON.stringify(counted.usage));
+setScenario((_url, body) => ((body.generationConfig as { thinkingConfig?: unknown }).thinkingConfig ? errorReply(400, "Invalid argument: thinking_config is not supported by this model", "INVALID_ARGUMENT") : ok("Answered without thinking.")));
+const plain = await asked({ model: "test-model", thinking: 8192 });
+check("a model that refuses the thinking setting is asked again without it", plain.text === "Answered without thinking." && requests.length === 2, `${plain.text} ${requests.length}`);
 scenario = null;
 
 // The other AI services (Groq, NVIDIA, OpenRouter, Mistral, OpenAI) speak OpenAI's chat format.

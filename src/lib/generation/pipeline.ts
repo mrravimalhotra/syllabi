@@ -110,6 +110,28 @@ const TEMPERATURE: Record<GenerationTaskType, number> = {
   paper_check: 0.1,
 };
 
+// How much the model may think before writing: most for maths and marking, where working the problem
+// through first catches mistakes; a little for notes. Study packs are made elsewhere.
+const THINKING: Record<GenerationTaskType, number> = {
+  solution: 8192,
+  paper_check: 8192,
+  sample_paper: 4096,
+  ad_hoc: 4096,
+  notes: 2048,
+  study_pack: 0,
+};
+
+/** Shown when the independent examiner couldn't read the answer this time. */
+export const NOT_DOUBLE_CHECKED: AnswerCheck = {
+  kind: "review",
+  ok: false,
+  message: "Not double-checked: the independent check couldn't run this time, so this answer hasn't been read a second time. Check it carefully, or ask again in a minute.",
+};
+
+/** After this long since writing began, the fix and its re-check think less, so the answer is in well within the time limit. */
+const LATE_MS = 120_000;
+const LATE_THINKING = 1024;
+
 /**
  * Shared generation pipeline: quota check → RAG retrieval → LLM call → usage
  * recording. Every generation route (solutions, notes, sample papers, ad-hoc)
@@ -290,6 +312,7 @@ export async function writeAndCheck(input: {
     // coverage from the books is weak.
     allowSearchGrounding: coverageLow,
     temperature: TEMPERATURE[taskType],
+    thinking: THINKING[taskType],
   };
   const writingStart = Date.now();
   const result = await generateCompletion({
@@ -339,12 +362,15 @@ async function checkAndRepair(input: {
 }): Promise<{ result: CompletionResult; checks: AnswerCheck[] }> {
   const { taskType, studentId, request, chunks, photos, searchQuery, prompt, timings, onStage } = input;
   let result = input.result;
+  // Roughly when writing began: the checks and the fix think less once the answer is running late.
+  const began = Date.now() - timings.writingMs;
+  const late = () => Date.now() - began > LATE_MS;
   const cites = CITING_TASKS.includes(taskType);
   const runChecks = (text: string) => [...answerChecks(taskType, text, searchQuery, prompt), ...(cites ? checkCitations(text, chunks) : [])];
   const runReview = async (text: string): Promise<VerifyProblem[] | null> => {
     // The paper checker's marking is checked by code (lib/checks/paper.ts); it has no book to check against.
     if (taskType === "paper_check") return null;
-    const verified = await verifyAnswer({ taskType, question: request.prompt, answer: text, context: request.context, photos });
+    const verified = await verifyAnswer({ taskType, question: request.prompt, answer: text, context: request.context, photos, ...(late() ? { thinking: LATE_THINKING } : {}) });
     if (!verified) return null;
     await recordTokenUsage({
       studentId,
@@ -373,6 +399,8 @@ async function checkAndRepair(input: {
     return found === null && mismatches.length === 0 ? found : [...(found ?? []), ...mismatches];
   };
   let review = withSecond(firstReview, result.text);
+  // Whether the examiner's reading of the answer shown actually ran (it can fail: busy, or an unreadable reply).
+  let examined = firstReview !== null;
   timings.reviewMs = Date.now() - reviewStart;
   const problems = checks.filter((c) => !c.ok);
   const problemCount = (failed: AnswerCheck[], found: VerifyProblem[] | null) => failed.length + (found?.length ?? 0);
@@ -388,6 +416,7 @@ async function checkAndRepair(input: {
     ];
     const repaired = await generateCompletion({
       ...request,
+      ...(late() ? { thinking: LATE_THINKING } : {}),
       prompt:
         `${request.prompt}\n\nYour draft answer below has these problems:\n${found.join("\n")}\n` +
         "Check each one against the reference material. Fix every real problem, and anything that follows from it; for a claim the books do not support, " +
@@ -403,7 +432,8 @@ async function checkAndRepair(input: {
       usage: repaired.usage,
     });
     const recheck = runChecks(repaired.text);
-    const rereview = withSecond(await runReview(repaired.text), repaired.text);
+    const rereviewed = await runReview(repaired.text);
+    const rereview = withSecond(rereviewed, repaired.text);
     timings.repairMs = Date.now() - repairStart;
     // Keep the repair only if it really has fewer problems (a review that could not run counts as unchanged).
     if (
@@ -415,10 +445,13 @@ async function checkAndRepair(input: {
       result = { ...repaired, searchSuggestionsHtml: repaired.searchSuggestionsHtml ?? result.searchSuggestionsHtml };
       checks = recheck;
       review = rereview ?? review;
+      examined = rereviewed !== null;
     }
   }
   // What the independent check still finds is shown with the answer, so the parent knows what to look at.
   if (review) checks = [...checks, ...reviewChecks(review)];
+  // Never let an answer the examiner couldn't read look checked (added after any fix, so it never causes one).
+  if (!examined && taskType !== "paper_check") checks = [...checks, NOT_DOUBLE_CHECKED];
   // The checked "[S2]" marks become page references the parent can follow.
   if (cites) result = { ...result, text: withPageReferences(result.text, chunks) };
   return { result, checks };

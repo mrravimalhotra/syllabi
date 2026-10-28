@@ -59,15 +59,22 @@ function requestParts(req: CompletionRequest): Part[] {
 }
 
 function requestBody(req: CompletionRequest) {
+  const thinking = req.thinking && req.thinking > 0 ? req.thinking : 0;
   return {
     contents: [{ role: "user" as const, parts: requestParts(req) }],
     generationConfig: {
       temperature: req.temperature ?? 0.4,
-      maxOutputTokens: req.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+      // The thinking counts against the output limit, so it gets its own room on top of the answer's.
+      maxOutputTokens: (req.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS) + thinking,
       ...(req.jsonSchema ? { responseMimeType: "application/json", responseSchema: req.jsonSchema as never } : {}),
+      // Not in this SDK's types yet; the API takes it as is.
+      ...(thinking ? { thinkingConfig: { thinkingBudget: thinking } } : {}),
     },
   };
 }
+
+/** A model that doesn't take a thinking setting says so in a 400 reply. */
+const THINKING_REJECTED = /\b400\b[\s\S]*thinking|thinking[\s\S]*\b400\b|thinking[_ ]?(config|budget)[\s\S]*(not supported|invalid|unknown)/i;
 
 type Body = ReturnType<typeof requestBody>;
 
@@ -140,7 +147,7 @@ function textOf(response: GenerateResult["response"]): string {
 
 /** What a finished call gives back: the text, the tokens used, and whether search was used or skipped. */
 function toResult(model: string, response: GenerateResult["response"], searchSkipped: boolean): CompletionResult {
-  const usage = response.usageMetadata;
+  const usage = response.usageMetadata as (NonNullable<GenerateResult["response"]["usageMetadata"]> & { thoughtsTokenCount?: number }) | undefined;
   const candidate = response.candidates?.[0];
   const grounding = candidate?.groundingMetadata as Grounding | undefined;
   const groundingUsed = Boolean(grounding?.webSearchQueries?.length);
@@ -155,7 +162,8 @@ function toResult(model: string, response: GenerateResult["response"], searchSki
     model,
     usage: {
       inputTokens: usage?.promptTokenCount ?? 0,
-      outputTokens: usage?.candidatesTokenCount ?? 0,
+      // The thinking is paid for like the answer, so it counts against the allowance too.
+      outputTokens: (usage?.candidatesTokenCount ?? 0) + (usage?.thoughtsTokenCount ?? 0),
       totalTokens: usage?.totalTokenCount ?? 0,
     },
     usedSearchGrounding: groundingUsed,
@@ -163,8 +171,21 @@ function toResult(model: string, response: GenerateResult["response"], searchSki
   };
 }
 
-/** One Gemini call with the given model (search first when allowed, then without). With `patient` false, a busy or rate-limited reply fails at once instead of waiting and retrying. */
+/** One Gemini call; a model that refuses the thinking setting is asked again without it (the answer matters more). */
 async function completeWith(req: CompletionRequest & { model: string }, patient = true): Promise<CompletionResult> {
+  try {
+    return await completeOnce(req, patient);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (!req.thinking || !THINKING_REJECTED.test(message)) throw err;
+    console.warn(`[google] ${req.model} refused the thinking setting; asking without it`);
+    req.onRestart?.();
+    return completeOnce({ ...req, thinking: undefined }, patient);
+  }
+}
+
+/** One Gemini call with the given model (search first when allowed, then without). With `patient` false, a busy or rate-limited reply fails at once instead of waiting and retrying. */
+async function completeOnce(req: CompletionRequest & { model: string }, patient = true): Promise<CompletionResult> {
   const genAI = client();
   const modelWith = (search: boolean) =>
     genAI.getGenerativeModel({

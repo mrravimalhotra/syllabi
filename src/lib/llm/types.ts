@@ -31,6 +31,11 @@ export interface CompletionRequest {
   /** Longest answer allowed, in tokens. */
   maxOutputTokens?: number;
   /**
+   * Tokens the model may spend working the problem through before it answers ("thinking"), for maths, marking
+   * and checking. Added on top of `maxOutputTokens`. Gemini only; unset leaves the model's own default.
+   */
+  thinking?: number;
+  /**
    * Ask for JSON matching this schema (OpenAPI subset, as Gemini takes it).
    * Providers without structured output get the instruction in the prompt only,
    * so callers must still parse defensively.

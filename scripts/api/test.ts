@@ -909,7 +909,9 @@ failures.length = 0;
   calls.length = 0;
   verdicts = ["sorry, I can't"];
   out = await ask();
-  check("checker: an unreadable check never holds the answer back", calls.join() === "write,check" && out.text.includes("1605") && !out.checks.some((c) => c.kind === "review"), calls.join());
+  check("checker: an unreadable check never holds the answer back, and causes no fix", calls.join() === "write,check" && out.text.includes("1605"), calls.join());
+  const notChecked = out.checks.filter((c) => c.kind === "review");
+  check("checker: when it couldn't run, the answer says plainly it wasn't double-checked", notChecked.length === 1 && !notChecked[0].ok && /^Not double-checked/.test(notChecked[0].message), JSON.stringify(out.checks));
 
   calls.length = 0;
   fakeAi.reply = (req) => {

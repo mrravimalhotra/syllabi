@@ -93,6 +93,8 @@ export async function solveAgain(input: {
   question: string;
   context: string;
   photos: CompletionImage[];
+  /** How much the second solver may think first: it does the whole working itself. */
+  thinking?: number;
 }): Promise<{ finals: FinalAnswer[]; result: CompletionResult } | null> {
   try {
     const result = await generateCompletion({
@@ -103,6 +105,7 @@ export async function solveAgain(input: {
       images: input.photos,
       temperature: 0.3,
       maxOutputTokens: 4096,
+      thinking: input.thinking ?? 8192,
       jsonSchema: SCHEMA,
     });
     const finals = parseFinals(result.text);

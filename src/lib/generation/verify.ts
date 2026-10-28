@@ -114,6 +114,8 @@ export async function verifyAnswer(input: {
   answer: string;
   context: string;
   photos: CompletionImage[];
+  /** How much the examiner may think first (it works each answer out itself). */
+  thinking?: number;
 }): Promise<{ problems: VerifyProblem[]; result: CompletionResult } | null> {
   try {
     const result = await generateCompletion({
@@ -124,6 +126,7 @@ export async function verifyAnswer(input: {
       images: input.photos,
       temperature: 0,
       maxOutputTokens: 4096,
+      thinking: input.thinking ?? 8192,
       jsonSchema: SCHEMA,
     });
     const problems = parseProblems(result.text);
