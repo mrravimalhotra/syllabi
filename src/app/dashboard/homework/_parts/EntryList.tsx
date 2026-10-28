@@ -1,6 +1,6 @@
 "use client";
 
-import { EntryRow, type Entry, type RowActions } from "@/app/dashboard/homework/_parts/EntryRow";
+import { EntryRow, type Row, type RowActions } from "@/app/dashboard/homework/_parts/EntryRow";
 import { cx } from "@/components/ui";
 
 /** The groups of the list (by due date or by subject), each a card of rows. */
@@ -10,12 +10,15 @@ export function EntryGroups({
   onToggle,
   actions = {},
   big,
+  showSubject = true,
 }: {
-  groups: { title: string; entries: Entry[] }[];
+  groups: { title: string; entries: Row[] }[];
   today: string;
-  onToggle: (e: Entry) => void;
+  onToggle: (e: Row) => void;
   actions?: RowActions;
   big?: boolean;
+  /** Off when the groups are the subjects. */
+  showSubject?: boolean;
 }) {
   return (
     <div className="space-y-4">
@@ -32,7 +35,7 @@ export function EntryGroups({
           </h3>
           <ul className="divide-y divide-slate-100">
             {g.entries.map((e) => (
-              <EntryRow key={e.id} entry={e} today={today} onToggle={onToggle} actions={actions} big={big} />
+              <EntryRow key={e.id} entry={e} today={today} onToggle={onToggle} actions={actions} big={big} showSubject={showSubject} />
             ))}
           </ul>
         </section>

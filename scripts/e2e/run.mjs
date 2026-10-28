@@ -902,13 +902,14 @@ await test("Theme button: on every screen; Automatic, Dark and Light, remembered
   if ((await pageLight()) > 80) throw new Error("On Automatic with a dark device, Kindergarten should be dark.");
 });
 
-await test("Homework: tonight's work first, overdue flagged, by subject on request, ticked off by hand, typed in, and a diary added", async (page, ctx) => {
+await test("Homework: homework and notices first, by due date, with subjects; class and homework shown once; a ⋯ menu; undo; typed in with quick days; a diary added", async (page, ctx) => {
   await baseRoutes(ctx);
   const day = (offset) => new Date(Date.now() + offset * 86400000).toISOString().slice(0, 10);
   let list = [
     { id: "h1", kind: "homework", subject: "Mathematics", title: "3ABCD", topic: "Integers", sub_topic: "Ex 4A", due_date: day(-2), given_date: day(-4), done: false, done_at: null, source: "diary" },
     { id: "h2", kind: "classwork", subject: "Mathematics", title: "4A to E", topic: "Integers", sub_topic: null, due_date: null, given_date: day(-4), done: false, done_at: null, source: "diary" },
     { id: "h3", kind: "homework", subject: "Marathi", title: "pg 63,64 translation", topic: "पाठ ३", sub_topic: null, due_date: day(0), given_date: day(-1), done: false, done_at: null, source: "diary" },
+    { id: "h6", kind: "classwork", subject: "Mathematics", title: "3ABCD", topic: "Integers", sub_topic: "Ex 4A", due_date: day(-2), given_date: day(-4), done: false, done_at: null, source: "diary" },
     { id: "h5", kind: "note", subject: "Notice", title: "Bring chart paper", topic: null, sub_topic: null, due_date: null, given_date: day(-1), done: false, done_at: null, source: "diary" },
     { id: "h4", kind: "homework", subject: "Art", title: "Shade the sphere", topic: null, sub_topic: null, due_date: null, given_date: day(-6), done: true, done_at: day(-1), source: "diary" },
   ];
@@ -929,43 +930,64 @@ await test("Homework: tonight's work first, overdue flagged, by subject on reque
     r.request().method() === "POST" ? json(r, { added: 5, skipped: 2 }) : json(r, { entries: list })
   );
   await page.goto(`${BASE}/dashboard/homework`, { waitUntil: "networkidle" });
-  // By due date first: overdue, then today's, and classwork with no date last.
-  const headings = await page.locator("section[aria-label] h3").allInnerTexts();
-  if (!/^Notices from the diary/.test(headings[0] ?? "") || !/^Overdue/.test(headings[1] ?? "") || !/^Due today/.test(headings[2] ?? "") || !/^Classwork with no date/.test(headings[3] ?? "")) throw new Error(`Order: ${headings.join(" / ")}`);
-  await page.getByText("4 to do").waitFor();
+  // Homework and notices by due date; classwork from class is folded away.
+  const headings = await page.locator("section[aria-label] h3:visible").allInnerTexts();
+  if (!/^Notices from the diary/.test(headings[0] ?? "") || !/^Overdue/.test(headings[1] ?? "") || !/^Due today/.test(headings[2] ?? "") || headings.length !== 3) throw new Error(`Order: ${headings.join(" / ")}`);
+  await page.getByText("3 to do").waitFor();
   await page.getByText("1 overdue").waitFor();
+  await page.getByText("Classwork from class (1)").waitFor();
+  if (await page.getByText("4A to E").isVisible()) throw new Error("Classwork should be folded away.");
+  // Each row says its subject; the same work as classwork and homework is one row.
+  await page.getByText("Mathematics: 3ABCD").waitFor();
+  await page.getByText("Class & homework").waitFor();
+  if ((await page.getByRole("checkbox", { name: /3ABCD/ }).count()) !== 1) throw new Error("Class and homework 3ABCD should be one row.");
   await page.getByText("पाठ ३").waitFor();
-  // Get help opens Ask Syllabi with the work typed in; classwork has none.
-  if ((await page.getByRole("link", { name: "Get help" }).count()) !== 2) throw new Error("Each open homework, and only homework, has Get help.");
-  const help = await page.getByRole("link", { name: "Get help" }).first().getAttribute("href");
+  // The ⋯ menu: Get help opens Ask Syllabi with the work typed in; a notice has none.
+  await tap(page.getByRole("button", { name: "More for Mathematics: 3ABCD" }));
+  const help = await page.getByRole("menuitem", { name: "Get help with this" }).getAttribute("href");
   if (!help?.includes("tool=solution") || !decodeURIComponent(help).includes("Mathematics homework (Integers, Ex 4A): 3ABCD")) throw new Error(`Help link: ${help}`);
-  // The diary page it was read from.
-  await tap(page.getByRole("button", { name: "Diary page", exact: true }).first());
+  await page.getByText(/^Given /).waitFor();
+  await tap(page.getByRole("menuitem", { name: "See the diary page" }));
   await page.getByRole("img", { name: "Diary page 1" }).waitFor();
-  // By subject, remembered.
-  await tap(page.getByRole("radio", { name: "By subject" }));
-  for (const subject of ["Mathematics", "Marathi"]) await page.getByRole("region", { name: subject }).waitFor();
-  await page.reload({ waitUntil: "networkidle" });
-  await page.getByRole("region", { name: "Marathi" }).waitFor();
-  // Done work is folded away; ticking moves work there.
-  if (await page.getByText("Shade the sphere").isVisible()) throw new Error("Done work should be folded away.");
+  await tap(page.getByRole("button", { name: "More for Notice: Bring chart paper" }));
+  if (await page.getByRole("menuitem", { name: "Get help with this" }).count()) throw new Error("A notice has no Get help.");
+  await page.keyboard.press("Escape");
+  if (await page.getByRole("menu").count()) throw new Error("Escape should close the menu.");
+  // Ticked off by hand, with its classwork twin; undone; ticked again.
   await page.getByText("Done (1)").waitFor();
   await tap(page.getByRole("checkbox", { name: /Not done: Mathematics, 3ABCD/ }));
   await page.getByText("Done (2)").waitFor();
+  await page.getByText("2 to do").waitFor();
+  await page.getByRole("status").getByText("Done: 3ABCD").waitFor();
+  await tap(page.getByRole("button", { name: "Undo" }));
   await page.getByText("3 to do").waitFor();
-  if (patched.join() !== "h1:true") throw new Error(`Saved: ${patched.join()}`);
+  await tap(page.getByRole("checkbox", { name: /Not done: Mathematics, 3ABCD/ }));
+  await page.getByText("2 to do").waitFor();
+  if (patched.sort().join() !== ["h1:true", "h6:true", "h1:false", "h6:false", "h1:true", "h6:true"].sort().join()) throw new Error(`Saved: ${patched.join()}`);
+  // By subject, remembered.
+  await page.getByLabel("Sort").selectOption("subject");
+  for (const subject of ["Marathi", "Notice"]) await page.getByRole("region", { name: subject }).waitFor();
+  await page.reload({ waitUntil: "networkidle" });
+  await page.getByRole("region", { name: "Marathi" }).waitFor();
+  await page.getByLabel("Sort").selectOption("due");
   // Classwork only.
   await tap(page.getByRole("radio", { name: "Classwork" }));
-  await page.getByText("1 to do").waitFor();
-  if (await page.getByRole("region", { name: "Marathi" }).count()) throw new Error("Classwork only should hide the Marathi homework.");
-  await tap(page.getByRole("radio", { name: "All" }));
-  // Work set out loud is typed in.
+  await page.getByText("4A to E").waitFor();
+  if (await page.getByText("pg 63,64 translation").count()) throw new Error("Classwork only should hide the Marathi homework.");
+  await tap(page.getByRole("radio", { name: "Homework & notices" }));
+  // Work set out loud is typed in: what it is first, then a quick day.
   await tap(page.getByRole("button", { name: "Type it in" }));
   await page.getByLabel("Subject").fill("English");
   await page.getByLabel("The work, as the teacher gave it").fill("Learn the poem");
+  await tap(page.getByRole("radio", { name: "Tomorrow" }));
   await tap(page.getByRole("button", { name: "Add", exact: true }));
-  await page.getByText("Learn the poem").waitFor();
-  if (typed?.subject !== "English" || typed?.kind !== "homework") throw new Error(`Typed: ${JSON.stringify(typed)}`);
+  await page.getByText("English: Learn the poem").waitFor();
+  if (typed?.subject !== "English" || typed?.kind !== "homework" || typed?.due_date !== new Date(Date.now() + 86400000).toLocaleDateString("en-CA")) throw new Error(`Typed: ${JSON.stringify(typed)}`);
+  // A notice needs no subject.
+  await tap(page.getByRole("button", { name: "Type it in" }));
+  await tap(page.getByRole("radio", { name: "Notice", exact: true }));
+  if (await page.getByLabel("Subject").count()) throw new Error("A notice needs no subject.");
+  await page.getByRole("button", { name: "Cancel" }).click();
   // A diary page is added.
   await page.locator('input[aria-label="Class diary pages"]').setInputFiles({ name: "Diary 27 Oct.jpg", mimeType: "image/jpeg", buffer: tinyJpeg });
   await page.getByText("Added 5 entries from the diary. 2 were already in your list.").waitFor({ timeout: 15000 });
@@ -983,6 +1005,7 @@ await test("Homework: the child ticks their own list in Practice and earns a sta
   await page.goto(`${BASE}/dashboard/practice`, { waitUntil: "networkidle" });
   await tap(page.getByRole("link", { name: /My homework/ }));
   await page.getByRole("heading", { name: "My homework" }).waitFor();
+  await page.getByText(/Tick off your homework when it's finished to earn a star/).waitFor();
   if (await page.getByRole("button", { name: /Remove/ }).count()) throw new Error("The child can't remove work.");
   await tap(page.getByRole("checkbox", { name: /Not done: EVS, Draw a plant/ }));
   await page.getByRole("status").getByText(/star/).waitFor();

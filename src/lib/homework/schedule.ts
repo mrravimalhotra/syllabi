@@ -25,7 +25,7 @@ const BUCKET_TITLES: Record<Bucket, string> = {
 const ORDER: Bucket[] = ["notice", "overdue", "today", "tomorrow", "week", "later", "none", "class"];
 
 /** The date `days` after a YYYY-MM-DD date. */
-function addDays(date: string, days: number): string {
+export function addDays(date: string, days: number): string {
   const t = new Date(`${date}T00:00:00Z`);
   t.setUTCDate(t.getUTCDate() + days);
   return t.toISOString().slice(0, 10);
@@ -83,4 +83,24 @@ export function missingDiaryDay(entries: Pick<Scheduled, "given_date">[], diaryD
 export function helpQuestion(entry: { subject: string; title: string; topic: string | null; sub_topic: string | null }): string {
   const about = [entry.topic, entry.sub_topic].filter(Boolean).join(", ");
   return `${entry.subject} homework${about ? ` (${about})` : ""}: ${entry.title}`;
+}
+
+const sameWords = (a: string, b: string) => a.toLowerCase().replace(/\s+/g, "") === b.toLowerCase().replace(/\s+/g, "");
+
+/**
+ * The same work set as classwork and homework in one period ("CW 3ABCD", "Reinforcement 3ABCD") shown once:
+ * the homework carries the classwork as its `twin`, and the classwork is left out. Everything else is unchanged.
+ */
+export function pairUp<T extends Scheduled & { id: string; title: string }>(entries: T[]): (T & { twin?: T })[] {
+  const absorbed = new Set<string>();
+  const out: (T & { twin?: T })[] = [];
+  for (const e of entries) {
+    if (e.kind !== "homework") continue;
+    const twin = entries.find(
+      (c) => c.kind === "classwork" && !absorbed.has(c.id) && c.given_date === e.given_date && c.subject === e.subject && sameWords(c.title, e.title)
+    );
+    if (twin) absorbed.add(twin.id);
+    out.push(twin ? { ...e, twin } : e);
+  }
+  return entries.flatMap((e) => (e.kind === "homework" ? out.filter((o) => o.id === e.id) : absorbed.has(e.id) ? [] : [e]));
 }

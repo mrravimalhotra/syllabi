@@ -38,7 +38,7 @@ import { factChecks, parseJudge, scoreCase } from "../quality/grade";
 import { disagreements, numbersIn, parseFinals } from "@/lib/generation/second-solve";
 import { checkCitations, withPageReferences } from "@/lib/generation/citations";
 import { entriesFrom, givenDate, isNothing, normaliseSubject, parseDiaryDate } from "@/lib/homework/diary";
-import { byDueDate, bySubject, helpQuestion, missingDiaryDay } from "@/lib/homework/schedule";
+import { byDueDate, bySubject, helpQuestion, missingDiaryDay, pairUp } from "@/lib/homework/schedule";
 import { diaryFromPages, diaryFromText } from "@/lib/homework/diary-text";
 import type { MatchedChunk } from "@/types/database";
 import { BOARD_COLUMNS, BOARD_ROWS, makeBoardGame, makeFamilySheet, makeMatchSheet, schoolFamilySheet, schoolMatchSheet } from "@/lib/kindergarten/worksheets";
@@ -840,6 +840,17 @@ function q0(): Question {
   check(missingDiaryDay(used, [], "2026-11-02", 9) === "2026-10-30", "Homework: on a Monday morning it asks for Friday's, not the weekend's");
   check(missingDiaryDay([w("Maths", null, "2026-10-28")], [], "2026-10-28", 10) === null && missingDiaryDay([], [], "2026-10-28", 16) === null, "Homework: no nudge before the list was in use");
   check(missingDiaryDay(used, ["2026-10-27"], "2026-10-28", 10) === null, "Homework: a diary day with nothing set counts as added");
+  const twins = pairUp([
+    { id: "c1", kind: "classwork" as const, subject: "Mathematics", title: "3ABCD", due_date: null, given_date: "2026-10-22" },
+    { id: "h1", kind: "homework" as const, subject: "Mathematics", title: "3 ABCD", due_date: "2026-10-26", given_date: "2026-10-22" },
+    { id: "c2", kind: "classwork" as const, subject: "Mathematics", title: "2A - 2F", due_date: null, given_date: "2026-10-22" },
+    { id: "h2", kind: "homework" as const, subject: "Mathematics", title: "2A-2E", due_date: null, given_date: "2026-10-22" },
+    { id: "h3", kind: "homework" as const, subject: "Mathematics", title: "3ABCD", due_date: null, given_date: "2026-10-23" },
+  ]);
+  check(
+    twins.map((r) => `${r.id}${r.twin ? `+${r.twin.id}` : ""}`).join() === "h1+c1,c2,h2,h3",
+    `Homework: the same work as classwork and homework that day is one row; different work, or another day, stays apart (${twins.map((r) => r.id + (r.twin ? "+" + r.twin.id : "")).join()})`
+  );
   // A typed diary PDF's own text, read by code (the layout of real school diaries; the content is made up).
   const typedPage = [
     "Subject Math", "Topic Profit and Loss", "Sub Topic Overheads", "CW 3ABCD", "Reinforcement 3ABCD", "Submission date 26-10-2026",

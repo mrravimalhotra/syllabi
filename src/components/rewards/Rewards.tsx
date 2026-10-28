@@ -11,8 +11,11 @@ function useToday() {
   return today;
 }
 
-/** The child's star chart on a menu: stars, days in a row, and the sticker collection. */
-export function RewardsBar() {
+/**
+ * The child's star chart on a menu: stars, days in a row, and the sticker collection. `howToEarn` says how stars
+ * are earned on this screen (games and quizzes unless told otherwise); `panda` is off where the panda is already shown.
+ */
+export function RewardsBar({ howToEarn = "Finish a game or quiz to earn stars.", panda = true }: { howToEarn?: string; panda?: boolean }) {
   const { stars, days } = useRewards();
   const today = useToday();
   const streak = streakOf(days, today);
@@ -23,10 +26,12 @@ export function RewardsBar() {
       className="flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-xs"
       aria-label="Stars and stickers"
     >
-      <Panda mood="wave" className="h-16 w-14 shrink-0" />
+      {panda && <Panda mood="wave" className="h-16 w-14 shrink-0" />}
       <div className="min-w-0 flex-1 space-y-2">
         {stars === 0 ? (
-          <p className="text-sm text-amber-900">⭐ Finish a game or quiz to earn stars. Every {STARS_PER_STICKER} stars wins a sticker!</p>
+          <p className="text-sm text-amber-900">
+            ⭐ {howToEarn} Every {STARS_PER_STICKER} stars wins a sticker!
+          </p>
         ) : (
           <>
             <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm font-semibold text-amber-900">
@@ -38,6 +43,7 @@ export function RewardsBar() {
               )}
               {toNext !== null && <span className="font-normal text-amber-800">{toNext} more for the next sticker</span>}
             </p>
+            {!panda && <p className="text-sm text-amber-900">{howToEarn}</p>}
             {stickers.length > 0 && (
               <p className="flex flex-wrap gap-1 text-2xl leading-none" aria-label={`${stickers.length} stickers collected`}>
                 {stickers.map((s, i) => (
