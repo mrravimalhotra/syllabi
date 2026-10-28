@@ -37,6 +37,22 @@ export interface NewEntry {
   due_date: string | null;
   given_date: string;
   dedup_key: string;
+  /** The two readings of a diary photo didn't agree on it: worth checking against the page. */
+  needs_check?: boolean;
+}
+
+/**
+ * Two readings of the same diary photo put together: what both found is kept as it is; what only one found,
+ * or what they dated differently, is kept too (better a line to check than a missed homework) and marked.
+ */
+export function compareReads(first: NewEntry[], second: NewEntry[]): NewEntry[] {
+  const other = new Map(second.map((e) => [e.dedup_key, e]));
+  const out = first.map((e) => {
+    const twin = other.get(e.dedup_key);
+    return { ...e, needs_check: !twin || twin.due_date !== e.due_date };
+  });
+  const seen = new Set(first.map((e) => e.dedup_key));
+  return [...out, ...second.filter((e) => !seen.has(e.dedup_key)).map((e) => ({ ...e, needs_check: true }))];
 }
 
 /** Today's date in India, where the diaries are written, as YYYY-MM-DD. */

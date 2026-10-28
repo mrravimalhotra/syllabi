@@ -83,7 +83,17 @@ export function useHomework(onStar?: (stickers: string[]) => void) {
     setEntries((list) => list?.filter((e) => !ids.includes(e.id) || !results[ids.indexOf(e.id)]?.ok) ?? null);
   }
 
+  /** "Looks right": the grown-up checked it against the diary page. */
+  async function confirm(row: Row) {
+    const ids = [row.id, ...(row.twin ? [row.twin.id] : [])];
+    const results = await Promise.all(
+      ids.map((id) => fetch(`/api/homework/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ checked: true }) }).catch(() => null))
+    );
+    if (results.some((r) => !r?.ok)) return setError("Couldn't save that. Try again in a moment.");
+    setEntries((list) => list?.map((e) => (ids.includes(e.id) ? { ...e, needs_check: false } : e)) ?? null);
+  }
+
   const added = (entry: Entry) => setEntries((list) => [entry, ...(list ?? [])]);
 
-  return { entries, diaryDays, error, load, toggle, undo, justDone, remove, added };
+  return { entries, diaryDays, error, load, toggle, undo, justDone, remove, confirm, added };
 }

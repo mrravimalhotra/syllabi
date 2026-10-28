@@ -1,6 +1,6 @@
 import { generateCompletion } from "@/lib/llm";
 import type { CompletionImage, CompletionResult } from "@/lib/llm/types";
-import type { DiaryDay } from "@/lib/homework/diary";
+import { compareReads, entriesFrom, type DiaryDay, type NewEntry } from "@/lib/homework/diary";
 
 // The AI only reads the class diary into raw fields, word for word; lib/homework/diary.ts turns those into
 // entries (dates, subject names, Nil/NA and repeats are handled in code, the same way every time).
@@ -87,19 +87,37 @@ export function parseDiary(text: string): DiaryDay[] | null {
   }
 }
 
+/** The second reading's extra instruction: the same page, read afresh, row by row. */
+const CAREFULLY = "Read it row by row, carefully: each period's Subject, CW, Reinforcement and Submission date, and every date and number digit by digit.";
+
 /** Reads diary pages (pictures, with a PDF page's own text when it has one) into diary days. */
-export async function readDiary(pages: CompletionImage[], fileName: string): Promise<{ days: DiaryDay[]; result: CompletionResult }> {
+export async function readDiary(pages: CompletionImage[], fileName: string, again = false): Promise<{ days: DiaryDay[]; result: CompletionResult }> {
   const known = pages.map((p, i) => (p.text ? `Page ${i + 1} text (from the PDF itself):\n${p.text}` : "")).filter(Boolean);
   const result = await generateCompletion({
     taskType: "ad_hoc",
     systemInstructions: DIARY_SYSTEM,
-    prompt: [`The file is named "${fileName}".`, ...known, "Copy the diary pages into JSON."].join("\n\n"),
+    prompt: [`The file is named "${fileName}".`, ...known, again ? CAREFULLY : "", "Copy the diary pages into JSON."].filter(Boolean).join("\n\n"),
     images: pages,
-    temperature: 0,
+    temperature: again ? 0.2 : 0,
     maxOutputTokens: 8192,
     jsonSchema: SCHEMA,
   });
   const days = parseDiary(result.text);
   if (!days) throw new Error("The diary could not be read: the reply was not in the expected form");
   return { days, result };
+}
+
+/**
+ * A diary photo read twice, independently, and the readings compared (lib/homework/diary.ts compareReads):
+ * entries they disagree on are kept and marked to check. If the second reading fails, the first stands unmarked.
+ */
+export async function readDiaryTwice(
+  pages: CompletionImage[],
+  fileName: string,
+  uploaded: string
+): Promise<{ days: DiaryDay[]; entries: NewEntry[]; results: CompletionResult[] }> {
+  const [first, second] = await Promise.all([readDiary(pages, fileName), readDiary(pages, fileName, true).catch(() => null)]);
+  const entries = entriesFrom(first.days, fileName, uploaded);
+  if (!second) return { days: first.days, entries, results: [first.result] };
+  return { days: first.days, entries: compareReads(entries, entriesFrom(second.days, fileName, uploaded)), results: [first.result, second.result] };
 }

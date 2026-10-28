@@ -1007,10 +1007,39 @@ failures.length = 0;
   check("homework: classwork and homework become entries, Nil skipped", first.json?.added === 3 && rows.map((r) => `${r.subject}:${r.kind}:${r.title}`).join(" | ") === "Mathematics:classwork:4A to E | Mathematics:homework:3ABCD | Geography:homework:Draw a weather map", JSON.stringify(rows.map((r) => [r.subject, r.kind, r.title])));
   check("homework: the date comes from the file name, not the wrong header; submission dates are read", rows.every((r) => r.given_date === "2026-10-27") && rows[1].due_date === "2026-10-29" && rows[2].due_date === null, JSON.stringify(rows.map((r) => [r.given_date, r.due_date])));
   check("homework: the AI is told the file name, and the pages are kept", diaryPrompt.includes("Diary 27 Oct.pdf") && [...files.keys()].some((k) => k.startsWith(`homework/${ME}/`)) && rows.every((r) => r.owner_id === ME && r.source_file.startsWith(`homework/${ME}/`)));
+  check("homework: a diary photo is read twice, the second time row by row, and readings that agree mark nothing", fakeAi.calls === 2 && rows.every((r) => !(r as { needs_check?: boolean }).needs_check) && first.json?.toCheck === 0, `${fakeAi.calls} ${JSON.stringify(first.json)}`);
   const again = await expect("homework: the same diary again", homework.POST, 200, null, { fileName: "Diary 27 Oct.pdf", pages: [page] });
   check("homework: uploading it again adds nothing twice", again.json?.added === 0 && again.json?.skipped === 3 && (tables.homework_entries ?? []).length === 3, JSON.stringify(again.json));
+  // Two readings that disagree: what only one found, or dated differently, is kept and marked to check.
+  const reply = fakeAi.reply;
+  fakeAi.reply = (req) => {
+    const prompt = (req as unknown as { prompt: string }).prompt;
+    const day = JSON.parse(JSON.stringify(diary.days[0]));
+    if (prompt.includes("row by row")) {
+      day.periods[0].submission = "30.10.26";
+      day.periods.push({ subject: "Science", topic: "Air", subTopic: "", classwork: "Nil", reinforcement: "Learn the composition of air", submission: "" });
+    }
+    return { text: JSON.stringify({ days: [day] }) };
+  };
+  const doubted = await expect("homework: a photo the two readings disagree on", homework.POST, 200, null, { fileName: "Diary 28 Oct.jpg", pages: [page] });
+  const marked = ((tables.homework_entries ?? []) as { given_date: string; subject: string; kind: string; needs_check?: boolean }[]).filter((r) => r.given_date === "2026-10-28");
+  check(
+    "homework: entries the readings disagree on are kept and marked; the rest are not",
+    doubted.json?.added === 4 && doubted.json?.toCheck === 3 && marked.filter((r) => r.needs_check).map((r) => `${r.subject}:${r.kind}`).sort().join() === "Mathematics:classwork,Mathematics:homework,Science:homework",
+    JSON.stringify([doubted.json, marked.map((r) => [r.subject, r.kind, r.needs_check])])
+  );
+  const doubtedId = (marked.find((r) => r.needs_check) as unknown as { id: string }).id;
+  await expect("homework: 'Looks right' clears the mark", homeworkEntry.PATCH, 200, null, { checked: true }, { id: doubtedId });
+  check("homework: the checked entry is no longer marked", !((tables.homework_entries ?? []).find((r) => (r as { id: string }).id === doubtedId) as { needs_check?: boolean }).needs_check);
+  fakeAi.reply = (req) => {
+    if ((req as unknown as { prompt: string }).prompt.includes("row by row")) throw new Error("busy");
+    return { text: JSON.stringify(diary) };
+  };
+  const oneRead = await expect("homework: when the second reading fails", homework.POST, 200, null, { fileName: "Diary 29 Oct.jpg", pages: [page] });
+  check("homework: the first reading stands, unmarked", oneRead.json?.added === 3 && oneRead.json?.toCheck === 0, JSON.stringify(oneRead.json));
+  fakeAi.reply = reply;
   const listed = await homework.GET();
-  check("homework: the list comes back", ((await listed.json()).entries as unknown[]).length === 3);
+  check("homework: the list comes back", ((await listed.json()).entries as unknown[]).length === (tables.homework_entries ?? []).length);
   const id = (tables.homework_entries![0] as { id: string }).id;
   await expect("homework: an entry is marked done by hand", homeworkEntry.PATCH, 200, null, { done: true }, { id });
   check("homework: done, with the time it was done", (tables.homework_entries![0] as { done: boolean; done_at: string | null }).done === true && Boolean((tables.homework_entries![0] as { done_at: string | null }).done_at));

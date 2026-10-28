@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { AddDiary } from "@/app/dashboard/homework/_parts/AddDiary";
 import { EntryGroups } from "@/app/dashboard/homework/_parts/EntryList";
-import { isOverdue, shortDate, type Row } from "@/app/dashboard/homework/_parts/EntryRow";
+import { isOverdue, shortDate, type Row, type RowActions } from "@/app/dashboard/homework/_parts/EntryRow";
 import { TypeIt } from "@/app/dashboard/homework/_parts/TypeIt";
 import { UndoToast } from "@/app/dashboard/homework/_parts/UndoToast";
 import { localToday, useHomework } from "@/app/dashboard/homework/_parts/useHomework";
@@ -52,7 +52,7 @@ function Filters({ value, onChange }: { value: Filter; onChange: (v: Filter) => 
  * automatically, with a moment to undo.
  */
 export default function HomeworkPage() {
-  const { entries, diaryDays, error, load, toggle, undo, justDone, remove, added } = useHomework();
+  const { entries, diaryDays, error, load, toggle, undo, justDone, remove, confirm, added } = useHomework();
   const [filter, setFilter] = useState<Filter>("home");
   const [layout, setLayout] = usePref<Layout>("syllabi.homework.layout", "due", isLayout);
   const [today] = useState(localToday);
@@ -67,7 +67,7 @@ export default function HomeworkPage() {
   const overdue = open.filter((r) => isOverdue(r, today)).length;
   const missing = missingDiaryDay(all, diaryDays, today, hour);
   const subjects = [...new Set(all.filter((e) => e.kind !== "note").map((e) => e.subject))].sort();
-  const actions = { onRemove: (r: Row) => void remove(r), help: true, pages: true };
+  const actions: RowActions = { onRemove: (r: Row) => void remove(r), onChecked: (r: Row) => void confirm(r), help: true, pages: true };
   const groups = (list: Row[]) => (layout === "due" ? byDueDate(list, today) : bySubject(list));
   const list = (g: { title: string; entries: Row[] }[], rowActions = actions) => (
     <EntryGroups groups={g} today={today} onToggle={(r) => void toggle(r)} actions={rowActions} showSubject={layout === "due" || g.length === 1} />

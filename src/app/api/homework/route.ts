@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { parsePhotos } from "@/lib/generation/attachments";
 import { entriesFrom, givenDate, indiaToday } from "@/lib/homework/diary";
 import { diaryFromPages } from "@/lib/homework/diary-text";
-import { readDiary } from "@/lib/homework/read-diary";
+import { readDiaryTwice } from "@/lib/homework/read-diary";
 import { recordTokenUsage } from "@/lib/llm/usage";
 import { QuotaExceededError, checkQuota } from "@/lib/quota";
 import { uploadSourceFile } from "@/lib/storage";
@@ -16,7 +16,7 @@ export const maxDuration = 120;
 /** "Fri 23 Oct". */
 const spoken = (day: string) => new Date(`${day}T00:00:00Z`).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
 
-export const COLUMNS = "id, kind, subject, title, topic, sub_topic, due_date, given_date, done, done_at, source, created_at";
+export const COLUMNS = "id, kind, subject, title, topic, sub_topic, due_date, given_date, done, done_at, source, needs_check, created_at";
 
 
 /** The caller's homework and classwork entries, newest diary day first, and the recent days whose diary is in. */
@@ -65,15 +65,16 @@ export async function POST(request: Request) {
     const folder = `homework/${user.id}/${crypto.randomUUID()}/`;
     await Promise.all(pages.map((p, i) => uploadSourceFile(`${folder}page-${i + 1}.jpg`, Buffer.from(p.data, "base64"), p.mimeType)));
 
+    const uploaded = indiaToday();
     let days = typed;
+    let entries = typed ? entriesFrom(typed, fileName, uploaded) : [];
     if (!days) {
-      const read = await readDiary(pages, fileName);
-      days = read.days;
-      await recordTokenUsage({ studentId: user.id, taskType: "ad_hoc", provider: read.result.provider, model: read.result.model, usage: read.result.usage });
+      // A photo is read twice; what the readings disagree on is marked to check.
+      const read = await readDiaryTwice(pages, fileName, uploaded);
+      ({ days, entries } = read);
+      for (const r of read.results) await recordTokenUsage({ studentId: user.id, taskType: "ad_hoc", provider: r.provider, model: r.model, usage: r.usage });
     }
 
-    const uploaded = indiaToday();
-    const entries = entriesFrom(days, fileName, uploaded);
     const admin = createAdminClient();
     const diaryDays = [...new Set(days.filter((d) => d.periods.length > 0).map((d) => givenDate(d, fileName, uploaded)))];
     if (diaryDays.length) {
@@ -92,10 +93,11 @@ export async function POST(request: Request) {
         entries.map((e) => ({ ...e, owner_id: user.id, source_file: folder })),
         { onConflict: "owner_id,dedup_key", ignoreDuplicates: true }
       )
-      .select("id");
+      .select("id, needs_check");
     if (error) throw error;
     const added = inserted?.length ?? 0;
-    return NextResponse.json({ added, skipped: entries.length - added });
+    const toCheck = (inserted ?? []).filter((e) => e.needs_check).length;
+    return NextResponse.json({ added, skipped: entries.length - added, toCheck });
   } catch (err) {
     return errorResponse(err, "homework upload", "Couldn't read the diary. Check the photo is clear and try again.");
   }

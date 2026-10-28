@@ -18,6 +18,8 @@ export interface Entry {
   done: boolean;
   done_at: string | null;
   source: "diary" | "typed";
+  /** The two readings of the diary photo disagreed on it: check it against the page. */
+  needs_check?: boolean;
 }
 
 /** A row on screen: an entry, and the same work set as classwork in that period, shown with it once. */
@@ -30,6 +32,8 @@ export interface RowActions {
   help?: boolean;
   /** "Diary page": the page it was read from, to check a misreading. */
   pages?: boolean;
+  /** "Looks right": clears "Check this" once it has been checked against the diary page. */
+  onChecked?: (e: Row) => void;
 }
 
 /** "Thu, 29 Oct" (with the year when it is not this year). */
@@ -84,6 +88,7 @@ function Details({ entry, today }: { entry: Row; today: string }) {
     <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-slate-500">
       <Badge tone={KIND_TONE[entry.kind]}>{entry.twin ? "Class & homework" : KIND_LABEL[entry.kind]}</Badge>
       {isOverdue(entry, today) && <Badge tone="danger">Overdue</Badge>}
+      {entry.needs_check && <Badge tone="warning">Check this</Badge>}
       {due && <span className="font-medium text-slate-600">{due}</span>}
       {about && <span className="basis-full [overflow-wrap:anywhere]">{about}</span>}
     </p>
@@ -94,6 +99,7 @@ function menuItems(entry: Row, actions: RowActions, showPages: () => void): Menu
   const items: MenuItem[] = [];
   if (actions.help && entry.kind === "homework" && !entry.done) items.push({ label: "Get help with this", href: `/dashboard?tool=solution&q=${encodeURIComponent(helpQuestion(entry))}` });
   if (actions.pages && entry.source === "diary") items.push({ label: "See the diary page", onSelect: showPages });
+  if (actions.onChecked && entry.needs_check) items.push({ label: "Looks right", onSelect: () => actions.onChecked?.(entry) });
   if (actions.onRemove) items.push({ label: "Remove", danger: true, onSelect: () => actions.onRemove?.(entry) });
   return items;
 }

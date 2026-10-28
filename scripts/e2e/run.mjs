@@ -908,12 +908,13 @@ await test("Homework: homework and notices first, by due date, with subjects; cl
   let list = [
     { id: "h1", kind: "homework", subject: "Mathematics", title: "3ABCD", topic: "Integers", sub_topic: "Ex 4A", due_date: day(-2), given_date: day(-4), done: false, done_at: null, source: "diary" },
     { id: "h2", kind: "classwork", subject: "Mathematics", title: "4A to E", topic: "Integers", sub_topic: null, due_date: null, given_date: day(-4), done: false, done_at: null, source: "diary" },
-    { id: "h3", kind: "homework", subject: "Marathi", title: "pg 63,64 translation", topic: "पाठ ३", sub_topic: null, due_date: day(0), given_date: day(-1), done: false, done_at: null, source: "diary" },
+    { id: "h3", kind: "homework", subject: "Marathi", title: "pg 63,64 translation", topic: "पाठ ३", sub_topic: null, due_date: day(0), given_date: day(-1), done: false, done_at: null, source: "diary", needs_check: true },
     { id: "h6", kind: "classwork", subject: "Mathematics", title: "3ABCD", topic: "Integers", sub_topic: "Ex 4A", due_date: day(-2), given_date: day(-4), done: false, done_at: null, source: "diary" },
     { id: "h5", kind: "note", subject: "Notice", title: "Bring chart paper", topic: null, sub_topic: null, due_date: null, given_date: day(-1), done: false, done_at: null, source: "diary" },
     { id: "h4", kind: "homework", subject: "Art", title: "Shade the sphere", topic: null, sub_topic: null, due_date: null, given_date: day(-6), done: true, done_at: day(-1), source: "diary" },
   ];
   const patched = [];
+  const checkedIds = [];
   let typed = null;
   await ctx.route("**/api/homework/*/pages", (r) => json(r, { pages: [`${BASE}/icon.svg`] }));
   await ctx.route("**/api/homework/*", (r) => {
@@ -922,12 +923,16 @@ await test("Homework: homework and notices first, by due date, with subjects; cl
       typed = r.request().postDataJSON();
       return json(r, { entry: { id: "h9", kind: "homework", subject: "English", title: typed.title, topic: null, sub_topic: null, due_date: typed.due_date || null, given_date: day(0), done: false, done_at: null, source: "typed" } });
     }
+    if (r.request().postDataJSON().checked) {
+      checkedIds.push(id);
+      return json(r, { entry: { id } });
+    }
     patched.push(`${id}:${r.request().postDataJSON().done}`);
     list = list.map((e) => (e.id === id ? { ...e, done: r.request().postDataJSON().done } : e));
     return json(r, { entry: { id }, star: true });
   });
   await ctx.route("**/api/homework", (r) =>
-    r.request().method() === "POST" ? json(r, { added: 5, skipped: 2 }) : json(r, { entries: list })
+    r.request().method() === "POST" ? json(r, { added: 5, skipped: 2, toCheck: 1 }) : json(r, { entries: list })
   );
   await page.goto(`${BASE}/dashboard/homework`, { waitUntil: "networkidle" });
   // Homework and notices by due date; classwork from class is folded away.
@@ -953,6 +958,13 @@ await test("Homework: homework and notices first, by due date, with subjects; cl
   if (await page.getByRole("menuitem", { name: "Get help with this" }).count()) throw new Error("A notice has no Get help.");
   await page.keyboard.press("Escape");
   if (await page.getByRole("menu").count()) throw new Error("Escape should close the menu.");
+  // A line the two readings of the diary photo disagreed on: marked, and cleared once checked.
+  const doubted = page.locator('[data-entry="h3"]');
+  await doubted.getByText("Check this").waitFor();
+  await tap(page.getByRole("button", { name: "More for Marathi: pg 63,64 translation" }));
+  await tap(page.getByRole("menuitem", { name: "Looks right" }));
+  await page.waitForFunction(() => !document.querySelector('[data-entry="h3"]')?.textContent?.includes("Check this"));
+  if (checkedIds.join() !== "h3") throw new Error(`Checked: ${checkedIds.join()}`);
   // Ticked off by hand, with its classwork twin; undone; ticked again.
   await page.getByText("Done (1)").waitFor();
   await tap(page.getByRole("checkbox", { name: /Not done: Mathematics, 3ABCD/ }));
@@ -990,7 +1002,7 @@ await test("Homework: homework and notices first, by due date, with subjects; cl
   await page.getByRole("button", { name: "Cancel" }).click();
   // A diary page is added.
   await page.locator('input[aria-label="Class diary pages"]').setInputFiles({ name: "Diary 27 Oct.jpg", mimeType: "image/jpeg", buffer: tinyJpeg });
-  await page.getByText("Added 5 entries from the diary. 2 were already in your list.").waitFor({ timeout: 15000 });
+  await page.getByText(/Added 5 entries from the diary\. 2 were already in your list\. 1 needs a look/).waitFor({ timeout: 15000 });
 });
 
 await test("Homework: the child ticks their own list in Practice and earns a star; Get help fills in Ask Syllabi", async (page, ctx) => {
