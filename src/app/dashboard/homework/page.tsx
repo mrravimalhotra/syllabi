@@ -51,7 +51,7 @@ function Choice<T extends string>({ label, options, value, onChange }: { label: 
  * tonight's first, or by subject; ticked off by hand, never automatically; done work folded away below.
  */
 export default function HomeworkPage() {
-  const { entries, error, load, toggle, remove, added } = useHomework();
+  const { entries, diaryDays, error, load, toggle, remove, added } = useHomework();
   const [filter, setFilter] = useState<Filter>("all");
   const [layout, setLayout] = usePref<Layout>("syllabi.homework.layout", "due", isLayout);
   const [today] = useState(localToday);
@@ -62,7 +62,7 @@ export default function HomeworkPage() {
   const open = shown.filter((e) => !e.done);
   const done = shown.filter((e) => e.done).sort((a, b) => (b.done_at ?? "").localeCompare(a.done_at ?? ""));
   const overdue = open.filter((e) => isOverdue(e, today)).length;
-  const missing = missingDiaryDay(all, today, hour);
+  const missing = missingDiaryDay(all, diaryDays, today, hour);
   const subjects = [...new Set(all.map((e) => e.subject))].sort();
   const actions = { onRemove: (e: (typeof all)[number]) => void remove(e), help: true, pages: true };
 
@@ -81,7 +81,7 @@ export default function HomeworkPage() {
 
       {entries === null && !error ? (
         <PageSkeleton />
-      ) : entries && entries.length === 0 ? (
+      ) : entries && entries.length === 0 && diaryDays.length === 0 ? (
         <EmptyState icon={<ListCheckIcon className="h-6 w-6" />} title="Nothing yet" description="Add a photo or PDF of the class diary above, and its classwork and homework will appear here." />
       ) : (
         <>

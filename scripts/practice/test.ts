@@ -39,6 +39,7 @@ import { disagreements, numbersIn, parseFinals } from "@/lib/generation/second-s
 import { checkCitations, withPageReferences } from "@/lib/generation/citations";
 import { entriesFrom, givenDate, isNothing, normaliseSubject, parseDiaryDate } from "@/lib/homework/diary";
 import { byDueDate, bySubject, helpQuestion, missingDiaryDay } from "@/lib/homework/schedule";
+import { diaryFromPages, diaryFromText } from "@/lib/homework/diary-text";
 import type { MatchedChunk } from "@/types/database";
 import { BOARD_COLUMNS, BOARD_ROWS, makeBoardGame, makeFamilySheet, makeMatchSheet, schoolFamilySheet, schoolMatchSheet } from "@/lib/kindergarten/worksheets";
 import { BOARD_WORDS, CVC_WORDS, familiesOf, rimeOf, SIGHT_LEVELS, SIGHT_SETS, VOWELS } from "@/lib/kindergarten/words";
@@ -824,20 +825,43 @@ function q0(): Question {
 }
 {
   // Homework laid out the way a child plans an evening: tonight's work first. 2026-10-28 is a Wednesday.
-  const w = (subject: string, due: string | null, given = "2026-10-26") => ({ subject, title: subject, due_date: due, given_date: given });
-  const work = [w("Art", null), w("Maths", "2026-10-30"), w("Hindi", "2026-10-27"), w("EVS", "2026-10-29"), w("English", "2026-10-28"), w("Music", "2026-11-04"), w("PE", "2026-11-01")];
+  const w = (subject: string, due: string | null, given = "2026-10-26", kind: "homework" | "classwork" = "homework") => ({ kind, subject, title: subject, due_date: due, given_date: given });
+  const work = [w("Art", null), w("Drawing", null, "2026-10-26", "classwork"), w("Maths", "2026-10-30"), w("Hindi", "2026-10-27"), w("EVS", "2026-10-29"), w("English", "2026-10-28"), w("Music", "2026-11-04"), w("PE", "2026-11-01")];
   const plan = byDueDate(work, "2026-10-28").map((g) => `${g.title}=${g.entries.map((e) => e.subject).join("+")}`).join(" | ");
   check(
-    plan === "Overdue=Hindi | Due today=English | Due tomorrow=EVS | Later this week=Maths+PE | Later=Music | No submission date: ask your teacher=Art",
+    plan === "Overdue=Hindi | Due today=English | Due tomorrow=EVS | Later this week=Maths+PE | Later=Music | No submission date: ask your teacher=Art | Classwork with no date: tick it once it's finished=Drawing",
     `Homework: by due date, overdue first and no-date work last with a nudge to ask (${plan})`
   );
-  check(bySubject(work).map((g) => g.title).join() === "Art,English,EVS,Hindi,Maths,Music,PE", "Homework: by subject, A to Z");
+  check(bySubject(work).map((g) => g.title).join() === "Art,Drawing,English,EVS,Hindi,Maths,Music,PE", "Homework: by subject, A to Z");
   const used = [w("Maths", null, "2026-10-26")];
-  check(missingDiaryDay(used, "2026-10-28", 10) === "2026-10-27", "Homework: yesterday's diary not added is noticed (in the morning, today's isn't home yet)");
-  check(missingDiaryDay(used, "2026-10-28", 16) === "2026-10-28", "Homework: after school, today's diary is asked for");
-  check(missingDiaryDay([...used, w("Art", null, "2026-10-27")], "2026-10-28", 10) === null, "Homework: no nudge when the diary is in");
-  check(missingDiaryDay(used, "2026-11-02", 9) === "2026-10-30", "Homework: on a Monday morning it asks for Friday's, not the weekend's");
-  check(missingDiaryDay([w("Maths", null, "2026-10-28")], "2026-10-28", 10) === null && missingDiaryDay([], "2026-10-28", 16) === null, "Homework: no nudge before the list was in use");
+  check(missingDiaryDay(used, [], "2026-10-28", 10) === "2026-10-27", "Homework: yesterday's diary not added is noticed (in the morning, today's isn't home yet)");
+  check(missingDiaryDay(used, [], "2026-10-28", 16) === "2026-10-28", "Homework: after school, today's diary is asked for");
+  check(missingDiaryDay([...used, w("Art", null, "2026-10-27")], [], "2026-10-28", 10) === null, "Homework: no nudge when the diary is in");
+  check(missingDiaryDay(used, [], "2026-11-02", 9) === "2026-10-30", "Homework: on a Monday morning it asks for Friday's, not the weekend's");
+  check(missingDiaryDay([w("Maths", null, "2026-10-28")], [], "2026-10-28", 10) === null && missingDiaryDay([], [], "2026-10-28", 16) === null, "Homework: no nudge before the list was in use");
+  check(missingDiaryDay(used, ["2026-10-27"], "2026-10-28", 10) === null, "Homework: a diary day with nothing set counts as added");
+  // A typed diary PDF's own text, read by code (the layout of real school diaries; the content is made up).
+  const typedPage = [
+    "Subject Math", "Topic Profit and Loss", "Sub Topic Overheads", "CW 3ABCD", "Reinforcement 3ABCD", "Submission date 26-10-2026",
+    "Period - 2", "Subject SPA", "Topic", "Sub Topic", "CW", "Reinforcement", "Submission date",
+    "Period - 3", "Subject ART", "Topic Memory drawing", "Sub Topic Landscape", "CW Introduction", "Reinforcement Nil", "Submission date Nil",
+    "Period - 4", "Subject ART", "Topic Memory drawing", "Sub Topic Landscape", "CW Introduction", "Reinforcement Nil", "Submission date Nil",
+    "Period - 5", "Subject Geography 19th Oct", "Topic Lithosphere", "Sub Topic Interior of the earth", "CW CW 1,2", "Reinforcement Nil", "Submission date NA",
+    "Period - 6", "Subject Computer", "Topic Introduction to Krita", "Sub Topic Saving and Opening a Project ,", "Closing Krita", "CW Practical", "Reinforcement NIl", "Submission date Nil",
+    "Period - 7", "Subject History 8/9/26", "Topic Bhakti Movement", "Sub Topic Revision", "CW Nil", "Reinforcement Write answers in the NB", "Submission date 21st Oct",
+    "Period - 8", "Subject Marathi", "Topic वाचनाचे वेड", "Sub Topic वाचनाचे वेड", "CW Nil", "Reinforcement Nil", "Submission date NA",
+    "Additional Information", "16-10--2026", "FRIDAY 7F",
+  ].join("\n\n");
+  const typedDay = diaryFromText(typedPage);
+  check(typedDay?.periods.length === 8 && typedDay.headerDate === "16-10--2026" && typedDay.weekday === "FRIDAY", `Homework: a typed diary's own text is read by code, with its date from the footer (${JSON.stringify(typedDay?.headerDate)})`);
+  check(typedDay?.periods[5].subTopic === "Saving and Opening a Project , Closing Krita" && typedDay.periods[4].classwork === "CW 1,2" && typedDay.periods[1].topic === "", "Homework: values running onto the next line, a value starting with its label, and blank rows are kept as written");
+  const typedEntries = entriesFrom([typedDay!], "7F_16th_Oct.pdf", "2026-10-28").map((e) => `${e.subject}:${e.kind}:${e.title}:${e.due_date ?? "none"}`);
+  check(
+    typedEntries.join(" | ") === "Mathematics:classwork:3ABCD:2026-10-26 | Mathematics:homework:3ABCD:2026-10-26 | Art:classwork:Introduction:none | Geography:classwork:CW 1,2:none | Computer Science:classwork:Practical:none | History:homework:Write answers in the NB:2026-10-21",
+    `Homework: the typed diary becomes the right entries, the double Art period once (${typedEntries.join(" | ")})`
+  );
+  check(diaryFromText("Q1. Find the profit.\nQ2. Find the loss.") === null && diaryFromPages([{ text: typedPage }, {}]) === null, "Homework: a page that isn't the typed diary, or a photo, goes to the AI");
+  check(normaliseSubject("FRENCH") === "French" && normaliseSubject("BIOLOGY") === "Biology" && normaliseSubject("SPA") === "SPA" && normaliseSubject("Enrichment program") === "Enrichment Program", "Homework: subject names in one spelling whatever their case");
   check(helpQuestion({ subject: "Maths", title: "Ex 4B, Q1 to 5", topic: "Integers", sub_topic: null }) === "Maths homework (Integers): Ex 4B, Q1 to 5", "Homework: Get help asks about the work as written");
   // The quality test set's grading (scripts/quality), without the AI.
   const facts = factChecks("**Ans:** Akbar became emperor in 1556, aged 13.", ["1556", "thirteen|13", "Bairam"], ["1605"]);

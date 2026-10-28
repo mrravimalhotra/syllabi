@@ -17,6 +17,7 @@ export function localToday(): string {
  */
 export function useHomework(onStar?: (stickers: string[]) => void) {
   const [entries, setEntries] = useState<Entry[] | null>(null);
+  const [diaryDays, setDiaryDays] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -25,6 +26,7 @@ export function useHomework(onStar?: (stickers: string[]) => void) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Couldn't load the homework list.");
       setEntries(data.entries as Entry[]);
+      setDiaryDays(Array.isArray(data.diaryDays) ? (data.diaryDays as string[]) : []);
       setError(null);
     } catch (err) {
       setError(err instanceof TypeError ? OFFLINE_MESSAGE : err instanceof Error ? err.message : "Couldn't load the homework list.");
@@ -59,5 +61,5 @@ export function useHomework(onStar?: (stickers: string[]) => void) {
 
   const added = (entry: Entry) => setEntries((list) => [entry, ...(list ?? [])]);
 
-  return { entries, error, setError, load, toggle, remove, added };
+  return { entries, diaryDays, error, setError, load, toggle, remove, added };
 }

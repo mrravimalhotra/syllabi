@@ -2,13 +2,14 @@
 // evening), or by subject. Plain code over YYYY-MM-DD dates, so it is the same on every device.
 
 export interface Scheduled {
+  kind: "classwork" | "homework";
   subject: string;
   title: string;
   due_date: string | null;
   given_date: string;
 }
 
-type Bucket = "overdue" | "today" | "tomorrow" | "week" | "later" | "none";
+type Bucket = "overdue" | "today" | "tomorrow" | "week" | "later" | "none" | "class";
 
 const BUCKET_TITLES: Record<Bucket, string> = {
   overdue: "Overdue",
@@ -17,9 +18,10 @@ const BUCKET_TITLES: Record<Bucket, string> = {
   week: "Later this week",
   later: "Later",
   none: "No submission date: ask your teacher",
+  class: "Classwork with no date: tick it once it's finished",
 };
 
-const ORDER: Bucket[] = ["overdue", "today", "tomorrow", "week", "later", "none"];
+const ORDER: Bucket[] = ["overdue", "today", "tomorrow", "week", "later", "none", "class"];
 
 /** The date `days` after a YYYY-MM-DD date. */
 function addDays(date: string, days: number): string {
@@ -31,7 +33,8 @@ function addDays(date: string, days: number): string {
 /** When a piece of open work is due, as seen today ("this week" runs to the coming Sunday). */
 function bucketOf(entry: Scheduled, today: string): Bucket {
   const due = entry.due_date;
-  if (!due) return "none";
+  // Classwork with no date was done in class; only homework with no date needs asking about.
+  if (!due) return entry.kind === "classwork" ? "class" : "none";
   if (due < today) return "overdue";
   if (due === today) return "today";
   if (due === addDays(today, 1)) return "tomorrow";
@@ -62,12 +65,12 @@ const isSchoolDay = (date: string) => {
 };
 
 /**
- * The latest school day (Monday to Friday) whose diary has not been added, within the last week, or null. Today
+ * The latest school day (Monday to Friday) whose diary has not been added (it has no entries, and wasn't added as a day with nothing set), or null. Today
  * counts only from the afternoon (`hour` 15 or later), once the diary is home. Only asked once the list is in use.
  */
-export function missingDiaryDay(entries: Scheduled[], today: string, hour: number): string | null {
-  if (entries.length === 0) return null;
-  const given = new Set(entries.map((e) => e.given_date));
+export function missingDiaryDay(entries: Pick<Scheduled, "given_date">[], diaryDays: string[], today: string, hour: number): string | null {
+  const given = new Set([...entries.map((e) => e.given_date), ...diaryDays]);
+  if (given.size === 0) return null;
   let day = hour >= 15 ? today : addDays(today, -1);
   for (let i = 0; i < 7 && !isSchoolDay(day); i++) day = addDays(day, -1);
   if (!isSchoolDay(day) || given.has(day)) return null;

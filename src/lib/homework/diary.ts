@@ -138,6 +138,9 @@ const SUBJECT_NAMES: Record<string, string> = {
   sst: "Social Science",
 };
 
+/** Short subject names kept in capitals. */
+const ACRONYMS = new Set(["EVS", "SST", "ICT", "SPA", "GK", "PE", "IT", "SUPW", "STEM", "AI"]);
+
 /** A subject's name without the date some entries carry ("Geography 22nd oct", "History 19/10/26"), in one spelling. */
 export function normaliseSubject(raw: string): string {
   const cleaned = raw
@@ -146,7 +149,11 @@ export function normaliseSubject(raw: string): string {
     .trim();
   const key = cleaned.toLowerCase().replace(/\.$/, "");
   if (SUBJECT_NAMES[key]) return SUBJECT_NAMES[key];
-  return cleaned.replace(/\b([a-z])/g, (c) => c.toUpperCase());
+  // One spelling whatever the case it was typed in ("ART", "Art", "FRENCH"), keeping short names like EVS and SPA.
+  return cleaned
+    .split(" ")
+    .map((w) => (ACRONYMS.has(w.toUpperCase()) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()))
+    .join(" ");
 }
 
 /** Nothing set: blank, "Nil", "NA", "N/A", "None" or a dash. */

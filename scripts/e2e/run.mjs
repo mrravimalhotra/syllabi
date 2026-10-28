@@ -928,9 +928,9 @@ await test("Homework: tonight's work first, overdue flagged, by subject on reque
     r.request().method() === "POST" ? json(r, { added: 5, skipped: 2 }) : json(r, { entries: list })
   );
   await page.goto(`${BASE}/dashboard/homework`, { waitUntil: "networkidle" });
-  // By due date first: overdue, then today's, and work with no date says to ask the teacher.
+  // By due date first: overdue, then today's, and classwork with no date last.
   const headings = await page.locator("section[aria-label] h3").allInnerTexts();
-  if (!/^Overdue/.test(headings[0] ?? "") || !/^Due today/.test(headings[1] ?? "") || !/ask your teacher/.test(headings[2] ?? "")) throw new Error(`Order: ${headings.join(" / ")}`);
+  if (!/^Overdue/.test(headings[0] ?? "") || !/^Due today/.test(headings[1] ?? "") || !/^Classwork with no date/.test(headings[2] ?? "")) throw new Error(`Order: ${headings.join(" / ")}`);
   await page.getByText("3 to do").waitFor();
   await page.getByText("1 overdue").waitFor();
   await page.getByText("पाठ ३").waitFor();

@@ -1011,6 +1011,18 @@ failures.length = 0;
   check("homework: says nothing was found", /No classwork or homework was found/.test(String(empty.json?.message)));
   rpcs.student_monthly_usage = () => 5000;
   await expect("homework: over the monthly allowance is refused", homework.POST, 429, /allowance/i, { fileName: "x.jpg", pages: [page] });
+  // A typed diary PDF carries its text: read by code, no AI, nothing counted against the allowance.
+  fresh();
+  fakeAi.calls = 0;
+  const row = (subject: string, cw: string, hw: string, due: string) => `Subject ${subject}\nTopic Revision\nSub Topic Revision\nCW ${cw}\nReinforcement ${hw}\nSubmission date ${due}`;
+  const typedText = [row("Math", "4ABC", "4A to E", "29.10.26"), row("Chemistry", "Nil", "Nil", "NA"), "Additional Information\n26-10-2026 7F\nMonday"].join("\nPeriod - 2\n");
+  const typedUpload = await expect("homework: a typed diary PDF", homework.POST, 200, null, { fileName: "7F_26th_Oct.pdf", pages: [{ ...page, text: typedText }] });
+  check("homework: a typed diary PDF is read by code, without the AI", typedUpload.json?.added === 2 && fakeAi.calls === 0, JSON.stringify(typedUpload.json));
+  const nilText = [row("SPA", "Nil", "Nil", "Nil"), row("French", "Nil", "Nil", "NA"), "Additional Information\n23-10-2026-Grade7\nFRIDAY"].join("\nPeriod - 2\n");
+  const nilDay = await expect("homework: a diary day with nothing set", homework.POST, 200, null, { fileName: "Grade7_23rd_Oct.pdf", pages: [{ ...page, text: nilText }] });
+  check("homework: says the day is in, with nothing set (not that the photo is unclear)", /23 Oct is in: no classwork or homework was set/.test(String(nilDay.json?.message)), String(nilDay.json?.message));
+  const withDays = await (await homework.GET()).json();
+  check("homework: the days whose diary is in come back, the empty day too", JSON.stringify([...withDays.diaryDays].sort()) === JSON.stringify(["2026-10-23", "2026-10-26"]), JSON.stringify(withDays.diaryDays));
   check("homework replies: diary days are read, an unreadable reply is null", parseDiary(JSON.stringify(diary))?.[0].periods.length === 2 && parseDiary("no") === null);
   fresh();
 }
