@@ -1,6 +1,6 @@
 # Handoff for the next coding session
 
-> **Newest handoff: `docs/HANDOFF-2026-10-24.md`** (ground rules, release routine, what was built since, open items). It wins where it disagrees with this file: for example the Supabase project for Syllabi is reachable read-only through the Management API (never Invento), and commits carry the harness's trailer lines.
+> **Newest handoff: `docs/HANDOFF-2026-10-28.md`** (read it first; then `docs/HANDOFF-2026-10-24.md`) (ground rules, release routine, what was built since, open items). It wins where it disagrees with this file: for example the Supabase project for Syllabi is reachable read-only through the Management API (never Invento), and commits carry the harness's trailer lines.
 
 Read this first, then `docs/PROGRESS.md` (what exists, in plain language),
 `docs/KNOWN-ISSUES.md` (open problems and pending work, by severity),
