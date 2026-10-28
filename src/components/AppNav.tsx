@@ -6,13 +6,14 @@ import { LinkSpinner, PendingIcon } from "@/components/LinkPending";
 import { useSyncExternalStore } from "react";
 import { signOut } from "@/lib/actions/auth";
 import { forgetAll } from "@/lib/client-cache";
-import { BookIcon, DocumentIcon, LogoutIcon, ShieldIcon, SparklesIcon, TargetIcon, UserIcon, WifiOffIcon } from "@/components/icons";
+import { BookIcon, DocumentIcon, ListCheckIcon, LogoutIcon, ShieldIcon, SparklesIcon, TargetIcon, UserIcon, WifiOffIcon } from "@/components/icons";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Logo, button, cx } from "@/components/ui";
 
 const NAV = [
-  { href: "/dashboard", label: "Ask Syllabi", icon: SparklesIcon, exact: true },
+  { href: "/dashboard", label: "Ask Syllabi", short: "Ask", icon: SparklesIcon, exact: true },
   { href: "/dashboard/practice", label: "Practice", icon: TargetIcon },
+  { href: "/dashboard/homework", label: "Homework", icon: ListCheckIcon },
   { href: "/dashboard/library", label: "My books", icon: BookIcon },
   { href: "/dashboard/documents", label: "My Documents", short: "Documents", icon: DocumentIcon },
   { href: "/dashboard/account", label: "Account", icon: UserIcon },
@@ -113,7 +114,7 @@ export function AppNav({ name, isAdmin }: { name: string; isAdmin: boolean }) {
         aria-label="Main"
         className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur-md md:hidden print:hidden"
       >
-        <ul className="mx-auto grid max-w-lg grid-cols-5">
+        <ul className="mx-auto grid max-w-lg grid-cols-6">
           {NAV.map((item) => {
             const active = isActive(pathname, item.href, item.exact);
             const Icon = item.icon;
@@ -127,7 +128,7 @@ export function AppNav({ name, isAdmin }: { name: string; isAdmin: boolean }) {
                     active ? "text-brand-700" : "text-slate-500"
                   )}
                 >
-                  <span className={cx("flex h-7 w-12 items-center justify-center rounded-full", active && "bg-brand-50")}>
+                  <span className={cx("flex h-7 w-11 items-center justify-center rounded-full", active && "bg-brand-50")}>
                     <PendingIcon icon={Icon} className="h-5 w-5" />
                   </span>
                   {item.short ?? item.label}

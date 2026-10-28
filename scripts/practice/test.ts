@@ -37,6 +37,7 @@ import { readAnswerStream } from "@/lib/answer-stream";
 import { factChecks, parseJudge, scoreCase } from "../quality/grade";
 import { disagreements, numbersIn, parseFinals } from "@/lib/generation/second-solve";
 import { checkCitations, withPageReferences } from "@/lib/generation/citations";
+import { entriesFrom, givenDate, isNothing, normaliseSubject, parseDiaryDate } from "@/lib/homework/diary";
 import type { MatchedChunk } from "@/types/database";
 import { BOARD_COLUMNS, BOARD_ROWS, makeBoardGame, makeFamilySheet, makeMatchSheet, schoolFamilySheet, schoolMatchSheet } from "@/lib/kindergarten/worksheets";
 import { BOARD_WORDS, CVC_WORDS, familiesOf, rimeOf, SIGHT_LEVELS, SIGHT_SETS, VOWELS } from "@/lib/kindergarten/words";
@@ -785,6 +786,40 @@ function q0(): Question {
   const css = readFileSync("src/app/globals.css", "utf8");
   const blocks = [...css.matchAll(/:root(?::not\(\[data-theme="light"\]\)|\[data-theme="dark"\]) \{([\s\S]*?)\n {2}\}/g)].map((m) => m[1].trim());
   check(blocks.length === 2 && blocks[0] === blocks[1] && blocks[0].includes("--color-white"), "Dark mode: the automatic and the chosen-Dark colours are the same");
+}
+{
+  // Homework tracker: the class diary's quirks (from the handoff).
+  const ref = "2026-10-20";
+  const dates = ["26-10-2026", "29.10.26", "21st Oct", "28-10-26", "27/10/2026", "Oct 30", "2026-11-02"].map((d) => parseDiaryDate(d, ref));
+  check(dates.join() === "2026-10-26,2026-10-29,2026-10-21,2026-10-28,2026-10-27,2026-10-30,2026-11-02", `Homework: every way the diary writes a submission date is read (${dates.join()})`);
+  check(parseDiaryDate("", ref) === null && parseDiaryDate("Nil", ref) === null, "Homework: no date is no date");
+  check(givenDate({ headerDate: "27-09-2026", weekday: "Tuesday", periods: [] }, "diary.pdf", "2026-10-27") === "2026-10-27", "Homework: a wrong header date (27-09 on a Tuesday) is put right by the weekday");
+  check(givenDate({ headerDate: "27-09-2026", weekday: "Sunday", periods: [] }, "Diary 27 Oct.pdf", "2026-10-28") === "2026-10-27", "Homework: the file name's date wins over the header");
+  check(givenDate({ headerDate: "26-10-2026", weekday: "Monday", periods: [] }, "scan.jpg", "2026-10-28") === "2026-10-26", "Homework: a header date that agrees with its weekday is kept");
+  check(["Geography 22nd oct", "History 19/10/26", "Language", "maths", "Science"].map(normaliseSubject).join() === "Geography,History,English Language,Mathematics,Science", `Homework: subject names are normalised (${["Geography 22nd oct", "History 19/10/26", "Language"].map(normaliseSubject).join()})`);
+  check(["Nil", "NA", "N/A", "", "  -  ", "none"].every(isNothing) && !isNothing("No. 4 to 6") && !isNothing("4A to E"), "Homework: Nil, NA and blanks are nothing; real work is kept");
+  const entries = entriesFrom(
+    [
+      {
+        headerDate: "27-10-2026",
+        weekday: "Tuesday",
+        periods: [
+          { subject: "Mathematics", topic: "Integers", subTopic: "Ex 4A", classwork: "4A to E", reinforcement: "3ABCD", submission: "29.10.26" },
+          { subject: "Art", topic: "Shading", classwork: "Shade the sphere", reinforcement: "Nil", submission: "" },
+          { subject: "Art", topic: "Shading", classwork: "Shade the sphere", reinforcement: "NA", submission: "" },
+          { subject: "Marathi", topic: "पाठ ३", classwork: "NA", reinforcement: "pg 63,64 translation", submission: "28-10-26" },
+        ],
+      },
+    ],
+    "diary.pdf",
+    "2026-10-27"
+  );
+  const kinds = entries.map((e) => `${e.subject}:${e.kind}:${e.title}:${e.due_date ?? "none"}`).join(" | ");
+  check(
+    kinds === "Mathematics:classwork:4A to E:2026-10-29 | Mathematics:homework:3ABCD:2026-10-29 | Art:classwork:Shade the sphere:none | Marathi:homework:pg 63,64 translation:2026-10-28",
+    `Homework: CW and Reinforcement become entries word for word, Nil/NA skipped, a repeated CW kept once (${kinds})`
+  );
+  check(entries.every((e) => e.given_date === "2026-10-27") && entries.find((e) => e.subject === "Marathi")?.topic === "पाठ ३", "Homework: the diary date and Devanagari topics are kept");
 }
 {
   // The quality test set's grading (scripts/quality), without the AI.
