@@ -50,6 +50,7 @@ import * as followUp from "../../src/app/api/documents/[id]/follow-up/route";
 // The real answer pipeline (the routes above use a stand-in), with the AI faked: for the answer checker.
 import { runGeneration } from "../../src/lib/generation/pipeline";
 import { VERIFY_SYSTEM, parseProblems } from "../../src/lib/generation/verify";
+import { SECOND_MARKING_SYSTEM, parseMarking } from "../../src/lib/generation/second-marking";
 import { RERANK_SYSTEM, REWRITE_SYSTEM } from "../../src/lib/rag/refine";
 import { SECOND_SOLVE_SYSTEM } from "../../src/lib/generation/second-solve";
 import * as homework from "../../src/app/api/homework/route";
@@ -944,6 +945,26 @@ failures.length = 0;
   };
   await runGeneration({ student: person(), taskType: "paper_check", prompt: "Mark this" });
   check("checker: a marked paper is not sent to it (code checks the marks)", !calls.includes("check"), calls.join());
+
+  // A checked paper is marked a second time, independently: a question the markings disagree on is looked at again.
+  const report = (m: number, grade: string) => `# Paper check: Maths\n\n| Q | Max | Marks | Steps | Answer |\n|---|---|---|---|---|\n| 1 | 4 | ${m} | 12 x 15 | 170 |\n\n**Total: ${m} / 4 (${m * 25}%) · Grade: ${grade}**`;
+  const paperRun = async (fixTo: number) => {
+    calls.length = 0;
+    fakeAi.reply = (req) => {
+      if (req.systemInstructions === REWRITE_SYSTEM) return { text: '{"queries":[]}' };
+      if (req.systemInstructions === SECOND_MARKING_SYSTEM) return (calls.push("mark again"), { text: '{"questions":[{"question":"1","max":4,"marks":2,"reason":"170 is wrong; method shown"}]}' });
+      const fixing = (req as unknown as { prompt: string }).prompt.includes("Your draft answer below has these problems");
+      calls.push(fixing ? "fix" : "write");
+      return { text: fixing ? report(fixTo, fixTo === 2 ? "C" : "A+") : report(4, "A+") };
+    };
+    return runGeneration({ student: person(), taskType: "paper_check", prompt: "Mark this. Marks per question (set): 4" });
+  };
+  out = await paperRun(2);
+  check("second marking: the paper is marked again, and a question the markings disagree on is fixed", calls.slice(0, 2).sort().join() === "mark again,write" && calls.includes("fix") && out.text.includes("Total: 2 / 4"), `${calls.join()} | ${out.text.slice(-60)}`);
+  check("second marking: the fixed report shows the markings now agree", out.checks.some((c) => c.kind === "review" && c.ok && /same marks for every question/.test(c.message)), JSON.stringify(out.checks));
+  out = await paperRun(4);
+  check("second marking: a disagreement that stays is shown to the parent, naming the question", out.checks.some((c) => c.kind === "review" && !c.ok && /Q1: An independent second marking gave 2 \/ 4/.test(c.message)), JSON.stringify(out.checks));
+  check("second marking: its reply is read, and a bad one is null", parseMarking('{"questions":[{"question":"Q2(a)","max":3,"marks":1.5}]}')?.[0].question === "2(a)" && parseMarking("no") === null);
 
   // Maths is solved a second time: a wrong method with right arithmetic (which the calculator can't see) is caught.
   calls.length = 0;

@@ -8,6 +8,7 @@ import { checkQuota, QuotaExceededError } from "@/lib/quota";
 import { systemInstructionsFor } from "@/lib/generation/prompts";
 import { problemForRepair, reviewChecks, verifyAnswer, type VerifyProblem } from "@/lib/generation/verify";
 import { disagreements, solveAgain, type FinalAnswer } from "@/lib/generation/second-solve";
+import { markAgain, markingDisagreements, type SecondMark } from "@/lib/generation/second-marking";
 import { CITING_TASKS, checkCitations, withPageReferences } from "@/lib/generation/citations";
 import { levelLine } from "@/lib/generation/level";
 import type { AnswerLanguage } from "@/lib/generation/language";
@@ -127,6 +128,26 @@ const NOT_DOUBLE_CHECKED: AnswerCheck = {
   ok: false,
   message: "Not double-checked: the independent check couldn't run this time, so this answer hasn't been read a second time. Check it carefully, or ask again in a minute.",
 };
+
+/**
+ * What the independent checks say, shown with the answer: what they still find, else a clean result (only when
+ * the check really ran), and never an unchecked answer that looks checked. Added after any fix, so it never causes one.
+ */
+function independentChecks(review: VerifyProblem[] | null, examined: boolean, marking: boolean): AnswerCheck[] {
+  if (review?.length) return [...reviewChecks(review), ...(examined ? [] : [NOT_DOUBLE_CHECKED])];
+  if (!examined) return [NOT_DOUBLE_CHECKED];
+  return [marking ? SECOND_MARKING_AGREED : reviewChecks([])[0]];
+}
+
+/** Which independent check found a problem, as told to the writer when it is asked to fix it. */
+function foundBy(p: VerifyProblem): string {
+  if (p.fromSecondMarking) return "found by marking the paper again independently";
+  if (p.fromSecondSolution) return "found by solving the question again independently";
+  return "found by an independent examiner reading the answer against the books";
+}
+
+/** Shown when a second, independent marking of a checked paper agreed on every question. */
+const SECOND_MARKING_AGREED: AnswerCheck = { kind: "review", ok: true, message: "A second, independent marking gave the same marks for every question" };
 
 /** After this long since writing began, the fix and its re-check think less, so the answer is in well within the time limit. */
 const LATE_MS = 120_000;
@@ -389,18 +410,32 @@ async function checkAndRepair(input: {
     await recordTokenUsage({ studentId, taskType, provider: second.result.provider, model: second.result.model, usage: second.result.usage });
     return second.finals;
   };
+  // A checked paper is marked a second time, independently; a question the two markings disagree on is a problem.
+  const runSecondMarking = async (): Promise<SecondMark[] | null> => {
+    const second = await markAgain({ question: request.prompt, photos });
+    if (!second) return null;
+    await recordTokenUsage({ studentId, taskType, provider: second.result.provider, model: second.result.model, usage: second.result.usage });
+    return second.marks;
+  };
   const reviewStart = Date.now();
   if (taskType !== "paper_check") onStage?.("checking");
   let checks = runChecks(result.text);
   const maths = (taskType === "solution" || taskType === "ad_hoc") && checks.some((c) => c.kind === "calculation");
-  const [firstReview, secondFinals] = await Promise.all([runReview(result.text), maths ? runSecondSolve() : Promise.resolve(null)]);
+  const marking = taskType === "paper_check";
+  const [firstReview, secondFinals, secondMarks] = await Promise.all([
+    runReview(result.text),
+    maths ? runSecondSolve() : Promise.resolve(null),
+    marking ? runSecondMarking() : Promise.resolve(null),
+  ]);
+  // The examiner's problems with the second solution's (or second marking's) disagreements added; null only when nothing could check.
   const withSecond = (found: VerifyProblem[] | null, text: string): VerifyProblem[] | null => {
-    const mismatches = secondFinals ? disagreements(secondFinals, text) : [];
-    return found === null && mismatches.length === 0 ? found : [...(found ?? []), ...mismatches];
+    const mismatches = [...(secondFinals ? disagreements(secondFinals, text) : []), ...(secondMarks ? markingDisagreements(secondMarks, text) : [])];
+    return found === null && !secondFinals && !secondMarks ? null : [...(found ?? []), ...mismatches];
   };
   let review = withSecond(firstReview, result.text);
-  // Whether the examiner's reading of the answer shown actually ran (it can fail: busy, or an unreadable reply).
-  let examined = firstReview !== null;
+  // Whether the independent reading of the answer shown actually ran (it can fail: busy, or an unreadable reply):
+  // the examiner's, or for a checked paper the second marking.
+  let examined = marking ? secondMarks !== null : firstReview !== null;
   timings.reviewMs = Date.now() - reviewStart;
   const problems = checks.filter((c) => !c.ok);
   const problemCount = (failed: AnswerCheck[], found: VerifyProblem[] | null) => failed.length + (found?.length ?? 0);
@@ -411,7 +446,7 @@ async function checkAndRepair(input: {
       ...problems.map((c) => `- ${c.message} (found by Syllabi's exact calculator or marks counter)`),
       ...(review ?? []).map(
         (p) =>
-          `- ${problemForRepair(p)} (${p.fromSecondSolution ? "found by solving the question again independently" : "found by an independent examiner reading the answer against the books"})`
+          `- ${problemForRepair(p)} (${foundBy(p)})`
       ),
     ];
     const repaired = await generateCompletion({
@@ -445,13 +480,12 @@ async function checkAndRepair(input: {
       result = { ...repaired, searchSuggestionsHtml: repaired.searchSuggestionsHtml ?? result.searchSuggestionsHtml };
       checks = recheck;
       review = rereview ?? review;
-      examined = rereviewed !== null;
+      if (!marking) examined = rereviewed !== null;
     }
   }
-  // What the independent check still finds is shown with the answer, so the parent knows what to look at.
-  if (review) checks = [...checks, ...reviewChecks(review)];
-  // Never let an answer the examiner couldn't read look checked (added after any fix, so it never causes one).
-  if (!examined && taskType !== "paper_check") checks = [...checks, NOT_DOUBLE_CHECKED];
+  // What the independent checks still find is shown with the answer, so the parent knows what to look at; a clean
+  // result only when the check really ran.
+  checks = [...checks, ...independentChecks(review, examined, marking)];
   // The checked "[S2]" marks become page references the parent can follow.
   if (cites) result = { ...result, text: withPageReferences(result.text, chunks) };
   return { result, checks };

@@ -28,15 +28,15 @@ const TOTAL = new RegExp(`Total:\\**\\s*${NUMBER}\\s*/\\s*${NUMBER}\\s*\\(\\s*${
 const GRADE = /Grade:\**\s*\**\s*([A-E]\+?)(?![A-Za-z])/i;
 const HEADING = new RegExp(`^#{2,3}\\s*Question\\s+(\\S+?)\\s*[—–-]+\\s*${NUMBER}\\s*/\\s*${NUMBER}`, "i");
 
-interface Row {
+export interface MarksRow {
   question: string;
   max: number;
   marks: number;
 }
 
 /** The rows of the marks table: | Q | Max | Marks | Steps | Answer |. */
-function tableRows(report: string): Row[] {
-  const rows: Row[] = [];
+export function tableRows(report: string): MarksRow[] {
+  const rows: MarksRow[] = [];
   for (const line of report.split("\n")) {
     if (!line.trim().startsWith("|")) continue;
     const cells = line.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.replace(/\*/g, "").trim());

@@ -52,6 +52,8 @@ export interface VerifyProblem {
   kind: "wrong" | "missed" | "unsupported";
   /** Found by solving the question a second time, not by the examiner. */
   fromSecondSolution?: boolean;
+  /** Found by marking the paper a second time, independently (the paper checker). */
+  fromSecondMarking?: boolean;
   where: string;
   problem: string;
   fix: string;
