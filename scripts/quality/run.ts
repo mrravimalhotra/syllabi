@@ -5,6 +5,7 @@ import { writeAndCheck } from "@/lib/generation/pipeline";
 import type { MatchedChunk, SourceType } from "@/types/database";
 import { JUDGE_SYSTEM, factChecks, parseJudge, scoreCase, type QualityCase } from "./grade";
 import { used } from "./usage";
+import { DIARY_CASES, runDiaryCase } from "./diary";
 
 const DIR = join(process.cwd(), "scripts/quality");
 const args = process.argv.slice(2);
@@ -106,6 +107,14 @@ for (let i = 0; i < cases.length; i += AT_ONCE) {
   }
 }
 
+// Class diary photos: every entry must come out exactly as the diary says.
+for (const c of DIARY_CASES.filter((d) => !only || d.id.includes(only))) {
+  const r = await runDiaryCase(c);
+  used.tokens += r.tokens;
+  results.push({ id: r.id, score: r.score, pass: r.pass, missing: [], unwanted: [], correct: null, complete: null, grounded: null, notes: r.notes, flagged: [], answer: "" });
+  console.log(`${r.pass ? "PASS" : "FAIL"}  ${String(r.score).padStart(3)}  ${r.id}${r.pass ? "" : `  (${r.notes})`}`);
+}
+
 const passed = results.filter((r) => r.pass).length;
 const average = Math.round(results.reduce((n, r) => n + r.score, 0) / Math.max(1, results.length));
 console.log(`\n${passed} of ${results.length} passed · average score ${average} · ${used.tokens.toLocaleString("en-IN")} tokens · ${Math.round((Date.now() - started) / 1000)} s`);
@@ -128,4 +137,12 @@ if (args.includes("--save-baseline")) {
   writeFileSync(baselineFile, JSON.stringify({ ...report, results: results.map(({ id, pass, score }) => ({ id, pass, score })) }, null, 2) + "\n");
   console.log("Saved as the baseline (scripts/quality/baseline.json).");
 }
+// The pass mark: below it the run fails, so a change that makes answers worse can't go live unnoticed.
+const minPass = Number(process.env.QUALITY_MIN_PASS || 0.8);
+const rate = passed / Math.max(1, results.length);
+if (rate < minPass) {
+  console.log(`\nBELOW THE PASS MARK: ${Math.round(rate * 100)}% passed, ${Math.round(minPass * 100)}% needed.`);
+  process.exit(1);
+}
+console.log(`\nPass mark met: ${Math.round(rate * 100)}% passed (${Math.round(minPass * 100)}% needed).`);
 process.exit(0);

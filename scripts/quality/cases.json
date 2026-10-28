@@ -863,5 +863,138 @@
    "chloroplast",
    "sunlight|light energy"
   ]
+ },
+ {
+  "id": "notes-sci-respiration",
+  "subject": "Science",
+  "class": "Class 7",
+  "task": "notes",
+  "question": "Make revision notes on aerobic and anaerobic respiration.",
+  "passages": [
+   {
+    "page": 104,
+    "label": "Chapter 10: Respiration in Organisms",
+    "text": "Respiration releases energy from food. In aerobic respiration glucose is broken down using oxygen into carbon dioxide and water, releasing energy. In the absence of oxygen, as in yeast, glucose is broken down into alcohol and carbon dioxide; this is anaerobic respiration. Our muscle cells respire anaerobically for a short time during heavy exercise, forming lactic acid, whose build-up causes muscle cramps."
+   }
+  ],
+  "expected": "Aerobic: glucose + oxygen -> carbon dioxide + water + energy. Anaerobic: without oxygen; yeast gives alcohol + carbon dioxide; muscles give lactic acid during heavy exercise, causing cramps.",
+  "must": [
+   "oxygen",
+   "carbon dioxide",
+   "water",
+   "alcohol",
+   "lactic acid",
+   "cramp"
+  ]
+ },
+ {
+  "id": "notes-his-delhi-sultans",
+  "subject": "History",
+  "class": "Class 7",
+  "task": "notes",
+  "question": "Revision notes: the Khalji and Tughluq administration (key points only).",
+  "passages": [
+   {
+    "page": 33,
+    "label": "Chapter 3: The Delhi Sultans",
+    "text": "Alauddin Khalji paid his soldiers in cash rather than iqtas and controlled the prices of goods in Delhi to keep them low. He built a new garrison town named Siri for his soldiers. Muhammad Tughluq shifted the capital from Delhi to Daulatabad and introduced token currency made of cheap metals, which failed because it was easily forged."
+   }
+  ],
+  "expected": "Alauddin: cash salaries, price control in Delhi markets, garrison town Siri. Muhammad Tughluq: capital shifted to Daulatabad, token currency of cheap metal that failed (forgery).",
+  "must": [
+   "cash",
+   "price",
+   "Siri",
+   "Daulatabad",
+   "token"
+  ]
+ },
+ {
+  "id": "notes-geo-soil",
+  "subject": "Geography",
+  "class": "Class 7",
+  "task": "notes",
+  "question": "Notes on soil profile layers.",
+  "passages": [
+   {
+    "page": 21,
+    "label": "Chapter 2: Inside Our Earth",
+    "text": "A soil profile has layers called horizons. The top layer, topsoil (A horizon), is rich in humus and minerals. The subsoil (B horizon) has less humus and more minerals. Below it is the C horizon of weathered rock, and at the bottom lies the bedrock."
+   }
+  ],
+  "expected": "Horizons: A topsoil (humus, minerals), B subsoil (less humus, more minerals), C weathered rock, then bedrock.",
+  "must": [
+   "topsoil",
+   "humus",
+   "subsoil",
+   "bedrock"
+  ]
+ },
+ {
+  "id": "adhoc-math-si",
+  "subject": "Mathematics",
+  "class": "Class 7",
+  "task": "ad_hoc",
+  "question": "Find the simple interest on Rs 2,500 at 8% per annum for 3 years, and the amount.",
+  "passages": [
+   {
+    "page": 120,
+    "label": "Chapter 8: Comparing Quantities",
+    "text": "Simple interest SI = (P x R x T) / 100, where P is the principal, R the rate per cent per annum and T the time in years. Amount A = P + SI."
+   }
+  ],
+  "expected": "SI = 2500 x 8 x 3 / 100 = Rs 600; Amount = Rs 3,100.",
+  "must": [
+   "600",
+   "3100|3,100"
+  ],
+  "mustNot": [
+   "2,600",
+   "2600"
+  ]
+ },
+ {
+  "id": "adhoc-math-profit",
+  "subject": "Mathematics",
+  "class": "Class 7",
+  "task": "ad_hoc",
+  "question": "A shopkeeper buys a cycle for Rs 2,400, spends Rs 100 on repairs (overheads) and sells it for Rs 2,750. Find the profit and profit per cent.",
+  "passages": [
+   {
+    "page": 118,
+    "label": "Chapter 8: Comparing Quantities",
+    "text": "Overhead expenses such as repairs are added to the cost price. Profit = SP - CP. Profit per cent = (Profit / CP) x 100."
+   }
+  ],
+  "expected": "CP = 2400 + 100 = 2500; profit = 250; profit % = 10%.",
+  "must": [
+   "2500|2,500",
+   "250",
+   "10%|10 %|10 per"
+  ],
+  "mustNot": [
+   "14.58"
+  ]
+ },
+ {
+  "id": "adhoc-sci-air",
+  "subject": "Chemistry",
+  "class": "Class 7",
+  "task": "ad_hoc",
+  "question": "What is the composition of air? Which gas is present in the largest amount?",
+  "passages": [
+   {
+    "page": 40,
+    "label": "Chapter: Air",
+    "text": "Air is a mixture of gases. Nitrogen makes up about 78% of air and oxygen about 21%. The remaining 1% includes argon, carbon dioxide (about 0.04%), water vapour and other gases."
+   }
+  ],
+  "expected": "Nitrogen ~78%, oxygen ~21%, about 1% others (argon, carbon dioxide ~0.04%, water vapour); nitrogen is the largest.",
+  "must": [
+   "78",
+   "21",
+   "nitrogen",
+   "argon|carbon dioxide"
+  ]
  }
 ]
