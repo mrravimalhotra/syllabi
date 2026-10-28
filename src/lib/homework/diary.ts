@@ -2,7 +2,7 @@
 // (lib/homework/read-diary.ts); everything here is plain code, so the diary's quirks are handled the same
 // way every time: wrong header dates, subject names with dates in them, many date formats, Nil/NA, repeats.
 
-type EntryKind = "classwork" | "homework";
+export type EntryKind = "classwork" | "homework";
 
 /** One period as read from the diary, word for word. */
 interface DiaryPeriod {
@@ -35,6 +35,11 @@ export interface NewEntry {
   due_date: string | null;
   given_date: string;
   dedup_key: string;
+}
+
+/** Today's date in India, where the diaries are written, as YYYY-MM-DD. */
+export function indiaToday(now = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(now);
 }
 
 const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
@@ -150,7 +155,7 @@ export function isNothing(text: string | undefined): boolean {
 }
 
 /** The key that keeps one entry once: the same day, subject, kind and words. */
-function dedupKey(e: Pick<NewEntry, "given_date" | "subject" | "kind" | "title">): string {
+export function dedupKey(e: Pick<NewEntry, "given_date" | "subject" | "kind" | "title">): string {
   const words = e.title.toLowerCase().replace(/\s+/g, " ").trim();
   return `${e.given_date}|${e.subject.toLowerCase()}|${e.kind}|${words}`;
 }

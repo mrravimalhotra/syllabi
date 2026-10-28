@@ -902,36 +902,53 @@ await test("Theme button: on every screen; Automatic, Dark and Light, remembered
   if ((await pageLight()) > 80) throw new Error("On Automatic with a dark device, Kindergarten should be dark.");
 });
 
-await test("Homework: grouped by subject, overdue flagged, ticked off by hand into Done, filtered, and a diary added", async (page, ctx) => {
+await test("Homework: tonight's work first, overdue flagged, by subject on request, ticked off by hand, typed in, and a diary added", async (page, ctx) => {
   await baseRoutes(ctx);
   const day = (offset) => new Date(Date.now() + offset * 86400000).toISOString().slice(0, 10);
   let list = [
-    { id: "h1", kind: "homework", subject: "Mathematics", title: "3ABCD", topic: "Integers", sub_topic: "Ex 4A", due_date: day(-2), given_date: day(-4), done: false, done_at: null },
-    { id: "h2", kind: "classwork", subject: "Mathematics", title: "4A to E", topic: "Integers", sub_topic: null, due_date: null, given_date: day(-4), done: false, done_at: null },
-    { id: "h3", kind: "homework", subject: "Marathi", title: "pg 63,64 translation", topic: "पाठ ३", sub_topic: null, due_date: day(3), given_date: day(-1), done: false, done_at: null },
-    { id: "h4", kind: "homework", subject: "Art", title: "Shade the sphere", topic: null, sub_topic: null, due_date: null, given_date: day(-6), done: true, done_at: day(-1) },
+    { id: "h1", kind: "homework", subject: "Mathematics", title: "3ABCD", topic: "Integers", sub_topic: "Ex 4A", due_date: day(-2), given_date: day(-4), done: false, done_at: null, source: "diary" },
+    { id: "h2", kind: "classwork", subject: "Mathematics", title: "4A to E", topic: "Integers", sub_topic: null, due_date: null, given_date: day(-4), done: false, done_at: null, source: "diary" },
+    { id: "h3", kind: "homework", subject: "Marathi", title: "pg 63,64 translation", topic: "पाठ ३", sub_topic: null, due_date: day(0), given_date: day(-1), done: false, done_at: null, source: "diary" },
+    { id: "h4", kind: "homework", subject: "Art", title: "Shade the sphere", topic: null, sub_topic: null, due_date: null, given_date: day(-6), done: true, done_at: day(-1), source: "diary" },
   ];
   const patched = [];
+  let typed = null;
+  await ctx.route("**/api/homework/*/pages", (r) => json(r, { pages: [`${BASE}/icon.svg`] }));
   await ctx.route("**/api/homework/*", (r) => {
     const id = r.request().url().split("/").pop();
+    if (id === "add") {
+      typed = r.request().postDataJSON();
+      return json(r, { entry: { id: "h9", kind: "homework", subject: "English", title: typed.title, topic: null, sub_topic: null, due_date: typed.due_date || null, given_date: day(0), done: false, done_at: null, source: "typed" } });
+    }
     patched.push(`${id}:${r.request().postDataJSON().done}`);
     list = list.map((e) => (e.id === id ? { ...e, done: r.request().postDataJSON().done } : e));
-    return json(r, { entry: { id } });
+    return json(r, { entry: { id }, star: true });
   });
   await ctx.route("**/api/homework", (r) =>
     r.request().method() === "POST" ? json(r, { added: 5, skipped: 2 }) : json(r, { entries: list })
   );
   await page.goto(`${BASE}/dashboard/homework`, { waitUntil: "networkidle" });
-  for (const subject of ["Mathematics", "Marathi"]) await page.getByRole("region", { name: subject }).waitFor();
+  // By due date first: overdue, then today's, and work with no date says to ask the teacher.
+  const headings = await page.locator("section[aria-label] h3").allInnerTexts();
+  if (!/^Overdue/.test(headings[0] ?? "") || !/^Due today/.test(headings[1] ?? "") || !/ask your teacher/.test(headings[2] ?? "")) throw new Error(`Order: ${headings.join(" / ")}`);
   await page.getByText("3 to do").waitFor();
   await page.getByText("1 overdue").waitFor();
-  if ((await page.getByRole("region", { name: "Mathematics" }).getByText("Overdue").count()) !== 1) throw new Error("Only the late homework should be flagged.");
-  await page.getByText("No submission date").first().waitFor();
   await page.getByText("पाठ ३").waitFor();
-  // Done work is folded away.
+  // Get help opens Ask Syllabi with the work typed in; classwork has none.
+  if ((await page.getByRole("link", { name: "Get help" }).count()) !== 2) throw new Error("Each open homework, and only homework, has Get help.");
+  const help = await page.getByRole("link", { name: "Get help" }).first().getAttribute("href");
+  if (!help?.includes("tool=solution") || !decodeURIComponent(help).includes("Mathematics homework (Integers, Ex 4A): 3ABCD")) throw new Error(`Help link: ${help}`);
+  // The diary page it was read from.
+  await tap(page.getByRole("button", { name: "Diary page", exact: true }).first());
+  await page.getByRole("img", { name: "Diary page 1" }).waitFor();
+  // By subject, remembered.
+  await tap(page.getByRole("radio", { name: "By subject" }));
+  for (const subject of ["Mathematics", "Marathi"]) await page.getByRole("region", { name: subject }).waitFor();
+  await page.reload({ waitUntil: "networkidle" });
+  await page.getByRole("region", { name: "Marathi" }).waitFor();
+  // Done work is folded away; ticking moves work there.
   if (await page.getByText("Shade the sphere").isVisible()) throw new Error("Done work should be folded away.");
   await page.getByText("Done (1)").waitFor();
-  // Ticked off by hand: it moves to Done.
   await tap(page.getByRole("checkbox", { name: /Not done: Mathematics, 3ABCD/ }));
   await page.getByText("Done (2)").waitFor();
   await page.getByText("2 to do").waitFor();
@@ -940,9 +957,37 @@ await test("Homework: grouped by subject, overdue flagged, ticked off by hand in
   await tap(page.getByRole("radio", { name: "Classwork" }));
   await page.getByText("1 to do").waitFor();
   if (await page.getByRole("region", { name: "Marathi" }).count()) throw new Error("Classwork only should hide the Marathi homework.");
+  await tap(page.getByRole("radio", { name: "All" }));
+  // Work set out loud is typed in.
+  await tap(page.getByRole("button", { name: "Type it in" }));
+  await page.getByLabel("Subject").fill("English");
+  await page.getByLabel("The work, as the teacher gave it").fill("Learn the poem");
+  await tap(page.getByRole("button", { name: "Add", exact: true }));
+  await page.getByText("Learn the poem").waitFor();
+  if (typed?.subject !== "English" || typed?.kind !== "homework") throw new Error(`Typed: ${JSON.stringify(typed)}`);
   // A diary page is added.
   await page.locator('input[aria-label="Class diary pages"]').setInputFiles({ name: "Diary 27 Oct.jpg", mimeType: "image/jpeg", buffer: tinyJpeg });
   await page.getByText("Added 5 entries from the diary. 2 were already in your list.").waitFor({ timeout: 15000 });
+});
+
+await test("Homework: the child ticks their own list in Practice and earns a star; Get help fills in Ask Syllabi", async (page, ctx) => {
+  await baseRoutes(ctx);
+  const today = new Date().toISOString().slice(0, 10);
+  let list = [{ id: "k1", kind: "homework", subject: "EVS", title: "Draw a plant", topic: null, sub_topic: null, due_date: today, given_date: today, done: false, done_at: null, source: "diary" }];
+  await ctx.route("**/api/homework/*", (r) => {
+    list = list.map((e) => ({ ...e, done: r.request().postDataJSON().done }));
+    return json(r, { entry: { id: "k1" }, star: true });
+  });
+  await ctx.route("**/api/homework", (r) => json(r, { entries: list }));
+  await page.goto(`${BASE}/dashboard/practice`, { waitUntil: "networkidle" });
+  await tap(page.getByRole("link", { name: /My homework/ }));
+  await page.getByRole("heading", { name: "My homework" }).waitFor();
+  if (await page.getByRole("button", { name: /Remove/ }).count()) throw new Error("The child can't remove work.");
+  await tap(page.getByRole("checkbox", { name: /Not done: EVS, Draw a plant/ }));
+  await page.getByRole("status").getByText(/star/).waitFor();
+  await page.getByRole("region", { name: "Done today" }).waitFor();
+  await page.goto(`${BASE}/dashboard?tool=solution&q=${encodeURIComponent("EVS homework: Draw a plant")}`, { waitUntil: "networkidle" });
+  if ((await page.locator("textarea").inputValue()) !== "EVS homework: Draw a plant") throw new Error("Ask Syllabi should start with the homework typed in.");
 });
 
 await test("Stars: the account's star chart shows on a new device, and this device's stars are added to it once", async (page, ctx) => {

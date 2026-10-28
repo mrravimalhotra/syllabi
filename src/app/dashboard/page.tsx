@@ -50,13 +50,15 @@ export default function DashboardPage() {
  */
 function AskSyllabi() {
   const router = useRouter();
-  const tool = toolFrom(useSearchParams().get("tool"));
+  const params = useSearchParams();
+  const tool = toolFrom(params.get("tool"));
   const tab: GenerationTaskType = tool ?? "solution";
   // The tool the answer on screen (or being made) belongs to, and the tool last opened.
   const [answerTask, setAnswerTask] = useState<GenerationTaskType | null>(null);
   const [lastTool, setLastTool] = useState<GenerationTaskType | null>(tool);
   const [me, setMe] = useState<MeResponse | null>(() => peek<MeResponse>("me") ?? null);
-  const [prompt, setPrompt] = useState("");
+  // A question passed in the address (Homework's "Get help") starts in the box, ready to send or change.
+  const [prompt, setPrompt] = useState(() => (params.get("q") ?? "").slice(0, 2000));
   // Sample papers: total marks to aim for (Indian school papers are often 80).
   const [totalMarks, setTotalMarks] = useState("80");
   // Paper checker: marks for each question ("" = the marks on the paper, or 5).

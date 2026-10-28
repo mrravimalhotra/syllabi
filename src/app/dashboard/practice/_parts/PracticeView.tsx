@@ -95,6 +95,9 @@ export function PracticeView({ classLevel }: { classLevel: string | null }) {
         description="Quizzes and maths tutorials for your child, worked out by the app itself: always correct, and no AI used."
       />
       <RewardsBar />
+      <MenuGroup title="School">
+        <LinkTile href="/dashboard/practice/homework" emoji="🎒" tone="emerald" title="My homework" hint="Tick it off when it's done, and earn a star" />
+      </MenuGroup>
       <MenuGroup title="Practise">
         <LinkTile
           href="/dashboard/practice/kindergarten"

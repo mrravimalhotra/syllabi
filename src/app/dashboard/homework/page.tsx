@@ -1,80 +1,82 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { AddDiary } from "@/app/dashboard/homework/_parts/AddDiary";
-import { EntryGroups, isOverdue, type Entry } from "@/app/dashboard/homework/_parts/EntryList";
+import { EntryGroups } from "@/app/dashboard/homework/_parts/EntryList";
+import { isOverdue, shortDate } from "@/app/dashboard/homework/_parts/EntryRow";
+import { TypeIt } from "@/app/dashboard/homework/_parts/TypeIt";
+import { localToday, useHomework } from "@/app/dashboard/homework/_parts/useHomework";
 import { ListCheckIcon } from "@/components/icons";
 import { Alert, EmptyState, PageHeader, PageSkeleton, cx } from "@/components/ui";
-import { OFFLINE_MESSAGE } from "@/lib/http-errors";
+import { byDueDate, bySubject, missingDiaryDay } from "@/lib/homework/schedule";
+import { usePref } from "@/lib/use-pref";
 
 type Filter = "all" | "homework" | "classwork";
+type Layout = "due" | "subject";
 const FILTERS: { value: Filter; label: string }[] = [
   { value: "all", label: "All" },
   { value: "homework", label: "Homework" },
   { value: "classwork", label: "Classwork" },
 ];
+const LAYOUTS: { value: Layout; label: string }[] = [
+  { value: "due", label: "By due date" },
+  { value: "subject", label: "By subject" },
+];
+const isLayout = (v: unknown): v is Layout => v === "due" || v === "subject";
 
-/** Today in the phone's own time, as YYYY-MM-DD (for "overdue"). */
-function localToday(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+function Choice<T extends string>({ label, options, value, onChange }: { label: string; options: { value: T; label: string }[]; value: T; onChange: (v: T) => void }) {
+  return (
+    <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-2">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          role="radio"
+          aria-checked={value === o.value}
+          onClick={() => onChange(o.value)}
+          className={cx(
+            "rounded-full border px-3.5 py-1.5 text-sm font-medium transition",
+            value === o.value ? "border-brand-500 bg-brand-50 text-brand-800" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+          )}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 /**
- * The homework and classwork tracker, fed from the class diary: open work grouped by subject (overdue
- * flagged), ticked off by hand, never automatically; done work folded away below.
+ * The homework and classwork tracker, fed from the class diary (or typed in): open work by when it is due,
+ * tonight's first, or by subject; ticked off by hand, never automatically; done work folded away below.
  */
 export default function HomeworkPage() {
-  const [entries, setEntries] = useState<Entry[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { entries, error, load, toggle, remove, added } = useHomework();
   const [filter, setFilter] = useState<Filter>("all");
+  const [layout, setLayout] = usePref<Layout>("syllabi.homework.layout", "due", isLayout);
   const [today] = useState(localToday);
+  const [hour] = useState(() => new Date().getHours());
 
-  const load = useCallback(async () => {
-    try {
-      const res = await fetch("/api/homework");
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? "Couldn't load the homework list.");
-      setEntries(data.entries as Entry[]);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof TypeError ? OFFLINE_MESSAGE : err instanceof Error ? err.message : "Couldn't load the homework list.");
-    }
-  }, []);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch-on-mount
-    void load();
-  }, [load]);
-
-  /** Done or not done, shown at once and put back if it couldn't be saved. */
-  async function toggle(entry: Entry) {
-    const done = !entry.done;
-    const swap = (to: boolean) => setEntries((list) => list?.map((e) => (e.id === entry.id ? { ...e, done: to } : e)) ?? null);
-    swap(done);
-    const res = await fetch(`/api/homework/${entry.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ done }) }).catch(() => null);
-    if (!res?.ok) {
-      swap(!done);
-      setError("Couldn't save that. Check your connection and try again.");
-    }
-  }
-
-  async function remove(entry: Entry) {
-    if (!window.confirm(`Remove "${entry.title}" (${entry.subject})? Use this when the diary was read wrongly.`)) return;
-    const res = await fetch(`/api/homework/${entry.id}`, { method: "DELETE" }).catch(() => null);
-    if (!res?.ok) return setError("Couldn't remove that. Try again in a moment.");
-    setEntries((list) => list?.filter((e) => e.id !== entry.id) ?? null);
-  }
-
-  const shown = (entries ?? []).filter((e) => filter === "all" || e.kind === filter);
+  const all = entries ?? [];
+  const shown = all.filter((e) => filter === "all" || e.kind === filter);
   const open = shown.filter((e) => !e.done);
-  const done = shown.filter((e) => e.done);
+  const done = shown.filter((e) => e.done).sort((a, b) => (b.done_at ?? "").localeCompare(a.done_at ?? ""));
   const overdue = open.filter((e) => isOverdue(e, today)).length;
+  const missing = missingDiaryDay(all, today, hour);
+  const subjects = [...new Set(all.map((e) => e.subject))].sort();
+  const actions = { onRemove: (e: (typeof all)[number]) => void remove(e), help: true, pages: true };
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Homework" description="Classwork and homework from the class diary. Add the diary page, then tick off each piece of work when it is done." />
-      <AddDiary onAdded={() => void load()} />
+      <PageHeader title="Homework" description="Classwork and homework from the class diary. Add each day's diary page, then tick off each piece of work when it is done." />
+      <AddDiary onAdded={() => void load()}>
+        <TypeIt subjects={subjects} onAdded={added} />
+      </AddDiary>
+      {missing && (
+        <Alert tone="info">
+          No diary added for {shortDate(missing, Number(today.slice(0, 4)))} yet. Add its page so no homework is missed.
+        </Alert>
+      )}
       {error && <Alert tone="error">{error}</Alert>}
 
       {entries === null && !error ? (
@@ -84,22 +86,9 @@ export default function HomeworkPage() {
       ) : (
         <>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div role="radiogroup" aria-label="Show" className="flex gap-2">
-              {FILTERS.map((f) => (
-                <button
-                  key={f.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={filter === f.value}
-                  onClick={() => setFilter(f.value)}
-                  className={cx(
-                    "rounded-full border px-3.5 py-1.5 text-sm font-medium transition",
-                    filter === f.value ? "border-brand-500 bg-brand-50 text-brand-800" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                  )}
-                >
-                  {f.label}
-                </button>
-              ))}
+            <div className="flex flex-wrap gap-3">
+              <Choice label="Show" options={FILTERS} value={filter} onChange={setFilter} />
+              <Choice label="Arrange" options={LAYOUTS} value={layout} onChange={setLayout} />
             </div>
             <p className="text-sm text-slate-600" aria-live="polite">
               <span className="font-semibold text-slate-900">{open.length}</span> to do
@@ -108,7 +97,7 @@ export default function HomeworkPage() {
           </div>
 
           {open.length > 0 ? (
-            <EntryGroups entries={open} today={today} onToggle={(e) => void toggle(e)} onRemove={(e) => void remove(e)} />
+            <EntryGroups groups={layout === "due" ? byDueDate(open, today) : bySubject(open)} today={today} onToggle={(e) => void toggle(e)} actions={actions} />
           ) : (
             <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">All done. Well done! 🎉</p>
           )}
@@ -117,7 +106,7 @@ export default function HomeworkPage() {
             <details className="group">
               <summary className="cursor-pointer text-sm font-semibold text-slate-600 hover:text-slate-900">Done ({done.length})</summary>
               <div className="mt-3">
-                <EntryGroups entries={done} today={today} onToggle={(e) => void toggle(e)} onRemove={(e) => void remove(e)} />
+                <EntryGroups groups={[{ title: "Done", entries: done }]} today={today} onToggle={(e) => void toggle(e)} actions={{ onRemove: actions.onRemove }} />
               </div>
             </details>
           )}

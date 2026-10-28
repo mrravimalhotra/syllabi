@@ -10,7 +10,7 @@ import { OFFLINE_MESSAGE, failedRequestMessage } from "@/lib/http-errors";
  * Adding class diary pages: a PDF or photos (taken with the camera on a phone). The pages are read on the
  * server and each period's classwork and homework is added to the list. A diary added twice is not doubled.
  */
-export function AddDiary({ onAdded }: { onAdded: () => void }) {
+export function AddDiary({ onAdded, children }: { onAdded: () => void; children?: React.ReactNode }) {
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ tone: "success" | "info" | "error"; text: string } | null>(null);
@@ -53,11 +53,13 @@ export function AddDiary({ onAdded }: { onAdded: () => void }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-0.5">
           <h2 className="text-base font-semibold text-slate-900">Add the class diary</h2>
-          <p className="text-sm text-slate-500">A PDF or photos of the day&apos;s diary page. Classwork and homework are added for each period.</p>
+          <p className="text-sm text-slate-500">A photo or PDF of each day&apos;s diary page, every school day. Classwork and homework are added for each period.</p>
         </div>
-        <button type="button" className={button.primary} onClick={() => input.current?.click()} disabled={busy}>
-          {busy ? <Spinner /> : <UploadIcon className="h-4 w-4" />} {busy ? "Reading the diary..." : "Add diary pages"}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className={button.primary} onClick={() => input.current?.click()} disabled={busy}>
+            {busy ? <Spinner /> : <UploadIcon className="h-4 w-4" />} {busy ? "Reading the diary..." : "Add diary pages"}
+          </button>
+        </div>
         <input
           ref={input}
           type="file"
@@ -67,6 +69,7 @@ export function AddDiary({ onAdded }: { onAdded: () => void }) {
           aria-label="Class diary pages"
           onChange={(e) => void add(e.target.files)}
         />
+        {children}
       </div>
       {busy && <p className="text-xs text-slate-500">This takes about half a minute. Keep this page open.</p>}
       {result && <Alert tone={result.tone}>{result.text}</Alert>}

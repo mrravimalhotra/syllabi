@@ -38,6 +38,7 @@ import { factChecks, parseJudge, scoreCase } from "../quality/grade";
 import { disagreements, numbersIn, parseFinals } from "@/lib/generation/second-solve";
 import { checkCitations, withPageReferences } from "@/lib/generation/citations";
 import { entriesFrom, givenDate, isNothing, normaliseSubject, parseDiaryDate } from "@/lib/homework/diary";
+import { byDueDate, bySubject, helpQuestion, missingDiaryDay } from "@/lib/homework/schedule";
 import type { MatchedChunk } from "@/types/database";
 import { BOARD_COLUMNS, BOARD_ROWS, makeBoardGame, makeFamilySheet, makeMatchSheet, schoolFamilySheet, schoolMatchSheet } from "@/lib/kindergarten/worksheets";
 import { BOARD_WORDS, CVC_WORDS, familiesOf, rimeOf, SIGHT_LEVELS, SIGHT_SETS, VOWELS } from "@/lib/kindergarten/words";
@@ -822,6 +823,22 @@ function q0(): Question {
   check(entries.every((e) => e.given_date === "2026-10-27") && entries.find((e) => e.subject === "Marathi")?.topic === "पाठ ३", "Homework: the diary date and Devanagari topics are kept");
 }
 {
+  // Homework laid out the way a child plans an evening: tonight's work first. 2026-10-28 is a Wednesday.
+  const w = (subject: string, due: string | null, given = "2026-10-26") => ({ subject, title: subject, due_date: due, given_date: given });
+  const work = [w("Art", null), w("Maths", "2026-10-30"), w("Hindi", "2026-10-27"), w("EVS", "2026-10-29"), w("English", "2026-10-28"), w("Music", "2026-11-04"), w("PE", "2026-11-01")];
+  const plan = byDueDate(work, "2026-10-28").map((g) => `${g.title}=${g.entries.map((e) => e.subject).join("+")}`).join(" | ");
+  check(
+    plan === "Overdue=Hindi | Due today=English | Due tomorrow=EVS | Later this week=Maths+PE | Later=Music | No submission date: ask your teacher=Art",
+    `Homework: by due date, overdue first and no-date work last with a nudge to ask (${plan})`
+  );
+  check(bySubject(work).map((g) => g.title).join() === "Art,English,EVS,Hindi,Maths,Music,PE", "Homework: by subject, A to Z");
+  const used = [w("Maths", null, "2026-10-26")];
+  check(missingDiaryDay(used, "2026-10-28", 10) === "2026-10-27", "Homework: yesterday's diary not added is noticed (in the morning, today's isn't home yet)");
+  check(missingDiaryDay(used, "2026-10-28", 16) === "2026-10-28", "Homework: after school, today's diary is asked for");
+  check(missingDiaryDay([...used, w("Art", null, "2026-10-27")], "2026-10-28", 10) === null, "Homework: no nudge when the diary is in");
+  check(missingDiaryDay(used, "2026-11-02", 9) === "2026-10-30", "Homework: on a Monday morning it asks for Friday's, not the weekend's");
+  check(missingDiaryDay([w("Maths", null, "2026-10-28")], "2026-10-28", 10) === null && missingDiaryDay([], "2026-10-28", 16) === null, "Homework: no nudge before the list was in use");
+  check(helpQuestion({ subject: "Maths", title: "Ex 4B, Q1 to 5", topic: "Integers", sub_topic: null }) === "Maths homework (Integers): Ex 4B, Q1 to 5", "Homework: Get help asks about the work as written");
   // The quality test set's grading (scripts/quality), without the AI.
   const facts = factChecks("**Ans:** Akbar became emperor in 1556, aged 13.", ["1556", "thirteen|13", "Bairam"], ["1605"]);
   check(facts.missing.join() === "Bairam" && facts.unwanted.length === 0, "Quality: missing must-have facts are found, and either spelling counts");

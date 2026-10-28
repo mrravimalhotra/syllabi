@@ -1,6 +1,7 @@
 -- The homework and classwork tracker (handoff: Homework Tracker into Syllabi): entries read from the
--- class diary (PDF pages or photos). Each period's classwork (CW) becomes a "classwork" entry and its
--- reinforcement a "homework" entry, its text kept word for word. Only the person marks an entry done.
+-- class diary (PDF pages or photos), or typed in by the grown-up (work set out loud or on a parents' group).
+-- Each diary period's classwork (CW) becomes a "classwork" entry and its reinforcement a "homework" entry,
+-- its text kept word for word. Only a person marks an entry done.
 create table if not exists homework_entries (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null references students(id) on delete cascade,
@@ -15,8 +16,12 @@ create table if not exists homework_entries (
   given_date date not null,
   done boolean not null default false,
   done_at timestamptz,
+  -- Where it came from: read from the diary, or typed in.
+  source text not null default 'diary' check (source in ('diary', 'typed')),
   -- The stored diary pages it came from (R2 prefix), for looking back at the original.
   source_file text,
+  -- The child's star for this homework has been given (once only, however often it is ticked and unticked).
+  star_given boolean not null default false,
   -- The same entry read again (a diary uploaded twice, a CW repeated over two periods) is kept once.
   dedup_key text not null,
   created_at timestamptz not null default now(),

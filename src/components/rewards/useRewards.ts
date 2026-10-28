@@ -92,7 +92,7 @@ export function useRewards(): Rewards {
 }
 
 /** Adds stars for something just finished; returns the stickers just earned. */
-function addStars(stars: number): string[] {
+export function addStars(stars: number): string[] {
   const today = dayOf(new Date());
   const { rewards, newStickers } = earn(read(), stars, today);
   save(rewards);

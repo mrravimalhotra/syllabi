@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { apiError, authenticate, errorResponse } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parsePhotos } from "@/lib/generation/attachments";
-import { entriesFrom } from "@/lib/homework/diary";
+import { entriesFrom, indiaToday } from "@/lib/homework/diary";
 import { readDiary } from "@/lib/homework/read-diary";
 import { recordTokenUsage } from "@/lib/llm/usage";
 import { QuotaExceededError, checkQuota } from "@/lib/quota";
@@ -12,12 +12,8 @@ import { cleanText } from "@/lib/validate";
 // Reading a few diary pages with the AI.
 export const maxDuration = 120;
 
-const COLUMNS = "id, kind, subject, title, topic, sub_topic, due_date, given_date, done, done_at, created_at";
+export const COLUMNS = "id, kind, subject, title, topic, sub_topic, due_date, given_date, done, done_at, source, created_at";
 
-/** Today's date in India, where the diaries are written. */
-function today(): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
-}
 
 /** The caller's homework and classwork entries, newest diary day first. */
 export async function GET() {
@@ -61,7 +57,7 @@ export async function POST(request: Request) {
     const { days, result } = await readDiary(pages, fileName);
     await recordTokenUsage({ studentId: user.id, taskType: "ad_hoc", provider: result.provider, model: result.model, usage: result.usage });
 
-    const entries = entriesFrom(days, fileName, today());
+    const entries = entriesFrom(days, fileName, indiaToday());
     if (entries.length === 0) {
       return NextResponse.json({ added: 0, skipped: 0, message: "No classwork or homework was found on these pages. Check it is the class diary, and that the photo is clear." });
     }
