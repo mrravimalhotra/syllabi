@@ -122,7 +122,7 @@ const THINKING: Record<GenerationTaskType, number> = {
 };
 
 /** Shown when the independent examiner couldn't read the answer this time. */
-export const NOT_DOUBLE_CHECKED: AnswerCheck = {
+const NOT_DOUBLE_CHECKED: AnswerCheck = {
   kind: "review",
   ok: false,
   message: "Not double-checked: the independent check couldn't run this time, so this answer hasn't been read a second time. Check it carefully, or ask again in a minute.",
