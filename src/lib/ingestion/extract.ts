@@ -84,8 +84,10 @@ edges. Transcribe only the main page.
  * the page (published text it won't copy word for word), a second model reads
  * it; if that declines too, partial text is kept when there is enough of it.
  */
-export async function extractPageText(imageBase64: string, mimeType: string, hint?: string): Promise<CompletionResult> {
-  const read = async (model?: string, temperature = 0) => {
+export async function extractPageText(imageBase64: string, mimeType: string, hint?: string, again = false): Promise<CompletionResult> {
+  // A second look at an unclear page reads it afresh, number by number.
+  const carefully = again ? "\nRead it carefully: check every number digit by digit, and every decimal point, fraction and sign." : "";
+  const read = async (model?: string, temperature = again ? 0.2 : 0) => {
     const result = await generateCompletion({
       taskType: "ocr_extraction",
       systemInstructions: EXTRACTION_SYSTEM_PROMPT,
@@ -93,7 +95,7 @@ export async function extractPageText(imageBase64: string, mimeType: string, hin
       // so the transcription starts with that context (e.g. which question).
       prompt: hint
         ? `This is a picture from a Word document, not a whole page. ${hint}\nStart your transcription with that context in one line, then transcribe the picture.`
-        : "Transcribe this page.",
+        : `Transcribe this page.${carefully}`,
       images: [{ data: imageBase64, mimeType }],
       temperature,
       ...(model ? { model } : {}),

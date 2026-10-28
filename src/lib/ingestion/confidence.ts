@@ -13,7 +13,8 @@ type PageIssue =
   | "illegible_words"
   | "very_little_text"
   | "blank"
-  | "reader_unsure";
+  | "reader_unsure"
+  | "numbers_unsure";
 
 // A page scoring under 60 is "weak" (worth scanning again): page_read_summary in migration 23 lists those.
 
@@ -37,6 +38,7 @@ const PENALTY: Record<PageIssue, number> = {
   very_little_text: 25,
   blank: 0, // fixed score, below
   reader_unsure: 0, // a cap, below
+  numbers_unsure: 0, // a cap, below
 };
 
 /** What the reader (the AI that transcribes the page) says about how legible the page was. */
@@ -60,6 +62,8 @@ export interface PageEvidence {
   /** The picture measurements; null when the text came with the file (Word, a digital PDF) and no picture was read. */
   image: ImageStats | null;
   legibility: Legibility | null;
+  /** Three readings of the page gave different numbers (lib/ingestion/double-read.ts). */
+  numbersUnsure?: boolean;
 }
 
 export interface PageConfidence {
@@ -109,6 +113,11 @@ export function scorePage(evidence: PageEvidence): PageConfidence {
   } else if (evidence.legibility === "fair") {
     score = Math.min(score, 82);
   }
+  // The numbers can't be trusted: always a weak page, so the book asks for it to be scanned again.
+  if (evidence.numbersUnsure) {
+    score = Math.min(score, 55);
+    issues.push("numbers_unsure");
+  }
   return { score: Math.max(0, Math.min(100, Math.round(score))), issues };
 }
 
@@ -149,6 +158,7 @@ const ISSUE_WORDS: Record<PageIssue, string> = {
   very_little_text: "very little text found",
   blank: "looks blank",
   reader_unsure: "hard to read",
+  numbers_unsure: "its numbers read differently each time",
 };
 
 /** A page's saved issues in plain words ("out of focus", "too dark"); unknown ones are left out. */

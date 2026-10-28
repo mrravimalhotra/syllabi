@@ -36,6 +36,7 @@ import { allPrompts, ruleGroups } from "../../src/lib/rules/catalogue";
 import { measureImage } from "../../src/lib/ingestion/image-quality";
 import { HANDWRITTEN_PAGE } from "../fixtures/bhakti-exercise-pages";
 import { scorePage, summariseBook, takeLegibility } from "../../src/lib/ingestion/confidence";
+import { numbersIn, settleReading, worthReadingAgain } from "../../src/lib/ingestion/double-read";
 import * as paperCheck from "../../src/app/api/generate/paper-check/route";
 import * as guests from "../../src/app/api/admin/guests/route";
 import * as speech from "../../src/app/api/speech/route";
@@ -557,7 +558,29 @@ fresh();
   const taken = takeLegibility("Some text\nPage: 3\n[Legibility: fair]");
   check("scan: the legibility line is taken out of the page text", taken.legibility === "fair" && taken.text === "Some text\nPage: 3" && takeLegibility("plain").legibility === null);
 
-  const book = (average: number, weak: number[], pages: number, failed = 0) => summariseBook({ pages, average, weak_pages: weak, issues: ["blurry", "too_dark"] }, { total: pages + failed, failed });
+  // Unclear pages are read again, and the numbers in the readings compared.
+  const reading = (text: string) => ({ text, provider: "google" as const, model: "m", usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } });
+  const sums = "Q1. 25 × 4 = 100\nQ2. 3/4 of 80 = 60\n[Legibility: fair]";
+  check("scan: an unclear page with numbers is read again; a clear one, or one with no numbers, is not", worthReadingAgain(sums, blurStats, "fair") && !worthReadingAgain(sums, sharpStats, "clear") && !worthReadingAgain("The Alvars and Nayanars.", blurStats, "poor"));
+  check("scan: the numbers in a reading, wherever they sit", numbersIn("Q2. 3 / 4 of 80 = 60, Q1. 25").join() === numbersIn("Q1. 25 Q2. 3/4 of 80 = 60").join());
+  let rereads = [reading("Q1. 25 × 4 = 100\nQ2. 3/4 of 80 = 60")];
+  const agreed = await settleReading(sums, async () => rereads.shift()!);
+  check("scan: a second reading with the same numbers keeps the first, after one extra read", agreed.raw === sums && !agreed.unsure && agreed.extra.length === 1);
+  rereads = [reading("Q1. 25 × 4 = 100\nQ2. 3/4 of 30 = 60"), reading("Q1. 25 × 4 = 100\nQ2. 3/4 of 80 = 60")];
+  const settled = await settleReading("Q1. 25 × 4 = 100\nQ2. 3/4 of 80 = 60", async () => rereads.shift()!);
+  check("scan: when two readings differ, a third settles it (the first and third agree)", !settled.unsure && settled.raw.includes("of 80") && settled.extra.length === 2);
+  rereads = [reading("Q1. 25 × 4 = 100\nQ2. 3/4 of 30 = 60"), reading("Q1. 25 × 4 = 100\nQ2. 3/4 of 30 = 60")];
+  const second = await settleReading("Q1. 25 × 4 = 100\nQ2. 3/4 of 80 = 60", async () => rereads.shift()!);
+  check("scan: when the second and third agree, theirs is kept", !second.unsure && second.raw.includes("of 30"));
+  rereads = [reading("Q1. 26 × 4 = 100"), reading("Q1. 25 × 4 = 10")];
+  const unsure = await settleReading("Q1. 25 × 4 = 100", async () => rereads.shift()!);
+  check("scan: when all three differ, the first is kept and the page is marked unsure", unsure.unsure && unsure.raw === "Q1. 25 × 4 = 100");
+  const marked = scorePage({ text, image: sharpStats, legibility: "clear", numbersUnsure: true });
+  check("scan: a page whose numbers can't be settled is weak and says why", marked.score < 60 && marked.issues.includes("numbers_unsure") && /numbers read differently/.test(book(60, [1], 3, 0, ["numbers_unsure"]).problems.join()), JSON.stringify(marked));
+
+  function book(average: number, weak: number[], pages: number, failed = 0, issues: string[] = ["blurry", "too_dark"]) {
+    return summariseBook({ pages, average, weak_pages: weak, issues: issues as never }, { total: pages + failed, failed });
+  }
   check("scan: clean pages make a High book with no advice", book(93, [], 15).level === "high" && book(93, [], 15).advice === null);
   const one = book(92, [4], 15);
   check("scan: one weak page keeps the book Medium and names the page", one.level === "medium" && /Page 4 is unclear/.test(one.advice ?? "") && /re-scan/i.test(one.advice ?? ""), one.advice ?? "");

@@ -11,11 +11,12 @@ export async function recordPageRead(
   ids: { documentId: string; ownerId: string; pageNumber: number },
   text: string,
   imageBase64: string | undefined,
-  legibility: Legibility | null
+  legibility: Legibility | null,
+  numbersUnsure = false
 ): Promise<void> {
   try {
     const image = imageBase64 ? await measureImage(Buffer.from(imageBase64, "base64")) : null;
-    const { score, issues } = scorePage({ text, image, legibility });
+    const { score, issues } = scorePage({ text, image, legibility, numbersUnsure });
     const { error } = await createAdminClient()
       .from("page_reads")
       .upsert(

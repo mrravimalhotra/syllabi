@@ -2,6 +2,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { extractPageText } from "@/lib/ingestion/extract";
 import { chunkPageText } from "@/lib/ingestion/chunk";
 import { takeLegibility, type Legibility } from "@/lib/ingestion/confidence";
+import { settleReading, worthReadingAgain } from "@/lib/ingestion/double-read";
+import { measureImage } from "@/lib/ingestion/image-quality";
 import { withoutHandwriting } from "@/lib/rag/handwriting";
 import { recordPageRead } from "@/lib/ingestion/page-read";
 import { embedMany } from "@/lib/llm";
@@ -113,6 +115,8 @@ export async function ingestPage(ctx: PageContext, page: IngestPage, storedImage
   // Only for pages the AI read from a picture: the reader's own rating of the page, for the book's scan score.
   let legibility: Legibility | null = null;
   let readFromPicture = false;
+  // Three readings of an unclear page disagreed on its numbers.
+  let numbersUnsure = false;
   if (page.text !== undefined) {
     pageText = page.text;
   } else if (earlier?.text) {
@@ -131,8 +135,22 @@ export async function ingestPage(ctx: PageContext, page: IngestPage, storedImage
     });
     // The reader says "[EMPTY PAGE]" for a blank page: an empty reply is a failed read (a backup service answering nothing), not a blank page.
     if (!extraction.text.trim()) failAt("reading the page", page.pageNumber, new Error("The reader returned no text"));
-    await earlier?.keep(extraction.text);
-    ({ text: pageText, legibility } = takeLegibility(extraction.text));
+    let raw = extraction.text;
+    const first = takeLegibility(raw);
+    const image = await measureImage(Buffer.from(page.imageBase64, "base64")).catch(() => null);
+    if (worthReadingAgain(first.text, image, first.legibility)) {
+      const settled = await settleReading(raw, () => extractPageText(page.imageBase64, page.mimeType, page.hint, true)).catch((err) => {
+        // The extra reading is a check: if it fails, the first reading stands.
+        console.warn(`[ingest] page ${page.pageNumber}: second reading failed`, errorText(err));
+        return null;
+      });
+      for (const r of settled?.extra ?? []) {
+        await recordTokenUsage({ studentId: ctx.ownerId, taskType: "ocr_extraction", provider: r.provider, model: r.model, usage: r.usage });
+      }
+      if (settled) ({ raw, unsure: numbersUnsure } = settled);
+    }
+    await earlier?.keep(raw);
+    ({ text: pageText, legibility } = takeLegibility(raw));
     readFromPicture = true;
   }
 
@@ -163,7 +181,7 @@ export async function ingestPage(ctx: PageContext, page: IngestPage, storedImage
     })),
   });
   if (error) failAt("saving the page", page.pageNumber, error);
-  await recordPageRead({ documentId: ctx.documentId, ownerId: ctx.ownerId, pageNumber: page.pageNumber }, pageText, readFromPicture ? page.imageBase64 : undefined, legibility);
+  await recordPageRead({ documentId: ctx.documentId, ownerId: ctx.ownerId, pageNumber: page.pageNumber }, pageText, readFromPicture ? page.imageBase64 : undefined, legibility, numbersUnsure);
 
   const embeddingTokens = embeddings.reduce((sum, e) => sum + e.usage.totalTokens, 0);
   if (embeddingTokens > 0) {
