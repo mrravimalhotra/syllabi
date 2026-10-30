@@ -5,7 +5,7 @@ import { Burst } from "@/components/kindergarten/Burst";
 import { RIGHT_CARD, WRONG_CARD } from "@/components/kindergarten/feedback";
 import { useEffect, useState } from "react";
 import { PlaceBlocks } from "@/components/kindergarten/PlaceBlocks";
-import { RoundDone, RoundFrame } from "@/components/kindergarten/RoundFrame";
+import { PlayAgain, RoundDone, RoundFrame } from "@/components/kindergarten/RoundFrame";
 import { cx } from "@/components/ui";
 import { onesOf, placeSpeech, tensOf, type PlaceQuestion } from "@/lib/kindergarten/place-value";
 
@@ -77,13 +77,8 @@ export function PlaceValueGame({ questions, say, prepare, onAgain, onExit }: Pro
   return (
     <RoundFrame index={index} total={questions.length} stars={stars} onExit={onExit}>
       <div data-answer={question.answer} data-number={question.number} className="space-y-5 text-center">
-        <button
-          type="button"
-          onClick={() => void say(placeSpeech(question))}
-          className="mx-auto flex items-center gap-2 rounded-full bg-brand-50 px-5 py-3 text-xl font-semibold text-brand-800"
-        >
-          <span aria-hidden>🔊</span> {placeSpeech(question)}
-        </button>
+        <p className="text-xl font-semibold text-slate-800">{placeSpeech(question)}</p>
+        <PlayAgain onClick={() => void say(placeSpeech(question))} />
         {question.kind === "build" ? <PlaceBlocks number={question.number} /> : <BigNumber q={question} />}
         <div className="grid grid-cols-3 gap-3">
           {question.choices.map((choice, i) => (

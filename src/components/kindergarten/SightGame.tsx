@@ -4,7 +4,7 @@ import { cheer, oops } from "@/components/practice/sounds";
 import { Burst } from "@/components/kindergarten/Burst";
 import { RIGHT_CARD, WRONG_CARD } from "@/components/kindergarten/feedback";
 import { useEffect, useState } from "react";
-import { RoundDone, RoundFrame } from "@/components/kindergarten/RoundFrame";
+import { PlayAgain, RoundDone, RoundFrame } from "@/components/kindergarten/RoundFrame";
 import { cx } from "@/components/ui";
 import type { SightQuestion } from "@/lib/kindergarten/quiz";
 
@@ -63,14 +63,8 @@ export function SightGame({ questions, say, prepare, onAgain, onExit }: Props) {
   return (
     <RoundFrame index={index} total={questions.length} stars={stars} onExit={onExit}>
       <div data-word={question.word} className="space-y-6 text-center">
-        <button
-          type="button"
-          onClick={() => void say(prompt(question.word))}
-          className="mx-auto flex items-center gap-2 rounded-full bg-brand-50 px-5 py-3 text-lg font-medium text-brand-800"
-        >
-          <span aria-hidden>🔊</span> Hear the word
-        </button>
-        <p className="text-sm text-slate-500">Find the word you heard.</p>
+        <p className="text-xl font-semibold text-slate-800">Find the word you heard.</p>
+        <PlayAgain onClick={() => void say(prompt(question.word))} />
         <div className="grid gap-3">
           {question.choices.map((word, i) => (
             <button

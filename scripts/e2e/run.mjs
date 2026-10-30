@@ -1191,6 +1191,8 @@ await test("Kindergarten: the look-and-tap games - each opens, a wrong choice is
       await box.waitFor({ timeout: 15000 });
       const answer = await box.getAttribute("data-answer");
       const choices = page.getByRole("group", { name: "Choices" }).getByRole("button");
+      // The question can always be heard again from the same big button.
+      if (q === 0) await page.getByRole("button", { name: "Play again", exact: true }).waitFor();
       if ((await choices.count()) !== 3) throw new Error(`${title}: expected 3 choices.`);
       if (q === 0) {
         // A wrong choice shakes and says "try again"; the question stays.

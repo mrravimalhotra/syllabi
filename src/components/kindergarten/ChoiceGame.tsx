@@ -4,7 +4,7 @@ import { cheer, oops } from "@/components/practice/sounds";
 import { Burst } from "@/components/kindergarten/Burst";
 import { CONSONANT_TEXT, RIGHT_CARD, VOWEL_TEXT, WRONG_CARD } from "@/components/kindergarten/feedback";
 import { useEffect, useState } from "react";
-import { RoundDone, RoundFrame } from "@/components/kindergarten/RoundFrame";
+import { PlayAgain, RoundDone, RoundFrame } from "@/components/kindergarten/RoundFrame";
 import { cx } from "@/components/ui";
 import type { ChoiceQuestion, Show } from "@/lib/kindergarten/games";
 import { VOWELS } from "@/lib/kindergarten/words";
@@ -227,13 +227,8 @@ export function ChoiceGame({ questions, say, prepare, onAgain, onExit }: Props) 
   return (
     <RoundFrame index={index} total={questions.length} stars={stars} onExit={onExit}>
       <div data-answer={question.answer} className="space-y-6 text-center">
-        <button
-          type="button"
-          onClick={() => void say(question.speech)}
-          className="mx-auto flex items-center gap-2 rounded-full bg-brand-50 px-5 py-3 text-lg font-medium text-brand-800"
-        >
-          <span aria-hidden>🔊</span> {question.speech}
-        </button>
+        <p className="text-xl font-semibold text-slate-800">{question.speech}</p>
+        <PlayAgain onClick={() => void say(question.speech)} />
         <Picture key={index} show={question.show} found={right} onHelp={help} />
         <div className={cx("grid gap-3", long ? "grid-cols-1" : "grid-cols-3")} role="group" aria-label="Choices">
           {question.choices.map((choice, i) => (

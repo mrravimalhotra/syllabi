@@ -4,7 +4,7 @@ import { cheer, oops } from "@/components/practice/sounds";
 import { Burst } from "@/components/kindergarten/Burst";
 import { CONSONANT_TEXT, pause, SOUND_GAP_MS, VOWEL_TEXT, WRONG_CARD } from "@/components/kindergarten/feedback";
 import { useEffect, useRef, useState } from "react";
-import { RoundDone, RoundFrame } from "@/components/kindergarten/RoundFrame";
+import { PlayAgain, RoundDone, RoundFrame } from "@/components/kindergarten/RoundFrame";
 import { button, cx } from "@/components/ui";
 import type { CvcQuestion } from "@/lib/kindergarten/quiz";
 import { blendStart, isVowel, phoneLabel } from "@/lib/kindergarten/phonics";
@@ -131,18 +131,21 @@ export function CvcGame({ questions, say, sound, prepare, prepareSounds, onAgain
             <span className="kg-bob inline-block">{question.emoji ?? "🔊"}</span>
           </span>
         </button>
-        <p className="text-sm text-slate-500">Tap the letters to spell the word. Tap the picture to hear it again.</p>
-        <button
-          type="button"
-          disabled={celebrating}
-          onClick={() => {
-            setCelebrating(true);
-            void soundOut(question, false).finally(() => setCelebrating(false));
-          }}
-          className={cx(button.primary, "mx-auto rounded-full px-6 text-lg disabled:opacity-50")}
-        >
-          <span aria-hidden>🔊</span> Sound it out
-        </button>
+        <p className="text-sm text-slate-500">Tap the letters to spell the word.</p>
+        <div className="flex flex-wrap justify-center gap-3">
+          <PlayAgain onClick={() => void say(question.word)} />
+          <button
+            type="button"
+            disabled={celebrating}
+            onClick={() => {
+              setCelebrating(true);
+              void soundOut(question, false).finally(() => setCelebrating(false));
+            }}
+            className={cx(button.secondary, "rounded-full px-6 text-lg disabled:opacity-50")}
+          >
+            <span aria-hidden>🔊</span> Sound it out
+          </button>
+        </div>
 
         <div className="relative flex justify-center gap-3" aria-label="The word so far">
           {blended && <Burst />}

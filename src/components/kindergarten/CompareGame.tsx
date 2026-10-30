@@ -4,7 +4,7 @@ import { cheer, oops } from "@/components/practice/sounds";
 import { Burst } from "@/components/kindergarten/Burst";
 import { RIGHT_CARD, WRONG_CARD } from "@/components/kindergarten/feedback";
 import { useEffect, useState } from "react";
-import { RoundDone, RoundFrame } from "@/components/kindergarten/RoundFrame";
+import { PlayAgain, RoundDone, RoundFrame } from "@/components/kindergarten/RoundFrame";
 import { cx } from "@/components/ui";
 import { compareSpeech, type CompareQuestion } from "@/lib/kindergarten/quiz";
 
@@ -82,13 +82,8 @@ export function CompareGame({ questions, say, prepare, onAgain, onExit }: Props)
   return (
     <RoundFrame index={index} total={questions.length} stars={stars} onExit={onExit}>
       <div data-answer={question.answer} className="space-y-5 text-center">
-        <button
-          type="button"
-          onClick={() => void say(compareSpeech(question))}
-          className="mx-auto flex items-center gap-2 rounded-full bg-brand-50 px-5 py-3 text-xl font-semibold text-brand-800"
-        >
-          <span aria-hidden>🔊</span> {question.ask === "more" ? "Which group has MORE?" : "Which group has FEWER?"}
-        </button>
+        <p className="text-xl font-semibold text-slate-800">{question.ask === "more" ? "Which group has MORE?" : "Which group has FEWER?"}</p>
+        <PlayAgain onClick={() => void say(compareSpeech(question))} />
         <div className="flex gap-3">
           <button type="button" aria-label="The left group" onClick={() => void choose("left")} className="flex flex-1 active:scale-95">
             <Group key={index} count={question.left} emoji={question.emoji} tone={toneOf("left")} />

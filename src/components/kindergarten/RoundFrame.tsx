@@ -55,6 +55,15 @@ export function RoundFrame({
   );
 }
 
+/** Hears the question again: the same big blue button in every game, so a child always knows where to tap. */
+export function PlayAgain({ onClick, disabled }: { onClick: () => void; disabled?: boolean }) {
+  return (
+    <button type="button" disabled={disabled} onClick={onClick} className={cx(button.primary, "mx-auto rounded-full px-6 text-lg disabled:opacity-50")}>
+      <span aria-hidden>🔊</span> Play again
+    </button>
+  );
+}
+
 /** The end of a round: stars earned, a note for the grown-up about words that needed help, and what to do next. */
 export function RoundDone({
   stars,

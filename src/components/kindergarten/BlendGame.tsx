@@ -4,7 +4,7 @@ import { cheer, oops } from "@/components/practice/sounds";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Burst } from "@/components/kindergarten/Burst";
 import { CONSONANT_TEXT, pause, RIGHT_CARD, SOUND_GAP_MS, VOWEL_TEXT, WRONG_CARD } from "@/components/kindergarten/feedback";
-import { RoundDone, RoundFrame } from "@/components/kindergarten/RoundFrame";
+import { PlayAgain, RoundDone, RoundFrame } from "@/components/kindergarten/RoundFrame";
 import { button, cx } from "@/components/ui";
 import { isVowel, phoneLabel } from "@/lib/kindergarten/phonics";
 import type { BlendQuestion } from "@/lib/kindergarten/quiz";
@@ -132,14 +132,7 @@ export function BlendGame({ questions, say, sound, prepare, prepareSounds, onAga
             </span>
           ))}
         </div>
-        <button
-          type="button"
-          disabled={listening}
-          onClick={() => void listen(question, Boolean(right))}
-          className={cx(button.primary, "mx-auto rounded-full px-6 text-lg disabled:opacity-50")}
-        >
-          <span aria-hidden>🔊</span> Play again
-        </button>
+        <PlayAgain disabled={listening} onClick={() => void listen(question, Boolean(right))} />
         <div className="grid grid-cols-3 gap-3">
           {question.choices.map((choice, i) => (
             <button
