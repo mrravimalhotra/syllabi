@@ -38,7 +38,7 @@ export const DEFAULT_CVC: CvcSettings = { vowels: ["a"], questions: 5 };
 const hasPicture = (w: { word: string; emoji: string | null }): w is { word: string; emoji: string } => w.emoji !== null;
 
 /** The words that have a clear picture; a family with none falls back to all the chosen vowels' picture words. */
-function picturePool(settings: CvcSettings) {
+export function picturePool(settings: CvcSettings) {
   const familyPool = cvcPool(settings).filter(hasPicture);
   return familyPool.length > 0 ? familyPool : cvcPool({ ...settings, family: undefined }).filter(hasPicture);
 }

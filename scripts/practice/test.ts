@@ -4,6 +4,7 @@ import type { PracticeNumber } from "@/lib/practice/numbers";
 import { makeCompareQuiz, makeCvcQuiz, makeSightQuiz, type CompareSettings, type SightSettings } from "@/lib/kindergarten/quiz";
 import { IPA, PHONEMES, blendStart, soundText } from "@/lib/kindergarten/phonics";
 import { makeBlendQuiz, cvcPool } from "@/lib/kindergarten/quiz";
+import { DEFAULT_GAMES, GAME_IDS, GAME_LEVELS, PHRASES, isGames, makeGameQuiz, numberName } from "@/lib/kindergarten/games";
 import { PLACE_MAX, makePlaceQuiz, onesOf, placeSpeech, placeValue, tensOf, tutorialNumber, tutorialSteps } from "@/lib/kindergarten/place-value";
 import { blockedReason, buildRequestBody, questionProblem, type Question } from "@/app/dashboard/_ask/build-request";
 import { checkPages } from "@/lib/ingestion/upload-pages";
@@ -43,6 +44,8 @@ import { diaryFromPages, diaryFromText } from "@/lib/homework/diary-text";
 import type { MatchedChunk } from "@/types/database";
 import { BOARD_COLUMNS, BOARD_ROWS, makeBoardGame, makeFamilySheet, makeMatchSheet, schoolFamilySheet, schoolMatchSheet } from "@/lib/kindergarten/worksheets";
 import { BOARD_WORDS, CVC_WORDS, familiesOf, rimeOf, SIGHT_LEVELS, SIGHT_SETS, VOWELS } from "@/lib/kindergarten/words";
+
+const DEFAULT_CVC_FOR_TEST = { vowels: ["a" as const], questions: 5 };
 
 let passed = 0;
 let failed = 0;
@@ -333,6 +336,79 @@ check(schoolFam.map((f) => `${f.rime} ${f.example}`).join(",") === "at cat,an ma
 const schoolMatch = schoolMatchSheet();
 check(schoolMatch.pictures.length === 10 && schoolMatch.pictures.every((p) => p.emoji) && schoolMatch.words.join(" ") === "bat sun cat pot bed cap dog pig pen bug", "The school matching sheet differs from the printed one");
 check(schoolMatch.words.every((w) => schoolMatch.pictures.some((p) => p.word === w)), "A school matching word has no picture");
+// ---- Kindergarten: the look-and-tap games (missing letter, reading, numbers, patterns) ----
+
+check(numberName(7) === "seven" && numberName(13) === "thirteen" && numberName(40) === "forty" && numberName(21) === "twenty-one" && numberName(99) === "ninety-nine" && numberName(100) === "one hundred", "number names");
+check(new Set(PHRASES.map((p) => p.emoji)).size === PHRASES.length, "every phrase has its own picture");
+check(isGames(DEFAULT_GAMES) && !isGames({ ...DEFAULT_GAMES, count: { level: "7", questions: 5 } }) && !isGames({}), "saved game choices are checked");
+for (const id of GAME_IDS) {
+  for (const { value: level } of GAME_LEVELS[id].options) {
+    for (const questions of [5, 10]) {
+      for (let seed = 1; seed <= 150; seed++) {
+        const quiz = makeGameQuiz(id, { level, questions }, { vowels: ["a", "e", "i", "o", "u"], questions: 5 }, seed * 104729);
+        const label = `${id} ${level} seed ${seed}`;
+        check(quiz.length === questions, `${label}: ${quiz.length} questions`);
+        for (const q of quiz) {
+          check(q.choices.length === 3 && new Set(q.choices).size === 3 && q.choices.includes(q.answer), `${label}: choices ${q.choices} for ${q.answer}`);
+          check(!/undefined|NaN/.test(JSON.stringify(q)), `${label}: undefined or NaN in ${JSON.stringify(q)}`);
+          const sh = q.show;
+          // Each answer worked out again from what the child sees.
+          if (sh.kind === "missing") {
+            check(sh.letters[sh.gap] === q.answer && (level !== "middle" || sh.gap === 1) && (level !== "ends" || sh.gap !== 1), `${label}: missing letter`);
+            const vowel = (c: string) => "aeiou".includes(c);
+            check(q.choices.every((c) => vowel(c) === vowel(q.answer)), `${label}: choices mix vowels and consonants ${q.choices}`);
+          }
+          if (sh.kind === "read") {
+            check(!new RegExp(`\\b${sh.text}\\b`).test(q.speech) && q.help === sh.text, `${label}: the text to read is said aloud`);
+            const pic = level === "words" ? Object.values(CVC_WORDS).flat().find((w) => w.word === sh.text)?.emoji : PHRASES.find((p) => p.text === sh.text)?.emoji;
+            check(pic === q.answer, `${label}: picture for ${sh.text}`);
+          }
+          if (sh.kind === "count") check(String(sh.count) === q.answer && sh.count >= 1 && sh.count <= Number(level) && q.choices.every((c) => Number(c) >= 1 && Number(c) <= Number(level)), `${label}: count`);
+          if (sh.kind === "next") {
+            const known = sh.numbers.filter((n): n is number => n !== null);
+            const gap = sh.numbers.indexOf(null);
+            const expected = gap === 0 ? known[0] - 1 : known[gap - 1] + 1;
+            check(String(expected) === q.answer && q.choices.every((c) => Number(c) >= 1 && Number(c) <= Number(level) && !known.includes(Number(c))), `${label}: ${sh.numbers} -> ${q.answer} from ${q.choices}`);
+          }
+          if (sh.kind === "bonds") check(sh.have + Number(q.answer) === sh.total && !/There are 1\./.test(q.speech) && sh.have >= 1 && sh.have < sh.total && q.choices.every((c) => Number(c) >= 0 && Number(c) <= sh.total), `${label}: bond`);
+          if (sh.kind === "sum") {
+            const max = level.endsWith("10") ? 10 : 5;
+            const result = sh.op === "+" ? sh.a + sh.b : sh.a - sh.b;
+            check(String(result) === q.answer && result >= 1 && result <= max && sh.a <= max && sh.b >= 1, `${label}: ${sh.a} ${sh.op} ${sh.b} = ${q.answer}`);
+            check((level.startsWith("add") ? sh.op === "+" : level.startsWith("take") ? sh.op === "−" : true) && q.choices.every((c) => Number(c) >= 0 && Number(c) <= max), `${label}: sum kind or choices`);
+          }
+          if (sh.kind === "name") {
+            const n = /^\d+$/.test(sh.text) ? Number(sh.text) : Number(q.answer);
+            check(n >= 1 && n <= Number(level) && (/^\d+$/.test(sh.text) ? q.answer === numberName(n) : sh.text === numberName(n)), `${label}: number name ${sh.text} -> ${q.answer}`);
+          }
+          if (sh.kind === "pattern") {
+            // The smallest repeating unit of what is shown predicts the next picture.
+            const items = sh.items;
+            const unit = [1, 2, 3, 4].find((u) => items.every((x, i) => x === items[i % u]))!;
+            check(unit !== undefined && items[items.length % unit] === q.answer && items.length >= unit * 2, `${label}: pattern ${items.join("")} -> ${q.answer}`);
+            check(level !== "ab" || unit === 2, `${label}: easy pattern is AB`);
+          }
+        }
+      }
+    }
+  }
+}
+// Read and match, phrases: most wrong pictures share a word with the phrase.
+{
+  let sharing = 0;
+  let total = 0;
+  for (let seed = 1; seed <= 50; seed++)
+    for (const q of makeGameQuiz("read", { level: "phrases", questions: 10 }, DEFAULT_CVC_FOR_TEST, seed)) {
+      const words = (t: string) => t.split(" ").filter((w) => w.length > 2);
+      const text = (q.show as { text: string }).text;
+      for (const c of q.choices.filter((c) => c !== q.answer)) {
+        total++;
+        if (words(PHRASES.find((p) => p.emoji === c)!.text).some((w) => words(text).includes(w))) sharing++;
+      }
+    }
+  check(sharing / total > 0.8, `phrase distractors share a word (${sharing} of ${total})`);
+}
+
 // ---- Phonics: every letter has a sound, a tip and a keyword ----
 const LETTERS = "abcdefghijklmnopqrstuvwxyz".split("");
 for (const l of LETTERS) {

@@ -11,6 +11,7 @@ import { summary } from "@/app/dashboard/practice/kindergarten/_parts/Settings";
 import { useSay, useVoiceChoice } from "@/components/kindergarten/useSay";
 import { useSoundEffects } from "@/components/practice/useSoundEffects";
 import { PageHeader } from "@/components/ui";
+import { DEFAULT_GAMES, isGames } from "@/lib/kindergarten/games";
 import { DEFAULT_PLACE } from "@/lib/kindergarten/place-value";
 import { DEFAULT_COMPARE, DEFAULT_CVC, DEFAULT_SIGHT } from "@/lib/kindergarten/quiz";
 import { newSeed } from "@/lib/practice/random";
@@ -29,6 +30,7 @@ export default function KindergartenPage() {
   const [sight, setSight] = usePref("syllabi-kg-sight", DEFAULT_SIGHT, isSight);
   const [compare, setCompare] = usePref("syllabi-kg-compare", DEFAULT_COMPARE, isCompare);
   const [place, setPlace] = usePref("syllabi-kg-place", DEFAULT_PLACE, isPlace);
+  const [games, setGames] = usePref("syllabi-kg-games", DEFAULT_GAMES, isGames);
   const { voice, choose } = useVoiceChoice();
   const [soundsOn] = useSoundEffects();
   const speaker = useSay();
@@ -50,6 +52,7 @@ export default function KindergartenPage() {
         sight={sight}
         compare={compare}
         place={place}
+        games={games}
         voice={speaker}
         onAgain={again}
         onPlay={() => start("place")}
@@ -62,7 +65,7 @@ export default function KindergartenPage() {
     return (
       <KindergartenScreen
         screen={screen}
-        {...{ cvc, setCvc, sight, setSight, compare, setCompare, place, setPlace, voice }}
+        {...{ cvc, setCvc, sight, setSight, compare, setCompare, place, setPlace, games, setGames, voice }}
         chooseVoice={choose}
         start={start}
         onBack={() => setScreen(null)}
@@ -90,12 +93,20 @@ export default function KindergartenPage() {
       <MenuGroup title="Letters and sounds">
         {tile("blend", summary.cvc(cvc))}
         {tile("cvc", summary.cvc(cvc))}
+        {tile("missing", `${cvc.vowels.join(", ")} · ${summary.game("missing", games)}`)}
         {tile("explore", summary.cvc(cvc))}
         {tile("sight", summary.sight(sight))}
+        {tile("read", summary.game("read", games))}
       </MenuGroup>
 
-      <MenuGroup title="Numbers">
+      <MenuGroup title="Numbers and patterns">
+        {tile("count", summary.game("count", games))}
         {tile("compare", summary.compare(compare))}
+        {tile("next", summary.game("next", games))}
+        {tile("names", summary.game("names", games))}
+        {tile("bonds", summary.game("bonds", games))}
+        {tile("sums", summary.game("sums", games))}
+        {tile("pattern", summary.game("pattern", games))}
         {tile("place", summary.place(place))}
       </MenuGroup>
 

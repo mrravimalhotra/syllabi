@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { Chip } from "@/app/dashboard/practice/kindergarten/_parts/Chip";
+import { GAME_LEVELS, type GameId, type GamesSettings } from "@/lib/kindergarten/games";
 import { PLACE_MAX, type PlaceSettings } from "@/lib/kindergarten/place-value";
 import { ROUND_SIZES, type CompareSettings, type CvcSettings, type SightSettings } from "@/lib/kindergarten/quiz";
 import { SIGHT_LEVELS, SIGHT_LEVEL_LABELS, VOWELS, familiesOf, type Vowel } from "@/lib/kindergarten/words";
@@ -34,8 +35,18 @@ function RoundSize({ current, set, unit }: { current: number; set: (n: 5 | 10) =
   );
 }
 
-/** Vowels, word family and round size: shared by Listen and blend, Spell the word and Word explorer. */
-export function CvcChoices({ cvc, setCvc, shared }: { cvc: CvcSettings; setCvc: (next: CvcSettings) => void; shared?: boolean }) {
+/** Vowels, word family and round size: shared by Listen and blend, Spell the word, Word explorer and Missing letter (which has its own round size). */
+export function CvcChoices({
+  cvc,
+  setCvc,
+  shared,
+  round = true,
+}: {
+  cvc: CvcSettings;
+  setCvc: (next: CvcSettings) => void;
+  shared?: boolean;
+  round?: boolean;
+}) {
   const toggleVowel = (v: Vowel) => {
     const next = cvc.vowels.includes(v) ? cvc.vowels.filter((x) => x !== v) : [...cvc.vowels, v];
     if (next.length === 0) return;
@@ -48,7 +59,7 @@ export function CvcChoices({ cvc, setCvc, shared }: { cvc: CvcSettings; setCvc: 
     <>
       <Setting
         label="Vowel sounds to practise"
-        hint={shared ? "Shared by Listen and blend, Spell the word and Word explorer." : "Choose one or more."}
+        hint={shared ? "Shared by Listen and blend, Spell the word, Word explorer and Missing letter." : "Choose one or more."}
       >
         {VOWELS.map((v) => (
           <Chip key={v} on={cvc.vowels.includes(v)} onClick={() => toggleVowel(v)}>
@@ -66,7 +77,26 @@ export function CvcChoices({ cvc, setCvc, shared }: { cvc: CvcSettings; setCvc: 
           </Chip>
         ))}
       </Setting>
-      <RoundSize current={cvc.questions} set={(n) => setCvc({ ...cvc, questions: n })} unit="words" />
+      {round && <RoundSize current={cvc.questions} set={(n) => setCvc({ ...cvc, questions: n })} unit="words" />}
+    </>
+  );
+}
+
+/** The level and round size of one of the newer games. */
+export function GameChoices({ id, games, setGames }: { id: GameId; games: GamesSettings; setGames: (next: GamesSettings) => void }) {
+  const current = games[id];
+  const set = (next: Partial<typeof current>) => setGames({ ...games, [id]: { ...current, ...next } });
+  const { label, options } = GAME_LEVELS[id];
+  return (
+    <>
+      <Setting label={label}>
+        {options.map((o) => (
+          <Chip key={o.value} on={current.level === o.value} onClick={() => set({ level: o.value })}>
+            {o.label}
+          </Chip>
+        ))}
+      </Setting>
+      <RoundSize current={current.questions} set={(n) => set({ questions: n })} unit="questions" />
     </>
   );
 }
@@ -122,4 +152,6 @@ export const summary = {
   sight: (s: SightSettings) => `${SIGHT_LEVEL_LABELS[s.level].split(" (")[0]} · ${s.questions} words`,
   compare: (c: CompareSettings) => `Up to ${c.max} · ${c.questions} questions`,
   place: (p: PlaceSettings) => `Up to ${p.max} · ${p.questions} questions`,
+  game: (id: GameId, g: GamesSettings) =>
+    `${GAME_LEVELS[id].options.find((o) => o.value === g[id].level)?.label.split(":")[0]} · ${g[id].questions} questions`,
 };

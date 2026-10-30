@@ -1177,6 +1177,39 @@ await test("Kindergarten: without the sound files, letter sounds are asked for i
   if (!kinds.has("sound") || !kinds.has("phrase")) throw new Error(`Expected both phrase and sound requests, saw ${[...kinds]}.`);
 });
 
+await test("Kindergarten: the look-and-tap games - each opens, a wrong choice is not accepted, a full round ends in stars", async (page, ctx) => {
+  await baseRoutes(ctx);
+  await speechOk(ctx);
+  await page.goto(`${BASE}/dashboard/practice/kindergarten`, { waitUntil: "networkidle" });
+  const games = ["Missing letter", "Read and match", "Count and tap", "Before, after, between", "Number names", "Make 5 and 10", "Add and take away", "What comes next?"];
+  for (const title of games) {
+    await openActivity(page, title);
+    await page.getByRole("heading", { name: title }).waitFor();
+    await tap(page.getByRole("button", { name: "▶ Play" }));
+    for (let q = 0; q < 5; q++) {
+      const box = page.locator("[data-answer]");
+      await box.waitFor({ timeout: 15000 });
+      const answer = await box.getAttribute("data-answer");
+      const choices = page.getByRole("group", { name: "Choices" }).getByRole("button");
+      if ((await choices.count()) !== 3) throw new Error(`${title}: expected 3 choices.`);
+      if (q === 0) {
+        // A wrong choice shakes and says "try again"; the question stays.
+        const wrong = page.getByRole("group", { name: "Choices" }).getByRole("button").filter({ hasNotText: new RegExp(`^${answer.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`) });
+        await tap(wrong.first());
+        await page.locator(`[data-answer="${answer}"]`).waitFor();
+      }
+      await tap(page.getByRole("group", { name: "Choices" }).getByRole("button", { name: answer, exact: true }));
+      // The same answer can come twice in a row (count 3, then 3 again): wait for the question number to move on.
+      await page.getByRole("img", { name: `Question ${Math.min(q + 2, 5)} of 5` }).or(page.getByText("Well done!")).first().waitFor({ timeout: 20000 });
+    }
+    await page.getByText("Well done!").first().waitFor({ timeout: 20000 });
+    // The grown-up's note names the question that needed another go.
+    await page.getByText(/For the grown-up: needed another go on/).waitFor();
+    await tap(page.getByRole("button", { name: "Back to the menu" }));
+    await tap(page.getByRole("button", { name: "← All activities" }));
+  }
+});
+
 await test("Kindergarten: home tiles open each activity's screen, and leaving a game goes back to it", async (page, ctx) => {
   await baseRoutes(ctx);
   await speechOk(ctx);

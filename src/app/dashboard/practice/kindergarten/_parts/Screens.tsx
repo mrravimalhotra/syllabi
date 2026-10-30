@@ -2,13 +2,14 @@
 
 import { ActivityScreen, type Tone } from "@/components/menu/Tiles";
 import type { Activity } from "@/app/dashboard/practice/kindergarten/_parts/ActivityGame";
-import { CompareChoices, CvcChoices, PlaceChoices, SightChoices } from "@/app/dashboard/practice/kindergarten/_parts/Settings";
+import { CompareChoices, CvcChoices, GameChoices, PlaceChoices, SightChoices } from "@/app/dashboard/practice/kindergarten/_parts/Settings";
 import { SoundGuide } from "@/app/dashboard/practice/kindergarten/_parts/SoundGuide";
 import { SoundEffectsChoice, VoiceChoice } from "@/app/dashboard/practice/kindergarten/_parts/VoiceChoice";
+import type { GameId, GamesSettings } from "@/lib/kindergarten/games";
 import type { PlaceSettings } from "@/lib/kindergarten/place-value";
 import type { CompareSettings, CvcSettings, SightSettings } from "@/lib/kindergarten/quiz";
 
-export type Screen = "blend" | "cvc" | "explore" | "sight" | "compare" | "place" | "guide" | "voice";
+export type Screen = "blend" | "cvc" | "explore" | "sight" | "compare" | "place" | "guide" | "voice" | GameId;
 
 /** What each tile and screen shows. */
 export const SCREENS: Record<Screen, { emoji: string; tone: Tone; title: string; hint: string; description: string; badge?: string }> = {
@@ -57,6 +58,63 @@ export const SCREENS: Record<Screen, { emoji: string; tone: Tone; title: string;
     description:
       "Learn what a digit is, and what it is worth where it sits (the 4 in 47 is worth 40), with tens and ones blocks. Then play the quiz.",
   },
+  missing: {
+    emoji: "🧩",
+    tone: "sky",
+    title: "Missing letter",
+    hint: "c _ t: which letter fits?",
+    description: "See a picture and its word with one letter missing (c _ t), hear the word, and tap the letter that fits.",
+  },
+  read: {
+    emoji: "📖",
+    tone: "sky",
+    title: "Read and match",
+    hint: "Read it, tap the picture",
+    description:
+      "Read a word (pig) or a short phrase (a cat in a hat) and tap its picture. The words are not read aloud: that is the child's job, though “Read it to me” helps.",
+  },
+  count: {
+    emoji: "🔢",
+    tone: "amber",
+    title: "Count and tap",
+    hint: "How many apples?",
+    description: "Count the pictures, set out in rows of five, and tap the number.",
+  },
+  next: {
+    emoji: "➡️",
+    tone: "amber",
+    title: "Before, after, between",
+    hint: "14, __, 16",
+    description: "Which number comes after 29, before 30, or between 14 and 16?",
+  },
+  names: {
+    emoji: "🔤",
+    tone: "amber",
+    title: "Number names",
+    hint: "7 is “seven”",
+    description: "Match a number to its name (7 and “seven”), and a name to its number, the way school papers ask.",
+  },
+  bonds: {
+    emoji: "🖐️",
+    tone: "amber",
+    title: "Make 5 and 10",
+    hint: "3 and how many make 5?",
+    description: "Some dots are filled in. How many more make 5, or 10? The first step to adding without counting on fingers.",
+  },
+  sums: {
+    emoji: "➕",
+    tone: "amber",
+    title: "Add and take away",
+    hint: "3 🍎 + 2 🍎",
+    description: "Little sums with pictures: put two groups together, or take some away, and tap how many there are.",
+  },
+  pattern: {
+    emoji: "🔴",
+    tone: "amber",
+    title: "What comes next?",
+    hint: "🔴🔵🔴🔵 ?",
+    description: "Look at a pattern of pictures and tap the one that comes next.",
+  },
   guide: {
     emoji: "🗣️",
     tone: "slate",
@@ -83,6 +141,8 @@ interface Props {
   setCompare: (next: CompareSettings) => void;
   place: PlaceSettings;
   setPlace: (next: PlaceSettings) => void;
+  games: GamesSettings;
+  setGames: (next: GamesSettings) => void;
   voice: "natural" | "phone";
   chooseVoice: (next: "natural" | "phone") => void;
   start: (kind: Activity) => void;
@@ -118,6 +178,25 @@ export function KindergartenScreen({ screen, start, onBack, ...p }: Props) {
       return (
         <ActivityScreen {...base} onLearn={() => start("place-learn")} onPlay={() => start("place")}>
           <PlaceChoices place={p.place} setPlace={p.setPlace} />
+        </ActivityScreen>
+      );
+    case "missing":
+      return (
+        <ActivityScreen {...base} onPlay={() => start(screen)}>
+          <CvcChoices cvc={p.cvc} setCvc={p.setCvc} shared round={false} />
+          <GameChoices id={screen} games={p.games} setGames={p.setGames} />
+        </ActivityScreen>
+      );
+    case "read":
+    case "count":
+    case "next":
+    case "names":
+    case "bonds":
+    case "sums":
+    case "pattern":
+      return (
+        <ActivityScreen {...base} onPlay={() => start(screen)}>
+          <GameChoices id={screen} games={p.games} setGames={p.setGames} />
         </ActivityScreen>
       );
     case "guide":
