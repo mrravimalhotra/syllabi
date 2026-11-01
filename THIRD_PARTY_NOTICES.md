@@ -10,6 +10,12 @@ Noto Sans, Noto Sans Devanagari, Noto Sans Math and Noto Sans Mono, embedded in 
 ### pdf.js — `public/pdf.worker.min.mjs`
 Copyright Mozilla Foundation. Apache License 2.0. The licence header is preserved at the top of the file; full text: https://www.apache.org/licenses/LICENSE-2.0
 
+### Supabase agent skills — `.claude/skills/supabase`, `.claude/skills/supabase-postgres-best-practices`
+From https://github.com/supabase/agent-skills (commit `c9be0e9`), copied unmodified. Copyright Supabase. MIT License; full text in each folder's `LICENSE`.
+
+### Vercel agent skills — `.claude/skills/vercel-react-best-practices`, `.claude/skills/vercel-composition-patterns`, `.claude/skills/web-design-guidelines`
+From https://github.com/vercel-labs/agent-skills (commit `1a2c79d`), copied unmodified. Copyright Vercel. MIT License, as each skill's `SKILL.md` states.
+
 ### BMAD Method — `_bmad/`, `.claude/skills/bmad-*`
 Installed from the `bmad-method` npm package v6.12.4. BMad™, BMad Method™ and BMad Core™ are trademarks of BMad Code, LLC; their use here does not imply endorsement. Licence:
 
