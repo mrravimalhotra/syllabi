@@ -15,7 +15,8 @@ await build({
   platform: "node",
   format: "esm",
   outfile: out,
-  alias: { "@": join(ROOT, "src") },
+  // The usage recorder saves through Next's after(), which needs the app's server; this test has no database.
+  alias: { "@/lib/llm/usage": join(ROOT, "scripts/api/fakes/llm-usage.ts"), "@": join(ROOT, "src") },
   logLevel: "error",
 });
 await import(pathToFileURL(out).href);

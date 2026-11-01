@@ -24,14 +24,16 @@ export async function GET() {
   const auth = await authenticate();
   if ("response" in auth) return auth.response;
   const admin = createAdminClient();
-  const days = await admin.from("homework_diary_days").select("day").eq("owner_id", auth.account.id).order("day", { ascending: false }).limit(30);
-  const { data, error } = await admin
-    .from("homework_entries")
-    .select(COLUMNS)
-    .eq("owner_id", auth.account.id)
-    .order("given_date", { ascending: false })
-    .order("created_at", { ascending: true })
-    .limit(2000);
+  const [days, { data, error }] = await Promise.all([
+    admin.from("homework_diary_days").select("day").eq("owner_id", auth.account.id).order("day", { ascending: false }).limit(30),
+    admin
+      .from("homework_entries")
+      .select(COLUMNS)
+      .eq("owner_id", auth.account.id)
+      .order("given_date", { ascending: false })
+      .order("created_at", { ascending: true })
+      .limit(2000),
+  ]);
   if (error) return errorResponse(error, "homework GET", "Couldn't load the homework list. Check your connection and reload.");
   // The diary days are only for the missing-diary reminder: without them the list still shows.
   return NextResponse.json({ entries: data ?? [], diaryDays: days.error ? [] : (days.data ?? []).map((d) => d.day) });

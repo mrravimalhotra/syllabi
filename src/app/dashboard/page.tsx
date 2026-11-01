@@ -12,6 +12,7 @@ import { ResultSection } from "@/app/dashboard/_ask/ResultSection";
 import { AskHome } from "@/app/dashboard/_ask/AskHome";
 import { AskComposer } from "@/app/dashboard/_ask/AskComposer";
 import { ActivityScreen } from "@/components/menu/Tiles";
+import { preloadMarkdown } from "@/components/Markdown";
 import { PageSkeleton } from "@/components/ui";
 import { planCommand, type QuickCommand } from "@/app/dashboard/_ask/commands";
 import { blockedReason, buildRequestBody, calculationAnswer, questionProblem, type Question } from "@/app/dashboard/_ask/build-request";
@@ -85,6 +86,11 @@ function AskSyllabi() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch-on-mount is intentional here (the cached copy, if any, shows at once)
     loadMe().catch(() => {});
   }, []);
+
+  // A tool screen is open, so an answer is likely: fetch its formatter now rather than when the answer arrives.
+  useEffect(() => {
+    if (tool) preloadMarkdown();
+  }, [tool]);
 
   const language: AnswerLanguage = answerLanguage ?? me?.student.answer_language ?? "auto";
   // The chapter for a study pack: the book picked (none is pre-chosen). Attached pages win over it (see buildRequestBody).

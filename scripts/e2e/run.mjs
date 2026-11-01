@@ -180,6 +180,16 @@ await test("Ask: a question shows the answer and its checks", async (page, ctx) 
   await page.getByText("Plants make food from sunlight.").first().waitFor({ timeout: 10000 });
 });
 
+await test("Ask: an answer's Markdown is formatted once the formatter has loaded", async (page, ctx) => {
+  await baseRoutes(ctx);
+  await ctx.route("**/api/generate/**", (r) => json(r, { ...answer, text: "## Steps\n\n- **Light** is taken in\n- Food is made" }));
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
+  await page.locator("textarea").fill("Explain photosynthesis");
+  await page.getByRole("button", { name: /^Generate$/ }).click();
+  await page.getByRole("heading", { name: "Steps" }).waitFor({ timeout: 10000 });
+  await page.locator("li strong", { hasText: "Light" }).first().waitFor();
+});
+
 await test("Ask: allowance used up says when it resets", async (page, ctx) => {
   await baseRoutes(ctx);
   await ctx.route("**/api/generate/**", (r) => json(r, { error: "You've used all of this month's allowance, so new answers are paused. It resets on the 1st.", quota: { used: 200000, quota: 200000, overQuota: true } }, 429));
