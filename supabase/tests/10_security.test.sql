@@ -230,6 +230,14 @@ begin
     'insert into error_log (source, context, message) values (''server'', ''test'', ''boom'')', '1');
   perform pg_temp.check('server can purge the error log', 'service_role', null, 'select purge_error_log()', '1');
   perform pg_temp.check('user cannot purge the error log', 'authenticated', p1, 'select purge_error_log()', 'error');
+  perform pg_temp.check('user cannot read answer progress records', 'authenticated', p1, 'select * from generation_runs', 'error');
+  perform pg_temp.check('anon cannot read answer progress records', 'anon', null, 'select * from generation_runs', 'error');
+  perform pg_temp.check('user cannot write answer progress records', 'authenticated', p1,
+    'insert into generation_runs (id, task_type) values (gen_random_uuid(), ''solution'')', 'error');
+  perform pg_temp.check('server records and updates answer progress', 'service_role', null,
+    format('insert into generation_runs (id, student_id, task_type) values (''00000000-0000-4000-8000-0000000000f1'', %L, ''solution''); update generation_runs set stage = ''writing'', details = ''{"stages": {"writing": 4.2}}''::jsonb where id = ''00000000-0000-4000-8000-0000000000f1''; select 1 from generation_runs where stage = ''writing''', p1), '1');
+  perform pg_temp.check('server can purge answer progress records', 'service_role', null, 'select purge_generation_runs()', '1');
+  perform pg_temp.check('user cannot purge answer progress records', 'authenticated', p1, 'select purge_generation_runs()', 'error');
 
   -- At least one active admin always remains.
   perform pg_temp.check('cannot demote the last admin', 'service_role', null,

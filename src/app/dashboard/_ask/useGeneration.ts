@@ -1,12 +1,35 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { readAnswerStream } from "@/lib/answer-stream";
-import { OFFLINE_MESSAGE, failedRequestMessage } from "@/lib/http-errors";
+import { AnswerCutError, readAnswerStream } from "@/lib/answer-stream";
+import { OFFLINE_MESSAGE, SERVER_UNREACHABLE_MESSAGE, answerStoppedMessage, failedRequestMessage } from "@/lib/http-errors";
 import { findProblems, solve } from "@/lib/worked/detect";
 import type { WorkedExample } from "@/lib/worked/types";
 import type { GenerationTaskType } from "@/types/database";
 import type { GenerationResult } from "@/app/dashboard/_ask/constants";
+
+/**
+ * What to tell the person when a request failed, from where it failed: before any reply (offline, or the server
+ * unreachable), while the answer was coming in (cut, or out of time), or with the server's own message.
+ */
+function failureMessage(err: unknown, replied: boolean, seconds: number): string {
+  if (err instanceof AnswerCutError || (replied && err instanceof TypeError)) return answerStoppedMessage(seconds);
+  if (err instanceof TypeError) return navigator.onLine === false ? OFFLINE_MESSAGE : SERVER_UNREACHABLE_MESSAGE;
+  return err instanceof Error && err.message ? err.message : "Couldn't make your answer. Check your connection and try again.";
+}
+
+/** A failed answer goes into the admin's error log with its progress record's id, so it can be traced. */
+function reportFailure(task: GenerationTaskType, message: string, runId: string | null, seconds: number) {
+  void fetch("/api/log-error", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      where: `answer failed (${task})`,
+      message: `${message} | after ${seconds}s | run ${runId ?? "none (no reply)"} | ${navigator.onLine === false ? "offline" : "online"}`,
+      path: window.location.pathname + window.location.search,
+    }),
+  }).catch(() => {});
+}
 
 interface LastRequest {
   route: string;
@@ -118,6 +141,9 @@ export function useGeneration(onFinished: () => void) {
     const controller = new AbortController();
     abortRef.current = controller;
     let answered = false;
+    const started = Date.now();
+    let replied = false;
+    let runId: string | null = null;
 
     try {
       // Answers (not study packs) are streamed, so the first words show within seconds.
@@ -128,6 +154,8 @@ export function useGeneration(onFinished: () => void) {
         signal: controller.signal,
         body: JSON.stringify(streaming ? { ...body, stream: true } : body),
       });
+      replied = true;
+      runId = res.headers.get("X-Run-Id");
       const data = await readResponse(res);
       setLoading(false);
       setResult(data);
@@ -137,13 +165,11 @@ export function useGeneration(onFinished: () => void) {
       if (controller.signal.aborted) {
         setNotice("You stopped waiting. If the answer still finishes, it will appear in My Documents.");
       } else {
-        setError(
-          err instanceof TypeError
-            ? OFFLINE_MESSAGE
-            : err instanceof Error
-              ? err.message
-              : "Couldn't make your answer. Check your connection and try again."
-        );
+        const seconds = Math.round((Date.now() - started) / 1000);
+        const message = failureMessage(err, replied, seconds);
+        reportFailure(task, message, runId, seconds);
+        // The reference finds this request's progress record (where it stopped and why).
+        setError(runId ? `${message} (Reference ${runId.slice(0, 8)})` : message);
       }
     } finally {
       abortRef.current = null;

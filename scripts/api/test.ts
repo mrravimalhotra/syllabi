@@ -291,6 +291,18 @@ const failLines = (await failed.text()).trim().split("\n").map((l) => JSON.parse
 check("generate: a failure inside a stream arrives as an error line", failLines.at(-1)?.type === "error" && /Couldn't make your answer/.test(String(failLines.at(-1)?.error)));
 await expect("generate: a failure without streaming is a plain error", adhoc.POST, 500, /Couldn't make your answer/i, { prompt: "Yet another question" });
 pipeline.fail = false;
+// Every request leaves a progress record (written in the background, so wait a moment), with no question text in it.
+await new Promise((r) => setTimeout(r, 50));
+{
+  const runs = tables.generation_runs ?? [];
+  const outcomes = runs.map((r) => r.outcome).sort().join(",");
+  const streamedRun = runs.find((r) => r.id === streamed.headers.get("x-run-id"));
+  const failedRun = runs.find((r) => r.id === failed.headers.get("x-run-id"));
+  check("progress records: one per request, saying how each ended", outcomes === "answered,answered,answered,answered,failed,failed,reused", outcomes);
+  check("progress records: a streamed answer's record is named in its reply and shows when the first words came", Boolean(streamedRun) && streamedRun?.stage === "done" && "first words" in ((streamedRun?.details as { stages?: Record<string, number> })?.stages ?? {}) && typeof streamedRun?.document_id === "string");
+  check("progress records: a failure keeps its error and the stage it ended at", failedRun?.stage === "failed" && /The AI is down/.test(String(failedRun?.error)));
+  check("progress records: sizes only, never the question's text", runs.length > 0 && !JSON.stringify(runs).includes("photosynthesis") && (runs[0].details as { request?: { promptChars?: number } }).request?.promptChars === 22);
+}
 
 // ---- The request gate (middleware): who may open which address ----
 {

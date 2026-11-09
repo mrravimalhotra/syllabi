@@ -8,6 +8,7 @@ import { QUESTIONS_SYSTEM, WALKTHROUGH_SYSTEM } from "@/lib/study-pack/prompts";
 import { generateStudyPack } from "@/lib/study-pack/generate";
 import { packToMarkdown } from "@/lib/study-pack/markdown";
 import { parseStudyPackRequest } from "@/lib/study-pack/request";
+import { startRunLog } from "@/lib/generation/run-log";
 import type { StudyPack } from "@/lib/study-pack/types";
 
 // Two long AI calls (run together) for a whole chapter.
@@ -49,6 +50,12 @@ export async function POST(request: Request) {
   const parsed = parseStudyPackRequest(body, student.answer_language ?? "auto");
   if (!parsed.ok) return apiError(400, parsed.message);
   const { documentId, focus, language, photos, fresh } = parsed.value;
+  // The request's progress record (sizes only); its id goes with the reply so the screen can show it with an error.
+  const run = startRunLog(student.id, "study_pack", { book: Boolean(documentId), photos: photos.length, focusChars: focus?.trim().length ?? 0, language, fresh: Boolean(fresh) });
+  const reply = (response: NextResponse) => {
+    response.headers.set("X-Run-Id", run.id);
+    return response;
+  };
 
   try {
     // The same chapter, focus, language, class and model again reuses the saved pack.
@@ -68,20 +75,26 @@ export async function POST(request: Request) {
     if (!fresh) {
       const saved = await findReusable(student.id, cacheKey, documentId ? [documentId] : null);
       if (saved?.pack) {
-        return NextResponse.json({
+        run.finish("reused", { documentId: saved.id });
+        return reply(NextResponse.json({
           id: saved.id,
           title: saved.title,
           pack: saved.pack,
           text: saved.content ?? "",
           pdfUrl: `/api/documents/${saved.id}/pdf`,
           reusedFrom: saved.created_at,
-        });
+        }));
       }
     }
 
+    run.stage("writing");
     const pack = await generateStudyPack({ student, documentId, photos: documentId ? undefined : photos, focus, language });
-    return NextResponse.json(await saveStudyPack(student.id, pack, cacheKey));
+    run.stage("saving");
+    const saved = await saveStudyPack(student.id, pack, cacheKey);
+    run.finish("answered", { documentId: saved.id ?? null });
+    return reply(NextResponse.json(saved));
   } catch (err) {
-    return errorResponse(err, "generate study_pack", "Couldn't make the study pack. Wait a minute and try again. If it keeps happening, tell the person who runs Syllabi.");
+    run.finish("failed", { error: err instanceof Error ? `${err.name}: ${err.message}` : String(err) });
+    return reply(errorResponse(err, "generate study_pack", "Couldn't make the study pack. Wait a minute and try again. If it keeps happening, tell the person who runs Syllabi."));
   }
 }

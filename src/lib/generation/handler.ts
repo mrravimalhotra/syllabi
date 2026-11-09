@@ -10,6 +10,7 @@ import { systemInstructionsFor } from "@/lib/generation/prompts";
 import { answerKey, findReusable } from "@/lib/generation/reuse";
 import { parseGenerationRequest, type GenerationRequest } from "@/lib/generation/request";
 import { parseFollowUps } from "@/lib/generation/follow-up";
+import { startRunLog, type RunLog } from "@/lib/generation/run-log";
 import type { GeneratedDocumentRow, Student } from "@/types/database";
 
 /** How a streamed answer reports its progress: draft pieces, a restart, and the checking stages. */
@@ -49,8 +50,11 @@ async function makeAndSaveAnswer(
   req: GenerationRequest,
   cacheKey: string,
   requestStart: number,
+  run: RunLog,
   hooks: StreamHooks = {}
 ) {
+  const { onText } = hooks;
+  let wrote = false;
   const result = await runGeneration({
     student,
     taskType,
@@ -59,8 +63,25 @@ async function makeAndSaveAnswer(
     documentIds: req.documentIds,
     photos: req.photos,
     language: req.language,
-    ...hooks,
+    // Each step is also written to the request's progress record.
+    onText:
+      onText &&
+      ((delta) => {
+        if (!wrote) run.stage("first words");
+        wrote = true;
+        onText(delta);
+      }),
+    onRestart: () => {
+      run.stage("started again (model busy)");
+      hooks.onRestart?.();
+    },
+    onStage: (stage) => {
+      run.stage(stage);
+      hooks.onStage?.(stage);
+    },
+    onProgress: (stage, details) => run.stage(stage, details),
   });
+  run.stage("saving");
   const title = titleFor(req.typedPrompt, req.hasAttachedText, taskType);
   const savedSources: SavedSource[] = result.sources.map((s) => ({
     id: s.id,
@@ -94,6 +115,7 @@ async function makeAndSaveAnswer(
   if (error) console.error("[generate] saving answer", error);
   const timings = { ...result.timings, totalMs: Date.now() - requestStart, savedMs: Date.now() - savingStart };
   console.log(`[generate:timing] ${JSON.stringify({ taskType, ...timings, answerChars: result.text.length })}`);
+  run.finish("answered", { documentId: doc?.id ?? null, timings });
 
   return {
     id: doc?.id ?? null,
@@ -111,12 +133,20 @@ async function makeAndSaveAnswer(
   };
 }
 
+const errorText = (err: unknown) => (err instanceof Error ? `${err.name}: ${err.message}` : String(err));
+
+/** The progress record's id goes with every reply, so the screen can show it with an error. */
+function withRunId(response: Response, run: RunLog): Response {
+  response.headers.set("X-Run-Id", run.id);
+  return response;
+}
+
 /**
  * Streaming: the first draft is sent piece by piece as it is written (one JSON
  * object per line), then a final "done" line with the checked answer. Errors
  * after this point arrive as an "error" line.
  */
-function streamAnswer(taskType: GenerationTaskType, produce: (hooks: StreamHooks) => Promise<unknown>): Response {
+function streamAnswer(taskType: GenerationTaskType, run: RunLog, produce: (hooks: StreamHooks) => Promise<unknown>): Response {
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -129,6 +159,7 @@ function streamAnswer(taskType: GenerationTaskType, produce: (hooks: StreamHooks
         });
         send({ type: "done", answer: payload });
       } catch (err) {
+        run.finish("failed", { error: errorText(err) });
         const failure = errorResponse(err, `generate ${taskType}`, GENERATE_FAILED);
         send({ type: "error", status: failure.status, ...(await failure.json()) });
       }
@@ -155,6 +186,15 @@ export function createGenerationRoute(taskType: GenerationTaskType) {
     const parsed = parseGenerationRequest(await request.json().catch(() => null), taskType, student.answer_language ?? "auto");
     if (!parsed.ok) return apiError(400, parsed.message);
     const req = parsed.value;
+    // Sizes only: no question text goes into the progress record.
+    const run = startRunLog(student.id, taskType, {
+      promptChars: req.prompt.length,
+      photos: req.photos.length,
+      books: req.documentIds?.length ?? "all",
+      language: req.language,
+      streamed: Boolean(req.stream),
+      fresh: Boolean(req.fresh),
+    });
 
     try {
       // The same question again (same attachments, books, language, class, model and instructions) gets its saved answer back:
@@ -173,13 +213,17 @@ export function createGenerationRoute(taskType: GenerationTaskType) {
       });
       if (!req.fresh) {
         const saved = await findReusable(student.id, cacheKey, req.documentIds ?? []);
-        if (saved) return NextResponse.json(await savedAnswerResponse(saved));
+        if (saved) {
+          run.finish("reused", { documentId: saved.id });
+          return withRunId(NextResponse.json(await savedAnswerResponse(saved)), run);
+        }
       }
 
-      const produce = (hooks?: StreamHooks) => makeAndSaveAnswer(taskType, student, req, cacheKey, requestStart, hooks);
-      return req.stream ? streamAnswer(taskType, produce) : NextResponse.json(await produce());
+      const produce = (hooks?: StreamHooks) => makeAndSaveAnswer(taskType, student, req, cacheKey, requestStart, run, hooks);
+      return withRunId(req.stream ? streamAnswer(taskType, run, produce) : NextResponse.json(await produce()), run);
     } catch (err) {
-      return errorResponse(err, `generate ${taskType}`, GENERATE_FAILED);
+      run.finish("failed", { error: errorText(err) });
+      return withRunId(errorResponse(err, `generate ${taskType}`, GENERATE_FAILED), run);
     }
   };
 }

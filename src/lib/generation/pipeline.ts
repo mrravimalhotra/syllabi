@@ -41,6 +41,8 @@ export interface GenerationInput {
   onRestart?: () => void;
   /** The finished draft is being checked, or being fixed after the checks, so a screen can say so. */
   onStage?: (stage: AnswerStage) => void;
+  /** Each step reached, with what was learned (sizes, counts, the model), for the request's progress record. */
+  onProgress?: (stage: string, details?: Record<string, unknown>) => void;
 }
 
 /** What happens after the first draft is written. */
@@ -171,6 +173,7 @@ export async function runGeneration({
   onText,
   onRestart,
   onStage,
+  onProgress,
 }: GenerationInput): Promise<GenerationOutput> {
   // The allowance check runs alongside the (cheap) photo reading and search
   // below instead of before them, and still stops the request before the
@@ -201,6 +204,7 @@ export async function runGeneration({
       if (early.overQuota) throw new QuotaExceededError(early);
     }
     const photosStart = Date.now();
+    if (unread.length > 0) onProgress?.("reading photos", { photosToRead: unread.length });
     const transcription = unread.length > 0 ? await transcribePhotos(student.id, unread) : "";
     timings.readingPhotosMs = Date.now() - photosStart;
     // Each part gets its share, so a long typed or attached text cannot push the photos' questions out of the search.
@@ -212,6 +216,7 @@ export async function runGeneration({
   if (quota.overQuota) throw new QuotaExceededError(quota);
 
   const searchStart = Date.now();
+  onProgress?.("finding pages");
   // Marking a paper needs no book: the student's work is the material.
   const retrieval: RetrievalResult =
     taskType === "paper_check"
@@ -228,6 +233,9 @@ export async function runGeneration({
   const imagesStart = Date.now();
   const { images: sourcePageImages, byPath: sourceImages } = await loadSourceImages(retrieval.chunks, retrieval.stats.mode === "search" ? undefined : MAX_PAGE_IMAGES);
   timings.loadingImagesMs = Date.now() - imagesStart;
+  onProgress?.("writing", {
+    books: { mode: retrieval.stats.mode, books: retrieval.stats.books, chars: retrieval.stats.totalChars, passages: retrieval.chunks.length, pagePictures: sourcePageImages.length },
+  });
 
   const { result, checks } = await writeAndCheck({
     taskType,
@@ -244,6 +252,7 @@ export async function runGeneration({
     onRestart,
     onStage,
   });
+  onProgress?.("checked", { model: timings.model, answerChars: result.text.length, problemsLeft: checks.filter((c) => !c.ok).length });
 
   // How much of a marking comes from the books is not a question: there are no books in it.
   const confidence =

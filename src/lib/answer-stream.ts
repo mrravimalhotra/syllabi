@@ -4,6 +4,9 @@
 
 class AnswerStreamError extends Error {}
 
+/** The stream ended or broke before the finished answer arrived: the connection was cut, or the server ran out of time. */
+export class AnswerCutError extends Error {}
+
 export async function readAnswerStream<T>(
   body: ReadableStream<Uint8Array>,
   handlers: { onText: (delta: string) => void; onReset: () => void; onStage?: (stage: string) => void }
@@ -29,7 +32,13 @@ export async function readAnswerStream<T>(
   };
 
   for (;;) {
-    const { value, done: finished } = await reader.read();
+    let chunk: ReadableStreamReadResult<Uint8Array>;
+    try {
+      chunk = await reader.read();
+    } catch {
+      throw new AnswerCutError("The connection broke while the answer was coming in.");
+    }
+    const { value, done: finished } = chunk;
     if (value) pending += decoder.decode(value, { stream: true });
     let newline: number;
     while ((newline = pending.indexOf("\n")) >= 0) {
@@ -41,7 +50,7 @@ export async function readAnswerStream<T>(
   handleLine(pending);
 
   if (!done) {
-    throw new AnswerStreamError("The connection dropped before the answer finished. If it was saved, it will appear in My Documents. Otherwise, try again.");
+    throw new AnswerCutError("The connection dropped before the answer finished. If it was saved, it will appear in My Documents. Otherwise, try again.");
   }
   return done;
 }

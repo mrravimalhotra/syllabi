@@ -210,11 +210,21 @@ await test("Ask: service busy message is shown, not a blank screen", async (page
 
 await test("Ask: offline shows the connection message", async (page, ctx) => {
   await baseRoutes(ctx);
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
+  await page.locator("textarea").fill("Explain fractions");
+  await ctx.setOffline(true);
+  await page.getByRole("button", { name: /^Generate$/ }).click();
+  await page.getByText(/Check your internet connection/i).first().waitFor({ timeout: 10000 });
+  await ctx.setOffline(false);
+});
+
+await test("Ask: online but the server can't be reached says so, not 'check your internet'", async (page, ctx) => {
+  await baseRoutes(ctx);
   await ctx.route("**/api/generate/**", (r) => r.abort("failed"));
   await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
   await page.locator("textarea").fill("Explain fractions");
   await page.getByRole("button", { name: /^Generate$/ }).click();
-  await page.getByText(/Check your internet connection|reach Syllabi/i).first().waitFor({ timeout: 10000 });
+  await page.getByText(/Couldn't reach Syllabi's server, though this device seems to be online/).first().waitFor({ timeout: 10000 });
 });
 
 const ndjson = (lines) => ({ status: 200, contentType: "application/x-ndjson; charset=utf-8", body: lines.map((l) => JSON.stringify(l)).join("\n") + "\n" });
@@ -243,11 +253,23 @@ await test("Ask: an error inside a streamed answer is shown", async (page, ctx) 
 
 await test("Ask: a stream that stops early says what to do", async (page, ctx) => {
   await baseRoutes(ctx);
-  await ctx.route("**/api/generate/**", (r) => r.fulfill(ndjson([{ type: "text", delta: "Partial " }])));
+  const logged = [];
+  await ctx.route("**/api/log-error", (r) => {
+    logged.push(r.request().postDataJSON());
+    return json(r, { ok: true });
+  });
+  await ctx.route("**/api/generate/**", (r) =>
+    r.fulfill({ ...ndjson([{ type: "text", delta: "Partial " }]), headers: { "X-Run-Id": "3f2a91c0-0000-4000-8000-000000000001" } })
+  );
   await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
   await page.locator("textarea").fill("Explain photosynthesis");
   await page.getByRole("button", { name: /^Generate$/ }).click();
-  await page.getByText(/connection dropped before the answer finished/).first().waitFor({ timeout: 10000 });
+  // How long it ran, what happened, and a reference to the request's progress record; the failure is logged with it.
+  await page.getByText(/The answer stopped after \d+ seconds, before it was finished: the connection dropped\..*\(Reference 3f2a91c0\)/).first().waitFor({ timeout: 10000 });
+  for (let i = 0; i < 20 && logged.length === 0; i++) await page.waitForTimeout(100);
+  if (!logged.some((l) => /run 3f2a91c0-0000-4000-8000-000000000001/.test(l.message) && /answer failed \(solution\)/.test(l.where))) {
+    throw new Error(`the failure was not logged with its run: ${JSON.stringify(logged)}`);
+  }
 });
 
 await test("Ask: switching kind clears the text and the old answer", async (page, ctx) => {
