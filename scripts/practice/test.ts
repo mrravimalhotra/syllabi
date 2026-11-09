@@ -12,6 +12,7 @@ import { parsePhotos } from "@/lib/generation/attachments";
 import { PAPER_REPORT } from "../fixtures/bhakti-exercise-pages";
 import { checkPaperMarks, checkTickedSteps, gradeFor, gradeScaleText, withoutStudentWork } from "@/lib/checks/paper";
 import { checkArithmetic } from "@/lib/checks/arithmetic";
+import { ANY_BOOK, effectiveFilter, filterOptions, matchingBooks } from "@/lib/book-filter";
 import { checkSamplePaper } from "@/lib/checks/rules";
 import { autoKeyFor } from "@/lib/study-pack/auto-key";
 import { pureProblem } from "@/lib/worked/detect";
@@ -676,7 +677,7 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
 
 // Quick commands: ready-made requests, some tied to kinds of book.
 {
-  const lib = (id: string, source_type: "textbook" | "exercise" | "past_paper" | "notes") => ({ id, title: id, subject: null, grade: null, status: "ready" as const, source_type });
+  const lib = (id: string, source_type: "textbook" | "exercise" | "past_paper" | "notes") => ({ id, title: id, subject: null, grade: null, chapter: null, status: "ready" as const, source_type });
   const books = [lib("t1", "textbook"), lib("e1", "exercise"), lib("p1", "past_paper"), lib("e2", "exercise")];
   check(booksOfKinds(books, ["exercise"]).join() === "e1,e2" && booksOfKinds(books, ["past_paper"]).join() === "p1" && booksOfKinds(books, ["exercise", "textbook"]).join() === "t1,e1,e2", "Commands: books are picked by kind");
   check(booksOfKinds(books, ["notes"]).length === 0, "Commands: no book of that kind means none are picked");
@@ -821,6 +822,30 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
   check(caught.length === 1 && caught[0].message.includes("marked ✓") && caught[0].message.includes("105"), `Paper check: a ticked step with the decimal point left out (10½% = 105%) is sent back to be marked wrong (${caught.map((c) => c.message).join("; ")})`);
   check(checkTickedSteps(exact.replace("- ✓ ", "- ✗ Student wrote: ")).length === 0 && checkArithmetic(withoutStudentWork(exact)).every((c) => c.ok), "Paper check: once marked ✗, the student's slip is not counted against the teacher");
   check(checkArithmetic("10½ + 2¼ = 12¾").every((c) => c.ok) && checkArithmetic("3(1)/(4) = 3.25").every((c) => c.ok) && checkArithmetic("3(1)/(4) = 1.5").some((c) => !c.ok), "Arithmetic: mixed numbers (10½, 3(1)/(4)) are a whole number plus a fraction, not a product");
+  // Solve's book filters: class, subject and chapter, however they were typed.
+  {
+    const shelf = [
+      { id: "geo-text", grade: "Class 7", subject: "Geography", chapter: "Unit 2 Lithosphere" },
+      { id: "geo-ex", grade: "class 7 ", subject: "geography", chapter: "unit 2  lithosphere" },
+      { id: "geo-3", grade: "Class 7", subject: "Geography", chapter: "Unit 3 Air" },
+      { id: "hist", grade: "Class 7", subject: "History", chapter: "Unit 1 Bhakti Movement" },
+      { id: "sci-8", grade: "Class 8", subject: "Science", chapter: "Unit 10 Light" },
+      { id: "sci-8b", grade: "Class 8", subject: "Science", chapter: "Unit 2 Cells" },
+      { id: "loose", grade: null, subject: null, chapter: null },
+    ];
+    const ids = (f: typeof ANY_BOOK) => matchingBooks(shelf, f).map((b) => b.id).join(",");
+    const opts = filterOptions(shelf, ANY_BOOK);
+    check(opts.grade.join("|") === "Class 7|Class 8" && opts.subject.length === 3 && ids(ANY_BOOK).split(",").length === 7, `Book filters: with nothing chosen every book shows, and labels typed differently count once (${JSON.stringify(opts)})`);
+    const seven = filterOptions(shelf, { ...ANY_BOOK, grade: "Class 7" });
+    check(seven.subject.join("|") === "Geography|History" && !seven.subject.includes("Science"), "Book filters: a class offers only its own subjects");
+    const geo = filterOptions(shelf, { grade: "Class 7", subject: "Geography", chapter: "" });
+    check(geo.chapter.join("|") === "Unit 2 Lithosphere|Unit 3 Air", `Book filters: a subject offers only its own chapters, each once (${geo.chapter.join("|")})`);
+    check(ids({ grade: "Class 7", subject: "Geography", chapter: "Unit 2 Lithosphere" }) === "geo-text,geo-ex", "Book filters: a chapter picks its textbook and exercises together, whatever their spelling");
+    check(filterOptions(shelf, { grade: "Class 8", subject: "Science", chapter: "" }).chapter.join("|") === "Unit 2 Cells|Unit 10 Light", "Book filters: chapters are in natural order (Unit 2 before Unit 10)");
+    const stale = { grade: "Class 7", subject: "Geography", chapter: "Unit 9 Deleted" };
+    check(effectiveFilter(shelf, stale).chapter === "" && ids(stale) === "geo-text,geo-ex,geo-3", "Book filters: a remembered chapter no book has any more is dropped, not an empty list");
+    check(effectiveFilter(shelf, { grade: "Class 9", subject: "Geography", chapter: "" }).subject === "Geography" && ids({ grade: "Class 9", subject: "Geography", chapter: "" }) === "geo-text,geo-ex,geo-3", "Book filters: a class no book has is dropped and the later choices still apply");
+  }
   check(checkArithmetic("25% = 0.25").every((c) => c.ok) && checkArithmetic("12.5% = 125%").some((c) => !c.ok) && checkArithmetic("Amount = ₹ 14,400 = 12000 + 2400").every((c) => c.ok), "Arithmetic: percentages and rupee amounts are recomputed");
 
   // The request.

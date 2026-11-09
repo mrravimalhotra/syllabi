@@ -849,6 +849,60 @@ await test("Kindergarten: listen and blend - the sounds are heard, then the righ
   await page.getByRole("region", { name: "Stars and stickers" }).locator('svg[data-mood="wave"]').waitFor();
 });
 
+const shelf = [
+  ["geo-text", "Geography Unit 2 Textbook", "Class 7", "Geography", "Unit 2 Lithosphere", "textbook"],
+  ["geo-ex", "Geography Unit 2 Exercises", "class 7", "geography", "unit 2 lithosphere", "exercise"],
+  ["geo-3", "Geography Unit 3", "Class 7", "Geography", "Unit 3 Air", "textbook"],
+  ["hist", "History Unit 1", "Class 7", "History", "Unit 1 Bhakti Movement", "textbook"],
+  ["sci", "Science Light", "Class 8", "Science", "Unit 10 Light", "textbook"],
+].map(([id, title, grade, subject, chapter, source_type]) => ({ id, title, grade, subject, chapter, source_type, status: "ready", created_at: now, pages: null }));
+
+await test("Solve: class, subject and chapter narrow the books; a chapter picks its textbook and exercises; the choice is remembered", async (page, ctx) => {
+  await baseRoutes(ctx, { books: shelf });
+  let sent = null;
+  await ctx.route("**/api/generate/**", (r) => {
+    sent = r.request().postDataJSON();
+    return json(r, { ...answer, text: "Rocks are of three kinds." });
+  });
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
+  const pick = (label, value) => page.getByRole("combobox", { name: label }).selectOption(value);
+  await pick("Class", "Class 7");
+  const subjects = await page.getByRole("combobox", { name: "Subject" }).locator("option").allTextContents();
+  if (subjects.includes("Science") || !subjects.includes("Geography")) throw new Error(`Class 7 offers: ${subjects.join(", ")}`);
+  await pick("Subject", "Geography");
+  const chapters = await page.getByRole("combobox", { name: "Chapter" }).locator("option").allTextContents();
+  if (chapters.join("|") !== "All chapters|Unit 2 Lithosphere|Unit 3 Air") throw new Error(`Geography offers: ${chapters.join("|")}`);
+  await pick("Chapter", "Unit 2 Lithosphere");
+  await page.getByText(/From your books: .*Geography Unit 2 Textbook, Geography Unit 2 Exercises/).waitFor();
+  await page.locator("textarea").fill("Name the layers of the earth");
+  await page.getByRole("button", { name: /^Generate$/ }).click();
+  await page.getByText("Rocks are of three kinds.").first().waitFor({ timeout: 10000 });
+  if ([...(sent?.documentIds ?? [])].sort().join(",") !== "geo-ex,geo-text") throw new Error(`books sent: ${JSON.stringify(sent?.documentIds)}`);
+  // Next time Solve opens on the same chapter.
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
+  if ((await page.getByRole("combobox", { name: "Chapter" }).inputValue()) !== "Unit 2 Lithosphere") throw new Error("the chapter was not remembered");
+  // A different class starts the subject and chapter again (Class 8 has one subject, so there is nothing to choose).
+  await pick("Class", "Class 8");
+  if ((await page.getByRole("combobox", { name: "Subject" }).count()) !== 0 || (await page.getByRole("combobox", { name: "Chapter" }).count()) !== 0) throw new Error("Geography and its chapter were kept after the class changed");
+  await page.getByText(/From your books: .*Science Light/).waitFor();
+});
+
+await test("My books: a book's class, subject and chapter can be added and changed", async (page, ctx) => {
+  let patched = null;
+  await baseRoutes(ctx, { books: [{ ...shelf[0], chapter: null }] });
+  await ctx.route("**/api/library/geo-text", (r) => {
+    patched = r.request().postDataJSON();
+    return json(r, { document: { ...shelf[0], ...patched } });
+  });
+  await page.goto(`${BASE}/dashboard/library`, { waitUntil: "networkidle" });
+  await tap(page.getByRole("button", { name: "Add the chapter" }));
+  await page.getByRole("textbox", { name: "Chapter", exact: true }).fill("Unit 2 Lithosphere");
+  await tap(page.getByRole("button", { name: /Save/ }));
+  await page.getByText("Class 7 · Geography · Unit 2 Lithosphere · Textbook").waitFor({ timeout: 8000 });
+  if (patched?.chapter !== "Unit 2 Lithosphere" || patched?.grade !== "Class 7" || patched?.subject !== "Geography") throw new Error(`sent: ${JSON.stringify(patched)}`);
+  await page.getByRole("button", { name: "Edit class, subject and chapter" }).waitFor();
+});
+
 await test("My books: View pages shows each page's picture and the text read from it", async (page, ctx) => {
   await baseRoutes(ctx);
   const shown = { 2: "Plants make food.", 3: "Roots take in water." };

@@ -142,6 +142,8 @@ await expect("library POST: an unknown kind is refused", library.POST, 400, /kin
 await expect("library POST: the rights box must be ticked", library.POST, 400, /Tick the box/i, { title: "Maths", sourceType: "textbook" });
 const created = await expect("library POST: a good book is created", library.POST, 200, null, { title: "Maths", sourceType: "textbook", rightsConfirmed: true });
 check("library POST: the new book belongs to the caller", (tables.documents ?? []).some((d) => d.id === created.json?.documentId && d.owner_id === ME));
+const withChapter = await expect("library POST: a book with its chapter is created", library.POST, 200, null, { title: "Geography exercises", grade: "Class 7", subject: "Geography", chapter: "  Unit 2 Lithosphere ", sourceType: "exercise", rightsConfirmed: true });
+check("library POST: the chapter is kept, tidied", (tables.documents ?? []).find((d) => d.id === withChapter.json?.documentId)?.chapter === "Unit 2 Lithosphere");
 rpcs.student_monthly_usage = () => 5000;
 await expect("library POST: over the allowance gets 429", library.POST, 429, /allowance/i, { title: "Maths", sourceType: "textbook", rightsConfirmed: true });
 rpcs.student_monthly_usage = () => 0;
@@ -154,6 +156,10 @@ await expect("book PATCH: a bad id is a 404", book.PATCH, 404, /no longer exists
 await expect("book PATCH: someone else's book is a 404", book.PATCH, 404, /no longer exists/i, { title: "x" }, { id: "55555555-5555-4555-8555-555555555555" });
 await expect("book PATCH: an empty title is refused", book.PATCH, 400, /title/i, { title: " " }, { id: BOOK });
 await expect("book PATCH: a rename is saved", book.PATCH, 200, null, { title: "Maths 6" }, { id: BOOK });
+const labelled = await expect("book PATCH: class, subject and chapter are saved", book.PATCH, 200, null, { grade: "Class 7", subject: "Geography", chapter: "Unit 2 Lithosphere" }, { id: BOOK });
+check("book PATCH: the saved labels come back, and the title is unchanged", (labelled.json?.document as { chapter?: string; title?: string } | undefined)?.chapter === "Unit 2 Lithosphere" && (labelled.json?.document as { title?: string }).title === "Maths 6");
+await expect("book PATCH: a chapter can be cleared", book.PATCH, 200, null, { chapter: "" }, { id: BOOK });
+check("book PATCH: a cleared chapter is empty, not blank text", (tables.documents ?? []).find((d) => d.id === BOOK)?.chapter === null);
 await expect("book DELETE: someone else's book is a 404", book.DELETE, 404, null, undefined, { id: "55555555-5555-4555-8555-555555555555" });
 storageState.failDeletes = true;
 await expect("book DELETE: if its page images can't be removed, it says the book is still there", book.DELETE, 500, /still in My books/i, undefined, { id: BOOK });

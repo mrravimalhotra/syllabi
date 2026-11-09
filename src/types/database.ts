@@ -62,6 +62,8 @@ export interface DocumentRow {
   /** Free-text labels the owner gives the book, e.g. "Science" and "Class 8". */
   subject: string | null;
   grade: string | null;
+  /** The chapter it belongs to ("Unit 2 Lithosphere"), so a chapter's textbook and exercises can be picked together. */
+  chapter: string | null;
   rights_confirmed_at: string | null;
   source_type: SourceType;
   status: "processing" | "ready" | "failed";

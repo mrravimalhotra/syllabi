@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     const [{ data, error }, progress] = await Promise.all([
       createAdminClient()
         .from("documents")
-        .select("id, title, subject, grade, source_type, status, created_at")
+        .select("id, title, subject, grade, chapter, source_type, status, created_at")
         .eq("owner_id", user.id)
         .order("created_at", { ascending: false })
         .limit(MAX_BOOKS),
@@ -50,6 +50,7 @@ interface CreateBody {
   title?: unknown;
   subject?: unknown;
   grade?: unknown;
+  chapter?: unknown;
   sourceType?: unknown;
   /** The uploader confirms they own this copy and will use it only for their own child's or students' study. */
   rightsConfirmed?: unknown;
@@ -96,6 +97,7 @@ export async function POST(request: Request) {
         owner_id: user.id,
         subject: cleanText(body.subject, 100),
         grade: cleanText(body.grade, 50),
+        chapter: cleanText(body.chapter, 150),
         rights_confirmed_at: new Date().toISOString(),
         source_type: body.sourceType,
         status: "processing",

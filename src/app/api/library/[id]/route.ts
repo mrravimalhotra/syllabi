@@ -18,7 +18,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const body = await request.json().catch(() => null);
   if (body === null || typeof body !== "object") return apiError(400, "Your change couldn't be read. Try again.");
 
-  const updates: { title?: string; subject?: string | null; grade?: string | null } = {};
+  const updates: { title?: string; subject?: string | null; grade?: string | null; chapter?: string | null } = {};
   if (body?.title !== undefined) {
     const title = cleanText(body.title, 200);
     if (!title) return apiError(400, "Type a title for the book. It can't be empty.");
@@ -26,6 +26,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
   if (body?.subject !== undefined) updates.subject = cleanText(body.subject, 100);
   if (body?.grade !== undefined) updates.grade = cleanText(body.grade, 50);
+  if (body?.chapter !== undefined) updates.chapter = cleanText(body.chapter, 150);
   if (Object.keys(updates).length === 0) return apiError(400, "There was nothing to change.");
 
   const admin = createAdminClient();
@@ -34,7 +35,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     .update(updates)
     .eq("id", id)
     .eq("owner_id", user.id)
-    .select("id, title, subject, grade, source_type, status, created_at")
+    .select("id, title, subject, grade, chapter, source_type, status, created_at")
     .maybeSingle();
   if (error) return errorResponse(error, "library PATCH", "Couldn't save your change. Try again in a moment.");
   if (!data) return apiError(404, NOT_FOUND);

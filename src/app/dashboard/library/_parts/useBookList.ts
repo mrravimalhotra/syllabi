@@ -67,5 +67,23 @@ export function useBookList() {
     );
   }
 
-  return { documents, setDocuments, loading, loadFailed, listedAt, load, rename };
+  /** Saves a book's class, subject and chapter (what Solve's filters go by). */
+  async function saveLabels(id: string, labels: { subject: string | null; grade: string | null; chapter: string | null }) {
+    const res = await fetch(`/api/library/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(labels),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error ?? "Couldn't save the details. Try again.");
+    const saved = data.document as { subject: string | null; grade: string | null; chapter: string | null };
+    setDocuments((prev) =>
+      keep(
+        "library",
+        prev.map((d) => (d.id === id ? { ...d, subject: saved.subject, grade: saved.grade, chapter: saved.chapter } : d))
+      )
+    );
+  }
+
+  return { documents, setDocuments, loading, loadFailed, listedAt, load, rename, saveLabels };
 }

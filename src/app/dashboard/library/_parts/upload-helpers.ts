@@ -69,6 +69,7 @@ export interface DocumentRowView {
   created_at: string;
   subject: string | null;
   grade: string | null;
+  chapter?: string | null;
 }
 
 /**

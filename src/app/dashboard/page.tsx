@@ -170,7 +170,7 @@ function AskSyllabi() {
   const blocked = blockedReason({ overQuota, noBookSelected, readingFiles, choosingPages: attachments.longPdfs.length > 0 });
 
   const header = (greeting: boolean) => (
-    <AskHeader me={me} overQuota={overQuota} booksFailed={books.failed} noBooks={books.loaded && books.books.length === 0} greeting={greeting} />
+    <AskHeader me={me} overQuota={overQuota} booksFailed={books.failed} noBooks={books.loaded && books.allBooks.length === 0} greeting={greeting} />
   );
   if (!tool) {
     return (

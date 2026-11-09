@@ -2,6 +2,7 @@
 
 import { TABS, usesBooks } from "@/app/dashboard/_ask/constants";
 import { AttachmentList } from "@/app/dashboard/_ask/AttachmentList";
+import { BookFilters } from "@/app/dashboard/_ask/BookFilters";
 import { BookPicker } from "@/app/dashboard/_ask/BookPicker";
 import { BooksInUse } from "@/app/dashboard/_ask/BooksInUse";
 import { ComposerToolbar } from "@/app/dashboard/_ask/ComposerToolbar";
@@ -74,11 +75,12 @@ export function AskComposer({
   const currentTab = TABS.find((t) => t.value === tab)!;
   const isPack = tab === "study_pack";
   const isCheck = tab === "paper_check";
-  const bookArea = bookAreaFor(tab, books.books.length, showBooks);
+  // Whether to show the books at all goes by every book, so narrowing the list never hides the filters themselves.
+  const bookArea = bookAreaFor(tab, books.allBooks.length, showBooks);
   const showCommands = commandsInView(tab, prompt, photos.length > 0 || docs.length > 0);
   return (
     <DropForm onSubmit={onSubmit} onFiles={(files) => void attachments.add(files)}>
-      {isPack && <PackChapter books={books.books} value={packBookId} onChange={onPackBook} attachedPages={photos.length} />}
+      {isPack && <PackChapter books={books.allBooks} value={packBookId} onChange={onPackBook} attachedPages={photos.length} />}
 
       <PromptBox
         value={prompt}
@@ -108,6 +110,8 @@ export function AskComposer({
           onSkip={() => attachments.skipPdf(i)}
         />
       ))}
+
+      {bookArea && <BookFilters filter={books.filter} options={books.filterOptions} onChange={books.setFilter} />}
 
       {bookArea === "picker" && (
         <BookPicker

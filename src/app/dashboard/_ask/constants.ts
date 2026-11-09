@@ -20,6 +20,7 @@ export interface Book {
   title: string;
   subject: string | null;
   grade: string | null;
+  chapter: string | null;
   status: "processing" | "ready" | "failed";
   /** What kind of material it is: Textbook, Exercise, Past paper (test) or Notes. */
   source_type: SourceType;

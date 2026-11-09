@@ -13,6 +13,7 @@ export interface BookValues {
   title: string;
   subject: string;
   grade: string;
+  chapter: string;
   sourceType: SourceType;
   rightsConfirmed: boolean;
 }

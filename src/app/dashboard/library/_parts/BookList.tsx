@@ -3,6 +3,7 @@
 import { StatusBadge, ViewPagesLink } from "@/app/dashboard/library/_parts/BookParts";
 import { ScanQuality } from "@/app/dashboard/library/_parts/ScanQuality";
 import type { DocumentRowView } from "@/app/dashboard/library/_parts/upload-helpers";
+import { EditBookDetails, type BookLabels } from "@/app/dashboard/library/_parts/EditBookDetails";
 import { EditableName } from "@/components/EditableName";
 import { BookIcon, DownloadIcon, TrashIcon } from "@/components/icons";
 import { Alert, EmptyState, Spinner, button, card, cx, link } from "@/components/ui";
@@ -22,6 +23,7 @@ interface Props {
   /** An upload that stopped part-way, or a book whose pages never arrived. */
   isUnfinished: (d: DocumentRowView) => boolean;
   onRename: (id: string, title: string) => Promise<void>;
+  onSaveLabels: (id: string, labels: BookLabels) => Promise<void>;
   onDelete: (d: DocumentRowView) => void;
   onDownload: (d: DocumentRowView) => void;
   onCheckScan: (d: DocumentRowView) => void;
@@ -29,7 +31,7 @@ interface Props {
   onRemoveUnfinished: () => void;
 }
 
-/** "Your books": each book with its reading progress, and the ways to rename, retry or delete it. */
+/** "Your books": each book with its reading progress, and the ways to rename, label, retry or delete it. */
 export function BookList({
   documents,
   loadFailed,
@@ -39,6 +41,7 @@ export function BookList({
   errors,
   isUnfinished,
   onRename,
+  onSaveLabels,
   onDelete,
   onDownload,
   onCheckScan,
@@ -77,8 +80,9 @@ export function BookList({
               <div className="min-w-0 flex-1 space-y-1.5">
                 <EditableName value={d.title} onSave={(title) => onRename(d.id, title)} className="text-sm font-medium text-slate-900" />
                 <p className="truncate text-xs text-slate-500">
-                  {[d.subject, d.grade, sourceTypeLabel(d.source_type)].filter(Boolean).join(" · ")}
+                  {[d.grade, d.subject, d.chapter, sourceTypeLabel(d.source_type)].filter(Boolean).join(" · ")}
                 </p>
+                <EditBookDetails id={d.id} labels={{ subject: d.subject, grade: d.grade, chapter: d.chapter ?? null }} onSave={(labels) => onSaveLabels(d.id, labels)} />
                 <StatusBadge status={d.status} unfinished={isUnfinished(d)} pages={d.pages} />
                 <ScanQuality scan={d.scan ?? null} />
                 <ViewPagesLink doc={d} />

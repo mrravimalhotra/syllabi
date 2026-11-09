@@ -17,7 +17,7 @@ export default function LibraryPage() {
   const list = useBookList();
   const { documents, loading, loadFailed, load } = list;
 
-  const [values, setValues] = useState<BookValues>({ title: "", subject: "", grade: "", sourceType: "textbook", rightsConfirmed: false });
+  const [values, setValues] = useState<BookValues>({ title: "", subject: "", grade: "", chapter: "", sourceType: "textbook", rightsConfirmed: false });
   const change = (patch: Partial<BookValues>) => setValues((v) => ({ ...v, ...patch }));
   const [pages, setPages] = useState<PendingPage[]>([]);
   const [processingFiles, setProcessingFiles] = useState(false);
@@ -112,6 +112,7 @@ export default function LibraryPage() {
       title: values.title,
       subject: values.subject,
       grade: values.grade,
+      chapter: values.chapter,
       rightsConfirmed: values.rightsConfirmed,
       pages,
       signal: controller.signal,
@@ -154,6 +155,7 @@ export default function LibraryPage() {
       errors={{ ...books.errors, ...downloads.errors, ...scans.errors }}
       isUnfinished={books.unfinished}
       onRename={list.rename}
+      onSaveLabels={list.saveLabels}
       onDelete={books.deleteBook}
       onDownload={(d) => void downloads.download(d.id, d.title)}
       onCheckScan={(d) => void scans.check(d.id)}

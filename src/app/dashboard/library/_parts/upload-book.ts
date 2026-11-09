@@ -15,6 +15,7 @@ export interface UploadJob {
   title: string;
   subject: string;
   grade: string;
+  chapter: string;
   rightsConfirmed: boolean;
   pages: PendingPage[];
   signal: AbortSignal;
@@ -117,6 +118,7 @@ async function startBook(group: PendingPage[], job: UploadJob): Promise<string> 
       title: job.title.trim(),
       subject: job.subject.trim(),
       grade: job.grade.trim(),
+      chapter: job.chapter.trim(),
       rightsConfirmed: job.rightsConfirmed,
       sourceType: mainKind(group),
     }),

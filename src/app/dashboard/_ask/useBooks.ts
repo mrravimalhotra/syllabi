@@ -3,10 +3,17 @@
 import { useEffect, useState } from "react";
 import { keep, peek } from "@/lib/client-cache";
 import type { Book } from "@/app/dashboard/_ask/constants";
+import { ANY_BOOK, effectiveFilter, filterOptions, isBookFilter, matchingBooks, type BookFilter } from "@/lib/book-filter";
+import { usePref } from "@/lib/use-pref";
 
-/** The person's own books (only the ones that are ready), and which of them answers search (all by default). */
+/**
+ * The person's own books (only the ones that are ready), narrowed by class, subject and chapter (remembered on this
+ * device, so Solve opens on the chapter used last), and which of those answers search (all of them by default).
+ * `books` is the narrowed list; `allBooks` every ready book.
+ */
 export function useBooks() {
-  const [books, setBooks] = useState<Book[]>(() => peek<Book[]>("books") ?? []);
+  const [allBooks, setBooks] = useState<Book[]>(() => peek<Book[]>("books") ?? []);
+  const [savedFilter, saveFilter] = usePref<BookFilter>("ask-book-filter", ANY_BOOK, isBookFilter);
   const [selected, setSelected] = useState<string[] | null>(null);
   const [loaded, setLoaded] = useState(() => peek("books") !== undefined);
   const [failed, setFailed] = useState(false);
@@ -31,10 +38,20 @@ export function useBooks() {
     void load();
   }, []);
 
-  const activeIds = selected ?? books.map((b) => b.id);
+  const books = matchingBooks(allBooks, savedFilter);
+  const shown = new Set(books.map((b) => b.id));
+  const activeIds = selected ? selected.filter((id) => shown.has(id)) : books.map((b) => b.id);
 
   return {
     books,
+    allBooks,
+    filter: effectiveFilter(allBooks, savedFilter),
+    filterOptions: filterOptions(allBooks, savedFilter),
+    /** A new class, subject or chapter: every book it lets through is picked. */
+    setFilter: (next: BookFilter) => {
+      saveFilter(next);
+      setSelected(null);
+    },
     loaded,
     failed,
     activeIds,
