@@ -111,8 +111,12 @@ function caller(req: CompletionRequest, body: Body) {
     let silentFor = limit("GEMINI_FIRST_WORDS_TIMEOUT_MS", FIRST_WORDS_TIMEOUT_MS);
     let heard = false;
     let timer = setTimeout(() => controller.abort(), silentFor);
+    let streamed: Awaited<ReturnType<GeminiModel["generateContentStream"]>> | undefined;
     try {
-      const streamed = await model.generateContentStream(body, { signal: controller.signal });
+      streamed = await model.generateContentStream(body, { signal: controller.signal });
+      // The library reads the stream twice (pieces and the whole reply); when the pieces fail, the whole reply
+      // fails too, and nobody may be waiting for it any more.
+      streamed.response.catch(() => {});
       for await (const chunk of streamed.stream) {
         clearTimeout(timer);
         heard = true;
