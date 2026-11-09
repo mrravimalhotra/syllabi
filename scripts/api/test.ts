@@ -1,6 +1,7 @@
 // Route tests: calls the real route handlers with a fake database and a fake
 // signed-in person, and checks status codes and messages for signed-out,
 // not-allowed, bad input, over-allowance and not-found cases.
+import { ContentBody } from "@/lib/pdf/render";
 import { session } from "./fakes/auth";
 import { deleted, files, storageState } from "./fakes/storage";
 import { resetDb, tables, rpcs, failures } from "./fakes/db";
@@ -302,6 +303,13 @@ await new Promise((r) => setTimeout(r, 50));
   check("progress records: a streamed answer's record is named in its reply and shows when the first words came", Boolean(streamedRun) && streamedRun?.stage === "done" && "first words" in ((streamedRun?.details as { stages?: Record<string, number> })?.stages ?? {}) && typeof streamedRun?.document_id === "string");
   check("progress records: a failure keeps its error and the stage it ended at", failedRun?.stage === "failed" && /The AI is down/.test(String(failedRun?.error)));
   check("progress records: sizes only, never the question's text", runs.length > 0 && !JSON.stringify(runs).includes("photosynthesis") && (runs[0].details as { request?: { promptChars?: number } }).request?.promptChars === 22);
+}
+
+// ---- PDFs: a marked paper's steps ----
+{
+  // Report 2: in the PDF too, the step that lost marks is red and the correct step under it green; other lines keep their colour.
+  const pdfSteps = JSON.stringify(ContentBody({ text: "**Student's working:**\n- ✓ 3/4 = 9/12\n- ✗ Student wrote: 2/3 = 6/12 (−1)\n- ✔ Correct step: 2/3 = 8/12" }));
+  check("PDF: a wrong step is red and its correct step green, nothing else is coloured", (pdfSteps.match(/"color":"#b91c1c"/g) ?? []).length === 1 && (pdfSteps.match(/"color":"#047857"/g) ?? []).length === 1 && (pdfSteps.match(/"color":/g) ?? []).length === 2);
 }
 
 // ---- The request gate (middleware): who may open which address ----
