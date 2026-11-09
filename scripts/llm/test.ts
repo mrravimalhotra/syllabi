@@ -26,10 +26,26 @@ const reply = (candidate: object, usage: object = { promptTokenCount: 5, candida
 const errorReply = (status: number, message: string, code = "ERROR") =>
   new Response(JSON.stringify({ error: { code: status, message, status: code } }), { status, headers: { "content-type": "application/json" } });
 
+// Models that go silent: no reply at all, or one piece and then nothing; either ends only when the call gives up.
+const silent = new Map<string, "no reply" | "stalls">();
+const untilAborted = (signal: AbortSignal | null | undefined) =>
+  new Promise<never>((_, reject) => signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError"))));
+
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = String(input);
   const model = /models\/([^:]+):/.exec(url)?.[1] ?? "?";
   calls.push(model);
+  const quiet = silent.get(model);
+  if (quiet === "no reply") return untilAborted(init?.signal);
+  if (quiet === "stalls") {
+    const body = new ReadableStream<Uint8Array>({
+      start(c) {
+        c.enqueue(new TextEncoder().encode(sse("Partial ")));
+        init?.signal?.addEventListener("abort", () => c.error(new DOMException("aborted", "AbortError")));
+      },
+    });
+    return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
+  }
   if (url.includes("chat/completions")) {
     openAiBodies.push(JSON.parse(String(init?.body)));
     return new Response(JSON.stringify({ model: "served-model", choices: [{ message: { content: "Groq says hi" }, finish_reason: "length" }], usage: { prompt_tokens: 4, completion_tokens: 2, total_tokens: 6 } }), {
@@ -79,6 +95,22 @@ check("the main model was tried once", calls.filter((m) => m === "gemini-flash-l
 calls.length = 0;
 const second = await googleAdapter.generateCompletion({ ...base });
 check("the next question skips the busy model", !calls.includes("gemini-flash-latest") && second.standInFor === "gemini-flash-latest", calls.join(","));
+
+// A model that goes silent is given up on, and the stand-in answers (the waits are shortened for the test).
+process.env.GEMINI_FIRST_WORDS_TIMEOUT_MS = "300";
+process.env.GEMINI_STALL_TIMEOUT_MS = "300";
+for (const [model, how] of [["gemini-silent-model", "no reply"], ["gemini-stalling-model", "stalls"]] as const) {
+  silent.set(model, how);
+  calls.length = 0;
+  const words: string[] = [];
+  let restarts = 0;
+  const t0 = Date.now();
+  const res = await googleAdapter.generateCompletion({ ...base, model, allowSearchGrounding: true, onText: (d) => words.push(d), onRestart: () => restarts++ });
+  check(`a model that ${how === "no reply" ? "never replies" : "stops in the middle"} is given up on and the stand-in answers`, res.text === "Hello world" && res.standInFor === model && Date.now() - t0 < 3000, `${res.text} ${res.standInFor} ${Date.now() - t0} ms`);
+  check(`${how === "no reply" ? "a silent model is tried once, even with search allowed" : "the stalled draft is started again"}`, how === "no reply" ? calls.filter((m) => m === model).length === 1 : restarts >= 1 && words.join("").endsWith("Hello world"), `${calls.join(",")} restarts=${restarts}`);
+}
+delete process.env.GEMINI_FIRST_WORDS_TIMEOUT_MS;
+delete process.env.GEMINI_STALL_TIMEOUT_MS;
 
 // How a single call is built and read (the model name starts with "test-" so the fake above lets the scenario answer).
 const one = { taskType: "ad_hoc" as const, systemInstructions: "x", prompt: "hi", model: "gemini-test-model" };

@@ -78,6 +78,20 @@ const THINKING_REJECTED = /\b400\b[\s\S]*thinking|thinking[\s\S]*\b400\b|thinkin
 
 type Body = ReturnType<typeof requestBody>;
 
+// A streamed call that goes silent (no reply and no error) would otherwise wait until the server is stopped at its
+// time limit. Long enough for the model to think first (an 8,192-token budget takes well under a minute).
+const FIRST_WORDS_TIMEOUT_MS = 90_000;
+// Once words are coming, a pause this long means the stream has stalled.
+const STALL_TIMEOUT_MS = 60_000;
+const limit = (name: string, fallback: number) => Number(process.env[name]) || fallback;
+
+/** A silent model counts as busy (the 503 wording), so the stand-in takes over and the model is paused for a while. */
+class SilentModelError extends Error {
+  constructor(seconds: number, started: boolean) {
+    super(`503 UNAVAILABLE: no ${started ? "more words" : "reply"} from the model for ${seconds} s`);
+  }
+}
+
 /**
  * One call to a model. With `req.onText` set, the answer is streamed: each
  * piece is passed on as it arrives, and the complete response is returned at
@@ -92,20 +106,36 @@ function caller(req: CompletionRequest, body: Body) {
       req.onRestart?.();
       emitted = false;
     }
-    const streamed = await model.generateContentStream(body);
-    for await (const chunk of streamed.stream) {
-      let piece = "";
-      try {
-        piece = chunk.text();
-      } catch {
-        // A blocked or empty piece has no text; the final response explains why.
+    // Silence is cut off: first while waiting for the reply, then between pieces.
+    const controller = new AbortController();
+    let silentFor = limit("GEMINI_FIRST_WORDS_TIMEOUT_MS", FIRST_WORDS_TIMEOUT_MS);
+    let heard = false;
+    let timer = setTimeout(() => controller.abort(), silentFor);
+    try {
+      const streamed = await model.generateContentStream(body, { signal: controller.signal });
+      for await (const chunk of streamed.stream) {
+        clearTimeout(timer);
+        heard = true;
+        silentFor = limit("GEMINI_STALL_TIMEOUT_MS", STALL_TIMEOUT_MS);
+        timer = setTimeout(() => controller.abort(), silentFor);
+        let piece = "";
+        try {
+          piece = chunk.text();
+        } catch {
+          // A blocked or empty piece has no text; the final response explains why.
+        }
+        if (piece) {
+          emitted = true;
+          req.onText(piece);
+        }
       }
-      if (piece) {
-        emitted = true;
-        req.onText(piece);
-      }
+      return { response: await streamed.response };
+    } catch (err) {
+      if (controller.signal.aborted) throw new SilentModelError(Math.round(silentFor / 1000), heard);
+      throw err;
+    } finally {
+      clearTimeout(timer);
     }
-    return { response: await streamed.response };
   };
 }
 
@@ -204,6 +234,8 @@ async function completeOnce(req: CompletionRequest & { model: string }, patient 
     try {
       result = await generate(modelWith(true));
     } catch (err) {
+      // A silent model would be silent again without search: hand over to the stand-in at once.
+      if (err instanceof SilentModelError) throw err;
       console.warn("[google] search-grounded call failed; answering without search:", err instanceof Error ? err.message : err);
       searchSkipped = true;
     }
