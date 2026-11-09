@@ -1,3 +1,4 @@
+import { checkArithmetic } from "@/lib/checks/arithmetic";
 import type { AnswerCheck } from "@/types/database";
 
 /** Marks for one question when none are printed on the paper and none are given. */
@@ -107,10 +108,29 @@ export function paperSummary(text: string): { marks: number; max: number; percen
   return total ? { marks: Number(total[1]), max: Number(total[2]), percent: Number(total[3]), grade: grade ? grade[1].toUpperCase() : gradeFor(Math.round(Number(total[3]))) } : null;
 }
 
-/** The report without lines that quote the student's own (possibly wrong) working, so only the teacher's sums are checked. */
+// A step of the student's working the teacher marked right: "- ✓ Rate = 10(1)/(2)% = 10.5%".
+const TICKED = /^\s*(?:[-*+•]\s*)?✓/;
+
+/** The report without lines that quote the student's own working (wrong or ticked), so only the teacher's sums are checked. */
 export function withoutStudentWork(report: string): string {
   return report
     .split("\n")
-    .filter((line) => !/student|✗|wrote|writes|their working|\bwrong\b|incorrect/i.test(line))
+    .filter((line) => !TICKED.test(line) && !/student|✗|wrote|writes|their working|\bwrong\b|incorrect/i.test(line))
     .join("\n");
+}
+
+/**
+ * Recomputes the steps the teacher ticked as right. A ticked step whose sum is wrong ("10½% = 105%": the decimal point
+ * left out) was misread or passed over, so it is sent back to be marked wrong, quoted as the student wrote it.
+ */
+export function checkTickedSteps(report: string): AnswerCheck[] {
+  const ticked = report.split("\n").filter((line) => TICKED.test(line));
+  return checkArithmetic(ticked.map((line) => line.replace(TICKED, "")).join("\n")).map((c) =>
+    c.ok
+      ? c
+      : {
+          ...c,
+          message: `A step marked ✓ in the student's working is wrong: ${c.message}. Mark it ✗ as "Student wrote: …" exactly as written, take off marks for it, and correct the table, total and grade.`,
+        }
+  );
 }

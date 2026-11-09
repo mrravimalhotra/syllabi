@@ -151,6 +151,9 @@ How to mark each question:
    mistakes do not lead you. Check every calculation of your own.
 3. Read the student's working step by step and judge each step: ✓ correct or ✗ wrong. Never judge by
    the final answer alone. Quote the student's wrong steps as "Student wrote: ...".
+   Read every number exactly as the student wrote it, digit by digit, with its decimal point and sign. Never
+   correct, tidy or complete the student's working while reading or copying it: if 10.5 is written as 105,
+   the student wrote 105. Compare each number the student wrote with what it should be at that step.
 4. Marks. The maximum for a question is the marks printed beside it. If no marks are printed anywhere and
    none are given in the request, every question is out of ${DEFAULT_MARKS_PER_QUESTION} marks. If the request says "Marks per question (set): N", every
    question is out of N. Split the marks into METHOD (about 60%: setting up, the right steps and operations,
@@ -162,6 +165,9 @@ How to mark each question:
    - A notation or wording slip when the numbers and method are right (for example the formula written the
      wrong way round but the right numbers used): lose at most 0.5 of a mark and say so. Lose more only for a
      wrong method, wrong numbers or a wrong answer.
+   - A number written wrong (a missing or misplaced decimal point, a dropped or swapped digit, a wrong sign) is
+     a wrong step, not a notation slip, even when a later line uses the right value: mark it ✗, quote it, and
+     take off at least 0.5 of a method mark (more if the wrong number is used afterwards).
    - Half marks are allowed. Never give full marks for a wrong answer or a wrong method.
    - A question with parts (a), (b): split its marks across the parts.
 5. Be fair and kind, as to a child, and specific: say exactly what was right and exactly what to change.
@@ -184,7 +190,7 @@ Write the report in EXACTLY this layout (code checks the numbers: the table must
 **Question:** <as read>
 **Correct answer:** <your own worked answer, brief, with the final value and unit>
 **Student's working:**
-- ✓ <all the correct steps together, in one line>
+- ✓ <all the correct steps together, in one line, copied exactly as the student wrote them>
 - ✗ Student wrote: <wrong step> → <what it should be>
 **Marks:** Method <x>/<y>, Answer <x>/<y>. <one line why>
 **To do better:** <one or two specific tips for this question>

@@ -60,8 +60,21 @@ function normalise(line: string): string {
     .replace(/³/g, "^3")
     .replace(/√\s*\(([^()]+)\)/g, "(($1)^(1/2))")
     .replace(new RegExp(String.raw`√\s*(${NUMBER})`, "g"), "(($1)^(1/2))")
-    .replace(new RegExp(String.raw`(${NUMBER})\s*%\s*of\s*`, "gi"), "($1/100)*");
+    .replace(new RegExp(String.raw`(${NUMBER})\s*%\s*of\s*`, "gi"), "($1/100)*")
+    // Mixed numbers: "10(1)/(2)" (the answers' fraction style) and "10½" are 10 + 1/2, not 10 × 1/2.
+    .replace(/(?<![\d.])(\d+)\((\d+)\)\s*\/\s*\((\d+)\)/g, "($1+$2/$3)")
+    .replace(/(?<![\d.])(\d+)?([½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞])/g, (_, whole: string | undefined, glyph: string) =>
+      `(${whole ? `${whole}+` : ""}${VULGAR[glyph]})`
+    )
+    // "10.5%" is 10.5/100, so "10½% = 105%" is caught. "₹ 18,480" is the number 18480.
+    .replace(/(\d|\))\s*%/g, "$1/100")
+    .replace(/₹\s*/g, "");
 }
+
+const VULGAR: Record<string, string> = {
+  "½": "1/2", "⅓": "1/3", "⅔": "2/3", "¼": "1/4", "¾": "3/4", "⅕": "1/5", "⅖": "2/5", "⅗": "3/5", "⅘": "4/5",
+  "⅙": "1/6", "⅚": "5/6", "⅛": "1/8", "⅜": "3/8", "⅝": "5/8", "⅞": "7/8",
+};
 
 const OPERATOR = /[-+*/^]/;
 
@@ -86,7 +99,7 @@ function agrees(computed: number, written: string, writtenValue: number): boolea
 
 /** "12 × 15" for messages: back to the symbols the answer used. */
 function pretty(expression: string): string {
-  return expression.trim().replace(/\*/g, " × ").replace(/\//g, " ÷ ").replace(/\s+/g, " ").replace(/\^2/g, "²").replace(/\^3/g, "³");
+  return expression.trim().replace(/\((\d+)\+(\d+)\/(\d+)\)/g, "$1 $2⁄$3").replace(/\*/g, " × ").replace(/\//g, " ÷ ").replace(/\s+/g, " ").replace(/\^2/g, "²").replace(/\^3/g, "³");
 }
 
 function format(value: number): string {

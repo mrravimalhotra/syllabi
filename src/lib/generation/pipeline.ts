@@ -15,7 +15,7 @@ import type { AnswerLanguage } from "@/lib/generation/language";
 import type { CompletionImage, CompletionResult } from "@/lib/llm/types";
 import type { AnswerCheck, GenerationTaskType, MatchedChunk, Student } from "@/types/database";
 import { checkArithmetic } from "@/lib/checks/arithmetic";
-import { checkPaperMarks, withoutStudentWork } from "@/lib/checks/paper";
+import { checkPaperMarks, checkTickedSteps, withoutStudentWork } from "@/lib/checks/paper";
 import { checkCoverage, checkSamplePaper } from "@/lib/checks/rules";
 
 export interface GenerationInput {
@@ -86,9 +86,10 @@ interface GenerationTimings {
 /** All code checks that apply to this kind of answer. */
 function answerChecks(taskType: GenerationTaskType, text: string, questionText: string, prompt: string): AnswerCheck[] {
   if (taskType === "paper_check") {
-    // The teacher's own sums are checked; lines quoting the student's (wrong) working are not, then the marks, total and grade.
+    // The teacher's own sums, the student's steps ticked as right (a wrong one was misread), then the marks, total and grade.
+    // Lines quoting the student's wrong working are expected to be wrong, so they are not checked.
     const set = /Marks per question \(set\):\s*(\d+(?:\.\d+)?)/i.exec(prompt);
-    return [...checkArithmetic(withoutStudentWork(text)), ...checkPaperMarks(text, set ? Number(set[1]) : null)];
+    return [...checkArithmetic(withoutStudentWork(text)), ...checkTickedSteps(text), ...checkPaperMarks(text, set ? Number(set[1]) : null)];
   }
   const checks = checkArithmetic(text);
   if (taskType === "sample_paper") {

@@ -10,7 +10,7 @@ import { blockedReason, buildRequestBody, questionProblem, type Question } from 
 import { checkPages } from "@/lib/ingestion/upload-pages";
 import { parsePhotos } from "@/lib/generation/attachments";
 import { PAPER_REPORT } from "../fixtures/bhakti-exercise-pages";
-import { checkPaperMarks, gradeFor, gradeScaleText, withoutStudentWork } from "@/lib/checks/paper";
+import { checkPaperMarks, checkTickedSteps, gradeFor, gradeScaleText, withoutStudentWork } from "@/lib/checks/paper";
 import { checkArithmetic } from "@/lib/checks/arithmetic";
 import { checkSamplePaper } from "@/lib/checks/rules";
 import { autoKeyFor } from "@/lib/study-pack/auto-key";
@@ -810,6 +810,18 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
   const teacherOnly = checkArithmetic(withoutStudentWork(PAPER_REPORT));
   check(sums.some((c) => !c.ok) && teacherOnly.every((c) => c.ok) && teacherOnly.length >= 2, `Paper check: the student's wrong sums are not mistaken for the teacher's (${sums.filter((c) => !c.ok).length} wrong sums quoted, ${teacherOnly.filter((c) => !c.ok).length} counted against the teacher)`);
   check(!withoutStudentWork(PAPER_REPORT).includes("Student wrote") && withoutStudentWork(PAPER_REPORT).includes("5255 ÷ 5 = 1051"), "Paper check: quoted student lines are removed, the correct answers stay");
+
+  // Bug report 1: the student wrote 105 for 10½% and the report copied it as 10.5%, so the question got full marks.
+  const q3 = (working: string) =>
+    `## Question 3 — 5/5\n**Correct answer:** SI = (32000 × (21)/(2) × 66)/(100 × 12) = ₹ 18,480\n**Student's working:**\n- ✓ ${working}\n**Marks:** Method 3/3, Answer 2/2.`;
+  const tidied = q3("Principal = ₹ 32,000, Rate = 10(1)/(2)% = 10.5% or (21)/(2)%, SI = (32000 × (21)/(2) × 66)/(100 × 12) = ₹ 18,480");
+  const exact = q3("Principal = ₹ 32,000, Rate = 10(1)/(2)% = 105%, SI = (32000 × (21)/(2) × 66)/(100 × 12) = ₹ 18,480");
+  check(checkTickedSteps(tidied).every((c) => c.ok), "Paper check: a ticked step that is right passes (10(1)/(2)% = 10.5%, ₹ 18,480)");
+  const caught = checkTickedSteps(exact).filter((c) => !c.ok);
+  check(caught.length === 1 && caught[0].message.includes("marked ✓") && caught[0].message.includes("105"), `Paper check: a ticked step with the decimal point left out (10½% = 105%) is sent back to be marked wrong (${caught.map((c) => c.message).join("; ")})`);
+  check(checkTickedSteps(exact.replace("- ✓ ", "- ✗ Student wrote: ")).length === 0 && checkArithmetic(withoutStudentWork(exact)).every((c) => c.ok), "Paper check: once marked ✗, the student's slip is not counted against the teacher");
+  check(checkArithmetic("10½ + 2¼ = 12¾").every((c) => c.ok) && checkArithmetic("3(1)/(4) = 3.25").every((c) => c.ok) && checkArithmetic("3(1)/(4) = 1.5").some((c) => !c.ok), "Arithmetic: mixed numbers (10½, 3(1)/(4)) are a whole number plus a fraction, not a product");
+  check(checkArithmetic("25% = 0.25").every((c) => c.ok) && checkArithmetic("12.5% = 125%").some((c) => !c.ok) && checkArithmetic("Amount = ₹ 14,400 = 12000 + 2400").every((c) => c.ok), "Arithmetic: percentages and rupee amounts are recomputed");
 
   // The request.
   const pq: Question = { task: "paper_check", prompt: "", totalMarks: "80", marksEach: "", language: "auto", packBookId: "", bookIds: ["b1"], photos: [], docs: [] };
