@@ -8,6 +8,22 @@ function answerKeyBreak(children: React.ReactNode): string {
   return /^\s*(?:answer key\b|उत्तर कुंजी|उत्तरसूची|उत्तर सूची|corrigé)/i.test(text) ? "print:break-before-page" : "";
 }
 
+/** The first words of a list item, through any paragraph or bold it starts with. */
+function firstText(node: React.ReactNode): string {
+  if (typeof node === "string") return node;
+  if (Array.isArray(node)) return firstText(node.find((n) => (typeof n === "string" ? n.trim() !== "" : n != null && n !== false)));
+  if (node && typeof node === "object" && "props" in node) return firstText((node.props as { children?: React.ReactNode }).children);
+  return "";
+}
+
+/** A marked paper: a wrong step ("✗ Student wrote: …") in red, the correct step under it ("✔ Correct step: …") in green. */
+function stepTone(children: React.ReactNode): string | undefined {
+  const text = firstText(children).trimStart();
+  if (text.startsWith("✗")) return "text-red-700 marker:text-red-400";
+  if (text.startsWith("✔")) return "text-emerald-700 marker:text-emerald-500";
+  return undefined;
+}
+
 // Styled mappings for the Markdown the prompts ask for. Tables and code blocks
 // scroll sideways on narrow screens instead of stretching the page.
 const COMPONENTS: Components = {
@@ -23,6 +39,7 @@ const COMPONENTS: Components = {
   p: ({ children }) => <p className="mb-3">{children}</p>,
   ul: ({ children }) => <ul className="mb-3 ml-5 list-disc space-y-1.5 marker:text-slate-400">{children}</ul>,
   ol: ({ children }) => <ol className="mb-3 ml-5 list-decimal space-y-1.5 marker:text-slate-500">{children}</ol>,
+  li: ({ children }) => <li className={stepTone(children)}>{children}</li>,
   strong: ({ children }) => <strong className="font-semibold text-slate-900">{children}</strong>,
   hr: () => <hr className="my-5 border-slate-200" />,
   blockquote: ({ children }) => (

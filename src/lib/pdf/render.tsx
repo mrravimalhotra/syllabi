@@ -60,7 +60,7 @@ const pdfGlyphs = (text: string) => text.replace(/[✗✘✕✖❌☓]/g, "×").
 const ANSWER_KEY_HEADING = /^(?:answer key\b|उत्तर कुंजी|उत्तरसूची|उत्तर सूची|corrigé)/i;
 
 /** Renders one line of text with **bold** spans; other inline markdown (`code`, *italic*) is shown as plain text. */
-function InlineText({ text }: { text: string }) {
+function InlineText({ text, color }: { text: string; color?: string }) {
   const clean = pdfGlyphs(tidyMath(text))
     .replace(/`([^`]+)`/g, "$1")
     .replace(/(^|[^*])\*([^*\s][^*]*)\*/g, "$1$2")
@@ -70,7 +70,7 @@ function InlineText({ text }: { text: string }) {
     .replace(/\u2028/g, "\n");
   const parts = clean.split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
   return (
-    <Text>
+    <Text style={color ? { color } : undefined}>
       {parts.map((part, i) =>
         part.startsWith("**") && part.endsWith("**") ? (
           <Text key={i} style={styles.bold}>
@@ -174,12 +174,15 @@ function readListItem(raw: string, line: string, index: number): Read | null {
   const bullet = /^[-*•]\s+([^]*)$/.exec(line);
   const numbered = /^(\d+|[a-zA-Z])[.)]\s+([^]*)$/.exec(line);
   if (!bullet && !numbered) return null;
+  const content = bullet ? bullet[1] : numbered![2];
+  // A marked paper: a wrong step in red, the correct step under it in green (as on screen).
+  const color = /^✗/.test(content) ? "#b91c1c" : /^✔/.test(content) ? "#047857" : undefined;
   return {
     node: (
       <View key={index} style={[styles.listItem, { paddingLeft: 6 + indent }]} wrap={false}>
         <Text style={styles.listMarker}>{bullet ? "•" : `${numbered![1]}.`}</Text>
         <View style={styles.listText}>
-          <InlineText text={bullet ? bullet[1] : numbered![2]} />
+          <InlineText text={content} color={color} />
         </View>
       </View>
     ),

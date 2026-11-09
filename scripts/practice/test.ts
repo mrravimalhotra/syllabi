@@ -12,6 +12,7 @@ import { parsePhotos } from "@/lib/generation/attachments";
 import { PAPER_REPORT } from "../fixtures/bhakti-exercise-pages";
 import { checkPaperMarks, checkTickedSteps, gradeFor, gradeScaleText, withoutStudentWork } from "@/lib/checks/paper";
 import { checkArithmetic } from "@/lib/checks/arithmetic";
+import { ContentBody } from "@/lib/pdf/render";
 import { checkSamplePaper } from "@/lib/checks/rules";
 import { autoKeyFor } from "@/lib/study-pack/auto-key";
 import { pureProblem } from "@/lib/worked/detect";
@@ -821,6 +822,9 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
   check(caught.length === 1 && caught[0].message.includes("marked ✓") && caught[0].message.includes("105"), `Paper check: a ticked step with the decimal point left out (10½% = 105%) is sent back to be marked wrong (${caught.map((c) => c.message).join("; ")})`);
   check(checkTickedSteps(exact.replace("- ✓ ", "- ✗ Student wrote: ")).length === 0 && checkArithmetic(withoutStudentWork(exact)).every((c) => c.ok), "Paper check: once marked ✗, the student's slip is not counted against the teacher");
   check(checkArithmetic("10½ + 2¼ = 12¾").every((c) => c.ok) && checkArithmetic("3(1)/(4) = 3.25").every((c) => c.ok) && checkArithmetic("3(1)/(4) = 1.5").some((c) => !c.ok), "Arithmetic: mixed numbers (10½, 3(1)/(4)) are a whole number plus a fraction, not a product");
+  // Report 2: in the PDF too, the step that lost marks is red and the correct step under it green; other lines keep their colour.
+  const pdfSteps = JSON.stringify(ContentBody({ text: "**Student's working:**\n- ✓ 3/4 = 9/12\n- ✗ Student wrote: 2/3 = 6/12 (−1)\n- ✔ Correct step: 2/3 = 8/12" }));
+  check((pdfSteps.match(/"color":"#b91c1c"/g) ?? []).length === 1 && (pdfSteps.match(/"color":"#047857"/g) ?? []).length === 1 && (pdfSteps.match(/"color":/g) ?? []).length === 2, "PDF: a wrong step is red and its correct step green, nothing else is coloured");
   check(checkArithmetic("25% = 0.25").every((c) => c.ok) && checkArithmetic("12.5% = 125%").some((c) => !c.ok) && checkArithmetic("Amount = ₹ 14,400 = 12000 + 2400").every((c) => c.ok), "Arithmetic: percentages and rupee amounts are recomputed");
 
   // The request.

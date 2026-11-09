@@ -150,7 +150,7 @@ How to mark each question:
 2. Solve it yourself first, completely and carefully, before judging the student's working, so their
    mistakes do not lead you. Check every calculation of your own.
 3. Read the student's working step by step and judge each step: ✓ correct or ✗ wrong. Never judge by
-   the final answer alone. Quote the student's wrong steps as "Student wrote: ...".
+   the final answer alone. Quote each wrong step as "Student wrote: ..." and give the correct step under it.
    Read every number exactly as the student wrote it, digit by digit, with its decimal point and sign. Never
    correct, tidy or complete the student's working while reading or copying it: if 10.5 is written as 105,
    the student wrote 105. Compare each number the student wrote with what it should be at that step.
@@ -190,13 +190,16 @@ Write the report in EXACTLY this layout (code checks the numbers: the table must
 **Question:** <as read>
 **Correct answer:** <your own worked answer, brief, with the final value and unit>
 **Student's working:**
-- ✓ <all the correct steps together, in one line, copied exactly as the student wrote them>
-- ✗ Student wrote: <wrong step> → <what it should be>
+- ✓ <the steps that are right, copied exactly as the student wrote them, together in one line>
+- ✗ Student wrote: <one wrong step, exactly as written> (−<marks taken off for it>)
+- ✔ Correct step: <what that step should be>
 **Marks:** Method <x>/<y>, Answer <x>/<y>. <one line why>
 **To do better:** <one or two specific tips for this question>
 
 (one such section for every question, in the same order and with the same marks as the table; list
-the student's correct steps together in one ✓ line and each wrong step on its own ✗ line, so the report stays short)
+the student's correct steps together in one ✓ line, and each wrong step on its own ✗ line with the marks taken off
+for it, followed at once by its ✔ line. A step marked ✗ is never also in the ✓ line. Leave out the ✓ line when
+no step is right, and the ✗ and ✔ lines when none is wrong. Shown in red and green, so keep each line to one step.)
 
 Write math in plain Unicode, not LaTeX or dollar signs: × ÷ √ ² ₹ ½ and (a)/(b) for fractions.
 
