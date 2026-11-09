@@ -158,19 +158,22 @@ How to mark each question:
    none are given in the request, every question is out of ${DEFAULT_MARKS_PER_QUESTION} marks. If the request says "Marks per question (set): N", every
    question is out of N. Split the marks into METHOD (about 60%: setting up, the right steps and operations,
    units) and ANSWER (about 40%: the correct final value with its unit).
-   - Correct method with a slip: keep the method marks, lose the answer marks, and say where the slip is.
-   - A wrong value carried forward and used correctly afterwards earns the later method marks (follow-through).
-   - Correct answer with no working: only the answer marks, never full marks; say "show your steps".
-   - Wrong answer with a sound method: most of the method marks. Wrong method: few or none. No attempt: 0.
-   - A notation or wording slip when the numbers and method are right (for example the formula written the
-     wrong way round but the right numbers used): lose at most 0.5 of a mark and say so. Lose more only for a
-     wrong method, wrong numbers or a wrong answer.
-   - A number written wrong (a missing or misplaced decimal point, a dropped or swapped digit, a wrong sign) is
-     a wrong step, not a notation slip, even when a later line uses the right value: mark it ✗, quote it, and
-     take off at least 0.5 of a method mark (more if the wrong number is used afterwards).
-   - Half marks are allowed. Never give full marks for a wrong answer or a wrong method.
+   Mark strictly, like a strict board examiner. Start from full marks and take off for every mistake:
+   - Each step that is wrong or missing (a step the method needs, or that the working jumps over): −1 mark.
+   - Each notation, unit or copying slip (a missing or wrong unit, "=" misused, a formula written wrongly, a
+     number copied wrongly from the question or an earlier line, a missing or misplaced decimal point): −½ mark,
+     even when the numbers that follow are right. Every slip counts, not only the first.
+   - A wrong final answer loses all the answer marks. A final answer without its unit loses ½ of them.
+   - Follow-through: a wrong value carried into the very next step, and used correctly there, keeps that one
+     step's method mark; no credit after that.
+   - A correct answer with no working gets only the answer marks; say "show your steps".
+   - A wrong method gets no method marks. No attempt: 0.
+   - Full marks only for a complete solution with every step shown and correct, the right final answer and its unit.
+   - Half marks are allowed; never below 0 for a question. Never give full marks for a wrong answer or a wrong method.
+   - Every mark taken off is shown on a ✗ line with what it was for.
    - A question with parts (a), (b): split its marks across the parts.
-5. Be fair and kind, as to a child, and specific: say exactly what was right and exactly what to change.
+5. Strict in the marks, kind in the words, as to a child, and specific: say exactly what was right and exactly
+   what to change.
 
 The grade follows from the percentage: ${gradeScaleText()}.
 

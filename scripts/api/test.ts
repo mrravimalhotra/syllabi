@@ -954,12 +954,27 @@ failures.length = 0;
   calls.length = 0;
   verdicts = ['{"problems":[{"kind":"missed","where":"Q1","problem":"The age is not given.","fix":"At 13."}]}', '{"problems":[{"kind":"missed","where":"Q1","problem":"The age is not given.","fix":"At 13."}]}'];
   out = await ask();
+  calls.length = 0;
+  verdicts = [
+    '{"problems":[{"kind":"wrong","where":"Q1","problem":"The year is wrong.","fix":"1556"},{"kind":"missed","where":"Q1","problem":"The age is not given.","fix":"At 13."}]}',
+    '{"problems":[{"kind":"missed","where":"Q1","problem":"The age is not given.","fix":"At 13."}]}',
+    '{"problems":[]}',
+  ];
+  out = await ask();
+  check("checker: when a fix helps but problems remain, a second round fixes the rest", calls.join() === "write,check,fix,check,fix,check" && out.checks.filter((c) => c.kind === "review").every((c) => c.ok), calls.join());
+  verdicts = ['{"problems":[{"kind":"missed","where":"Q1","problem":"The age is not given.","fix":"At 13."}]}', '{"problems":[{"kind":"missed","where":"Q1","problem":"The age is not given.","fix":"At 13."}]}'];
+  out = await ask();
   check("checker: a fix that is no better is not kept, and the doubt is shown to the parent", out.text.includes("1605") && out.checks.some((c) => c.kind === "review" && !c.ok && c.message.includes("Not answered: Q1")), JSON.stringify(out.checks));
 
   calls.length = 0;
-  verdicts = ["sorry, I can't"];
+  verdicts = ["sorry, I can't", '{"problems":[]}'];
   out = await ask();
-  check("checker: an unreadable check never holds the answer back, and causes no fix", calls.join() === "write,check" && out.text.includes("1605"), calls.join());
+  check("checker: a check that couldn't run is tried once more, and its clean result shown", calls.join() === "write,check,check" && out.checks.some((c) => c.kind === "review" && c.ok), `${calls.join()} ${JSON.stringify(out.checks)}`);
+
+  calls.length = 0;
+  verdicts = ["sorry, I can't", "still can't"];
+  out = await ask();
+  check("checker: an unreadable check (twice) never holds the answer back, and causes no fix", calls.join() === "write,check,check" && out.text.includes("1605"), calls.join());
   const notChecked = out.checks.filter((c) => c.kind === "review");
   check("checker: when it couldn't run, the answer says plainly it wasn't double-checked", notChecked.length === 1 && !notChecked[0].ok && /^Not double-checked/.test(notChecked[0].message), JSON.stringify(out.checks));
 

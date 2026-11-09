@@ -154,6 +154,8 @@ const SECOND_MARKING_AGREED: AnswerCheck = { kind: "review", ok: true, message: 
 
 /** After this long since writing began, the fix and its re-check think less, so the answer is in well within the time limit. */
 const LATE_MS = 120_000;
+/** Rounds of fixing an answer the checks found problems in (the second only before LATE_MS). */
+const MAX_REPAIR_ROUNDS = 2;
 const LATE_THINKING = 1024;
 
 /**
@@ -376,7 +378,8 @@ type DraftRequest = Parameters<typeof generateCompletion>[0] & { prompt: string;
  * Checks a finished draft and fixes it when needed. Every answer is checked twice over: by code (calculations recomputed, a paper's marks added up and its
  * answer key compared, a worksheet's questions counted) and by a second, independent AI reading against
  * the books (wrong facts, missed parts, unsupported claims). Only when something is wrong is the AI asked
- * (once) to correct it; the correction is checked the same way and kept only if it has fewer problems.
+ * to correct it (a second time, if problems remain and there is time); each correction is checked the same way and
+ * kept only if it has fewer problems.
  */
 async function checkAndRepair(input: {
   taskType: GenerationTaskType;
@@ -401,7 +404,10 @@ async function checkAndRepair(input: {
   const runReview = async (text: string): Promise<VerifyProblem[] | null> => {
     // The paper checker's marking is checked by code (lib/checks/paper.ts); it has no book to check against.
     if (taskType === "paper_check") return null;
-    const verified = await verifyAnswer({ taskType, question: request.prompt, answer: text, context: request.context, photos, ...(late() ? { thinking: LATE_THINKING } : {}) });
+    const examine = () => verifyAnswer({ taskType, question: request.prompt, answer: text, context: request.context, photos, ...(late() ? { thinking: LATE_THINKING } : {}) });
+    // A check that couldn't run (busy, an unreadable reply) is tried once more while there is time, rather than
+    // showing the answer as not double-checked.
+    const verified = (await examine()) ?? (late() ? null : await examine());
     if (!verified) return null;
     await recordTokenUsage({
       studentId,
@@ -447,10 +453,12 @@ async function checkAndRepair(input: {
   // the examiner's, or for a checked paper the second marking.
   let examined = marking ? secondMarks !== null : firstReview !== null;
   timings.reviewMs = Date.now() - reviewStart;
-  const problems = checks.filter((c) => !c.ok);
   const problemCount = (failed: AnswerCheck[], found: VerifyProblem[] | null) => failed.length + (found?.length ?? 0);
-  if (problemCount(problems, review) > 0) {
-    const repairStart = Date.now();
+  const repairStart = Date.now();
+  // Up to two rounds of fixing: a second only when the first helped, problems remain and there is time.
+  for (let round = 0; round < MAX_REPAIR_ROUNDS && (round === 0 || !late()); round++) {
+    const problems = checks.filter((c) => !c.ok);
+    if (problemCount(problems, review) === 0) break;
     onStage?.("fixing");
     const found = [
       ...problems.map((c) => `- ${c.message} (found by Syllabi's exact calculator or marks counter)`),
@@ -481,17 +489,16 @@ async function checkAndRepair(input: {
     const rereview = withSecond(rereviewed, repaired.text);
     timings.repairMs = Date.now() - repairStart;
     // Keep the repair only if it really has fewer problems (a review that could not run counts as unchanged).
-    if (
+    const better =
       problemCount(
         recheck.filter((c) => !c.ok),
         rereview ?? review
-      ) < problemCount(problems, review)
-    ) {
-      result = { ...repaired, searchSuggestionsHtml: repaired.searchSuggestionsHtml ?? result.searchSuggestionsHtml };
-      checks = recheck;
-      review = rereview ?? review;
-      if (!marking) examined = rereviewed !== null;
-    }
+      ) < problemCount(problems, review);
+    if (!better) break;
+    result = { ...repaired, searchSuggestionsHtml: repaired.searchSuggestionsHtml ?? result.searchSuggestionsHtml };
+    checks = recheck;
+    review = rereview ?? review;
+    if (!marking) examined = rereviewed !== null;
   }
   // What the independent checks still find is shown with the answer, so the parent knows what to look at; a clean
   // result only when the check really ran.
