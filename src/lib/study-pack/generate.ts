@@ -213,6 +213,8 @@ interface StudyPackInput {
   photos?: CompletionImage[];
   focus?: string;
   language?: AnswerLanguage;
+  /** Each step reached, with what was learned (sizes, the model), for the request's progress record. */
+  onProgress?: (stage: string, details?: Record<string, unknown>) => void;
 }
 
 /** The chapter text: a book from My books, or attached photos; refuses one that is missing, too short or too long. */
@@ -268,11 +270,16 @@ export async function generateStudyPack(input: StudyPackInput): Promise<StudyPac
   if (quota.overQuota) throw new QuotaExceededError(quota);
 
   const chapter = await chapterFor(input);
+  input.onProgress?.("chapter read", { chapterChars: chapter.text.length });
   const prompt = packPrompt(input, chapter.text);
-  const call = (systemInstructions: string, jsonSchema: Record<string, unknown>) =>
-    generateCompletion({ taskType: "study_pack", systemInstructions, prompt, jsonSchema, temperature: 0.3 });
+  // Each call is streamed (its words are not shown) so that a model that goes silent is given up on, and each reports when it is done.
+  const call = async (part: string, systemInstructions: string, jsonSchema: Record<string, unknown>) => {
+    const result = await generateCompletion({ taskType: "study_pack", systemInstructions, prompt, jsonSchema, temperature: 0.3, onText: () => {} });
+    input.onProgress?.(`${part} written`, { [`${part}Model`]: `${result.provider} / ${result.model}${result.standInFor ? ` (stand-in: ${result.standInFor} was busy)` : ""}`, [`${part}Chars`]: result.text.length });
+    return result;
+  };
 
-  const [walkResult, qaResult] = await Promise.all([call(WALKTHROUGH_SYSTEM, WALKTHROUGH_SCHEMA), call(QUESTIONS_SYSTEM, QUESTIONS_SCHEMA)]);
+  const [walkResult, qaResult] = await Promise.all([call("walkthrough", WALKTHROUGH_SYSTEM, WALKTHROUGH_SCHEMA), call("questions", QUESTIONS_SYSTEM, QUESTIONS_SCHEMA)]);
   for (const result of [walkResult, qaResult]) {
     await recordTokenUsage({ studentId: input.student.id, taskType: "study_pack", provider: result.provider, model: result.model, usage: result.usage });
   }

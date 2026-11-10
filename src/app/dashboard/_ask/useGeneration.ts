@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnswerCutError, readAnswerStream } from "@/lib/answer-stream";
+import { recoverAnswer } from "@/app/dashboard/_ask/recover";
 import { OFFLINE_MESSAGE, SERVER_UNREACHABLE_MESSAGE, answerStoppedMessage, failedRequestMessage } from "@/lib/http-errors";
 import { findProblems, solve } from "@/lib/worked/detect";
 import type { WorkedExample } from "@/lib/worked/types";
@@ -29,6 +30,18 @@ function reportFailure(task: GenerationTaskType, message: string, runId: string 
       path: window.location.pathname + window.location.search,
     }),
   }).catch(() => {});
+}
+
+/**
+ * The connection dropped after the server had begun (a phone network, a locked screen): the server carries on, so
+ * wait for it and hand back the answer when it is saved; null when it can't be picked up.
+ */
+async function pickedUpAgain(err: unknown, runId: string | null, started: number, signal: AbortSignal, say: (notice: string | null) => void): Promise<GenerationResult | null> {
+  if (!runId || !(err instanceof AnswerCutError || err instanceof TypeError)) return null;
+  say("The connection dropped, but Syllabi is still making your answer. It will appear here when it is ready. Keep this page open.");
+  const recovered = await recoverAnswer(runId, started, signal);
+  say(null);
+  return recovered === "failed" ? null : recovered;
 }
 
 interface LastRequest {
@@ -144,15 +157,15 @@ export function useGeneration(onFinished: () => void) {
     const started = Date.now();
     let replied = false;
     let runId: string | null = null;
+    let recovered: GenerationResult | null = null;
 
     try {
-      // Answers (not study packs) are streamed, so the first words show within seconds.
-      const streaming = task !== "study_pack";
+      // Every answer is streamed: the first words show within seconds, and a study pack's connection is kept alive while it is written.
       const res = await fetch(route, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         signal: controller.signal,
-        body: JSON.stringify(streaming ? { ...body, stream: true } : body),
+        body: JSON.stringify({ ...body, stream: true }),
       });
       replied = true;
       runId = res.headers.get("X-Run-Id");
@@ -163,6 +176,13 @@ export function useGeneration(onFinished: () => void) {
       onFinished();
     } catch (err) {
       if (controller.signal.aborted) {
+        setNotice("You stopped waiting. If the answer still finishes, it will appear in My Documents.");
+      } else if ((recovered = await pickedUpAgain(err, runId, started, controller.signal, setNotice))) {
+        setLoading(false);
+        setResult(recovered);
+        answered = true;
+        onFinished();
+      } else if (controller.signal.aborted) {
         setNotice("You stopped waiting. If the answer still finishes, it will appear in My Documents.");
       } else {
         const seconds = Math.round((Date.now() - started) / 1000);

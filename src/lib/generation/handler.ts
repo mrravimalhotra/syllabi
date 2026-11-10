@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { apiError, authenticate, errorResponse } from "@/lib/api";
 import { runGeneration, type GenerationInput } from "@/lib/generation/pipeline";
 import { withImageUrls } from "@/lib/generation/sources";
@@ -147,28 +147,66 @@ function withRunId(response: Response, run: RunLog): Response {
  * after this point arrive as an "error" line.
  */
 function streamAnswer(taskType: GenerationTaskType, run: RunLog, produce: (hooks: StreamHooks) => Promise<unknown>): Response {
+  return streamWork(run, `generate ${taskType}`, GENERATE_FAILED, produce);
+}
+
+/** How often a line is sent while nothing else is, so a phone network doesn't drop a connection that looks idle. */
+const PING_MS = 10_000;
+
+/**
+ * Runs `produce` and streams what it reports, one JSON object per line: draft text, stages, a "ping" while it is
+ * quiet, then "done" with the answer or "error". If the reader goes away (a dropped connection, a locked phone) the
+ * work carries on to the end and is saved, and the reader can ask how it went (api/generate/runs/[id]).
+ */
+export function streamWork(run: RunLog, context: string, failedMessage: string, produce: (hooks: StreamHooks) => Promise<unknown>): Response {
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      const send = (line: Record<string, unknown>) => controller.enqueue(encoder.encode(`${JSON.stringify(line)}\n`));
+    start(controller) {
+      let open = true;
+      const send = (line: Record<string, unknown>) => {
+        if (!open) return;
+        try {
+          controller.enqueue(encoder.encode(`${JSON.stringify(line)}\n`));
+        } catch {
+          // The reader has gone: keep working, stop sending.
+          open = false;
+        }
+      };
+      const ping = setInterval(() => send({ type: "ping" }), PING_MS);
+      const job = (async () => {
+        try {
+          const payload = await produce({
+            onText: (delta) => send({ type: "text", delta }),
+            onRestart: () => send({ type: "reset" }),
+            onStage: (stage) => send({ type: "stage", stage }),
+          });
+          send({ type: "done", answer: payload });
+        } catch (err) {
+          run.finish("failed", { error: errorText(err) });
+          const failure = errorResponse(err, context, failedMessage);
+          send({ type: "error", status: failure.status, ...(await failure.json()) });
+        } finally {
+          clearInterval(ping);
+          try {
+            controller.close();
+          } catch {
+            // Already closed by the reader going away.
+          }
+        }
+      })();
+      // The server stays up until the work is done, whether or not anyone is still reading.
       try {
-        const payload = await produce({
-          onText: (delta) => send({ type: "text", delta }),
-          onRestart: () => send({ type: "reset" }),
-          onStage: (stage) => send({ type: "stage", stage }),
-        });
-        send({ type: "done", answer: payload });
-      } catch (err) {
-        run.finish("failed", { error: errorText(err) });
-        const failure = errorResponse(err, `generate ${taskType}`, GENERATE_FAILED);
-        send({ type: "error", status: failure.status, ...(await failure.json()) });
+        after(() => job);
+      } catch {
+        // Outside a request (tests): the work simply runs on.
       }
-      controller.close();
     },
   });
-  return new Response(stream, {
+  const response = new Response(stream, {
     headers: { "Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-store", "X-Accel-Buffering": "no" },
   });
+  response.headers.set("X-Run-Id", run.id);
+  return response;
 }
 
 /**

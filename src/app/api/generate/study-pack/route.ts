@@ -9,6 +9,9 @@ import { generateStudyPack } from "@/lib/study-pack/generate";
 import { packToMarkdown } from "@/lib/study-pack/markdown";
 import { parseStudyPackRequest } from "@/lib/study-pack/request";
 import { startRunLog } from "@/lib/generation/run-log";
+import { streamWork } from "@/lib/generation/handler";
+
+const PACK_FAILED = "Couldn't make the study pack. Wait a minute and try again. If it keeps happening, tell the person who runs Syllabi.";
 import type { StudyPack } from "@/lib/study-pack/types";
 
 // Two long AI calls (run together) for a whole chapter.
@@ -87,14 +90,19 @@ export async function POST(request: Request) {
       }
     }
 
-    run.stage("writing");
-    const pack = await generateStudyPack({ student, documentId, photos: documentId ? undefined : photos, focus, language });
-    run.stage("saving");
-    const saved = await saveStudyPack(student.id, pack, cacheKey);
-    run.finish("answered", { documentId: saved.id ?? null });
-    return reply(NextResponse.json(saved));
+    const make = async () => {
+      run.stage("writing");
+      const pack = await generateStudyPack({ student, documentId, photos: documentId ? undefined : photos, focus, language, onProgress: (stage, details) => run.stage(stage, details) });
+      run.stage("saving");
+      const saved = await saveStudyPack(student.id, pack, cacheKey);
+      run.finish("answered", { documentId: saved.id ?? null });
+      return saved;
+    };
+    // Streamed, the connection is kept alive while the pack is written, and the pack is saved even if the reader goes away.
+    if ((body as { stream?: unknown }).stream === true) return streamWork(run, "generate study_pack", PACK_FAILED, make);
+    return reply(NextResponse.json(await make()));
   } catch (err) {
     run.finish("failed", { error: err instanceof Error ? `${err.name}: ${err.message}` : String(err) });
-    return reply(errorResponse(err, "generate study_pack", "Couldn't make the study pack. Wait a minute and try again. If it keeps happening, tell the person who runs Syllabi."));
+    return reply(errorResponse(err, "generate study_pack", PACK_FAILED));
   }
 }

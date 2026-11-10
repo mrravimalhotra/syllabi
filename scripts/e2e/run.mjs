@@ -261,15 +261,32 @@ await test("Ask: a stream that stops early says what to do", async (page, ctx) =
   await ctx.route("**/api/generate/**", (r) =>
     r.fulfill({ ...ndjson([{ type: "text", delta: "Partial " }]), headers: { "X-Run-Id": "3f2a91c0-0000-4000-8000-000000000001" } })
   );
+  // The server doesn't know the request (it never began), so there is nothing to pick up again.
+  await ctx.route("**/api/generate/runs/*", (r) => json(r, { error: "That request is not known." }, 404));
   await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
   await page.locator("textarea").fill("Explain photosynthesis");
   await page.getByRole("button", { name: /^Generate$/ }).click();
   // How long it ran, what happened, and a reference to the request's progress record; the failure is logged with it.
-  await page.getByText(/The answer stopped after \d+ seconds, before it was finished: the connection dropped\..*\(Reference 3f2a91c0\)/).first().waitFor({ timeout: 10000 });
+  await page.getByText(/The answer stopped after \d+ seconds, before it was finished: the connection dropped\..*\(Reference 3f2a91c0\)/).first().waitFor({ timeout: 20000 });
   for (let i = 0; i < 20 && logged.length === 0; i++) await page.waitForTimeout(100);
   if (!logged.some((l) => /run 3f2a91c0-0000-4000-8000-000000000001/.test(l.message) && /answer failed \(solution\)/.test(l.where))) {
     throw new Error(`the failure was not logged with its run: ${JSON.stringify(logged)}`);
   }
+});
+
+await test("Ask: when the connection drops while the server is still working, the answer is picked up when it is ready", async (page, ctx) => {
+  await baseRoutes(ctx);
+  let asked = 0;
+  await ctx.route("**/api/log-error", (r) => json(r, { ok: true }));
+  await ctx.route("**/api/generate/**", (r) => r.fulfill({ ...ndjson([{ type: "ping" }, { type: "text", delta: "Partial " }]), headers: { "X-Run-Id": "3f2a91c0-0000-4000-8000-000000000002" } }));
+  await ctx.route("**/api/generate/runs/*", (r) => json(r, ++asked < 2 ? { stage: "checking", outcome: null, documentId: null, seconds: 40 } : { stage: "done", outcome: "answered", documentId: "a9" }));
+  await ctx.route("**/api/documents/a9", (r) => json(r, { answer: { ...answer, id: "a9", text: "Plants make food from sunlight.", pack: null } }));
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
+  await page.locator("textarea").fill("Explain photosynthesis");
+  await page.getByRole("button", { name: /^Generate$/ }).click();
+  await page.getByText(/The connection dropped, but Syllabi is still making your answer/).waitFor({ timeout: 10000 });
+  await page.getByText("Plants make food from sunlight.").first().waitFor({ timeout: 25000 });
+  if (asked < 2 || (await page.getByText(/The answer stopped after/).count()) !== 0) throw new Error(`asked ${asked} times`);
 });
 
 await test("Ask: switching kind clears the text and the old answer", async (page, ctx) => {

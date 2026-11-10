@@ -101,7 +101,7 @@ class SilentModelError extends Error {
 function caller(req: CompletionRequest, body: Body) {
   let emitted = false;
   return async (model: GeminiModel) => {
-    if (!req.onText) return model.generateContent(body);
+    if (!req.onText) return quietCall(model, body);
     if (emitted) {
       req.onRestart?.();
       emitted = false;
@@ -155,6 +155,24 @@ async function generatePlain(call: () => Promise<GenerateResult>, patient: boole
     // Anything but busy (a dropped connection) is retried as usual.
     if (isCapacityProblem(err instanceof Error ? err.message : String(err))) throw err;
     return withNetworkRetry(call);
+  }
+}
+
+// A call that isn't streamed gives no sign of life until it ends: one silent this long has hung.
+const WHOLE_REPLY_TIMEOUT_MS = 150_000;
+
+/** A call answered in one piece, given up on (as busy) when nothing has come back in time. */
+async function quietCall(model: GeminiModel, body: Body) {
+  const controller = new AbortController();
+  const wait = limit("GEMINI_REPLY_TIMEOUT_MS", WHOLE_REPLY_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), wait);
+  try {
+    return await model.generateContent(body, { signal: controller.signal });
+  } catch (err) {
+    if (controller.signal.aborted) throw new SilentModelError(Math.round(wait / 1000), false);
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
 }
 

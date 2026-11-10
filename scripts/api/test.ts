@@ -1,6 +1,7 @@
 // Route tests: calls the real route handlers with a fake database and a fake
 // signed-in person, and checks status codes and messages for signed-out,
 // not-allowed, bad input, over-allowance and not-found cases.
+import * as runStatus from "../../src/app/api/generate/runs/[id]/route";
 import * as solveAllParts from "../../src/app/api/generate/solution/parts/route";
 import * as combine from "../../src/app/api/documents/combine/route";
 import { ContentBody } from "@/lib/pdf/render";
@@ -300,6 +301,24 @@ const failLines = (await failed.text()).trim().split("\n").map((l) => JSON.parse
 check("generate: a failure inside a stream arrives as an error line", failLines.at(-1)?.type === "error" && /Couldn't make your answer/.test(String(failLines.at(-1)?.error)));
 await expect("generate: a failure without streaming is a plain error", adhoc.POST, 500, /Couldn't make your answer/i, { prompt: "Yet another question" });
 pipeline.fail = false;
+// The screen can ask how a request went (to pick the answer up after a dropped connection); a stream nobody reads still ends in a saved answer.
+const unread = await adhoc.POST(new Request("http://test/api", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ prompt: "A question nobody waits for", stream: true }) }));
+{
+  const before = (tables.generated_documents ?? []).length;
+  await unread.body?.cancel();
+  await new Promise((r) => setTimeout(r, 50));
+  check("streaming: when the reader goes away, the answer is still made and saved", (tables.generated_documents ?? []).length >= before && (tables.generated_documents ?? []).some((d) => d.title === "A question nobody waits for"));
+  const runId = unread.headers.get("x-run-id")!;
+  const status = await runStatus.GET(new Request("http://test/api"), { params: Promise.resolve({ id: runId }) });
+  const how = await status.json();
+  check("run status: the request's outcome and saved answer can be asked for", status.status === 200 && how.outcome === "answered" && typeof how.documentId === "string", JSON.stringify(how));
+  const me = session.user;
+  session.user = person({ id: OTHER });
+  tables.students!.push(person({ id: OTHER }) as unknown as Record<string, unknown>);
+  const theirs = await runStatus.GET(new Request("http://test/api"), { params: Promise.resolve({ id: runId }) });
+  check("run status: someone else's request is not known", theirs.status === 404, String(theirs.status));
+  session.user = me;
+}
 // Every request leaves a progress record (written in the background, so wait a moment), with no question text in it.
 await new Promise((r) => setTimeout(r, 50));
 {
@@ -307,7 +326,7 @@ await new Promise((r) => setTimeout(r, 50));
   const outcomes = runs.map((r) => r.outcome).sort().join(",");
   const streamedRun = runs.find((r) => r.id === streamed.headers.get("x-run-id"));
   const failedRun = runs.find((r) => r.id === failed.headers.get("x-run-id"));
-  check("progress records: one per request, saying how each ended", outcomes === "answered,answered,answered,answered,failed,failed,reused", outcomes);
+  check("progress records: one per request, saying how each ended", outcomes === "answered,answered,answered,answered,answered,failed,failed,reused", outcomes);
   check("progress records: a streamed answer's record is named in its reply and shows when the first words came", Boolean(streamedRun) && streamedRun?.stage === "done" && "first words" in ((streamedRun?.details as { stages?: Record<string, number> })?.stages ?? {}) && typeof streamedRun?.document_id === "string");
   check("progress records: a failure keeps its error and the stage it ended at", failedRun?.stage === "failed" && /The AI is down/.test(String(failedRun?.error)));
   check("progress records: sizes only, never the question's text", runs.length > 0 && !JSON.stringify(runs).includes("photosynthesis") && (runs[0].details as { request?: { promptChars?: number } }).request?.promptChars === 22);

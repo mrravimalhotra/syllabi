@@ -109,6 +109,15 @@ for (const [model, how] of [["gemini-silent-model", "no reply"], ["gemini-stalli
   check(`a model that ${how === "no reply" ? "never replies" : "stops in the middle"} is given up on and the stand-in answers`, res.text === "Hello world" && res.standInFor === model && Date.now() - t0 < 3000, `${res.text} ${res.standInFor} ${Date.now() - t0} ms`);
   check(`${how === "no reply" ? "a silent model is tried once, even with search allowed" : "the stalled draft is started again"}`, how === "no reply" ? calls.filter((m) => m === model).length === 1 : restarts >= 1 && words.join("").endsWith("Hello world"), `${calls.join(",")} restarts=${restarts}`);
 }
+{
+  // The same for a call that isn't streamed (the checker, a second marking): it is given up on, and the stand-in answers.
+  process.env.GEMINI_REPLY_TIMEOUT_MS = "300";
+  silent.set("gemini-quiet-model", "no reply");
+  const t0 = Date.now();
+  const res = await googleAdapter.generateCompletion({ ...base, model: "gemini-quiet-model" });
+  check("a call answered in one piece that never answers is given up on and the stand-in answers", res.text === "Hello world" && res.standInFor === "gemini-quiet-model" && Date.now() - t0 < 3000, `${res.text} ${res.standInFor}`);
+  delete process.env.GEMINI_REPLY_TIMEOUT_MS;
+}
 delete process.env.GEMINI_FIRST_WORDS_TIMEOUT_MS;
 delete process.env.GEMINI_STALL_TIMEOUT_MS;
 
