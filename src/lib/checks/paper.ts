@@ -1,3 +1,4 @@
+import { wrongAlgebraSteps } from "@/lib/checks/algebra";
 import { checkArithmetic } from "@/lib/checks/arithmetic";
 import type { AnswerCheck } from "@/types/database";
 
@@ -125,12 +126,62 @@ export function withoutStudentWork(report: string): string {
  */
 export function checkTickedSteps(report: string): AnswerCheck[] {
   const ticked = report.split("\n").filter((line) => TICKED.test(line));
-  return checkArithmetic(ticked.map((line) => line.replace(TICKED, "")).join("\n")).map((c) =>
-    c.ok
-      ? c
-      : {
-          ...c,
-          message: `A step marked ✓ in the student's working is wrong: ${c.message}. Mark it ✗ as "Student wrote: …" exactly as written, take off marks for it, and correct the table, total and grade.`,
-        }
+  const markWrong = `Mark it ✗ as "Student wrote: …" exactly as written, take off marks for it, and correct the table, total and grade.`;
+  const sums = checkArithmetic(ticked.map((line) => line.replace(TICKED, "")).join("\n")).map((c) =>
+    c.ok ? c : { ...c, message: `A step marked ✓ in the student's working is wrong: ${c.message}. ${markWrong}` }
   );
+  // Algebra too ("9x² - 2(9x)(4y) + 4y²" written for (9x - 4y)²): each ticked step must equal the question it works on.
+  const algebra = questionSections(report).flatMap(({ label, question, lines }) =>
+    lines
+      .filter((line) => TICKED.test(line))
+      .flatMap((line) => wrongAlgebraSteps(`${question}, ${line.replace(TICKED, "")}`))
+      .map(({ step, shouldEqual }): AnswerCheck => ({
+        kind: "calculation",
+        ok: false,
+        message: `Question ${label}: a step marked ✓ in the student's working is wrong: ${step} is not equal to ${shouldEqual}. ${markWrong}`,
+      }))
+  );
+  return [...sums, ...algebra];
+}
+
+// A question's section of the report: its "## Question 3 — 4/5" heading up to the next one.
+const SECTION = /^#{2,3}\s*Question\s+(\S+?)\s*[—–-]/;
+const QUESTION_LINE = /^\s*\**Question:\**\s*(.+)$/i;
+const CORRECT_ANSWER = /^\s*\**Correct answer:\**\s*(.+)$/i;
+const CORRECT_STEP = /^\s*(?:[-*+•]\s*)?✔\s*Correct step:\s*(.+)$/i;
+
+/** Each question in a marking report: its label, the question as read, and the lines under it. */
+function questionSections(report: string): { label: string; question: string; lines: string[] }[] {
+  const sections: { label: string; question: string; lines: string[] }[] = [];
+  for (const line of report.split("\n")) {
+    const heading = SECTION.exec(line.trim());
+    if (heading) sections.push({ label: heading[1], question: "", lines: [] });
+    else if (sections.length > 0) {
+      const current = sections[sections.length - 1];
+      const question = QUESTION_LINE.exec(line);
+      if (question && !current.question) current.question = question[1].replace(/\s*\(question inferred\)\s*$/i, "");
+      current.lines.push(line);
+    }
+  }
+  return sections;
+}
+
+/**
+ * The teacher's own algebra: a question's correct answer, and each correct step given under a wrong one, must equal
+ * the question ("(5x - 3/(8y))²" is not "25x² - (15/4)xy + 9/(64y²)"). A wrong one is sent back to be corrected.
+ */
+export function checkTeacherAlgebra(report: string): AnswerCheck[] {
+  return questionSections(report).flatMap(({ label, question, lines }) => {
+    const given = lines.flatMap((line) => {
+      const answer = CORRECT_ANSWER.exec(line) ?? CORRECT_STEP.exec(line);
+      return answer ? [answer[1].replace(/^=\s*/, "").replace(/\*\*/g, "")] : [];
+    });
+    return given.flatMap((g) => wrongAlgebraSteps(`${question}, = ${g}`)).map(
+      ({ step, shouldEqual }): AnswerCheck => ({
+        kind: "calculation",
+        ok: false,
+        message: `Question ${label}: the correct answer or step given, ${step}, is not equal to ${shouldEqual}. Work it out again and correct it, and the marks if they depend on it.`,
+      })
+    );
+  });
 }

@@ -161,8 +161,9 @@ How to mark each question:
    Mark strictly, like a strict board examiner. Start from full marks and take off for every mistake:
    - Each step that is wrong or missing (a step the method needs, or that the working jumps over): −1 mark.
    - Each notation, unit or copying slip (a missing or wrong unit, "=" misused, a formula written wrongly, a
-     number copied wrongly from the question or an earlier line, a missing or misplaced decimal point): −½ mark,
-     even when the numbers that follow are right. Every slip counts, not only the first.
+     number copied wrongly from the question or an earlier line, a missing or misplaced decimal point, a bracket or
+     a square left off, as in 9x² written for (9x)² or 3²/(8y) for (3/(8y))²): −½ mark, even when the lines that
+     follow are right. Every slip counts, not only the first. Check every line you tick: it must equal the line before it.
    - A wrong final answer loses all the answer marks. A final answer without its unit loses ½ of them.
    - Follow-through: a wrong value carried into the very next step, and used correctly there, keeps that one
      step's method mark; no credit after that.

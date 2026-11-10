@@ -10,7 +10,8 @@ import { blockedReason, buildRequestBody, questionProblem, type Question } from 
 import { checkPages } from "@/lib/ingestion/upload-pages";
 import { parsePhotos } from "@/lib/generation/attachments";
 import { PAPER_REPORT } from "../fixtures/bhakti-exercise-pages";
-import { checkPaperMarks, checkTickedSteps, gradeFor, gradeScaleText, withoutStudentWork } from "@/lib/checks/paper";
+import { checkPaperMarks, checkTeacherAlgebra, checkTickedSteps, gradeFor, gradeScaleText, withoutStudentWork } from "@/lib/checks/paper";
+import { wrongAlgebraSteps } from "@/lib/checks/algebra";
 import { checkArithmetic } from "@/lib/checks/arithmetic";
 import { ANY_BOOK, effectiveFilter, filterOptions, matchingBooks } from "@/lib/book-filter";
 import { checkSamplePaper } from "@/lib/checks/rules";
@@ -822,6 +823,23 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
   check(caught.length === 1 && caught[0].message.includes("marked ✓") && caught[0].message.includes("105"), `Paper check: a ticked step with the decimal point left out (10½% = 105%) is sent back to be marked wrong (${caught.map((c) => c.message).join("; ")})`);
   check(checkTickedSteps(exact.replace("- ✓ ", "- ✗ Student wrote: ")).length === 0 && checkArithmetic(withoutStudentWork(exact)).every((c) => c.ok), "Paper check: once marked ✗, the student's slip is not counted against the teacher");
   check(checkArithmetic("10½ + 2¼ = 12¾").every((c) => c.ok) && checkArithmetic("3(1)/(4) = 3.25").every((c) => c.ok) && checkArithmetic("3(1)/(4) = 1.5").some((c) => !c.ok), "Arithmetic: mixed numbers (10½, 3(1)/(4)) are a whole number plus a fraction, not a product");
+  // Bug report 3: an algebra slip in a ticked step (9x² written for (9x)²) and a wrong model answer were not caught.
+  {
+    const section = (q: string, working: string, answer: string) =>
+      `## Question ${q} — 5/5\n**Question:** ${q === "2" ? "(9x - 4y)²" : "(5x - 3/(8y))²"}\n**Correct answer:** ${answer}\n**Student's working:**\n- ✓ ${working}\n**Marks:** Method 3/3, Answer 2/2.`;
+    const q2 = section("2", "(9x-4y)², we know that, (a-b)² = a² - 2ab + b², = 9x² - 2(9x)(4y) + 4y², = 81x² - 72xy + 16y²", "81x² - 72xy + 16y²");
+    const caught = checkTickedSteps(q2).filter((c) => !c.ok);
+    check(caught.length === 1 && caught[0].message.startsWith("Question 2: a step marked ✓") && caught[0].message.includes("9x² - 2(9x)(4y) + 4y²"), `Algebra: a ticked step with a square left off a bracket is sent back to be marked wrong (${caught.map((c) => c.message).join("; ")})`);
+    const right = section("2", "(9x-4y)², we know that, (a-b)² = a² - 2ab + b², = (9x)² - 2(9x)(4y) + (4y)², = 81x² - 72xy + 16y²", "81x² - 72xy + 16y²");
+    check(checkTickedSteps(right).every((c) => c.ok) && checkTeacherAlgebra(right).length === 0, "Algebra: the same working done right passes, and so does a right model answer");
+    const q4 = section("4", "(5x - 3/(8y))², we know that, (a-b)² = a² - 2ab + b²", "25x² - (15/4)xy + 9/(64y²)") + "\n- ✔ Correct step: = (5x)² - 2(5x)(3/(8y)) + (3/(8y))²";
+    const teacher = checkTeacherAlgebra(q4);
+    check(teacher.length === 1 && teacher[0].message.startsWith("Question 4: the correct answer or step given, 25x² - (15/4)xy + 9/(64y²)"), `Algebra: a wrong model answer ((15/4)xy for 15x/(4y)) is sent back, a right correct step is not (${teacher.map((c) => c.message).join("; ")})`);
+    check(checkTeacherAlgebra(q4.replace("(15/4)xy", "15x/(4y)")).length === 0, "Algebra: the right model answer for Q4 passes");
+    check(wrongAlgebraSteps("3x + 5 = x + 9, 2x = 4, x = 2").length === 0 && wrongAlgebraSteps("2x + 3 = 7, 2x = 4, x = 2").length === 0, "Algebra: equations being solved are left alone");
+    check(wrongAlgebraSteps("[1/4 p² - 2/5 q²]², [1/4 p²]² - 2(1/4 p²)(2/5 q²) + [2/5 q²]², = 1/16 p⁴ - 1/5 p²q² + 4/25 q⁴").length === 0 && wrongAlgebraSteps("(a + 0.9)(a - 0.17) = a² - 0.73a - 0.153").length === 1, "Algebra: fractions, square brackets and decimals are read; a sign error is caught");
+    check(wrongAlgebraSteps("Area = l × b, = 12 × 5 = 60").length === 0 && wrongAlgebraSteps("So, we know that, (x-5)² = x² - 10x + 25").length === 0, "Algebra: words and plain sums are not mistaken for algebra");
+  }
   // Solve's book filters: class, subject and chapter, however they were typed.
   {
     const shelf = [
