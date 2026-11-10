@@ -10,6 +10,7 @@ import { QuotaExceededError, checkQuota } from "@/lib/quota";
 import { uploadSourceFile } from "@/lib/storage";
 import { cleanText } from "@/lib/validate";
 import { withoutRepeats, type KnownEntry } from "@/lib/homework/duplicates";
+import { removeUnusedDiaryPages } from "@/lib/homework/pages";
 
 // Reading a few diary pages with the AI.
 export const maxDuration = 120;
@@ -119,7 +120,10 @@ export async function POST(request: Request) {
         : "No classwork or homework was found on these pages. Check it is the class diary, and that the photo is clear.";
       return NextResponse.json({ added: 0, skipped: 0, message });
     }
-    return NextResponse.json(await saveEntries(user.id, entries, folder));
+    const saved = await saveEntries(user.id, entries, folder);
+    // Pages no entry points to (this upload, if it added nothing new; an earlier one whose entries are all gone) are not kept.
+    await removeUnusedDiaryPages(user.id);
+    return NextResponse.json(saved);
   } catch (err) {
     return errorResponse(err, "homework upload", "Couldn't read the diary. Check the photo is clear and try again.");
   }

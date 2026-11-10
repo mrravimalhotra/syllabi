@@ -1199,6 +1199,21 @@ failures.length = 0;
     const kept = (tables.homework_entries ?? []).find((r) => r.id === original!.id) as { done?: boolean; star_given?: boolean } | undefined;
     check("homework: merged, one entry is left, and it takes the duplicate's tick and star", merged.json?.into === original!.id && !(tables.homework_entries ?? []).some((r) => r.id === dupId) && kept?.done === true && kept?.star_given === true, JSON.stringify(kept));
     await expect("homework: settling someone else's entry is a 404", homeworkEntry.PATCH, 404, null, { duplicate: "merge" }, { id: "55555555-5555-4555-8555-555555555555" });
+    // Stored diary pages no entry points to are removed: an old upload whose entries are gone, and one that added nothing.
+    {
+      const folderOf = (title: string) => (tables.homework_entries ?? []).find((r) => r.title === title)?.source_file as string;
+      const kept = folderOf("Sheet 2 and 3");
+      files.set(`homework/${ME}/old-upload/page-1.jpg`, { data: Buffer.from("x"), contentType: "image/jpeg" });
+      files.set(`homework/${OTHER}/theirs/page-1.jpg`, { data: Buffer.from("x"), contentType: "image/jpeg" });
+      fakeAi.reply = () => ({ text: JSON.stringify({ days: [firstDay] }) });
+      const repeat = await expect("homework: a diary that adds nothing new", homework.POST, 200, null, { fileName: "diary.pdf", pages: [page] });
+      const mine = [...files.keys()].filter((k) => k.startsWith(`homework/${ME}/`));
+      const inUse = new Set((tables.homework_entries ?? []).map((r) => r.source_file as string));
+      check("homework: pages no entry points to are removed (an old upload, and this one that added nothing); pages in use and other people's stay", repeat.json?.added === 0 && !mine.some((k) => k.includes("old-upload")) && mine.length > 0 && mine.every((k) => [...inUse].some((f) => k.startsWith(f))) && mine.some((k) => k.startsWith(kept)) && files.has(`homework/${OTHER}/theirs/page-1.jpg`), JSON.stringify(mine));
+      const lastOfUpload = (tables.homework_entries ?? []).filter((r) => r.source_file === kept);
+      for (const r of lastOfUpload) await call(homeworkEntry.DELETE, undefined, { id: r.id as string });
+      check("homework: when an upload's last entry is removed, its pages go too", lastOfUpload.length > 0 && ![...files.keys()].some((k) => k.startsWith(kept)));
+    }
     tables.homework_entries = earlier;
     fakeAi.reply = () => ({ text: JSON.stringify(diary) });
   }

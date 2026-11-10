@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { apiError, authenticate, errorResponse } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isUuid } from "@/lib/validate";
+import { removeUnusedDiaryPages } from "@/lib/homework/pages";
 
 const GONE = "That entry no longer exists. Reload the page.";
 type Params = { params: Promise<{ id: string }> };
@@ -66,6 +67,7 @@ async function settleDuplicate(id: string, ownerId: string, how: "merge" | "keep
   }
   const { error: removeError } = await admin.from("homework_entries").delete().eq("id", id).eq("owner_id", ownerId);
   if (removeError) return errorResponse(removeError, "homework duplicate", SAVE_FAILED);
+  await removeUnusedDiaryPages(ownerId);
   return NextResponse.json({ merged: id, into: entry.duplicate_of, done: entry.done });
 }
 
@@ -78,5 +80,7 @@ export async function DELETE(_request: Request, { params }: Params) {
   const { data, error } = await createAdminClient().from("homework_entries").delete().eq("id", id).eq("owner_id", auth.account.id).select("id");
   if (error) return errorResponse(error, "homework DELETE", "Couldn't remove that. Try again in a moment.");
   if (!data?.length) return apiError(404, GONE);
+  // The last entry of a diary upload gone: its stored pages go too.
+  await removeUnusedDiaryPages(auth.account.id);
   return NextResponse.json({ ok: true });
 }
