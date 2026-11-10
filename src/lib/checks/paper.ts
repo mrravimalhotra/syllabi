@@ -144,6 +144,56 @@ export function checkTickedSteps(report: string): AnswerCheck[] {
   return [...sums, ...algebra];
 }
 
+// A mixed number as questions are copied: 5(1/4), 5(1)/(4), 5 1/4 (a proper fraction after a whole number).
+const MIXED = String.raw`(?<![\d./(])(\d+)\s*(?:\(\s*(\d+)\s*\/\s*(\d+)\s*\)|\((\d+)\)\s*\/\s*\((\d+)\)|\s(\d+)\s*\/\s*(\d+))(?![\d/])`;
+// What it is said to equal: 21/4, (21)/(4), 5.25, 1.25.
+const VALUE = String.raw`\(?(\d+(?:\.\d+)?)\)?(?:\s*\/\s*\(?(\d+)\)?)?`;
+const close = (a: number, b: number) => Math.abs(a - b) < 1e-6;
+/** The whole number, numerator and denominator of a MIXED match, whichever way it was written. */
+const mixedParts = (m: RegExpMatchArray) => ({ whole: Number(m[1]), num: Number(m[2] ?? m[4] ?? m[6]), den: Number(m[3] ?? m[5] ?? m[7]) });
+
+/** The mixed numbers a question has, as "5 1/4". */
+function mixedNumbersIn(question: string): Set<string> {
+  const found = new Set<string>();
+  for (const m of question.matchAll(new RegExp(MIXED, "g"))) {
+    const { whole, num, den } = mixedParts(m);
+    if (num < den) found.add(`${whole} ${num}/${den}`);
+  }
+  return found;
+}
+
+/**
+ * Mixed numbers in a question ("at 5(1/4)% for 3(1/2) years") are a whole number plus a fraction (5.25), never a
+ * multiplication (1.25). Where the teacher's own line turns one into the product, it is sent back; so is a student's
+ * step marked ✗ that turns it into the right value ("5 1/4 = 21/4").
+ */
+export function checkMixedNumbers(report: string): AnswerCheck[] {
+  return questionSections(report).flatMap(({ label, lines }): AnswerCheck[] => {
+    const question = lines.map((l) => QUESTION_LINE.exec(l)?.[1]).find(Boolean) ?? "";
+    const inQuestion = mixedNumbersIn(question);
+    if (inQuestion.size === 0) return [];
+    const found = new Map<string, AnswerCheck>();
+    for (const line of lines) {
+      if (QUESTION_LINE.test(line)) continue;
+      const students = /✗|Student wrote/i.test(line);
+      for (const m of line.matchAll(new RegExp(`${MIXED}\\s*%?\\s*=\\s*${VALUE}`, "g"))) {
+        const { whole, num, den } = mixedParts(m);
+        const name = `${whole} ${num}/${den}`;
+        if (!inQuestion.has(name)) continue;
+        const value = Number(m[8]) / (m[9] ? Number(m[9]) : 1);
+        const [mixed, product] = [whole + num / den, (whole * num) / den];
+        const is = `${name} in the question is a mixed number, ${whole} + ${num}/${den} = ${fmt(mixed)}, not ${whole} × ${num}/${den}`;
+        if (students && close(value, mixed)) {
+          found.set(`s${name}`, { kind: "marks", ok: false, message: `Question ${label}: a step marked ✗ is right: ${is}, as the student wrote. Put it on the ✓ line, give its marks back, mark the rest of the working from there, and correct the table, total and grade.` });
+        } else if (!students && close(value, product) && !close(product, mixed)) {
+          found.set(`t${name}`, { kind: "calculation", ok: false, message: `Question ${label}: ${is}. Work the question out again with ${fmt(mixed)}, mark the student's working against that, and correct the marks, table, total and grade.` });
+        }
+      }
+    }
+    return [...found.values()];
+  });
+}
+
 // A question's section of the report: its "## Question 3 — 4/5" heading up to the next one.
 const SECTION = /^#{2,3}\s*Question\s+(\S+?)\s*[—–-]/;
 const QUESTION_LINE = /^\s*\**Question:\**\s*(.+)$/i;

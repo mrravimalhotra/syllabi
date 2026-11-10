@@ -10,7 +10,7 @@ import { blockedReason, buildRequestBody, questionProblem, type Question } from 
 import { checkPages } from "@/lib/ingestion/upload-pages";
 import { parsePhotos } from "@/lib/generation/attachments";
 import { PAPER_REPORT } from "../fixtures/bhakti-exercise-pages";
-import { checkPaperMarks, checkRightAnswerMarks, checkTeacherAlgebra, checkTickedSteps, checkWronglyMarked, gradeFor, gradeScaleText, withoutStudentWork } from "@/lib/checks/paper";
+import { checkMixedNumbers, checkPaperMarks, checkRightAnswerMarks, checkTeacherAlgebra, checkTickedSteps, checkWronglyMarked, gradeFor, gradeScaleText, withoutStudentWork } from "@/lib/checks/paper";
 import { wrongAlgebraSteps } from "@/lib/checks/algebra";
 import { checkArithmetic } from "@/lib/checks/arithmetic";
 import { ANY_BOOK, effectiveFilter, filterOptions, matchingBooks } from "@/lib/book-filter";
@@ -872,6 +872,16 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
     const answerMarks = checkRightAnswerMarks(report).map((c) => c.message);
     check(answerMarks.length === 2 && answerMarks.every((m) => /marked right \(✓\) but gets 1 of its 2 answer marks/.test(m)), `Marking: a right answer losing answer marks is sent back, a wrong one is not (${answerMarks.join(" | ")})`);
     check(checkRightAnswerMarks(report.replace(/Answer 1\/2/g, "Answer 2/2")).length === 0 && checkWronglyMarked(report.replace(/- ✗ Student wrote: (=|Ans =) (\(p²\)|\(50\)|2491)[^\n]*\n/g, "")).length === 0, "Marking: a fair report raises nothing");
+  }
+  // Bug report 5: 5(1/4)% in the question was worked as 5 × 1/4 = 1.25, and the student's right 21/4 marked wrong.
+  {
+    const q5 = (lines: string[]) =>
+      ["## Question 5 — 0/5", "**Question:** ₹ 8,000 is invested at 5(1/4)% per annum simple interest for 3(1/2) years. Find the interest and final amount.", "**Correct answer:** Simple Interest = ₹ 1,470, Amount = ₹ 9,470", "**Student's working:**", "- ✓ Principal = 8000", ...lines, "**Marks:** Method 0/3, Answer 0/2."].join("\n");
+    const bad = checkMixedNumbers(q5(["- ✗ Student wrote: Rate of interest = 5 1/4 = 21/4 (−1 mark)", "- ✔ Correct step: Rate of interest = 5(1/4) = 1.25", "- ✗ Student wrote: Time = 3 1/2 = 7/2 = 3.5 (−1 mark)", "- ✔ Correct step: Time = 3(1/2) = 1.5"])).map((c) => c.message);
+    check(bad.length === 4 && bad.filter((m) => m.includes("a step marked ✗ is right")).length === 2 && bad.some((m) => m.includes("5 + 1/4 = 5.25, not 5 × 1/4")) && bad.some((m) => m.includes("3 + 1/2 = 3.5")), `Mixed numbers: the teacher's 5(1/4) = 1.25 and the student's right 21/4 marked ✗ are both sent back (${bad.join(" | ")})`);
+    check(checkMixedNumbers(q5(["- ✓ Rate of interest = 5 1/4 = 21/4, Time = 3 1/2 = 7/2 = 3.5"])).length === 0 && checkMixedNumbers(q5(["- ✗ Student wrote: Rate = 5 1/4 = 1.25 (−1 mark)", "- ✔ Correct step: Rate = 5 1/4 = 21/4"])).length === 0, "Mixed numbers: read right, nothing is raised; a student's real mistake stays ✗");
+    check(checkMixedNumbers("## Question 1 — 5/5\n**Question:** Multiply 6 by 3.\n- ✔ Correct step: 2(1/2) = 1").length === 0, "Mixed numbers: only numbers that are in the question are judged");
+    check(checkArithmetic("Rate = 5(1/4) = 21/4").every((c) => c.ok) && checkArithmetic("5(1/4) = 5.25").every((c) => c.ok) && checkArithmetic("2(1/2) = 1").every((c) => c.ok) && checkArithmetic("5(1/4) = 3").some((c) => !c.ok), "Arithmetic: 5(1/4) is right as a mixed number or as a product, wrong as neither");
   }
   // Solve's book filters: class, subject and chapter, however they were typed.
   {

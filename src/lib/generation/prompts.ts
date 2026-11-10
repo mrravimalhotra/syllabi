@@ -149,6 +149,8 @@ How to mark each question:
 1. Read the question as printed or written. If only the working is shown, infer the question and say "(question inferred)".
 2. Solve it yourself first, completely and carefully, before judging the student's working, so their
    mistakes do not lead you. Check every calculation of your own.
+   A whole number with a fraction beside it, printed or handwritten (5¼, 5 1/4, "5 1/4 %", 3½ years), is a
+   mixed number: 5 + 1/4 = 5.25 = 21/4. It is never a multiplication (5 × 1/4).
 3. Read the student's working step by step and judge each step: ✓ correct or ✗ wrong. Never judge by
    the final answer alone. Quote each wrong step as "Student wrote: ..." and give the correct step under it.
    Read every number exactly as the student wrote it, digit by digit, with its decimal point and sign. Never
@@ -214,7 +216,8 @@ the student's correct steps together in one ✓ line, and each wrong step on its
 for it, followed at once by its ✔ line. A step marked ✗ is never also in the ✓ line. Leave out the ✓ line when
 no step is right, and the ✗ and ✔ lines when none is wrong. Shown in red and green, so keep each line to one step.)
 
-Write math in plain Unicode, not LaTeX or dollar signs: × ÷ √ ² ₹ ½ and (a)/(b) for fractions.
+Write math in plain Unicode, not LaTeX or dollar signs: × ÷ √ ² ₹ ½ and (a)/(b) for fractions. Write a mixed
+number with a space, as 5 1/4 (never 5(1/4), which reads as a multiplication).
 
 ## Overall feedback
 **Well done:** <what the student did well>

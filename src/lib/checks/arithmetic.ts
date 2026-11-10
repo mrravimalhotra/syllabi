@@ -174,6 +174,9 @@ function checkChainedNumbers(tail: string, head: string): AnswerCheck | null {
   return { kind: "calculation", ok: false, message: `${tail.trim()} = ${head.trim()} is not right: they are different numbers` };
 }
 
+const MIXED_IN_BRACKETS = /(?<![\d.)])\d+\(\d+\/\d+\)/;
+const asMixed = (expression: string) => expression.replace(/(?<![\d.)])(\d+)\((\d+)\/(\d+)\)/g, "($1+$2/$3)");
+
 /** Checks one "left = right" pair; null when it isn't a plain calculation. */
 function checkPair(left: string, right: string, inChain: boolean): AnswerCheck | null {
   const ratio = checkRatio(left, right);
@@ -197,6 +200,12 @@ function checkPair(left: string, right: string, inChain: boolean): AnswerCheck |
     ? agrees(leftValue, head.trim(), rightValue)
     : agrees(rightValue, tail.trim(), leftValue) || Math.abs(leftValue - rightValue) < 1e-9;
   const shown = `${pretty(tail)} = ${pretty(head)}`;
+  // "5(1/4)" can be the mixed number 5¼ or 5 × ¼: a sum that is right under the mixed reading is right
+  // ("5(1/4) = 21/4"). Which reading a paper's question means is checked there (lib/checks/paper.ts).
+  if (!ok && (MIXED_IN_BRACKETS.test(tail) || MIXED_IN_BRACKETS.test(head))) {
+    const [a, b] = [numeric(asMixed(tail)), numeric(asMixed(head))];
+    if (a !== null && b !== null && (agrees(a, head.trim(), b) || Math.abs(a - b) < 1e-9)) return { kind: "calculation", ok: true, message: shown };
+  }
   return {
     kind: "calculation",
     ok,

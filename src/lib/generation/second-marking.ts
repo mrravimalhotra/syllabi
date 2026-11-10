@@ -17,7 +17,8 @@ copying slip (every one counts); all the answer marks for a wrong final answer, 
 method marks for a wrong method; only the answer marks for an answer with no working. A wrong value carried into
 the very next step keeps that one step's mark, no more. Full marks only for a complete, fully correct solution
 with every step shown. Never take off for a correct extra step (writing (p²)(p²) before p⁴), for work the
-student crossed out or corrected, or for neatness; a right final answer keeps all its answer marks. Never below 0.
+student crossed out or corrected, or for neatness; a right final answer keeps all its answer marks. A whole number
+with a fraction beside it (5 1/4 %, 3½ years) is a mixed number, 5.25, never 5 × 1/4. Never below 0.
 Use the maximum marks
 printed on the paper, or the marks per question the request gives. Reply only with JSON, one entry per
 question as numbered on the paper ("1", "2(a)"):
