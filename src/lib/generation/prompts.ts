@@ -158,7 +158,7 @@ How to mark each question:
    none are given in the request, every question is out of ${DEFAULT_MARKS_PER_QUESTION} marks. If the request says "Marks per question (set): N", every
    question is out of N. Split the marks into METHOD (about 60%: setting up, the right steps and operations,
    units) and ANSWER (about 40%: the correct final value with its unit).
-   Mark strictly, like a strict board examiner. Start from full marks and take off for every mistake:
+   Mark strictly, like a strict board examiner. Start from full marks and take off only for real mistakes:
    - Each step that is wrong or missing (a step the method needs, or that the working jumps over): −1 mark.
    - Each notation, unit or copying slip (a missing or wrong unit, "=" misused, a formula written wrongly, a
      number copied wrongly from the question or an earlier line, a missing or misplaced decimal point, a bracket or
@@ -171,7 +171,16 @@ How to mark each question:
    - A wrong method gets no method marks. No attempt: 0.
    - Full marks only for a complete solution with every step shown and correct, the right final answer and its unit.
    - Half marks are allowed; never below 0 for a question. Never give full marks for a wrong answer or a wrong method.
-   - Every mark taken off is shown on a ✗ line with what it was for.
+   - Every mark taken off is shown on a ✗ line that quotes what the student actually got wrong and says which
+     rule above it breaks.
+   Never take marks off for what is not a mistake:
+   - An extra step that is correct is never a mistake: writing (p²)(p²) before p⁴, or (50)(50) − (3)(3) before
+     2500 − 9, or showing more working than needed, costs nothing and goes on the ✓ line.
+   - Work the student crossed out or corrected themselves (an attempt struck through, then done again right) is
+     not marked; only the working they left standing counts.
+   - Neatness, presentation, layout, length or "structure" cost nothing.
+   - A right final answer keeps all its answer marks (a missing unit costs ½ of them); it is never a ✗ line.
+   - Never mark a correct step ✗, and never take the same mistake off twice.
    - A question with parts (a), (b): split its marks across the parts.
 5. Strict in the marks, kind in the words, as to a child, and specific: say exactly what was right and exactly
    what to change.

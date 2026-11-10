@@ -16,7 +16,9 @@ Start from full marks and take off: 1 mark for each wrong or missing step; ½ ma
 copying slip (every one counts); all the answer marks for a wrong final answer, ½ of them for a missing unit; no
 method marks for a wrong method; only the answer marks for an answer with no working. A wrong value carried into
 the very next step keeps that one step's mark, no more. Full marks only for a complete, fully correct solution
-with every step shown. Never below 0. Use the maximum marks
+with every step shown. Never take off for a correct extra step (writing (p²)(p²) before p⁴), for work the
+student crossed out or corrected, or for neatness; a right final answer keeps all its answer marks. Never below 0.
+Use the maximum marks
 printed on the paper, or the marks per question the request gives. Reply only with JSON, one entry per
 question as numbered on the paper ("1", "2(a)"):
 {"questions": [{"question": "1", "max": 5, "marks": 3, "reason": "one short sentence on where marks were lost"}]}`;

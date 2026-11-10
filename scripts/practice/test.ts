@@ -10,7 +10,7 @@ import { blockedReason, buildRequestBody, questionProblem, type Question } from 
 import { checkPages } from "@/lib/ingestion/upload-pages";
 import { parsePhotos } from "@/lib/generation/attachments";
 import { PAPER_REPORT } from "../fixtures/bhakti-exercise-pages";
-import { checkPaperMarks, checkTeacherAlgebra, checkTickedSteps, gradeFor, gradeScaleText, withoutStudentWork } from "@/lib/checks/paper";
+import { checkPaperMarks, checkRightAnswerMarks, checkTeacherAlgebra, checkTickedSteps, checkWronglyMarked, gradeFor, gradeScaleText, withoutStudentWork } from "@/lib/checks/paper";
 import { wrongAlgebraSteps } from "@/lib/checks/algebra";
 import { checkArithmetic } from "@/lib/checks/arithmetic";
 import { ANY_BOOK, effectiveFilter, filterOptions, matchingBooks } from "@/lib/book-filter";
@@ -839,6 +839,39 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
     check(wrongAlgebraSteps("3x + 5 = x + 9, 2x = 4, x = 2").length === 0 && wrongAlgebraSteps("2x + 3 = 7, 2x = 4, x = 2").length === 0, "Algebra: equations being solved are left alone");
     check(wrongAlgebraSteps("[1/4 p² - 2/5 q²]², [1/4 p²]² - 2(1/4 p²)(2/5 q²) + [2/5 q²]², = 1/16 p⁴ - 1/5 p²q² + 4/25 q⁴").length === 0 && wrongAlgebraSteps("(a + 0.9)(a - 0.17) = a² - 0.73a - 0.153").length === 1, "Algebra: fractions, square brackets and decimals are read; a sign error is caught");
     check(wrongAlgebraSteps("Area = l × b, = 12 × 5 = 60").length === 0 && wrongAlgebraSteps("So, we know that, (x-5)² = x² - 10x + 25").length === 0, "Algebra: words and plain sums are not mistaken for algebra");
+  }
+  // Bug report 4: correct extra steps and right answers lost marks.
+  {
+    const report = [
+      "| Q | Max | Marks | Steps | Answer |",
+      "|---|---|---|---|---|",
+      "| 1(i) | 5 | 2 | ~ | ✓ |",
+      "| 1(iii) | 5 | 2 | ~ | ✓ |",
+      "| 2 | 5 | 4 | ~ | ✗ |",
+      "## Question 1(i) — 2/5",
+      "**Question:** Evaluate using the identity (a + b)(a - b) = a² - b²: (p² + q²)(p² - q²)",
+      "**Correct answer:** p⁴ - q⁴",
+      "**Student's working:**",
+      "- ✓ we know that (a + b)(a - b) = a² - b², so, (p² + q²)(p² - q²) = (p²)² - (q²)²",
+      "- ✗ Student wrote: = (p²)(p²) - (q²)(q²) (−1 mark for unnecessary redundant expansion step)",
+      "- ✔ Correct step: = p⁴ - q⁴",
+      "**Marks:** Method 1/3, Answer 1/2.",
+      "## Question 1(iii) — 2/5",
+      "**Question:** Evaluate using the identity (a + b)(a - b) = a² - b²: 53 × 47",
+      "**Correct answer:** 2491",
+      "- ✗ Student wrote: = (50)(50) - (3)(3) (−1 mark for redundant step)",
+      "- ✗ Student wrote: Ans = 2491 with method deductions (−2 marks)",
+      "**Marks:** Method 1/3, Answer 1/2.",
+      "## Question 2 — 4/5",
+      "**Question:** Simplify: (a + x)(a - x)",
+      "- ✗ Student wrote: = a² + x² (−1 mark for a sign error)",
+      "**Marks:** Method 3/3, Answer 1/2.",
+    ].join("\n");
+    const back = checkWronglyMarked(report).map((c) => c.message);
+    check(back.length === 2 && back[0].startsWith("Question 1(i): a step marked ✗ is right: (p²)(p²) - (q²)(q²)") && back[1].startsWith("Question 1(iii): a step marked ✗ is right: (50)(50) - (3)(3)"), `Marking: correct extra steps marked ✗ are sent back; a real sign error stays ✗ (${back.join(" | ")})`);
+    const answerMarks = checkRightAnswerMarks(report).map((c) => c.message);
+    check(answerMarks.length === 2 && answerMarks.every((m) => /marked right \(✓\) but gets 1 of its 2 answer marks/.test(m)), `Marking: a right answer losing answer marks is sent back, a wrong one is not (${answerMarks.join(" | ")})`);
+    check(checkRightAnswerMarks(report.replace(/Answer 1\/2/g, "Answer 2/2")).length === 0 && checkWronglyMarked(report.replace(/- ✗ Student wrote: (=|Ans =) (\(p²\)|\(50\)|2491)[^\n]*\n/g, "")).length === 0, "Marking: a fair report raises nothing");
   }
   // Solve's book filters: class, subject and chapter, however they were typed.
   {

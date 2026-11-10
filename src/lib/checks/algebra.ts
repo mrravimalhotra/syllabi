@@ -50,9 +50,9 @@ function toAscii(text: string): string | null {
   return s;
 }
 
-function expression(text: string): Expression | null {
+function expression(text: string, numbersToo = false): Expression | null {
   const ascii = toAscii(text);
-  if (!ascii || !/[a-zA-Z]/.test(ascii)) return null;
+  if (!ascii || (!numbersToo && !/[a-zA-Z]/.test(ascii))) return null;
   try {
     const compiled = parse(ascii).compile();
     const letters = [...new Set(ascii.match(/[a-zA-Z]/g) ?? [])].sort().join("");
@@ -97,7 +97,7 @@ export function wrongAlgebraSteps(line: string): { step: string; shouldEqual: st
     const parts = (continues ? piece.slice(1) : piece).split("=").map((p) => p.trim()).filter(Boolean);
     // "2x = 4", "x = 2": an equation is being solved, so its sides were never meant to stay equal.
     if (parts.length > 1 && parts.some((p) => /[a-zA-Z]/.test(p)) && parts.some((p) => /^[-\d.\s()/]+$/.test(p))) return [];
-    const exprs = parts.map(expression);
+    const exprs = parts.map((p) => expression(p));
     // Words or something unreadable: this piece is not checked, and the working after it starts afresh.
     if (exprs.some((e) => e === null)) {
       runs.push([]);
@@ -127,4 +127,20 @@ export function wrongAlgebraSteps(line: string): { step: string; shouldEqual: st
     if (equal(start, e) === false) wrong.push({ step: e.shown, shouldEqual: start.shown });
   }
   return wrong;
+}
+
+/**
+ * Whether a step has the same value as the question it works on ("(50)(50) - (3)(3)" and "53 × 47",
+ * "(p²)(p²) - (q²)(q²)" and "(p² + q²)(p² - q²)"): true or false, or null when either isn't plain maths or they use
+ * different letters.
+ */
+export function sameValue(step: string, question: string): boolean | null {
+  const a = expression(question, true);
+  const b = expression(step, true);
+  if (!a || !b || a.letters !== b.letters) return null;
+  if (!a.letters) {
+    const [x, y] = [a.value({}), b.value({})];
+    return Number.isFinite(x) && Number.isFinite(y) ? Math.abs(x - y) <= 1e-9 * Math.max(1, Math.abs(x)) : null;
+  }
+  return equal(a, b);
 }

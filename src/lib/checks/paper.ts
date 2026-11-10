@@ -1,4 +1,4 @@
-import { wrongAlgebraSteps } from "@/lib/checks/algebra";
+import { sameValue, wrongAlgebraSteps } from "@/lib/checks/algebra";
 import { checkArithmetic } from "@/lib/checks/arithmetic";
 import type { AnswerCheck } from "@/types/database";
 
@@ -159,7 +159,8 @@ function questionSections(report: string): { label: string; question: string; li
     else if (sections.length > 0) {
       const current = sections[sections.length - 1];
       const question = QUESTION_LINE.exec(line);
-      if (question && !current.question) current.question = question[1].replace(/\s*\(question inferred\)\s*$/i, "");
+      // The maths of the question: after its instruction ("Evaluate using the identity ...: (p² + q²)(p² - q²)").
+      if (question && !current.question) current.question = question[1].replace(/\s*\(question inferred\)\s*$/i, "").split(/:\s+/).pop()!.trim();
       current.lines.push(line);
     }
   }
@@ -183,5 +184,57 @@ export function checkTeacherAlgebra(report: string): AnswerCheck[] {
         message: `Question ${label}: the correct answer or step given, ${step}, is not equal to ${shouldEqual}. Work it out again and correct it, and the marks if they depend on it.`,
       })
     );
+  });
+}
+
+// A step marked wrong: "✗ Student wrote: = (p²)(p²) - (q²)(q²) (−1 mark for ...)", the step without its comment.
+const MARKED_WRONG = /^\s*(?:[-*+•]\s*)?✗\s*Student wrote:\s*(.+?)\s*(?:\((?:−|-)\s*[\d½.]+\s*marks?\b.*\)|→.*)?\s*$/;
+
+/**
+ * Steps marked ✗ that are in fact right: the step has the same value as the question ("(50)(50) - (3)(3)" for 53 × 47,
+ * a correct extra step, or the right final answer). They are sent back to be marked ✓ with their marks given back.
+ */
+export function checkWronglyMarked(report: string): AnswerCheck[] {
+  return questionSections(report).flatMap(({ label, question, lines }) =>
+    lines.flatMap((line): AnswerCheck[] => {
+      const quoted = MARKED_WRONG.exec(line)?.[1];
+      // The value the step ends with: "Ans = 2491" is 2491, "= p⁴ - q⁴" is p⁴ - q⁴.
+      const step = quoted?.split("=").pop()?.trim();
+      if (!step || !question || sameValue(step, question) !== true) return [];
+      return [
+        {
+          kind: "marks",
+          ok: false,
+          message: `Question ${label}: a step marked ✗ is right: ${step} equals ${question}. A correct step, even an extra one, or a right answer loses no marks: put it on the ✓ line, give its marks back, and correct the table, total and grade.`,
+        },
+      ];
+    })
+  );
+}
+
+const MARKS_LINE = /Answer\s+([\d.]+½?|½)\s*\/\s*([\d.]+)/i;
+const mark = (text: string) => (text === "½" ? 0.5 : Number(text.replace("½", "")) + (text.endsWith("½") ? 0.5 : 0));
+
+/** A question whose answer is marked right (✓ in the table) but loses answer marks (other than for a missing unit). */
+export function checkRightAnswerMarks(report: string): AnswerCheck[] {
+  const answerRight = new Map<string, boolean>();
+  for (const line of report.split("\n")) {
+    if (!line.trim().startsWith("|")) continue;
+    const cells = line.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.replace(/\*/g, "").trim());
+    if (cells.length >= 5 && /\d/.test(cells[1])) answerRight.set(cells[0].replace(/^Q\.?\s*/i, ""), cells[4] === "✓");
+  }
+  return questionSections(report).flatMap(({ label, lines }): AnswerCheck[] => {
+    const text = lines.join("\n");
+    const marks = MARKS_LINE.exec(text);
+    if (!answerRight.get(label) || !marks || /\bunit/i.test(text)) return [];
+    const [got, out] = [mark(marks[1]), mark(marks[2])];
+    if (!(got < out)) return [];
+    return [
+      {
+        kind: "marks",
+        ok: false,
+        message: `Question ${label}: the answer is marked right (✓) but gets ${fmt(got)} of its ${fmt(out)} answer marks. A right final answer keeps all its answer marks (only a missing unit costs some): give them back and correct the table, total and grade.`,
+      },
+    ];
   });
 }
