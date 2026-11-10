@@ -217,6 +217,12 @@ export function useGeneration(onFinished: () => void) {
     isBusy: () => busyRef.current,
     stop: () => abortRef.current?.abort(),
     clear,
+    /** Shows an answer made elsewhere (the parts of "Solve all exercise questions" put together). */
+    show: (answer: GenerationResult) => {
+      clear();
+      setResult(answer);
+      onFinished();
+    },
     send,
     resend,
     showWorked,

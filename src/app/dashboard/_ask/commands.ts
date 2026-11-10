@@ -36,6 +36,11 @@ export const COMMANDS: Record<GenerationTaskType, QuickCommand[]> = {
   paper_check: [],
 };
 
+/** Whether a question is the "Solve all exercise questions" command as it stands (unedited, nothing attached): it is then solved a few pages at a time. */
+export function isSolveAll(task: GenerationTaskType, prompt: string, attached: number): boolean {
+  return task === "solution" && attached === 0 && prompt.trim() === COMMANDS.solution[0].prompt;
+}
+
 /** Ids of the ready books that are of one of these kinds. */
 export function booksOfKinds(books: Book[], kinds: SourceType[]): string[] {
   return books.filter((b) => kinds.includes(b.source_type)).map((b) => b.id);

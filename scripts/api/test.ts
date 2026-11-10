@@ -1,6 +1,8 @@
 // Route tests: calls the real route handlers with a fake database and a fake
 // signed-in person, and checks status codes and messages for signed-out,
 // not-allowed, bad input, over-allowance and not-found cases.
+import * as solveAllParts from "../../src/app/api/generate/solution/parts/route";
+import * as combine from "../../src/app/api/documents/combine/route";
 import { ContentBody } from "@/lib/pdf/render";
 import { session } from "./fakes/auth";
 import { deleted, files, storageState } from "./fakes/storage";
@@ -316,6 +318,37 @@ await new Promise((r) => setTimeout(r, 50));
   // Report 2: in the PDF too, the step that lost marks is red and the correct step under it green; other lines keep their colour.
   const pdfSteps = JSON.stringify(ContentBody({ text: "**Student's working:**\n- ✓ 3/4 = 9/12\n- ✗ Student wrote: 2/3 = 6/12 (−1)\n- ✔ Correct step: 2/3 = 8/12" }));
   check("PDF: a wrong step is red and its correct step green, nothing else is coloured", (pdfSteps.match(/"color":"#b91c1c"/g) ?? []).length === 1 && (pdfSteps.match(/"color":"#047857"/g) ?? []).length === 1 && (pdfSteps.match(/"color":/g) ?? []).length === 2);
+}
+
+// ---- "Solve all exercise questions", a few pages at a time ----
+{
+  fresh(person({ role: "student" }));
+  const B1 = "66666666-6666-4666-8666-666666666661";
+  tables.documents = [{ id: B1, owner_id: ME, title: "History Unit 1", created_at: "2026-01-01" }, { id: "66666666-6666-4666-8666-666666666662", owner_id: OTHER, title: "Theirs", created_at: "2026-01-02" }];
+  tables.chunks = [1, 2, 11, 12, 13, 14].map((n, i) => ({ owner_id: ME, document_id: B1, page_number: n, chunk_index: i, source_type: "textbook", content: n > 10 ? "1. Who was Kabir?\n2. Why did saints sing?" : "The Bhakti movement began in the south." }));
+  await expect("solve all: needs a book", solveAllParts.POST, 400, /book/i, { documentIds: [] });
+  const listed = await expect("solve all: the parts of the chosen books are listed", solveAllParts.POST, 200, null, { documentIds: [B1, "66666666-6666-4666-8666-666666666662"] });
+  const labels = ((listed.json?.parts ?? []) as { label: string; prompt: string }[]).map((p) => p.label).join(" | ");
+  check("solve all: the pages with questions, a few at a time; someone else's book is left out", labels === "History Unit 1: pages 11 to 13 | History Unit 1: page 14", labels);
+
+  const part = (id: string, content: string, extra: Record<string, unknown> = {}) => ({ id, student_id: ME, task_type: "solution", title: "part", content, sources: [{ id: `s-${id}` }, { id: "shared" }], used_search_grounding: false, search_suggestions_html: null, checks: [{ kind: "calculation", ok: true, message: "2 + 2 = 4" }], confidence: { correct: 90, fromBook: 80, reasons: [] }, created_at: "2026-11-10", ...extra });
+  const [P1, P2, P3, THEIRS] = ["77777777-7777-4777-8777-777777777771", "77777777-7777-4777-8777-777777777772", "77777777-7777-4777-8777-777777777773", "77777777-7777-4777-8777-777777777774"];
+  tables.generated_documents = [
+    part(P1, "**Q1.** Kabir was a saint."),
+    part(P2, "No questions on these pages."),
+    part(P3, "**Q2.** They sang for the people.", { checks: [{ kind: "review", ok: false, message: "May be wrong: Q2" }], confidence: { correct: 60, fromBook: 70, reasons: [] } }),
+    { ...part(THEIRS, "Not mine"), student_id: OTHER },
+  ];
+  await expect("combine: needs parts", combine.POST, 400, /nothing to put together/i, { parts: [] });
+  const whole = await expect("combine: the parts become one saved answer", combine.POST, 200, null, { title: "All exercise questions: History Unit 1", parts: [{ id: P3, label: "History Unit 1: page 14" }, { id: P1, label: "History Unit 1: pages 11 to 13" }, { id: P2, label: "empty" }, { id: THEIRS, label: "theirs" }] });
+  const text = String(whole.json?.text ?? "");
+  check("combine: each part under its heading, in the order given; empty parts and other people's answers left out", text.indexOf("## History Unit 1: page 14") === 0 && text.indexOf("## History Unit 1: pages 11 to 13") > text.indexOf("They sang") && !text.includes("No questions") && !text.includes("Not mine"), text);
+  check("combine: sources once each, a problem named with its part, the least sure part's confidence, not marked as reused", (whole.json?.sources as unknown[]).length === 3 && (whole.json?.checks as { message: string }[]).some((c) => c.message === "History Unit 1: page 14: May be wrong: Q2") && (whole.json?.confidence as { correct: number }).correct === 60 && !whole.json?.reusedFrom && /\/pdf$/.test(String(whole.json?.pdfUrl)), JSON.stringify([whole.json?.sources, whole.json?.checks, whole.json?.confidence]));
+  const left = (tables.generated_documents ?? []).map((d) => d.title).sort().join();
+  check("combine: the parts are gone from My Documents, the whole answer and other people's are there", left === "All exercise questions: History Unit 1,part" && (tables.generated_documents ?? []).some((d) => d.id === THEIRS), left);
+  tables.generated_documents = [part(P2, "No questions on these pages.")];
+  await expect("combine: only empty parts is explained", combine.POST, 400, /No questions were found/i, { parts: [{ id: P2, label: "x" }] });
+  tables.chunks = [];
 }
 
 // ---- The request gate (middleware): who may open which address ----

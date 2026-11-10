@@ -17,6 +17,7 @@ import type { AnswerCheck, GenerationTaskType, MatchedChunk, Student } from "@/t
 import { checkArithmetic } from "@/lib/checks/arithmetic";
 import { checkMixedNumbers, checkPaperMarks, checkRightAnswerMarks, checkTeacherAlgebra, checkTickedSteps, checkWronglyMarked, withoutStudentWork } from "@/lib/checks/paper";
 import { checkCoverage, checkSamplePaper } from "@/lib/checks/rules";
+import { namedPages } from "@/lib/rag/whole-pages";
 
 export interface GenerationInput {
   student: Student;
@@ -233,7 +234,7 @@ export async function runGeneration({
   timings.searchMs = Date.now() - searchStart;
 
   const imagesStart = Date.now();
-  const { images: sourcePageImages, byPath: sourceImages } = await loadSourceImages(retrieval.chunks, retrieval.stats.mode === "search" ? undefined : MAX_PAGE_IMAGES);
+  const { images: sourcePageImages, byPath: sourceImages } = await loadSourceImages(retrieval.chunks, retrieval.stats.mode === "search" ? undefined : MAX_PAGE_IMAGES, namedPages(askedFor ?? prompt));
   timings.loadingImagesMs = Date.now() - imagesStart;
   onProgress?.("writing", {
     books: { mode: retrieval.stats.mode, books: retrieval.stats.books, chars: retrieval.stats.totalChars, passages: retrieval.chunks.length, pagePictures: sourcePageImages.length },

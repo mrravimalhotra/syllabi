@@ -358,6 +358,45 @@ await test("Ask: Solve all exercise questions fills the full request, picks exer
   if (!(await pressed("Lithosphere Textbook")) || !(await pressed("Half Yearly Papers"))) throw new Error("All should pick every book.");
 });
 
+await test("Solve all exercise questions: done a few pages at a time; a failed part is tried again; the parts become one answer", async (page, ctx) => {
+  await baseRoutes(ctx, { books: [{ ...books[0], id: "b1", source_type: "textbook" }] });
+  const asked = [];
+  let failOnce = true;
+  let combined = null;
+  await ctx.route("**/api/generate/solution", (r) => {
+    const prompt = r.request().postDataJSON().prompt;
+    asked.push(prompt);
+    if (prompt.includes("pages 4 to 5") && failOnce) {
+      failOnce = false;
+      return json(r, { error: "The AI service is busy right now. Wait a minute and try again." }, 503);
+    }
+    if (prompt.includes("page 9")) return json(r, { ...answer, id: "p3", text: "No questions on these pages." });
+    return json(r, { ...answer, id: prompt.includes("pages 1 to 3") ? "p1" : "p2", text: prompt.includes("pages 1 to 3") ? "**Q1.** First part answer." : "**Q2.** Second part answer." });
+  });
+  await ctx.route("**/api/generate/solution/parts", (r) =>
+    json(r, { parts: ["pages 1 to 3", "pages 4 to 5", "page 9"].map((pages) => ({ label: `Maths Chapter 3: ${pages}`, prompt: `Solve every question printed on ${pages} of "Maths Chapter 3".` })) })
+  );
+  await ctx.route("**/api/documents/combine", (r) => {
+    combined = r.request().postDataJSON();
+    return json(r, { ...answer, id: "whole", title: combined.title, text: "## Maths Chapter 3: pages 1 to 3\n\n**Q1.** First part answer.\n\n---\n\n## Maths Chapter 3: pages 4 to 5\n\n**Q2.** Second part answer." });
+  });
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
+  await tap(page.getByRole("button", { name: /Solve all exercise questions/ }));
+  await page.getByRole("button", { name: /^Generate$/ }).click();
+  const card = page.getByTestId("solve-all");
+  await card.getByText("Maths Chapter 3: pages 1 to 3").waitFor({ timeout: 10000 });
+  // The second part failed: it says why, and the rest carried on.
+  await card.getByText(/busy right now/).waitFor({ timeout: 10000 });
+  await card.getByText("(no questions here)").waitFor();
+  await card.getByText("2 of 3 parts done.").waitFor();
+  await tap(card.getByRole("button", { name: "Try the failed part again" }));
+  // All parts in: they are put together and shown as one answer, saved once.
+  await page.getByRole("heading", { name: "Maths Chapter 3: pages 4 to 5" }).waitFor({ timeout: 10000 });
+  await page.getByText("Second part answer.").first().waitFor();
+  await card.waitFor({ state: "detached" });
+  if (asked.length !== 4 || combined?.parts?.map((p) => p.id).join() !== "p1,p2,p3" || !/^All exercise questions: Maths Chapter 3/.test(combined.title)) throw new Error(`asked ${asked.length}, combined ${JSON.stringify(combined)}`);
+});
+
 await test("Ask: the command, with no exercise book or textbook uploaded, says so and keeps the selection", async (page, ctx) => {
   await ctx.route("**/api/me", (r) => json(r, me));
   await ctx.route("**/api/library**", (r) => json(r, { documents: [{ id: "p1", title: "Only Papers", subject: null, grade: null, source_type: "past_paper", status: "ready", created_at: now, pages: null }] }));

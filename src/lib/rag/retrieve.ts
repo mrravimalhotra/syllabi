@@ -277,12 +277,15 @@ async function withBookTitles(chunks: MatchedChunk[]): Promise<MatchedChunk[]> {
  */
 export async function loadSourceImages(
   chunks: MatchedChunk[],
-  limit?: number
+  limit?: number,
+  /** Pages the request names ("pages 12 to 14"): their pictures come first. */
+  firstPages: number[] = []
 ): Promise<{ images: CompletionImage[]; byPath: Map<string, CompletionImage> }> {
   // Pages added for a whole exercise (similarity 0) come first and get more room: its questions refer to their figures.
   const wholeSection = chunks.some((c) => c.similarity === 0);
   // Then exercise pages, then the rest by how close they are: when whole books are passed, these are the pages whose pictures matter most.
-  const rank = (c: MatchedChunk) => (c.similarity === 0 ? 0 : c.source_type === "exercise" ? 1 : 2);
+  const named = (c: MatchedChunk) => c.page_number !== null && firstPages.includes(c.page_number);
+  const rank = (c: MatchedChunk) => (named(c) ? -1 : c.similarity === 0 ? 0 : c.source_type === "exercise" ? 1 : 2);
   const ordered = [...chunks].sort((a, b) => rank(a) - rank(b) || b.similarity - a.similarity);
   const uniquePaths = [...new Set(ordered.map((c) => c.image_path).filter((p): p is string => Boolean(p)))].slice(
     0,

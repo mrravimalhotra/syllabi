@@ -13,6 +13,9 @@ import { PAPER_REPORT } from "../fixtures/bhakti-exercise-pages";
 import { checkMixedNumbers, checkPaperMarks, checkRightAnswerMarks, checkTeacherAlgebra, checkTickedSteps, checkWronglyMarked, gradeFor, gradeScaleText, withoutStudentWork } from "@/lib/checks/paper";
 import { wrongAlgebraSteps } from "@/lib/checks/algebra";
 import { checkArithmetic } from "@/lib/checks/arithmetic";
+import { isNoQuestions, solveParts } from "@/lib/generation/solve-parts";
+import { isSolveAll } from "@/app/dashboard/_ask/commands";
+import { namedPages } from "@/lib/rag/whole-pages";
 import { withoutRepeats } from "@/lib/homework/duplicates";
 import { ANY_BOOK, effectiveFilter, filterOptions, matchingBooks } from "@/lib/book-filter";
 import { checkSamplePaper } from "@/lib/checks/rules";
@@ -900,6 +903,22 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
     const sameDate = withoutRepeats([e("Mathematics", "homework", "2A-2E", "2026-10-22"), e("Mathematics", "homework", "1AB", "2026-10-22", "Profit and loss"), e("Science", "homework", "Diagram", "2026-10-22")], known);
     check(sameDate.repeats === 1 && sameDate.add.map((x) => x.title).join() === "1AB,Diagram" && sameDate.add.every((x) => !x.duplicate_of), "Duplicates: more pages of a day already in the list: its repeats are left out, other work with the same topic is not called a duplicate");
     check(withoutRepeats([e("Geography", "classwork", "CW 1A, 2A and map", "2026-10-22")], known).add[0].duplicate_of === "k3" && withoutRepeats(again, []).add.length === 5, "Duplicates: on the same date, nearly the same words are a possible duplicate; an empty list adds everything");
+  }
+  // "Solve all exercise questions" is cut into parts: the pages with questions, a few at a time.
+  {
+    const lesson = "The Bhakti movement began in the south. Saints sang in the language of the people.";
+    const questions = "Exercise\n1. Who was Kabir?\n2. Fill in the blanks: Mirabai was a devotee of ____.\n3. Why did the saints use local languages?";
+    const page = (document_id: string, page_number: number | null, content: string, source_type = "textbook") => ({ document_id, page_number, content, source_type });
+    const history = [1, 2, 3, 4, 5].map((n) => page("h", n, lesson)).concat([page("h", 3, "Warm-up: What do you think devotion means? Who do you look up to?"), ...[11, 12, 13, 14, 15].map((n) => page("h", n, questions))]);
+    const parts = solveParts([{ id: "h", title: "History Unit 1" }], history);
+    check(parts.map((p) => p.label).join(" | ") === "History Unit 1: page 3 | History Unit 1: pages 11 to 13 | History Unit 1: pages 14 to 15", `Solve all: only the pages with questions, a few at a time, in order (${parts.map((p) => p.label).join(" | ")})`);
+    check(namedPages(parts[1].prompt).join() === "11,12,13" && parts[1].prompt.includes('"History Unit 1"') && /reply with only: No questions on these pages\./.test(parts[1].prompt) && parts[1].prompt.length < 2000, "Solve all: a part's request names its pages and book, and what to say when they hold no questions");
+    const two = solveParts([{ id: "t", title: "Geo Textbook" }, { id: "e", title: "Geo Exercises" }, { id: "n", title: "Notes" }], [page("t", 1, lesson), page("t", 2, lesson), page("e", 1, "Sums", "exercise"), page("e", 2, "More sums", "exercise"), page("n", null, questions)]);
+    check(two.map((p) => p.label).join(" | ") === "Geo Textbook: pages 1 to 2 | Geo Exercises: pages 1 to 2 | Notes", `Solve all: a book with no questions found is taken whole, exercise pages always count, a book without page numbers is one part (${two.map((p) => p.label).join(" | ")})`);
+    const long = solveParts([{ id: "b", title: "Big" }], Array.from({ length: 300 }, (_, i) => page("b", i + 1, questions)));
+    check(long.length <= 40 && long.every((p) => namedPages(p.prompt).length <= 12) && namedPages(long[long.length - 1].prompt).includes(300), `Solve all: a long book is done in at most 40 parts of at most 12 pages, to its last page (${long.length} parts)`);
+    check(isNoQuestions("No questions on these pages.") && isNoQuestions("**No questions on this page**") && !isNoQuestions("Q1. No questions on these pages were hard."), "Solve all: a part with no questions is recognised by its reply");
+    check(isSolveAll("solution", ` ${COMMANDS.solution[0].prompt} `, 0) && !isSolveAll("solution", `${COMMANDS.solution[0].prompt} for chapter 2`, 0) && !isSolveAll("solution", COMMANDS.solution[0].prompt, 1) && !isSolveAll("notes", COMMANDS.solution[0].prompt, 0), "Solve all: only the command as it stands, with nothing attached, is done in parts");
   }
   // Solve's book filters: class, subject and chapter, however they were typed.
   {

@@ -14,7 +14,9 @@ import { AskComposer } from "@/app/dashboard/_ask/AskComposer";
 import { ActivityScreen } from "@/components/menu/Tiles";
 import { preloadMarkdown } from "@/components/Markdown";
 import { PageSkeleton } from "@/components/ui";
-import { planCommand, type QuickCommand } from "@/app/dashboard/_ask/commands";
+import { isSolveAll, planCommand, type QuickCommand } from "@/app/dashboard/_ask/commands";
+import { SolveAllCard } from "@/app/dashboard/_ask/SolveAllCard";
+import { useSolveAll } from "@/app/dashboard/_ask/useSolveAll";
 import { blockedReason, buildRequestBody, calculationAnswer, questionProblem, type Question } from "@/app/dashboard/_ask/build-request";
 import { useAttachments } from "@/app/dashboard/_ask/useAttachments";
 import { useBooks } from "@/app/dashboard/_ask/useBooks";
@@ -80,6 +82,11 @@ function AskSyllabi() {
   const generation = useGeneration(() => void loadMe().catch(() => {}));
   const { error, notice, setError, setNotice } = generation;
   const attachments = useAttachments(setError, setNotice);
+  // "Solve all exercise questions" is done a few pages at a time and put together at the end.
+  const solveAll = useSolveAll((answer) => {
+    generation.show(answer);
+    setAnswerTask("solution");
+  }, setError);
   const { photos, docs, reading: readingFiles } = attachments;
 
   useEffect(() => {
@@ -100,7 +107,8 @@ function AskSyllabi() {
 
   async function submit(e?: React.FormEvent) {
     e?.preventDefault();
-    if (generation.isBusy() || readingFiles || blocked) return;
+    if (generation.isBusy() || solveAll.running || solveAll.saving || readingFiles || blocked) return;
+    solveAll.clear();
     const question: Question = {
       task: tab,
       prompt,
@@ -126,6 +134,12 @@ function AskSyllabi() {
       return;
     }
     setAnswerTask(tab);
+    if (isSolveAll(tab, prompt, photos.length + docs.length)) {
+      generation.clear();
+      const chosen = books.books.filter((b) => books.activeIds.includes(b.id)).map((b) => b.title);
+      // Books that make a single part are asked the usual way, below.
+      if (await solveAll.start(books.activeIds, language, `All exercise questions: ${chosen.join(", ")}`.slice(0, 200))) return;
+    }
     if (await generation.send(ROUTE_BY_TASK[tab], buildRequestBody(question), tab)) attachments.clear();
   }
 
@@ -213,13 +227,15 @@ function AskSyllabi() {
         onMarksEach={setMarksEach}
         language={language}
         onLanguage={setAnswerLanguage}
-        loading={generation.loading}
+        loading={generation.loading || solveAll.running || solveAll.saving}
         noBookSelected={noBookSelected}
         overQuota={overQuota}
         blocked={blocked}
       />
 
       <Messages blocked={generation.loading ? null : blocked} error={error} notice={notice} />
+
+      {answerHere && <SolveAllCard run={solveAll} />}
 
       {answerHere && generation.loading && (
         <GeneratingCard steps={isPack ? PACK_WAIT_STEPS : WAIT_STEPS} draft={generation.draft} stage={generation.stage} onStop={generation.stop} />

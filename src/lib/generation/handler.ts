@@ -18,8 +18,8 @@ type StreamHooks = Pick<GenerationInput, "onText" | "onRestart" | "onStage">;
 
 const GENERATE_FAILED = "Couldn't make your answer. Wait a minute and try again. If it keeps happening, tell the person who runs Syllabi.";
 
-/** A saved answer, returned as if just generated, marked as reused (no AI call). */
-async function savedAnswerResponse(saved: GeneratedDocumentRow) {
+/** A saved answer, returned as if just generated; marked as reused (no AI call) unless `reused` is false. */
+export async function savedAnswerResponse(saved: GeneratedDocumentRow, reused = true) {
   return {
     id: saved.id,
     title: saved.title,
@@ -31,7 +31,7 @@ async function savedAnswerResponse(saved: GeneratedDocumentRow) {
     checks: saved.checks ?? [],
     confidence: saved.confidence ?? null,
     followUps: parseFollowUps(saved.follow_ups),
-    reusedFrom: saved.created_at,
+    ...(reused ? { reusedFrom: saved.created_at } : {}),
   };
 }
 
