@@ -990,6 +990,13 @@ function q0(): Question {
   check(givenDate({ headerDate: "27-09-2026", weekday: "Tuesday", periods: [] }, "diary.pdf", "2026-10-27") === "2026-10-27", "Homework: a wrong header date (27-09 on a Tuesday) is put right by the weekday");
   check(givenDate({ headerDate: "27-09-2026", weekday: "Sunday", periods: [] }, "Diary 27 Oct.pdf", "2026-10-28") === "2026-10-27", "Homework: the file name's date wins over the header");
   check(givenDate({ headerDate: "26-10-2026", weekday: "Monday", periods: [] }, "scan.jpg", "2026-10-28") === "2026-10-26", "Homework: a header date that agrees with its weekday is kept");
+  {
+    // A PDF of several diary days with one date in its name: each day keeps its own date.
+    const period = { subject: "Maths", topic: "T", classwork: "CW 1", reinforcement: "HW 1", submission: "" };
+    const several = entriesFrom([{ headerDate: "19-10-2026", weekday: "Monday", periods: [period] }, { headerDate: "20-09-2026", weekday: "Tuesday", periods: [{ ...period, reinforcement: "HW 2" }] }, { headerDate: "", weekday: "", periods: [{ ...period, reinforcement: "HW 3" }] }], "Diary 16 Oct.pdf", "2026-11-10");
+    check([...new Set(several.map((x) => x.given_date))].join() === "2026-10-19,2026-10-20,2026-10-16", `Homework: in an upload of several days each day goes by its own header (a slipped month put right), and the file name only fills in for an unreadable one (${[...new Set(several.map((x) => x.given_date))].join()})`);
+    check(entriesFrom([{ headerDate: "27-09-2026", weekday: "Tuesday", periods: [period] }, { periods: [] }], "Diary 27 Oct.pdf", "2026-10-28")[0].given_date === "2026-10-27", "Homework: one diary day (an empty page aside) still takes the file name's date");
+  }
   check(["Geography 22nd oct", "History 19/10/26", "Language", "maths", "Science"].map(normaliseSubject).join() === "Geography,History,English Language,Mathematics,Science", `Homework: subject names are normalised (${["Geography 22nd oct", "History 19/10/26", "Language"].map(normaliseSubject).join()})`);
   check(["Nil", "NA", "N/A", "", "  -  ", "none"].every(isNothing) && !isNothing("No. 4 to 6") && !isNothing("4A to E"), "Homework: Nil, NA and blanks are nothing; real work is kept");
   const entries = entriesFrom(

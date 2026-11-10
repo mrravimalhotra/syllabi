@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { apiError, authenticate, errorResponse } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parsePhotos } from "@/lib/generation/attachments";
-import { entriesFrom, givenDate, indiaToday, type NewEntry } from "@/lib/homework/diary";
+import { entriesFrom, givenDate, indiaToday, isOneDay, type NewEntry } from "@/lib/homework/diary";
 import { diaryFromPages } from "@/lib/homework/diary-text";
 import { readDiaryTwice } from "@/lib/homework/read-diary";
 import { recordTokenUsage } from "@/lib/llm/usage";
@@ -108,7 +108,7 @@ export async function POST(request: Request) {
     }
 
     const admin = createAdminClient();
-    const diaryDays = [...new Set(days.filter((d) => d.periods.length > 0).map((d) => givenDate(d, fileName, uploaded)))];
+    const diaryDays = [...new Set(days.filter((d) => d.periods.length > 0).map((d) => givenDate(d, fileName, uploaded, isOneDay(days!))))];
     if (diaryDays.length) {
       const { error: dayError } = await admin.from("homework_diary_days").upsert(diaryDays.map((day) => ({ owner_id: user.id, day })), { onConflict: "owner_id,day", ignoreDuplicates: true });
       if (dayError) console.error("[homework upload] diary days", dayError.message);

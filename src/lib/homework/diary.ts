@@ -140,16 +140,18 @@ function noteDate(text: string, given: string): string | null {
 }
 
 /**
- * The diary day's date. Header dates can be wrong (the 27 Oct page said 27-09-2026), so the file name wins
- * when it has a date; otherwise the header date is used if its weekday agrees with the page's weekday, else
- * the same day of a nearby month whose weekday does agree; and the upload date when nothing else is known.
+ * The diary day's date. Header dates can be wrong (the 27 Oct page said 27-09-2026), so when the upload is one
+ * diary day (`alone`) the file name wins if it has a date. An upload of several days ("Diary 16 Oct to 10 Nov.pdf")
+ * has one name for all of them, so each day goes by its own header: used if its weekday agrees with the page's
+ * weekday, else the same day of a nearby month whose weekday does agree. With no readable header, the file
+ * name's date, then the upload date.
  */
-export function givenDate(day: DiaryDay, fileName: string, uploaded: string): string {
+export function givenDate(day: DiaryDay, fileName: string, uploaded: string, alone = true): string {
   const fromFile = parseDiaryDate(fileName.replace(/\.[a-z0-9]+$/i, "").replace(/[_]/g, " "), uploaded);
-  if (fromFile) return fromFile;
+  if (fromFile && alone) return fromFile;
   const header = parseDiaryDate(day.headerDate, uploaded);
   const weekday = WEEKDAYS.findIndex((w) => (day.weekday ?? "").toLowerCase().startsWith(w.slice(0, 3)));
-  if (!header) return uploaded;
+  if (!header) return fromFile ?? uploaded;
   if (weekday === -1 || weekdayOf(header) === weekday) return header;
   // The header's day number with a slipped month: the nearest month (to the upload) that has the right weekday.
   const d = Number(header.slice(8, 10));
@@ -213,6 +215,9 @@ export function dedupKey(e: Pick<NewEntry, "given_date" | "subject" | "kind" | "
 
 const clean = (text: string | undefined, max: number) => (isNothing(text) ? null : (text ?? "").replace(/\s+/g, " ").trim().slice(0, max));
 
+/** Whether an upload holds a single diary day (its file name's date can then be trusted for it). */
+export const isOneDay = (days: DiaryDay[]) => days.filter((d) => (d.periods?.length ?? 0) > 0 || (d.notes?.length ?? 0) > 0).length <= 1;
+
 /** Every classwork and homework entry of the diary days read from one upload, each once. */
 export function entriesFrom(days: DiaryDay[], fileName: string, uploaded: string): NewEntry[] {
   const out = new Map<string, NewEntry>();
@@ -221,7 +226,7 @@ export function entriesFrom(days: DiaryDay[], fileName: string, uploaded: string
     if (!out.has(entry.dedup_key)) out.set(entry.dedup_key, entry);
   };
   for (const day of days) {
-    const given = givenDate(day, fileName, uploaded);
+    const given = givenDate(day, fileName, uploaded, isOneDay(days));
     for (const p of day.periods ?? []) {
       if (!p.subject || isNothing(p.subject)) continue;
       const subject = normaliseSubject(p.subject);
