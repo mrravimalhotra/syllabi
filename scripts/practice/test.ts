@@ -1067,6 +1067,7 @@ function q0(): Question {
   check(diaryFromText(typedPage.replace("Additional Information\n\n16-10--2026\n\nFRIDAY 7F", "Additional Information\n\n19-10-2026 7F\n\nMonday"))?.notes?.length === 0, "Homework: the date and class on one line are no notice");
   check(diaryFromText(`XYZ Public School Diary\n\n${typedPage}`)?.notes?.length === 0, "Homework: the school's name above the periods is no notice");
   check(diaryFromText("Q1. Find the profit.\nQ2. Find the loss.") === null && diaryFromPages([{ text: typedPage }, {}]) === null, "Homework: a page that isn't the typed diary, or a photo, goes to the AI");
+  check(diaryFromPages([{ text: typedPage }, { text: typedPage }])?.map((d) => d.page).join(",") === "1,2", "Homework: each day of a typed diary PDF knows its page, so only that page is shown");
   check(normaliseSubject("FRENCH") === "French" && normaliseSubject("BIOLOGY") === "Biology" && normaliseSubject("SPA") === "SPA" && normaliseSubject("Enrichment program") === "Enrichment Program", "Homework: subject names in one spelling whatever their case");
   check(helpQuestion({ subject: "Maths", title: "Ex 4B, Q1 to 5", topic: "Integers", sub_topic: null }) === "Maths homework (Integers): Ex 4B, Q1 to 5", "Homework: Get help asks about the work as written");
   // The quality test set's grading (scripts/quality), without the AI.

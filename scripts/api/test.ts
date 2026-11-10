@@ -1111,6 +1111,28 @@ failures.length = 0;
   check("homework: classwork earns no star", (await call(homeworkEntry.PATCH, { done: true }, { id })).json?.star === false);
   const shown = await homeworkPages.GET(new Request("http://localhost/x"), { params: Promise.resolve({ id }) });
   check("homework: the diary page an entry came from can be opened", shown.status === 200 && ((await shown.json()).pages as string[]).length === 1);
+  // Report 6: from a diary upload of several pages, only the page with the entry is shown.
+  {
+    const twoDays = {
+      days: [
+        { page: 1, headerDate: "28-10-2026", weekday: "Wednesday", periods: [{ subject: "Chemistry", topic: "Air", subTopic: "Oxygen", classwork: "", reinforcement: "Sheet 2", submission: "" }] },
+        { page: 2, headerDate: "29-10-2026", weekday: "Thursday", periods: [{ subject: "Chemistry", topic: "Air", subTopic: "Carbon dioxide", classwork: "", reinforcement: "Sheet 3", submission: "" }] },
+      ],
+    };
+    fakeAi.reply = () => ({ text: JSON.stringify(twoDays) });
+    await expect("homework: a two-page diary upload is read", homework.POST, 200, null, { fileName: "diary.pdf", pages: [page, page] });
+    const sheet3 = (tables.homework_entries ?? []).find((r) => r.title === "Sheet 3") as { id: string; source_page?: number; source_file: string } | undefined;
+    check("homework: each entry remembers the page it is on", sheet3?.source_page === 2 && (tables.homework_entries ?? []).find((r) => r.title === "Sheet 2")?.source_page === 1, JSON.stringify(sheet3));
+    const own = await (await homeworkPages.GET(new Request("http://localhost/x"), { params: Promise.resolve({ id: sheet3!.id }) })).json();
+    check("homework: See the diary page shows only the page with the entry", (own.pages as string[]).length === 1 && (own.pages as string[])[0].endsWith(`${sheet3!.source_file}page-2.jpg`) && own.page === 2, JSON.stringify(own));
+    (tables.homework_entries ?? []).forEach((r) => {
+      if (r.id === sheet3!.id) r.source_page = null;
+    });
+    const older = await (await homeworkPages.GET(new Request("http://localhost/x"), { params: Promise.resolve({ id: sheet3!.id }) })).json();
+    check("homework: an older entry without its page still shows every page of its upload", (older.pages as string[]).length === 2 && older.page === null, JSON.stringify(older));
+    check("homework replies: a page number outside the upload is not trusted, and one page is page 1", parseDiary(JSON.stringify({ days: [{ page: 7, periods: [] }] }), 2)?.[0].page === undefined && parseDiary(JSON.stringify({ days: [{ periods: [] }] }), 1)?.[0].page === 1);
+    fakeAi.reply = () => ({ text: JSON.stringify(diary) });
+  }
   const typed = await expect("homework: work typed in (set out loud, not in the diary)", homeworkAdd.POST, 200, null, { subject: "maths", title: "Learn table of 13", kind: "homework", due_date: "2026-10-30" });
   const typedRow = (tables.homework_entries ?? []).at(-1) as { source: string; subject: string; due_date: string; dedup_key: string; owner_id: string } | undefined;
   check("homework: typed work is kept as typed, for the right owner", Boolean(typed.json?.entry) && typedRow?.source === "typed" && typedRow.subject === "Mathematics" && typedRow.due_date === "2026-10-30" && typedRow.owner_id === ME && Boolean(typedRow.dedup_key), JSON.stringify(typedRow));

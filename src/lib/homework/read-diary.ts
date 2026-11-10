@@ -21,8 +21,9 @@ Rules:
   item separately in "notes", word for word (e.g. "Bring chart paper on Friday", "Unit test on 30-10-2026").
   Leave out the date, weekday and class (e.g. "7F") printed there; leave "notes" empty when nothing is written.
 - If a page holds several days, give each day separately.
+- "page" is the number of the page the day is on, counting the pages in the order given (1 for the first).
 Reply only with JSON:
-{"days": [{"headerDate": "...", "weekday": "...", "periods": [{"subject": "...", "topic": "...", "subTopic": "...",
+{"days": [{"page": 1, "headerDate": "...", "weekday": "...", "periods": [{"subject": "...", "topic": "...", "subTopic": "...",
 "classwork": "...", "reinforcement": "...", "submission": "..."}], "notes": ["..."]}]}`;
 
 const STRING = { type: "string" };
@@ -34,6 +35,7 @@ const SCHEMA = {
       items: {
         type: "object",
         properties: {
+          page: { type: "integer" },
           headerDate: STRING,
           weekday: STRING,
           notes: { type: "array", items: STRING },
@@ -54,7 +56,7 @@ const SCHEMA = {
 };
 
 /** The diary days in a reply; null when it can't be read. */
-export function parseDiary(text: string): DiaryDay[] | null {
+export function parseDiary(text: string, pageCount = 1): DiaryDay[] | null {
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
   if (start === -1 || end <= start) return null;
@@ -65,7 +67,10 @@ export function parseDiary(text: string): DiaryDay[] | null {
     return v.days.slice(0, 31).map((d) => {
       const day = (d ?? {}) as Record<string, unknown>;
       const periods = Array.isArray(day.periods) ? day.periods : [];
+      // A page number outside the upload is not trusted; with one page, it is that page.
+      const page = pageCount === 1 ? 1 : Number.isInteger(day.page) && (day.page as number) >= 1 && (day.page as number) <= pageCount ? (day.page as number) : undefined;
       return {
+        page,
         headerDate: str(day.headerDate),
         weekday: str(day.weekday),
         notes: Array.isArray(day.notes) ? day.notes.filter((n): n is string => typeof n === "string").slice(0, 10) : undefined,
@@ -102,7 +107,7 @@ export async function readDiary(pages: CompletionImage[], fileName: string, agai
     maxOutputTokens: 8192,
     jsonSchema: SCHEMA,
   });
-  const days = parseDiary(result.text);
+  const days = parseDiary(result.text, pages.length);
   if (!days) throw new Error("The diary could not be read: the reply was not in the expected form");
   return { days, result };
 }

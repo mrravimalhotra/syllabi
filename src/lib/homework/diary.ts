@@ -26,6 +26,8 @@ export interface DiaryDay {
   periods: DiaryPeriod[];
   /** Notices under "Additional Information" (bring chart paper, a test date), one per item, word for word. */
   notes?: string[];
+  /** Which page of the upload it is on (1 for the first), so "See the diary page" shows just that page. */
+  page?: number;
 }
 
 export interface NewEntry {
@@ -39,6 +41,8 @@ export interface NewEntry {
   dedup_key: string;
   /** The two readings of a diary photo didn't agree on it: worth checking against the page. */
   needs_check?: boolean;
+  /** The page of the upload it was read from (1 for the first); null when not known. */
+  source_page?: number | null;
 }
 
 /**
@@ -221,7 +225,7 @@ export function entriesFrom(days: DiaryDay[], fileName: string, uploaded: string
     for (const p of day.periods ?? []) {
       if (!p.subject || isNothing(p.subject)) continue;
       const subject = normaliseSubject(p.subject);
-      const base = { subject, topic: clean(p.topic, 300), sub_topic: clean(p.subTopic, 300), given_date: given };
+      const base = { subject, topic: clean(p.topic, 300), sub_topic: clean(p.subTopic, 300), given_date: given, source_page: day.page ?? null };
       const work: [EntryKind, string | undefined][] = [
         ["classwork", p.classwork],
         ["homework", p.reinforcement],
@@ -234,7 +238,7 @@ export function entriesFrom(days: DiaryDay[], fileName: string, uploaded: string
     // A notice is due on the date it names, if it names one ("Unit test on 30-10-2026").
     for (const note of day.notes ?? []) {
       const title = clean(note, 500);
-      if (title) add({ kind: "note", subject: "Notice", title, topic: null, sub_topic: null, given_date: given, due_date: noteDate(title, given), dedup_key: "" });
+      if (title) add({ kind: "note", subject: "Notice", title, topic: null, sub_topic: null, given_date: given, due_date: noteDate(title, given), dedup_key: "", source_page: day.page ?? null });
     }
   }
   return [...out.values()];

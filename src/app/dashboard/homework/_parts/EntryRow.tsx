@@ -44,9 +44,10 @@ export function shortDate(date: string, thisYear: number): string {
 
 export const isOverdue = (e: Entry, today: string) => !e.done && e.due_date !== null && e.due_date < today;
 
-/** The diary pages an entry was read from, shown under it. */
+/** The diary page an entry was read from (every page of the upload when which one isn't known), shown under it. */
 function DiaryPages({ id, onClose }: { id: string; onClose: () => void }) {
   const [pages, setPages] = useState<string[] | null>(null);
+  const [pageNumber, setPageNumber] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     fetch(`/api/homework/${id}/pages`)
@@ -54,6 +55,7 @@ function DiaryPages({ id, onClose }: { id: string; onClose: () => void }) {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data?.error ?? "Couldn't open the diary page.");
         setPages(data.pages as string[]);
+        setPageNumber(typeof data.page === "number" ? data.page : null);
       })
       .catch((err: unknown) => setError(err instanceof TypeError || !(err instanceof Error) ? "Couldn't open the diary page. Check your connection." : err.message));
   }, [id]);
@@ -67,7 +69,7 @@ function DiaryPages({ id, onClose }: { id: string; onClose: () => void }) {
         <p className="text-sm text-slate-500">The diary page is no longer kept.</p>
       ) : (
         // eslint-disable-next-line @next/next/no-img-element -- short-lived signed links, not optimisable
-        pages.map((src, i) => <img key={src} src={src} alt={`Diary page ${i + 1}`} className="max-h-[70vh] w-full rounded-lg border border-slate-200 object-contain" />)
+        pages.map((src, i) => <img key={src} src={src} alt={`Diary page ${pageNumber ?? i + 1}`} className="max-h-[70vh] w-full rounded-lg border border-slate-200 object-contain" />)
       )}
       <button type="button" onClick={onClose} className="text-xs font-medium text-brand-700 hover:underline">
         Hide diary page
@@ -79,19 +81,22 @@ function DiaryPages({ id, onClose }: { id: string; onClose: () => void }) {
 const KIND_LABEL: Record<Entry["kind"], string> = { homework: "Homework", classwork: "Classwork", note: "Notice" };
 const KIND_TONE = { homework: "brand", classwork: "neutral", note: "warning" } as const;
 
-/** Its kind, whether it is late, when it is due, and what it is about: one short line. */
+/** Its kind, whether it is late and when it is due on one short line, then what it is about (topic and sub-topic). */
 function Details({ entry, today }: { entry: Row; today: string }) {
   const year = Number(today.slice(0, 4));
   const about = [entry.topic, entry.sub_topic].filter((t, i, all) => t && all.indexOf(t) === i).join(" · ");
   const due = entry.due_date ? `${entry.kind === "note" ? "For" : "Due"} ${shortDate(entry.due_date, year)}` : entry.kind === "homework" ? "No date given" : null;
   return (
-    <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-slate-500">
-      <Badge tone={KIND_TONE[entry.kind]}>{entry.twin ? "Class & homework" : KIND_LABEL[entry.kind]}</Badge>
-      {isOverdue(entry, today) && <Badge tone="danger">Overdue</Badge>}
-      {entry.needs_check && <Badge tone="warning">Check this</Badge>}
-      {due && <span className="font-medium text-slate-600">{due}</span>}
-      {about && <span className="basis-full [overflow-wrap:anywhere]">{about}</span>}
-    </p>
+    <>
+      <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-slate-500">
+        <Badge tone={KIND_TONE[entry.kind]}>{entry.twin ? "Class & homework" : KIND_LABEL[entry.kind]}</Badge>
+        {isOverdue(entry, today) && <Badge tone="danger">Overdue</Badge>}
+        {entry.needs_check && <Badge tone="warning">Check this</Badge>}
+        {due && <span className="font-medium text-slate-600">{due}</span>}
+      </p>
+      {/* The topic and sub-topic as easy to read as the work itself (report 7). */}
+      {about && <p className="text-sm text-slate-800 [overflow-wrap:anywhere]" data-about>{about}</p>}
+    </>
   );
 }
 

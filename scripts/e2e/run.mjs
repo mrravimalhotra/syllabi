@@ -994,6 +994,23 @@ await test("Theme button: on every screen; Automatic, Dark and Light, remembered
   if ((await pageLight()) > 80) throw new Error("On Automatic with a dark device, Kindergarten should be dark.");
 });
 
+await test("Homework: topic and sub-topic are shown as plainly as the work; See the diary page shows the entry's own page", async (page, ctx) => {
+  await baseRoutes(ctx);
+  const today = new Date().toISOString().slice(0, 10);
+  const entry = { id: "c1", kind: "homework", subject: "Chemistry", title: "3", topic: "Air", sub_topic: "Constituents of air- Carbon dioxide", due_date: today, given_date: today, done: false, done_at: null, source: "diary" };
+  await ctx.route("**/api/homework", (r) => json(r, { entries: [entry], diaryDays: [today] }));
+  await ctx.route("**/api/homework/c1/pages", (r) => json(r, { pages: [`${BASE}/icon.svg`], page: 2 }));
+  await page.goto(`${BASE}/dashboard/homework`, { waitUntil: "networkidle" });
+  const about = page.locator("[data-about]", { hasText: "Air · Constituents of air- Carbon dioxide" });
+  await about.waitFor({ timeout: 10000 });
+  const size = await about.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+  if (size < 14) throw new Error(`topic text is ${size}px`);
+  await tap(page.getByRole("button", { name: /More for Chemistry/ }));
+  await tap(page.getByRole("menuitem", { name: "See the diary page" }));
+  await page.getByRole("img", { name: "Diary page 2" }).waitFor();
+  if ((await page.getByRole("img", { name: /Diary page/ }).count()) !== 1) throw new Error("more than the entry's own page was shown");
+});
+
 await test("Homework: homework and notices first, by due date, with subjects; class and homework shown once; a ⋯ menu; undo; typed in with quick days; a diary added", async (page, ctx) => {
   await baseRoutes(ctx);
   const day = (offset) => new Date(Date.now() + offset * 86400000).toISOString().slice(0, 10);

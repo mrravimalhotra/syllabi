@@ -111,6 +111,9 @@ export function diaryFromText(text: string): DiaryDay | null {
 
 /** Every page as diary days when each one is the typed template, else null (the pages go to the AI). */
 export function diaryFromPages(pages: { text?: string }[]): DiaryDay[] | null {
-  const days = pages.map((p) => (p.text ? diaryFromText(p.text) : null));
+  const days = pages.map((p, i) => {
+    const day = p.text ? diaryFromText(p.text) : null;
+    return day && { ...day, page: i + 1 };
+  });
   return days.length > 0 && days.every((d) => d !== null) ? (days as DiaryDay[]) : null;
 }
