@@ -1077,6 +1077,8 @@ failures.length = 0;
   fakeAi.reply = (req) => {
     const prompt = (req as unknown as { prompt: string }).prompt;
     const day = JSON.parse(JSON.stringify(diary.days[0]));
+    // Another day's page: the same work on new topics (the same lines exactly would be the same diary added twice).
+    for (const p of day.periods) p.topic = `${p.topic} II`;
     if (prompt.includes("row by row")) {
       day.periods[0].submission = "30.10.26";
       day.periods.push({ subject: "Science", topic: "Air", subTopic: "", classwork: "Nil", reinforcement: "Learn the composition of air", submission: "" });
@@ -1095,7 +1097,8 @@ failures.length = 0;
   check("homework: the checked entry is no longer marked", !((tables.homework_entries ?? []).find((r) => (r as { id: string }).id === doubtedId) as { needs_check?: boolean }).needs_check);
   fakeAi.reply = (req) => {
     if ((req as unknown as { prompt: string }).prompt.includes("row by row")) throw new Error("busy");
-    return { text: JSON.stringify(diary) };
+    // A third day's page, on its own topics (identical lines would be the same diary added twice).
+    return { text: JSON.stringify({ days: diary.days.map((d) => ({ ...d, periods: d.periods.map((p) => ({ ...p, topic: `${p.topic} III` })) })) }) };
   };
   const oneRead = await expect("homework: when the second reading fails", homework.POST, 200, null, { fileName: "Diary 29 Oct.jpg", pages: [page] });
   check("homework: the first reading stands, unmarked", oneRead.json?.added === 3 && oneRead.json?.toCheck === 0, JSON.stringify(oneRead.json));
@@ -1131,6 +1134,39 @@ failures.length = 0;
     const older = await (await homeworkPages.GET(new Request("http://localhost/x"), { params: Promise.resolve({ id: sheet3!.id }) })).json();
     check("homework: an older entry without its page still shows every page of its upload", (older.pages as string[]).length === 2 && older.page === null, JSON.stringify(older));
     check("homework replies: a page number outside the upload is not trusted, and one page is page 1", parseDiary(JSON.stringify({ days: [{ page: 7, periods: [] }] }), 2)?.[0].page === undefined && parseDiary(JSON.stringify({ days: [{ periods: [] }] }), 1)?.[0].page === 1);
+    // The same two diary days again, in another file whose dates are read a day late, with one line read differently.
+    const reread = JSON.parse(JSON.stringify(twoDays)) as typeof twoDays;
+    reread.days[0].headerDate = "30-10-2026";
+    reread.days[0].weekday = "Friday";
+    reread.days[0].periods = [
+      { subject: "Chemistry", topic: "Air", subTopic: "Oxygen", classwork: "", reinforcement: "sheet  2", submission: "" },
+      { subject: "Physics", topic: "Heat", subTopic: "", classwork: "Q1 to Q5", reinforcement: "Numericals 1-4", submission: "" },
+      { subject: "Biology", topic: "Cells", subTopic: "", classwork: "", reinforcement: "Draw a cell", submission: "" },
+    ];
+    reread.days = [reread.days[0]];
+    const firstDay = { ...twoDays.days[0], headerDate: "27-10-2026", weekday: "Tuesday", periods: [...reread.days[0].periods.slice(1), { subject: "Chemistry", topic: "Air", subTopic: "Oxygen", classwork: "", reinforcement: "Sheet 2 and 3", submission: "" }] };
+    const earlier = tables.homework_entries;
+    tables.homework_entries = [];
+    fakeAi.reply = () => ({ text: JSON.stringify({ days: [firstDay] }) });
+    await expect("homework: a diary day is added", homework.POST, 200, null, { fileName: "diary.pdf", pages: [page] });
+    const before = (tables.homework_entries ?? []).length;
+    fakeAi.reply = () => ({ text: JSON.stringify(reread) });
+    const second = await expect("homework: the same diary day added again, dated differently", homework.POST, 200, null, { fileName: "photo.jpg", pages: [page] });
+    const flagged = (tables.homework_entries ?? []).filter((r) => r.duplicate_of);
+    const original = (tables.homework_entries ?? []).find((r) => r.title === "Sheet 2 and 3");
+    check("homework: its repeats are not added again, and the line read differently is a possible duplicate", second.json?.added === 1 && second.json?.possibleDuplicates === 1 && (tables.homework_entries ?? []).length === before + 1 && flagged.length === 1 && flagged[0].title === "sheet 2" && flagged[0].duplicate_of === original?.id, `${JSON.stringify(second.json)} ${JSON.stringify(flagged.map((r) => r.title))}`);
+    const dupId = flagged[0].id as string;
+    await expect("homework: Keep both clears the mark", homeworkEntry.PATCH, 200, null, { duplicate: "keep" }, { id: dupId });
+    check("homework: kept, it is ordinary work again", (tables.homework_entries ?? []).find((r) => r.id === dupId)?.duplicate_of === null && (tables.homework_entries ?? []).length === before + 1);
+    (tables.homework_entries ?? []).forEach((r) => {
+      if (r.id === dupId) Object.assign(r, { duplicate_of: original!.id, done: true, done_at: "2026-10-30T10:00:00Z", star_given: true });
+      if (r.id === original!.id) r.done = false;
+    });
+    const merged = await expect("homework: Merge removes the duplicate", homeworkEntry.PATCH, 200, null, { duplicate: "merge" }, { id: dupId });
+    const kept = (tables.homework_entries ?? []).find((r) => r.id === original!.id) as { done?: boolean; star_given?: boolean } | undefined;
+    check("homework: merged, one entry is left, and it takes the duplicate's tick and star", merged.json?.into === original!.id && !(tables.homework_entries ?? []).some((r) => r.id === dupId) && kept?.done === true && kept?.star_given === true, JSON.stringify(kept));
+    await expect("homework: settling someone else's entry is a 404", homeworkEntry.PATCH, 404, null, { duplicate: "merge" }, { id: "55555555-5555-4555-8555-555555555555" });
+    tables.homework_entries = earlier;
     fakeAi.reply = () => ({ text: JSON.stringify(diary) });
   }
   const typed = await expect("homework: work typed in (set out loud, not in the diary)", homeworkAdd.POST, 200, null, { subject: "maths", title: "Learn table of 13", kind: "homework", due_date: "2026-10-30" });

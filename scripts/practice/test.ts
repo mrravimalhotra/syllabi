@@ -13,6 +13,7 @@ import { PAPER_REPORT } from "../fixtures/bhakti-exercise-pages";
 import { checkMixedNumbers, checkPaperMarks, checkRightAnswerMarks, checkTeacherAlgebra, checkTickedSteps, checkWronglyMarked, gradeFor, gradeScaleText, withoutStudentWork } from "@/lib/checks/paper";
 import { wrongAlgebraSteps } from "@/lib/checks/algebra";
 import { checkArithmetic } from "@/lib/checks/arithmetic";
+import { withoutRepeats } from "@/lib/homework/duplicates";
 import { ANY_BOOK, effectiveFilter, filterOptions, matchingBooks } from "@/lib/book-filter";
 import { checkSamplePaper } from "@/lib/checks/rules";
 import { autoKeyFor } from "@/lib/study-pack/auto-key";
@@ -882,6 +883,23 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
     check(checkMixedNumbers(q5(["- ✓ Rate of interest = 5 1/4 = 21/4, Time = 3 1/2 = 7/2 = 3.5"])).length === 0 && checkMixedNumbers(q5(["- ✗ Student wrote: Rate = 5 1/4 = 1.25 (−1 mark)", "- ✔ Correct step: Rate = 5 1/4 = 21/4"])).length === 0, "Mixed numbers: read right, nothing is raised; a student's real mistake stays ✗");
     check(checkMixedNumbers("## Question 1 — 5/5\n**Question:** Multiply 6 by 3.\n- ✔ Correct step: 2(1/2) = 1").length === 0, "Mixed numbers: only numbers that are in the question are judged");
     check(checkArithmetic("Rate = 5(1/4) = 21/4").every((c) => c.ok) && checkArithmetic("5(1/4) = 5.25").every((c) => c.ok) && checkArithmetic("2(1/2) = 1").every((c) => c.ok) && checkArithmetic("5(1/4) = 3").some((c) => !c.ok), "Arithmetic: 5(1/4) is right as a mixed number or as a product, wrong as neither");
+  }
+  // Homework: the same diary day added twice is recognised.
+  {
+    const e = (subject: string, kind: "classwork" | "homework", title: string, given_date: string, topic: string | null = "Topic", sub_topic: string | null = null) =>
+      ({ kind, subject, title, topic, sub_topic, given_date, due_date: null, dedup_key: `${given_date}|${subject}|${kind}|${title}` });
+    const known = [e("Mathematics", "homework", "2A-2E", "2026-10-22", "Profit and loss"), e("Mathematics", "classwork", "2A - 2F", "2026-10-22", "Profit and loss"), e("French", "homework", "HWSH 1", "2026-10-22", "Unit 6"), e("Geography", "classwork", "CW 1A,2A", "2026-10-22", "Lithosphere", "Interior of earth"), e("Art", "classwork", "Drawing", "2026-10-22")].map((x, i) => ({ ...x, id: `k${i}` }));
+    // The same page again, its date read as the 23rd, spaced differently, and one line misread.
+    const again = [e("Mathematics", "homework", "2A - 2E", "2026-10-23", "Profit and loss"), e("Mathematics", "classwork", "2A-2F", "2026-10-23", "Profit and loss"), e("French", "homework", "hwsh1", "2026-10-23", "Unit 6"), e("Geography", "classwork", "CW 1,2", "2026-10-23", "Lithosphere", "Interior of earth"), e("Hindi", "homework", "Learn the poem", "2026-10-23")];
+    const out = withoutRepeats(again, known);
+    check(out.repeats === 3 && out.add.length === 2, `Duplicates: the same diary day with another date: the work that matches (spaces, capitals aside) is not added again (${out.repeats} repeats, ${out.add.map((x) => x.title).join(", ")} added)`);
+    check(out.add.find((x) => x.title === "CW 1,2")?.duplicate_of === "k3" && out.add.find((x) => x.title === "Learn the poem")?.duplicate_of === undefined, "Duplicates: a line read differently is added as a possible duplicate of the one it resembles; new work is just added");
+    const otherDay = [e("Mathematics", "homework", "3ABC", "2026-10-26", "Profit and loss"), e("French", "homework", "HWSH 1", "2026-10-26", "Unit 7"), e("Art", "classwork", "Drawing", "2026-10-26")];
+    const fresh = withoutRepeats(otherDay, known);
+    check(fresh.repeats === 0 && fresh.add.length === 3 && fresh.add.every((x) => !x.duplicate_of), "Duplicates: another day that shares a line or two (the same sheet name, 'Drawing' again) is new work");
+    const sameDate = withoutRepeats([e("Mathematics", "homework", "2A-2E", "2026-10-22"), e("Mathematics", "homework", "1AB", "2026-10-22", "Profit and loss"), e("Science", "homework", "Diagram", "2026-10-22")], known);
+    check(sameDate.repeats === 1 && sameDate.add.map((x) => x.title).join() === "1AB,Diagram" && sameDate.add.every((x) => !x.duplicate_of), "Duplicates: more pages of a day already in the list: its repeats are left out, other work with the same topic is not called a duplicate");
+    check(withoutRepeats([e("Geography", "classwork", "CW 1A, 2A and map", "2026-10-22")], known).add[0].duplicate_of === "k3" && withoutRepeats(again, []).add.length === 5, "Duplicates: on the same date, nearly the same words are a possible duplicate; an empty list adds everything");
   }
   // Solve's book filters: class, subject and chapter, however they were typed.
   {

@@ -93,7 +93,18 @@ export function useHomework(onStar?: (stickers: string[]) => void) {
     setEntries((list) => list?.map((e) => (ids.includes(e.id) ? { ...e, needs_check: false } : e)) ?? null);
   }
 
+  /** A possible duplicate settled: merged into the entry it repeats (which takes its tick), or kept as its own work. */
+  async function settleDuplicate(row: Row, how: "merge" | "keep") {
+    const ids = [row, ...(row.twin ? [row.twin] : [])].filter((e) => e.duplicate_of).map((e) => e.id);
+    const results = await Promise.all(
+      ids.map((id) => fetch(`/api/homework/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ duplicate: how }) }).catch(() => null))
+    );
+    if (results.some((r) => !r?.ok)) setError("Couldn't save that. Try again in a moment.");
+    // The entry merged into may have taken a tick: read the list again rather than guess.
+    await load();
+  }
+
   const added = (entry: Entry) => setEntries((list) => [entry, ...(list ?? [])]);
 
-  return { entries, diaryDays, error, load, toggle, undo, justDone, remove, confirm, added };
+  return { entries, diaryDays, error, load, toggle, undo, justDone, remove, confirm, settleDuplicate, added };
 }

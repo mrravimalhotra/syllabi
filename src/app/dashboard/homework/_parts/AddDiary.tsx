@@ -38,6 +38,9 @@ export function AddDiary({ onAdded, children }: { onAdded: () => void; children?
           text:
             `Added ${data.added} ${data.added === 1 ? "entry" : "entries"} from the diary.` +
             (data.skipped ? ` ${data.skipped} ${data.skipped === 1 ? "was" : "were"} already in your list.` : "") +
+            (data.possibleDuplicates
+              ? ` ${data.possibleDuplicates} ${data.possibleDuplicates === 1 ? "looks" : "look"} like work already in your list (marked "Possible duplicate"): merge ${data.possibleDuplicates === 1 ? "it" : "them"} or keep both.`
+              : "") +
             (data.toCheck
               ? ` ${data.toCheck} ${data.toCheck === 1 ? "needs" : "need"} a look: the photo was read twice and the readings differed. Check ${data.toCheck === 1 ? "it" : "them"} against the diary page (marked "Check this").`
               : ""),

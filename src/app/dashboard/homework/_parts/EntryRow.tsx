@@ -20,6 +20,8 @@ export interface Entry {
   source: "diary" | "typed";
   /** The two readings of the diary photo disagreed on it: check it against the page. */
   needs_check?: boolean;
+  /** It looks like this entry already in the list (the same diary added again): merge them or keep both. */
+  duplicate_of?: string | null;
 }
 
 /** A row on screen: an entry, and the same work set as classwork in that period, shown with it once. */
@@ -34,6 +36,9 @@ export interface RowActions {
   pages?: boolean;
   /** "Looks right": clears "Check this" once it has been checked against the diary page. */
   onChecked?: (e: Row) => void;
+  /** The entry a possible duplicate resembles, and what to do about it. */
+  duplicateOf?: (e: Row) => Entry | undefined;
+  onDuplicate?: (e: Row, how: "merge" | "keep") => void;
 }
 
 /** "Thu, 29 Oct" (with the year when it is not this year). */
@@ -92,11 +97,35 @@ function Details({ entry, today }: { entry: Row; today: string }) {
         <Badge tone={KIND_TONE[entry.kind]}>{entry.twin ? "Class & homework" : KIND_LABEL[entry.kind]}</Badge>
         {isOverdue(entry, today) && <Badge tone="danger">Overdue</Badge>}
         {entry.needs_check && <Badge tone="warning">Check this</Badge>}
+        {duplicateId(entry) && <Badge tone="warning">Possible duplicate</Badge>}
         {due && <span className="font-medium text-slate-600">{due}</span>}
       </p>
       {/* The topic and sub-topic as easy to read as the work itself (report 7). */}
       {about && <p className="text-sm text-slate-800 [overflow-wrap:anywhere]" data-about>{about}</p>}
     </>
+  );
+}
+
+/** The entry a row (or the classwork shown with it) may be a duplicate of. */
+export const duplicateId = (e: Row) => e.duplicate_of ?? e.twin?.duplicate_of ?? null;
+
+/** A possible duplicate: what it looks the same as, with Merge (keep one) and Keep both. */
+function PossibleDuplicate({ entry, today, actions }: { entry: Row; today: string; actions: RowActions }) {
+  if (!duplicateId(entry) || !actions.onDuplicate) return null;
+  const other = actions.duplicateOf?.(entry);
+  const small = "rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:border-brand-500";
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 px-2.5 py-2 text-xs text-amber-900" data-duplicate>
+      <span className="[overflow-wrap:anywhere]">
+        {other ? `Looks the same as "${other.title}" from the diary of ${shortDate(other.given_date, Number(today.slice(0, 4)))}.` : "Looks like work already in your list."}
+      </span>
+      <button type="button" className={small} onClick={() => actions.onDuplicate?.(entry, "merge")}>
+        Merge
+      </button>
+      <button type="button" className={small} onClick={() => actions.onDuplicate?.(entry, "keep")}>
+        Keep both
+      </button>
+    </div>
   );
 }
 
@@ -137,6 +166,7 @@ export function EntryRow(props: { entry: Row; today: string; onToggle: (e: Row) 
           {entry.title}
         </p>
         <Details entry={entry} today={today} />
+        <PossibleDuplicate entry={entry} today={today} actions={actions} />
         {pages && <DiaryPages id={entry.id} onClose={() => setPages(false)} />}
       </div>
       {items.length > 0 && <RowMenu label={`More for ${entry.subject}: ${entry.title}`} items={items} note={given} />}

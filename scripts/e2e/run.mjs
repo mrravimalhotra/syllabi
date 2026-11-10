@@ -1011,6 +1011,35 @@ await test("Homework: topic and sub-topic are shown as plainly as the work; See 
   if ((await page.getByRole("img", { name: /Diary page/ }).count()) !== 1) throw new Error("more than the entry's own page was shown");
 });
 
+await test("Homework: a possible duplicate says what it looks the same as, and can be merged or kept", async (page, ctx) => {
+  await baseRoutes(ctx);
+  const today = new Date().toISOString().slice(0, 10);
+  const base = { kind: "homework", subject: "Geography", topic: "Lithosphere", sub_topic: null, due_date: today, given_date: today, done: false, done_at: null, source: "diary" };
+  let list = [
+    { ...base, id: "g1", title: "CW 1A,2A" },
+    { ...base, id: "g2", title: "CW 1,2", duplicate_of: "g1" },
+  ];
+  const sent = [];
+  await ctx.route("**/api/homework", (r) => json(r, { entries: list, diaryDays: [today] }));
+  await ctx.route("**/api/homework/g2", (r) => {
+    const how = r.request().postDataJSON().duplicate;
+    sent.push(how);
+    list = how === "merge" ? list.filter((e) => e.id !== "g2") : list.map((e) => ({ ...e, duplicate_of: null }));
+    return json(r, { ok: true });
+  });
+  await page.goto(`${BASE}/dashboard/homework`, { waitUntil: "networkidle" });
+  await page.getByText("Possible duplicate", { exact: true }).waitFor({ timeout: 10000 });
+  await page.getByText(/Looks the same as "CW 1A,2A" from the diary of/).waitFor();
+  await tap(page.getByRole("button", { name: "Keep both" }));
+  await page.getByText("Possible duplicate", { exact: true }).waitFor({ state: "detached" });
+  if ((await page.locator("[data-entry]").count()) !== 2) throw new Error("Keep both removed an entry");
+  list = list.map((e) => (e.id === "g2" ? { ...e, duplicate_of: "g1" } : e));
+  await page.reload({ waitUntil: "networkidle" });
+  await tap(page.getByRole("button", { name: "Merge" }));
+  await page.locator('[data-entry="g2"]').waitFor({ state: "detached" });
+  if (sent.join() !== "keep,merge" || (await page.locator("[data-entry]").count()) !== 1) throw new Error(`sent ${sent.join()}`);
+});
+
 await test("Homework: homework and notices first, by due date, with subjects; class and homework shown once; a ⋯ menu; undo; typed in with quick days; a diary added", async (page, ctx) => {
   await baseRoutes(ctx);
   const day = (offset) => new Date(Date.now() + offset * 86400000).toISOString().slice(0, 10);
