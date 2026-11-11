@@ -351,7 +351,9 @@ await test("Ask: Solve all exercise questions fills the full request, picks exer
   await ctx.route("**/api/library**", (r) => json(r, { documents: [lib("t1", "Lithosphere Textbook", "textbook"), lib("e1", "Lithosphere Exercises", "exercise"), lib("p1", "Half Yearly Papers", "past_paper")] }));
   let sent = null;
   await ctx.route("**/api/generate/**", (r) => {
-    sent = r.request().postDataJSON();
+    // The question itself, not the listing of the books' parts that comes first (these books make no parts, so it is asked in one go).
+    const body = r.request().postDataJSON();
+    if (body.prompt) sent = body;
     return json(r, answer);
   });
   await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
@@ -366,6 +368,7 @@ await test("Ask: Solve all exercise questions fills the full request, picks exer
 
   await page.getByRole("button", { name: /^Generate$/ }).click();
   await page.getByText(/checks|answer/i).first().waitFor({ timeout: 8000 });
+  for (let i = 0; i < 50 && !sent; i++) await page.waitForTimeout(100);
   if (!sent || sent.documentIds.join() !== "t1,e1" || !/every kind of question/.test(sent.prompt)) throw new Error(`Sent ${JSON.stringify(sent)}.`);
 
   // The picker can choose by kind too.
