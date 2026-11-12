@@ -224,7 +224,20 @@ await test("Ask: online but the server can't be reached says so, not 'check your
   await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
   await page.locator("textarea").fill("Explain fractions");
   await page.getByRole("button", { name: /^Generate$/ }).click();
-  await page.getByText(/Couldn't reach Syllabi's server, though this device seems to be online/).first().waitFor({ timeout: 10000 });
+  // Sent three times in all (the upload may have dropped), then the message.
+  await page.getByText(/Couldn't reach Syllabi's server, though this device seems to be online/).first().waitFor({ timeout: 20000 });
+});
+
+await test("Ask: a question whose upload drops is sent again by itself, and the answer comes", async (page, ctx) => {
+  await baseRoutes(ctx);
+  let tries = 0;
+  await ctx.route("**/api/generate/**", (r) => (++tries < 3 ? r.abort("failed") : json(r, { ...answer, text: "Marked on the third try." })));
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
+  await page.locator("textarea").fill("Explain fractions");
+  await page.getByRole("button", { name: /^Generate$/ }).click();
+  await page.getByText(/The upload didn't get through, so Syllabi is sending it again \(try 2 of 3\)/).waitFor({ timeout: 10000 });
+  await page.getByText("Marked on the third try.").first().waitFor({ timeout: 20000 });
+  if (tries !== 3 || (await page.getByText(/Couldn't reach Syllabi's server/).count()) !== 0) throw new Error(`sent ${tries} times`);
 });
 
 const ndjson = (lines) => ({ status: 200, contentType: "application/x-ndjson; charset=utf-8", body: lines.map((l) => JSON.stringify(l)).join("\n") + "\n" });

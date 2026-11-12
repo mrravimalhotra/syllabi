@@ -44,6 +44,28 @@ async function pickedUpAgain(err: unknown, runId: string | null, started: number
   return recovered === "failed" ? null : recovered;
 }
 
+/** Waits before sending again after a request that never got through (each a little longer). */
+const RESEND_AFTER_MS = [2000, 5000];
+
+/**
+ * Sends a question. A request that never reaches Syllabi (on a phone, an upload of several photos can drop part-way
+ * on a weak connection) is sent again, up to twice, before giving up: the server never began, so nothing is lost or
+ * done twice. A request that got a reply is never sent again here.
+ */
+async function sendWithRetries(route: string, body: string, signal: AbortSignal, say: (notice: string | null) => void, waits = RESEND_AFTER_MS): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fetch(route, { method: "POST", headers: { "Content-Type": "application/json" }, signal, body });
+    } catch (err) {
+      // Stopped, offline (sending again can't help), or out of tries: the caller says what happened.
+      if (signal.aborted || !(err instanceof TypeError) || navigator.onLine === false || attempt >= waits.length) throw err;
+      say(`The upload didn't get through, so Syllabi is sending it again (try ${attempt + 2} of ${waits.length + 1}).`);
+      await new Promise((resolve) => setTimeout(resolve, waits[attempt]));
+      if (signal.aborted) throw err;
+    }
+  }
+}
+
 interface LastRequest {
   route: string;
   body: Record<string, unknown>;
@@ -161,12 +183,8 @@ export function useGeneration(onFinished: () => void) {
 
     try {
       // Every answer is streamed: the first words show within seconds, and a study pack's connection is kept alive while it is written.
-      const res = await fetch(route, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
-        body: JSON.stringify({ ...body, stream: true }),
-      });
+      const res = await sendWithRetries(route, JSON.stringify({ ...body, stream: true }), controller.signal, setNotice);
+      setNotice(null);
       replied = true;
       runId = res.headers.get("X-Run-Id");
       const data = await readResponse(res);
