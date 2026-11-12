@@ -10,7 +10,7 @@ import { blockedReason, buildRequestBody, questionProblem, type Question } from 
 import { checkPages } from "@/lib/ingestion/upload-pages";
 import { parsePhotos } from "@/lib/generation/attachments";
 import { PAPER_REPORT } from "../fixtures/bhakti-exercise-pages";
-import { checkMixedNumbers, checkPaperMarks, checkRightAnswerMarks, checkTeacherAlgebra, checkTickedSteps, checkWronglyMarked, gradeFor, gradeScaleText, withoutStudentWork } from "@/lib/checks/paper";
+import { applySettledMarks, checkMixedNumbers, checkPaperMarks, paperConfidence, withConfidenceLine, checkRightAnswerMarks, checkTeacherAlgebra, checkTickedSteps, checkWronglyMarked, gradeFor, gradeScaleText, withoutStudentWork } from "@/lib/checks/paper";
 import { wrongAlgebraSteps } from "@/lib/checks/algebra";
 import { checkArithmetic } from "@/lib/checks/arithmetic";
 import { isNoQuestions, solveParts } from "@/lib/generation/solve-parts";
@@ -919,6 +919,38 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
     check(long.length <= 40 && long.every((p) => namedPages(p.prompt).length <= 12) && namedPages(long[long.length - 1].prompt).includes(300), `Solve all: a long book is done in at most 40 parts of at most 12 pages, to its last page (${long.length} parts)`);
     check(isNoQuestions("No questions on these pages.") && isNoQuestions("**No questions on this page**") && !isNoQuestions("Q1. No questions on these pages were hard."), "Solve all: a part with no questions is recognised by its reply");
     check(isSolveAll("solution", ` ${COMMANDS.solution[0].prompt} `, 0) && !isSolveAll("solution", `${COMMANDS.solution[0].prompt} for chapter 2`, 0) && !isSolveAll("solution", COMMANDS.solution[0].prompt, 1) && !isSolveAll("notes", COMMANDS.solution[0].prompt, 0), "Solve all: only the command as it stands, with nothing attached, is done in parts");
+  }
+  // Reports 8 and 9: a result written with its % sign is not a wrong sum; a settled mark is put in everywhere by code.
+  {
+    check(checkArithmetic("Loss % = (1500 × 100) / 12980 = 11.56%").every((c) => c.ok) && checkArithmetic("loss percent = (100 × 100) / 720 = 10000 / 720 = 13.89%").every((c) => c.ok) && checkArithmetic("Loss % = (1500 × 100) / 12980 = 11.56%").length > 0, "Arithmetic: a result written with its % sign (= 11.56%) is right when the number is");
+    check(checkArithmetic("Rate = 10½% = 105%").some((c) => !c.ok) && checkArithmetic("25% = 0.25").every((c) => c.ok) && checkArithmetic("(1500 × 100) / 12980 = 12.56%").some((c) => !c.ok) && checkArithmetic("SP = (95 / 100) × 40 = 380 / 100").some((c) => !c.ok), "Arithmetic: a wrong percentage, and a wrong sum beside one, are still caught");
+    const marked = [
+      "# Paper check: Maths paper",
+      "",
+      "**Total: 7 / 10 (70%) · Grade: B+**",
+      "",
+      "| Q | Max | Marks | Steps | Answer |",
+      "|---|---|---|---|---|",
+      "| 14 | 5 | 5 | ✓ | ✓ |",
+      "| 15 | 5 | 2 | ~ | ✗ |",
+      "",
+      "## Question 14 — 5/5",
+      "**Marks:** Method 3/3, Answer 2/2. Fine.",
+      "",
+      "## Question 15 — 2/5",
+      "**Question:** Find the S.P. when C.P. = ₹40 and Loss = 5%.",
+      "**Correct answer:** ₹3.80",
+      "**Marks:** Method 2/3, Answer 0/2. A simplification error.",
+      "**To do better:** Check division.",
+      "",
+      "## Overall feedback",
+      "**Well done:** Good.",
+    ].join("\n");
+    const fixed = applySettledMarks(marked, [{ question: "15", marks: 5, reason: "The student's 380/10 = 38 is right. Correct answer: ₹38." }, { question: "14", marks: 5, reason: "Already right." }]);
+    check(fixed.includes("| 15 | 5 | 5 |") && fixed.includes("## Question 15 — 5/5") && fixed.includes("**Marks:** 5/5. Settled by the head examiner: The student's 380/10 = 38 is right.") && fixed.includes("**Total: 10 / 10 (100%) · Grade: A+**") && fixed.includes("**Marks:** Method 3/3, Answer 2/2. Fine.") && fixed.includes("## Question 14 — 5/5"), `Marking: a settled mark is put in the table, the heading, the Marks line, the total and the grade; a question already right is untouched (${fixed.slice(0, 160)})`);
+    check(checkPaperMarks(fixed, null).every((c) => c.ok) && applySettledMarks(marked, []) === marked && applySettledMarks(marked, [{ question: "99", marks: 1, reason: "" }]) === marked, "Marking: the report still adds up after a mark is settled; nothing to settle changes nothing");
+    const sure = withConfidenceLine(fixed, 85);
+    check(paperConfidence(sure) === 85 && paperConfidence(marked) === null && sure.indexOf("**Confidence in these marks: 85%**") > sure.indexOf("**Total:") && sure.indexOf("**Confidence") < sure.indexOf("| Q |") && paperConfidence(withConfidenceLine(sure, 65)) === 65 && (withConfidenceLine(sure, 65).match(/Confidence in these marks/g) ?? []).length === 1 && checkPaperMarks(sure, null).every((c) => c.ok), "Marking: the confidence is written under the total, once, and read back");
   }
   // Solve's book filters: class, subject and chapter, however they were typed.
   {

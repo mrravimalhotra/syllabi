@@ -437,7 +437,7 @@ await test("Ask: only Solve has the command; the other kinds of answer have none
 });
 
 await test("Check paper: attach the solved paper, set marks per question, and get a marked report with a score card", async (page, ctx) => {
-  const report = "# Paper check: Class 7 maths worksheet\n\n**Total: 12 / 15 (80%) · Grade: A**\n\n| Q | Max | Marks | Steps | Answer |\n|---|---|---|---|---|\n| 1 | 5 | 5 | ✓ | ✓ |\n| 2 | 5 | 4 | ✓ | ✗ |\n| 3 | 5 | 3 | ~ | ✗ |\n\n## Question 2 — 4/5\n**Student's working:**\n- ✓ 3/4 = 9/12\n- ✗ Student wrote: 2/3 = 6/12 (−1)\n- ✔ Correct step: 2/3 = 8/12\n\n**To do better:** Check each converted fraction.";
+  const report = "# Paper check: Class 7 maths worksheet\n\n**Total: 12 / 15 (80%) · Grade: A**\n\n**Confidence in these marks: 85%**\n\n| Q | Max | Marks | Steps | Answer |\n|---|---|---|---|---|\n| 1 | 5 | 5 | ✓ | ✓ |\n| 2 | 5 | 4 | ✓ | ✗ |\n| 3 | 5 | 3 | ~ | ✗ |\n\n## Question 2 — 4/5\n**Student's working:**\n- ✓ 3/4 = 9/12\n- ✗ Student wrote: 2/3 = 6/12 (−1)\n- ✔ Correct step: 2/3 = 8/12\n\n**To do better:** Check each converted fraction.";
   await ctx.route("**/api/me", (r) => json(r, me));
   await ctx.route("**/api/library**", (r) => json(r, { documents: [{ id: "t1", title: "A Textbook", subject: null, grade: null, source_type: "textbook", status: "ready", created_at: now, pages: null }] }));
   let sent = null;
@@ -461,7 +461,8 @@ await test("Check paper: attach the solved paper, set marks per question, and ge
   await page.getByRole("button", { name: /^Generate$/ }).click();
   await page.getByTestId("paper-score").waitFor({ timeout: 10000 });
   await page.getByTestId("paper-score").getByText("Grade A").waitFor();
-  await page.getByTestId("paper-score").getByText("80%").waitFor();
+  await page.getByTestId("paper-score").getByText("80%", { exact: true }).waitFor();
+  await page.getByTestId("paper-confidence").getByText("85% sure of these marks").waitFor();
   // Report 2: the step that lost marks is red, and the correct step under it green.
   const wrongStep = page.locator("li", { hasText: "Student wrote: 2/3 = 6/12" });
   const rightStep = page.locator("li", { hasText: "Correct step: 2/3 = 8/12" });

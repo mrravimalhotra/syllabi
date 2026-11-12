@@ -288,3 +288,66 @@ export function checkRightAnswerMarks(report: string): AnswerCheck[] {
     ];
   });
 }
+
+const CONFIDENCE = /^\**Confidence in these marks:\**\s*(\d{1,3})\s*%/im;
+
+/** The report with "Confidence in these marks: N%" under its total (replacing one already there). */
+export function withConfidenceLine(report: string, percent: number): string {
+  const line = `**Confidence in these marks: ${percent}%**`;
+  const lines = report.split("\n").filter((l) => !CONFIDENCE.test(l.trim()));
+  const at = lines.findIndex((l) => TOTAL.test(l));
+  if (at === -1) return report;
+  lines.splice(at + 1, 0, "", line);
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n");
+}
+
+/** How sure the marks are (0 to 100), when the report says. */
+export function paperConfidence(report: string): number | null {
+  const found = CONFIDENCE.exec(report);
+  return found ? Number(found[1]) : null;
+}
+
+const sameQuestion = (a: string, b: string) => a.toLowerCase().replace(/[\s.()]/g, "") === b.toLowerCase().replace(/^q\.?/, "").replace(/[\s.()]/g, "");
+
+/** A question's section of the report as written (without its heading); "" when there is none. */
+export function sectionText(report: string, question: string): string {
+  return (questionSections(report).find((s) => sameQuestion(s.label, question))?.lines ?? []).join("\n").trim();
+}
+
+/**
+ * Puts settled marks into the report by code, so that whatever the last rewrite did each settled question shows its
+ * final mark everywhere: the table row, its heading, its Marks line (with the reason), and the total, percentage and
+ * grade. A question that already shows its settled mark is left as it is.
+ */
+export function applySettledMarks(report: string, settled: { question: string; marks: number; reason: string }[]): string {
+  const rows = tableRows(report);
+  const changes = settled.filter((s) => rows.some((r) => sameQuestion(r.question, s.question) && Math.abs(r.marks - s.marks) > 0.001));
+  if (changes.length === 0) return report;
+  const final = (question: string) => changes.find((s) => sameQuestion(question, s.question));
+  let section: (typeof changes)[number] | undefined;
+  const lines = report.split("\n").map((line) => {
+    const heading = HEADING.exec(line.trim());
+    if (heading) {
+      section = final(heading[1]);
+      return section ? line.replace(/[—–-]+\s*[\d.½]+\s*\/\s*([\d.]+)\s*$/, `— ${fmt(section.marks)}/$1`) : line;
+    }
+    if (/^#{1,3}\s/.test(line.trim())) section = undefined;
+    if (line.trim().startsWith("|")) {
+      const cells = line.trim().replace(/^\||\|$/g, "").split("|");
+      const change = cells.length >= 3 && !Number.isNaN(Number(cells[1])) && cells[1].trim() !== "" ? final(cells[0].replace(/\*/g, "").trim().replace(/^Q\.?\s*/i, "")) : undefined;
+      if (change) cells[2] = ` ${fmt(change.marks)} `;
+      return change ? `|${cells.join("|")}|` : line;
+    }
+    if (section && /^\s*\**Marks:\**/i.test(line)) {
+      const max = rows.find((r) => sameQuestion(r.question, section!.question))?.max;
+      return `**Marks:** ${fmt(section.marks)}/${max === undefined ? "?" : fmt(max)}. Settled by the head examiner${section.reason ? `: ${section.reason}` : "."}`;
+    }
+    return line;
+  });
+  const now = tableRows(lines.join("\n"));
+  const [marks, max] = [now.reduce((sum, r) => sum + r.marks, 0), now.reduce((sum, r) => sum + r.max, 0)];
+  const percent = max === 0 ? 0 : Math.round((marks / max) * 100);
+  return lines
+    .map((line) => (TOTAL.test(line) ? `**Total: ${fmt(marks)} / ${fmt(max)} (${percent}%) · Grade: ${gradeFor(percent)}**` : line))
+    .join("\n");
+}

@@ -54,6 +54,7 @@ import * as followUp from "../../src/app/api/documents/[id]/follow-up/route";
 // The real answer pipeline (the routes above use a stand-in), with the AI faked: for the answer checker.
 import { runGeneration } from "../../src/lib/generation/pipeline";
 import { VERIFY_SYSTEM, parseProblems } from "../../src/lib/generation/verify";
+import { MODERATOR_SYSTEM } from "../../src/lib/generation/settle-marking";
 import { SECOND_MARKING_SYSTEM, parseMarking } from "../../src/lib/generation/second-marking";
 import { RERANK_SYSTEM, REWRITE_SYSTEM } from "../../src/lib/rag/refine";
 import { SECOND_SOLVE_SYSTEM } from "../../src/lib/generation/second-solve";
@@ -1041,22 +1042,52 @@ failures.length = 0;
 
   // A checked paper is marked a second time, independently: a question the markings disagree on is looked at again.
   const report = (m: number, grade: string) => `# Paper check: Maths\n\n| Q | Max | Marks | Steps | Answer |\n|---|---|---|---|---|\n| 1 | 4 | ${m} | 12 x 15 | 170 |\n\n**Total: ${m} / 4 (${m * 25}%) · Grade: ${grade}**`;
-  const paperRun = async (fixTo: number) => {
+  const paperRun = async (fixTo: number, headExaminer: string | null) => {
     calls.length = 0;
     fakeAi.reply = (req) => {
       if (req.systemInstructions === REWRITE_SYSTEM) return { text: '{"queries":[]}' };
       if (req.systemInstructions === SECOND_MARKING_SYSTEM) return (calls.push("mark again"), { text: '{"questions":[{"question":"1","max":4,"marks":2,"reason":"170 is wrong; method shown"}]}' });
+      if (req.systemInstructions === MODERATOR_SYSTEM) {
+        calls.push("settle");
+        moderatorPrompt = (req as unknown as { prompt: string }).prompt;
+        return { text: headExaminer ?? "sorry, I can't" };
+      }
       const fixing = (req as unknown as { prompt: string }).prompt.includes("Your draft answer below has these problems");
       calls.push(fixing ? "fix" : "write");
+      if (fixing) fixPrompt = (req as unknown as { prompt: string }).prompt;
       return { text: fixing ? report(fixTo, fixTo === 2 ? "C" : "A+") : report(4, "A+") };
     };
     return runGeneration({ student: person(), taskType: "paper_check", prompt: "Mark this. Marks per question (set): 4" });
   };
-  out = await paperRun(2);
-  check("second marking: the paper is marked again, and a question the markings disagree on is fixed", calls.slice(0, 2).sort().join() === "mark again,write" && calls.includes("fix") && out.text.includes("Total: 2 / 4"), `${calls.join()} | ${out.text.slice(-60)}`);
-  check("second marking: the fixed report shows the markings now agree", out.checks.some((c) => c.kind === "review" && c.ok && /same marks for every question/.test(c.message)), JSON.stringify(out.checks));
-  out = await paperRun(4);
-  check("second marking: a disagreement that stays is shown to the parent, naming the question", out.checks.some((c) => c.kind === "review" && !c.ok && /Q1: An independent second marking gave 2 \/ 4/.test(c.message)), JSON.stringify(out.checks));
+  let moderatorPrompt = "";
+  let fixPrompt = "";
+  const reviews = () => out.checks.filter((c) => c.kind === "review");
+  const decided = (marks: number) => `{"questions":[{"question":"1","max":4,"marks":${marks},"correctAnswer":"180","reason":"12 x 15 is 180, not 170; the method is shown."}]}`;
+
+  // The two markings differ (4 and 2): a head examiner marks the question a third time, and that mark is final.
+  out = await paperRun(2, decided(2));
+  check("marking: the paper is marked twice, and the question the markings differ on goes to a head examiner", calls.slice(0, 2).sort().join() === "mark again,write" && calls[2] === "settle" && /First examiner: 4 \/ 4/.test(moderatorPrompt) && /Second examiner: 2 \/ 4\. Their reason: 170 is wrong/.test(moderatorPrompt), `${calls.join()} | ${moderatorPrompt.slice(0, 300)}`);
+  check("marking: the report is rewritten to the head examiner's mark, told exactly what to give", calls.includes("fix") && /settled it at 2 \/ 4/.test(fixPrompt) && /Give Q1 exactly 2 \/ 4/.test(fixPrompt) && out.text.includes("Total: 2 / 4"), fixPrompt.slice(0, 400));
+  check("marking: one final mark with a confidence score, and no second opinion left beside it", reviews().length === 1 && reviews()[0].ok && /^Confidence in these marks: 85%\. .*differed on Q1, so a head examiner marked it a third time/.test(reviews()[0].message) && !JSON.stringify(out.checks).includes("second marking gave") && /\*\*Confidence in these marks: 85%\*\*/.test(out.text), JSON.stringify(reviews()));
+
+  // The rewrite ignores the decision (still 4): the final mark is put in by code, with the total and grade.
+  out = await paperRun(4, decided(2));
+  check("marking: when the rewrite doesn't follow the head examiner, the final mark is put in by code", /\| 1 \| 4 \| 2 \|/.test(out.text) && out.text.includes("**Total: 2 / 4 (50%) · Grade: C**") && out.checks.some((c) => c.kind === "marks" && c.ok) && !out.checks.some((c) => c.kind === "marks" && !c.ok), out.text);
+
+  // The head examiner agrees with neither marking: its mark is used, and the question is named as the least sure.
+  out = await paperRun(3, decided(3));
+  check("marking: all three markings differ: the head examiner's mark is used, with lower confidence and the question named", /\| 1 \| 4 \| 3 \|/.test(out.text) && /Confidence in these marks: 65%/.test(reviews()[0].message) && reviews().some((c) => !c.ok && /^Least sure: Q1\. All three markings differed/.test(c.message)), JSON.stringify(reviews()));
+
+  // The third marking can't be made: the report's mark stands, and it says plainly the question is unsure.
+  out = await paperRun(4, null);
+  check("marking: when the third marking can't be made, the question is named as unsure, without two marks side by side", out.text.includes("Total: 4 / 4") && /Confidence in these marks: 50%\. Every question was marked twice, independently\.$/.test(reviews()[0].message) && reviews().some((c) => !c.ok && /^Least sure: Q1\. The two markings differed and a third could not be made/.test(c.message)) && !JSON.stringify(out.checks).includes("gave 2"), JSON.stringify(reviews()));
+
+  // The markings agree: nothing to settle.
+  out = await paperRun(2, decided(2));
+  fakeAi.reply = (req) => (req.systemInstructions === SECOND_MARKING_SYSTEM ? { text: '{"questions":[{"question":"1","max":4,"marks":4,"reason":"fine"}]}' } : (calls.push(req.systemInstructions === MODERATOR_SYSTEM ? "settle" : "write"), { text: report(4, "A+") }));
+  calls.length = 0;
+  out = await runGeneration({ student: person(), taskType: "paper_check", prompt: "Mark this. Marks per question (set): 4" });
+  check("marking: when the two markings agree, no third marking is made and confidence is high", !calls.includes("settle") && /^Confidence in these marks: 95%\. .*the two markings agreed\.$/.test(reviews()[0].message) && reviews().length === 1, `${calls.join()} ${JSON.stringify(reviews())}`);
   check("second marking: its reply is read, and a bad one is null", parseMarking('{"questions":[{"question":"Q2(a)","max":3,"marks":1.5}]}')?.[0].question === "2(a)" && parseMarking("no") === null);
 
   // Maths is solved a second time: a wrong method with right arithmetic (which the calculator can't see) is caught.

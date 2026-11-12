@@ -9,6 +9,7 @@ import { systemInstructionsFor } from "@/lib/generation/prompts";
 import { problemForRepair, reviewChecks, verifyAnswer, type VerifyProblem } from "@/lib/generation/verify";
 import { disagreements, solveAgain, type FinalAnswer } from "@/lib/generation/second-solve";
 import { markAgain, markingDisagreements, type SecondMark } from "@/lib/generation/second-marking";
+import { finishMarking, settleMarks } from "@/lib/generation/settle-marking";
 import { CITING_TASKS, checkCitations, withPageReferences } from "@/lib/generation/citations";
 import { levelLine } from "@/lib/generation/level";
 import type { AnswerLanguage } from "@/lib/generation/language";
@@ -137,10 +138,10 @@ const NOT_DOUBLE_CHECKED: AnswerCheck = {
  * What the independent checks say, shown with the answer: what they still find, else a clean result (only when
  * the check really ran), and never an unchecked answer that looks checked. Added after any fix, so it never causes one.
  */
-function independentChecks(review: VerifyProblem[] | null, examined: boolean, marking: boolean): AnswerCheck[] {
+function independentChecks(review: VerifyProblem[] | null, examined: boolean): AnswerCheck[] {
   if (review?.length) return [...reviewChecks(review), ...(examined ? [] : [NOT_DOUBLE_CHECKED])];
   if (!examined) return [NOT_DOUBLE_CHECKED];
-  return [marking ? SECOND_MARKING_AGREED : reviewChecks([])[0]];
+  return [reviewChecks([])[0]];
 }
 
 /** Which independent check found a problem, as told to the writer when it is asked to fix it. */
@@ -150,8 +151,6 @@ function foundBy(p: VerifyProblem): string {
   return "found by an independent examiner reading the answer against the books";
 }
 
-/** Shown when a second, independent marking of a checked paper agreed on every question. */
-const SECOND_MARKING_AGREED: AnswerCheck = { kind: "review", ok: true, message: "A second, independent marking gave the same marks for every question" };
 
 /** After this long since writing began, the fix and its re-check think less, so the answer is in well within the time limit. */
 const LATE_MS = 120_000;
@@ -375,6 +374,21 @@ export async function writeAndCheck(input: {
 
 type DraftRequest = Parameters<typeof generateCompletion>[0] & { prompt: string; context: string };
 
+/** The head examiner's settlement of a checked paper's disputed questions (null when there was no second marking), with its usage recorded. */
+async function settleDisputes(input: { studentId: string; second: SecondMark[] | null; report: string; question: string; photos: CompletionImage[]; checks: AnswerCheck[]; late: boolean }) {
+  if (!input.second) return { settlement: null, secondMarks: null };
+  const settlement = await settleMarks({
+    report: input.report,
+    second: input.second,
+    question: input.question,
+    photos: input.photos,
+    findings: input.checks.filter((c) => !c.ok).map((c) => c.message),
+    ...(input.late ? { thinking: LATE_THINKING } : {}),
+  });
+  if (settlement.result) await recordTokenUsage({ studentId: input.studentId, taskType: "paper_check", provider: settlement.result.provider, model: settlement.result.model, usage: settlement.result.usage });
+  return { settlement, secondMarks: settlement.marks };
+}
+
 /**
  * Checks a finished draft and fixes it when needed. Every answer is checked twice over: by code (calculations recomputed, a paper's marks added up and its
  * answer key compared, a worksheet's questions counted) and by a second, independent AI reading against
@@ -439,11 +453,14 @@ async function checkAndRepair(input: {
   let checks = runChecks(result.text);
   const maths = (taskType === "solution" || taskType === "ad_hoc") && checks.some((c) => c.kind === "calculation");
   const marking = taskType === "paper_check";
-  const [firstReview, secondFinals, secondMarks] = await Promise.all([
+  const [firstReview, secondFinals, secondMarking] = await Promise.all([
     runReview(result.text),
     maths ? runSecondSolve() : Promise.resolve(null),
     marking ? runSecondMarking() : Promise.resolve(null),
   ]);
+  // A checked paper: questions the two markings differ on are marked a third time by a head examiner, whose mark
+  // is final, so the teacher gets one mark for each question (lib/generation/settle-marking.ts).
+  const { settlement, secondMarks } = await settleDisputes({ studentId, second: secondMarking, report: result.text, question: request.prompt, photos, checks, late: late() });
   // The examiner's problems with the second solution's (or second marking's) disagreements added; null only when nothing could check.
   const withSecond = (found: VerifyProblem[] | null, text: string): VerifyProblem[] | null => {
     const mismatches = [...(secondFinals ? disagreements(secondFinals, text) : []), ...(secondMarks ? markingDisagreements(secondMarks, text) : [])];
@@ -503,7 +520,12 @@ async function checkAndRepair(input: {
   }
   // What the independent checks still find is shown with the answer, so the parent knows what to look at; a clean
   // result only when the check really ran.
-  checks = [...checks, ...independentChecks(review, examined, marking)];
+  if (marking) {
+    // One final mark for each question, with how sure it is.
+    const finished = finishMarking(result.text, settlement, runChecks);
+    return { result: { ...result, text: finished.text }, checks: finished.checks };
+  }
+  checks = [...checks, ...independentChecks(review, examined)];
   // The checked "[S2]" marks become page references the parent can follow.
   if (cites) result = { ...result, text: withPageReferences(result.text, chunks) };
   return { result, checks };

@@ -230,8 +230,15 @@ export function checkArithmetic(answer: string): AnswerCheck[] {
     // A Markdown list marker ("- 12 = 2 × 2 × 3", "1. ...") is not a minus sign or a number.
     const line = raw.replace(/^\s*(?:[-*+•]|\d+[.)]|>)\s+/, "");
     const parts = normalise(line).split("=");
+    // "Loss % = (1500 × 100)/12980 = 11.56%": the sign often only names the unit of the result. A sum that is right
+    // with the signs read that way is right ("10½% = 105%" is wrong either way).
+    const unsigned = line.includes("%") ? normalise(line.replace(/%(?!\s*of\b)/gi, "")).split("=") : null;
     for (let i = 0; i < parts.length - 1 && checks.length < MAX_CHECKS; i++) {
-      const check = checkPair(parts[i], parts[i + 1], i > 0);
+      let check = checkPair(parts[i], parts[i + 1], i > 0);
+      if (check && !check.ok && unsigned?.length === parts.length) {
+        const plain = checkPair(unsigned[i], unsigned[i + 1], i > 0);
+        if (plain?.ok) check = plain;
+      }
       if (check && !seen.has(check.message)) {
         seen.add(check.message);
         checks.push(check);

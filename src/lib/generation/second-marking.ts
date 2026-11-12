@@ -44,6 +44,8 @@ export interface SecondMark {
   max: number | null;
   marks: number;
   reason: string;
+  /** Set when the two markings differed and a head examiner settled the question: this mark is final (lib/generation/settle-marking.ts). */
+  settled?: boolean;
 }
 
 /** The second marking read back; null when the reply can't be read. */
@@ -78,6 +80,17 @@ export function markingDisagreements(second: SecondMark[], report: string): Veri
   return second.flatMap((s) => {
     const row = rows.find((r) => key(r.question) === key(s.question));
     if (!row || Math.abs(row.marks - s.marks) < 0.5) return [];
+    if (s.settled) {
+      return [
+        {
+          kind: "wrong" as const,
+          fromSecondMarking: true,
+          where: `Q${row.question}`,
+          problem: `The two markings differed, so the head examiner marked it a third time and settled it at ${fmt(s.marks)} / ${fmt(row.max)}${s.reason ? `: ${s.reason}` : "."} The report says ${fmt(row.marks)} / ${fmt(row.max)}.`,
+          fix: `Give Q${row.question} exactly ${fmt(s.marks)} / ${fmt(row.max)}: rewrite its section (correct answer, the ✓ and ✗ lines, the Marks line) to agree with the head examiner, and correct the table, total and grade.`,
+        },
+      ];
+    }
     return [
       {
         kind: "wrong" as const,
