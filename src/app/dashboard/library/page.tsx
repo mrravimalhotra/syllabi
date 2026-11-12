@@ -47,7 +47,7 @@ export default function LibraryPage() {
   const downloads = useBookDownload();
   const scans = useScanCheck(load);
 
-  async function addFiles(fileList: FileList | null) {
+  async function addFiles(fileList: FileList | File[] | null) {
     if (!fileList || fileList.length === 0) return;
     setError(null);
     setProcessingFiles(true);

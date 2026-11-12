@@ -5,6 +5,7 @@ import { readAttachments } from "@/app/dashboard/_ask/attachments";
 import { UploadIcon } from "@/components/icons";
 import { Alert, Spinner, button, card, cx } from "@/components/ui";
 import { OFFLINE_MESSAGE, failedRequestMessage } from "@/lib/http-errors";
+import { TakePhotos } from "@/components/TakePhotos";
 
 /**
  * Adding class diary pages: a PDF or photos (taken with the camera on a phone). The pages are read on the
@@ -15,7 +16,7 @@ export function AddDiary({ onAdded, children }: { onAdded: () => void; children?
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ tone: "success" | "info" | "error"; text: string } | null>(null);
 
-  async function add(files: FileList | null) {
+  async function add(files: FileList | File[] | null) {
     if (!files?.length) return;
     setBusy(true);
     setResult(null);
@@ -65,6 +66,7 @@ export function AddDiary({ onAdded, children }: { onAdded: () => void; children?
           <button type="button" className={button.primary} onClick={() => input.current?.click()} disabled={busy}>
             {busy ? <Spinner /> : <UploadIcon className="h-4 w-4" />} {busy ? "Reading the diary..." : "Add diary pages"}
           </button>
+          <TakePhotos max={12} disabled={busy} onPhotos={(files) => void add(files)} className={button.secondary} label="Take photos of the diary" />
         </div>
         <input
           ref={input}

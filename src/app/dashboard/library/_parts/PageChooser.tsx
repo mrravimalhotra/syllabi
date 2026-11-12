@@ -2,9 +2,10 @@
 
 import { PageCard } from "@/app/dashboard/library/_parts/BookParts";
 import { FileDropArea } from "@/app/dashboard/library/_parts/FileDropArea";
-import { SOURCE_TYPE_OPTIONS, type PendingPage } from "@/app/dashboard/library/_parts/upload-helpers";
+import { MAX_PAGES, SOURCE_TYPE_OPTIONS, type PendingPage } from "@/app/dashboard/library/_parts/upload-helpers";
+import { TakePhotos } from "@/components/TakePhotos";
 import { CheckIcon } from "@/components/icons";
-import { cx, label, link } from "@/components/ui";
+import { button, cx, label, link } from "@/components/ui";
 import type { SourceType } from "@/types/database";
 
 /** The kind of material, the area to drop or choose files, and the pages chosen so far (each with its own kind). */
@@ -28,7 +29,7 @@ export function PageChooser({
   preparing: boolean;
   running: boolean;
   note: string | null;
-  onFiles: (files: FileList | null) => void;
+  onFiles: (files: FileList | File[] | null) => void;
   onRemovePage: (id: string) => void;
   onPageKind: (id: string, sourceType: SourceType) => void;
   onRemoveAll: () => void;
@@ -54,6 +55,7 @@ export function PageChooser({
       </div>
 
       <FileDropArea busy={busy} preparing={preparing} onFiles={onFiles} />
+      <TakePhotos max={MAX_PAGES - pages.length} disabled={busy || preparing} onPhotos={onFiles} className={button.secondary} label="Take photos of the pages" />
 
       {note && pages.length > 0 && (
         <p className="flex items-center gap-1.5 text-xs text-emerald-700">

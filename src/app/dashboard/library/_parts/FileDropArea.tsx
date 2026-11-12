@@ -13,7 +13,7 @@ export function FileDropArea({
 }: {
   busy: boolean;
   preparing: boolean;
-  onFiles: (files: FileList | null) => void;
+  onFiles: (files: FileList | File[] | null) => void;
 }) {
   const [dragging, setDragging] = useState(false);
   return (

@@ -38,7 +38,7 @@ interface Props {
   success: string | null;
   note: string | null;
   onSubmit: (e: React.FormEvent) => void;
-  onFiles: (files: FileList | null) => void;
+  onFiles: (files: FileList | File[] | null) => void;
   onRemovePage: (id: string) => void;
   onPageKind: (id: string, sourceType: SourceType) => void;
   onRemoveAll: () => void;

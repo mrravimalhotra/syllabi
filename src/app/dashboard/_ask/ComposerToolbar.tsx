@@ -2,6 +2,7 @@
 
 import { ACCEPTED_FILES, MAX_PHOTOS } from "@/app/dashboard/_ask/constants";
 import { BookIcon, PaperclipIcon, SparklesIcon } from "@/components/icons";
+import { TakePhotos } from "@/components/TakePhotos";
 import { Spinner, button, cx } from "@/components/ui";
 import { LANGUAGE_NAMES, type AnswerLanguage } from "@/lib/generation/language";
 
@@ -23,7 +24,7 @@ interface Props {
   overQuota: boolean;
   /** Why Generate is off (shown under the form), or null. */
   blocked: string | null;
-  onAttach: (files: FileList | null) => void;
+  onAttach: (files: FileList | File[] | null) => void;
   onToggleBooks: () => void;
   onTotalMarks: (marks: string) => void;
   onMarksEach: (marks: string) => void;
@@ -70,6 +71,8 @@ export function ComposerToolbar(p: Props) {
           }}
         />
       </label>
+
+      <TakePhotos max={MAX_PHOTOS - photoCount} onPhotos={onAttach} />
 
       {bookCount > 0 && !isPack && !isPaperCheck && (
         <button

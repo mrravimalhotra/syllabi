@@ -491,6 +491,63 @@ await test("Check paper: with no marks given the request says 5 per question is 
   await page.getByTestId("paper-score").getByText("Grade A+").waitFor();
 });
 
+await test("Ask: Take photos takes several photos in a row, one can be removed, and they are attached at once", async (page, ctx) => {
+  await baseRoutes(ctx);
+  let sentPhotos = -1;
+  await ctx.route("**/api/generate/**", (r) => {
+    sentPhotos = (r.request().postDataJSON().photos ?? []).length;
+    return json(r, { ...answer, text: "All three pages solved." });
+  });
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
+  await tap(page.getByRole("button", { name: "Take photos" }));
+  const camera = page.getByRole("dialog", { name: "Take photos" });
+  await camera.getByTestId("camera-view").waitFor({ state: "visible", timeout: 10000 });
+  const shutter = camera.getByRole("button", { name: "Take a photo" });
+  for (let i = 0; i < 4; i++) {
+    await shutter.click();
+    await camera.getByText(`${i + 1} photo${i ? "s" : ""}`).waitFor({ timeout: 5000 });
+  }
+  await camera.getByRole("button", { name: "Remove photo 2" }).click();
+  await camera.getByText("3 photos").waitFor();
+  await camera.getByRole("button", { name: "Attach 3" }).click();
+  await camera.waitFor({ state: "detached" });
+  await page.getByRole("button", { name: "Remove page 3" }).waitFor({ timeout: 15000 });
+  if ((await page.getByRole("button", { name: /^Remove page \d+$/ }).count()) !== 3) throw new Error("three photos should be attached");
+  await page.locator("textarea").fill("Solve these");
+  await page.getByRole("button", { name: /^Generate$/ }).click();
+  await page.getByText("All three pages solved.").first().waitFor({ timeout: 10000 });
+  if (sentPhotos !== 3) throw new Error(`Expected three photos to be sent, saw ${sentPhotos}.`);
+});
+
+await test("Take photos: without the camera allowed it says how to allow it and offers the phone's camera; closing attaches nothing; Homework and My books offer it too", async (page, ctx) => {
+  await baseRoutes(ctx);
+  // The camera refused (as when the phone's settings don't allow it), until the test allows it.
+  await page.addInitScript(() => {
+    const real = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+    navigator.mediaDevices.getUserMedia = (c) => (window.__denyCamera === false ? real(c) : Promise.reject(new DOMException("Permission denied", "NotAllowedError")));
+  });
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
+  await tap(page.getByRole("button", { name: "Take photos" }));
+  const camera = page.getByRole("dialog", { name: "Take photos" });
+  await camera.getByText(/isn't allowed to use the camera\. Allow it in the phone's Settings/).waitFor({ timeout: 10000 });
+  await camera.getByRole("button", { name: "Use the phone's camera" }).waitFor();
+  await camera.getByRole("button", { name: "Close the camera" }).click();
+  await camera.waitFor({ state: "detached" });
+  await page.evaluate(() => (window.__denyCamera = false));
+  await tap(page.getByRole("button", { name: "Take photos" }));
+  await camera.getByTestId("camera-view").waitFor({ state: "visible", timeout: 10000 });
+  await camera.getByRole("button", { name: "Take a photo" }).click();
+  await camera.getByText("1 photo").waitFor();
+  await camera.getByRole("button", { name: "Close the camera" }).click();
+  await camera.waitFor({ state: "detached" });
+  if ((await page.getByRole("button", { name: /^Remove page/ }).count()) !== 0) throw new Error("closing the camera should attach nothing");
+  await ctx.route("**/api/homework", (r) => json(r, { entries: [], diaryDays: [] }));
+  await page.goto(`${BASE}/dashboard/homework`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Take photos of the diary" }).waitFor({ timeout: 10000 });
+  await page.goto(`${BASE}/dashboard/library`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Take photos of the pages" }).waitFor({ timeout: 10000 });
+});
+
 await test("Ask: an attached photo shows, can be removed, and goes with the question", async (page, ctx) => {
   await baseRoutes(ctx);
   let sentPhotos = -1;
