@@ -196,7 +196,8 @@ export async function runGeneration({
   // The knowledge-base search needs text, so photos are transcribed first and
   // that text joins the typed prompt as the search query.
   let searchQuery = prompt;
-  if (photos.length > 0) {
+  // Marking a paper searches no books (the marker reads the photos itself), so its photos are not transcribed.
+  if (photos.length > 0 && taskType !== "paper_check") {
     // Digital PDF pages bring their own text; only the rest are transcribed.
     const known = photos.filter((p) => p.text).map((p) => p.text!);
     const unread = photos.filter((p) => !p.text);
@@ -209,6 +210,7 @@ export async function runGeneration({
     if (unread.length > 0) onProgress?.("reading photos", { photosToRead: unread.length });
     const transcription = unread.length > 0 ? await transcribePhotos(student.id, unread) : "";
     timings.readingPhotosMs = Date.now() - photosStart;
+    if (unread.length > 0) onProgress?.("photos read", { transcribedChars: transcription.length });
     // Each part gets its share, so a long typed or attached text cannot push the photos' questions out of the search.
     const share = Math.floor(MAX_SEARCH_QUERY_CHARS / 3);
     searchQuery = [prompt.slice(0, share), transcription.slice(0, share), ...known].join("\n\n").trim().slice(0, MAX_SEARCH_QUERY_CHARS);
@@ -298,6 +300,8 @@ async function transcribePhotos(studentId: string, photos: CompletionImage[]): P
     prompt: "Transcribe these photos.",
     images: photos,
     temperature: 0,
+    // Streamed (the words are not shown) so that a model that goes silent is given up on sooner.
+    onText: () => {},
   });
   await recordTokenUsage({
     studentId,

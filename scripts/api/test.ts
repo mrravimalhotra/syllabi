@@ -1037,8 +1037,15 @@ failures.length = 0;
     calls.push(req.systemInstructions === VERIFY_SYSTEM ? "check" : "write");
     return { text: "# Paper check: Maths\n\n**Total: 5 / 5 (100%) · Grade: A1**" };
   };
-  await runGeneration({ student: person(), taskType: "paper_check", prompt: "Mark this" });
+  let transcribed = false;
+  const markOnly = fakeAi.reply;
+  fakeAi.reply = (req) => {
+    if (/^Transcribe the text in these photos/.test(String(req.systemInstructions))) transcribed = true;
+    return markOnly!(req);
+  };
+  await runGeneration({ student: person(), taskType: "paper_check", prompt: "Mark this", photos: [{ data: "QUJD", mimeType: "image/jpeg" }] });
   check("checker: a marked paper is not sent to it (code checks the marks)", !calls.includes("check"), calls.join());
+  check("paper check: the photos are not transcribed first (no books are searched; the marker reads them itself)", !transcribed && calls.includes("write"), calls.join());
 
   // A checked paper is marked a second time, independently: a question the markings disagree on is looked at again.
   const report = (m: number, grade: string) => `# Paper check: Maths\n\n| Q | Max | Marks | Steps | Answer |\n|---|---|---|---|---|\n| 1 | 4 | ${m} | 12 x 15 | 170 |\n\n**Total: ${m} / 4 (${m * 25}%) · Grade: ${grade}**`;
