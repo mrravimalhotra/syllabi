@@ -1,3 +1,4 @@
+import { notifyOwner, type Notification } from "@/lib/push";
 import { NextResponse, after } from "next/server";
 import { apiError, authenticate, errorResponse } from "@/lib/api";
 import { runGeneration, type GenerationInput } from "@/lib/generation/pipeline";
@@ -116,6 +117,8 @@ async function makeAndSaveAnswer(
   const timings = { ...result.timings, totalMs: Date.now() - requestStart, savedMs: Date.now() - savingStart };
   console.log(`[generate:timing] ${JSON.stringify({ taskType, ...timings, answerChars: result.text.length })}`);
   run.finish("answered", { documentId: doc?.id ?? null, timings });
+  // A paper takes minutes to mark, and the phone is often in another app meanwhile: say when it is ready.
+  if (taskType === "paper_check") await notifyOwner(student.id, paperMarked(result.text, doc?.id ?? null));
 
   return {
     id: doc?.id ?? null,
@@ -263,5 +266,16 @@ export function createGenerationRoute(taskType: GenerationTaskType) {
       run.finish("failed", { error: errorText(err) });
       return withRunId(errorResponse(err, `generate ${taskType}`, GENERATE_FAILED), run);
     }
+  };
+}
+
+/** "Your paper is marked: 48 / 50 (96%), grade A+": opens the marked paper. */
+function paperMarked(report: string, documentId: string | null): Notification {
+  const total = /Total:\s*([^*\n]+?)\s*(?:\*\*|$)/m.exec(report)?.[1]?.trim();
+  return {
+    title: "Your paper is marked",
+    body: total ? `${total.replace(/\s*·\s*Grade:\s*/, ", grade ")}. Tap to see the marks.` : "Tap to see the marks.",
+    url: documentId ? `/dashboard/documents/${documentId}` : "/dashboard?tool=paper_check",
+    tag: "paper-marked",
   };
 }

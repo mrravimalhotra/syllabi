@@ -1,5 +1,5 @@
-// Syllabi's service worker. It only does two things: lets the app be installed as a desktop app, and shows
-// a friendly page instead of the browser's error when there is no connection. It never stores pages, answers
+// Syllabi's service worker. It lets the app be installed, shows a friendly page instead of the browser's error
+// when there is no connection, and shows the "Your paper is marked" notification. It never stores pages, answers
 // or data (they are private and must always be the latest), so the installed app is always as up to date as
 // the website: every launch and every page comes from the network.
 const OFFLINE_PAGE = "/offline.html";
@@ -40,5 +40,31 @@ self.addEventListener("fetch", (event) => {
       },
       async () => (await caches.match(OFFLINE_PAGE)) ?? Response.error()
     )
+  );
+});
+
+// "Your paper is marked": shown when the server sends it, even while Syllabi is closed (lib/push.ts).
+self.addEventListener("push", (event) => {
+  let note = { title: "Syllabi", body: "", url: "/dashboard", tag: undefined };
+  try {
+    note = { ...note, ...event.data.json() };
+  } catch {
+    // Not a notification from Syllabi's server: show the plain title.
+  }
+  event.waitUntil(
+    self.registration.showNotification(note.title, { body: note.body, tag: note.tag, icon: "/icon-192.png", badge: "/icon-192.png", data: { url: note.url } })
+  );
+});
+
+// Tapping it opens the page it names: in an open Syllabi window if there is one, otherwise a new one.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = new URL(event.notification.data?.url ?? "/dashboard", self.location.origin).href;
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
+      const open = windows.find((w) => new URL(w.url).origin === self.location.origin);
+      if (open) return open.navigate(url).then((w) => (w ?? open).focus());
+      return self.clients.openWindow(url);
+    })
   );
 });

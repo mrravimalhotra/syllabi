@@ -323,6 +323,19 @@ await test("Ask: when the phone closes the page while an answer is made, it is p
   if (left !== null) throw new Error(`the picked-up answer is still remembered: ${left}`);
 });
 
+await test("Paper check: offers a notification when the paper is marked, and none where notifications aren't set up", async (page, ctx) => {
+  await baseRoutes(ctx);
+  let key = "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U";
+  await ctx.route("**/api/push", (r) => json(r, { publicKey: key }));
+  await page.goto(`${BASE}/dashboard?tool=paper_check`, { waitUntil: "networkidle" });
+  await page.getByText("Marking takes a few minutes. Get a notification when it's done?").waitFor({ timeout: 10000 });
+  await page.getByRole("button", { name: "Notify me" }).waitFor();
+  key = null;
+  await page.goto(`${BASE}/dashboard?tool=paper_check`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(500);
+  if ((await page.getByText(/Get a notification when it's done/).count()) !== 0) throw new Error("offered notifications that aren't set up");
+});
+
 await test("Ask: switching kind clears the text and the old answer", async (page, ctx) => {
   await baseRoutes(ctx);
   await ctx.route("**/api/generate/**", (r) => json(r, { ...answer, text: "Plants make food from sunlight.", timings: { totalMs: 6200, readingPhotosMs: 0, searchMs: 900, loadingImagesMs: 0, firstWordsMs: 2400, writingMs: 4800, repairMs: 0, savedMs: 100, model: "google / gemini-flash-latest" } }));

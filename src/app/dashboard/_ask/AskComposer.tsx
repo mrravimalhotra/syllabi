@@ -1,5 +1,6 @@
 "use client";
 
+import { MarkedNotice } from "@/app/dashboard/_ask/MarkedNotice";
 import { TABS, usesBooks } from "@/app/dashboard/_ask/constants";
 import { AttachmentList } from "@/app/dashboard/_ask/AttachmentList";
 import { BookFilters } from "@/app/dashboard/_ask/BookFilters";
@@ -148,6 +149,7 @@ export function AskComposer({
         onMarksEach={onMarksEach}
         onLanguage={onLanguage}
       />
+      {isCheck && <MarkedNotice />}
     </DropForm>
   );
 }

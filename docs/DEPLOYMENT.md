@@ -37,6 +37,7 @@ Create an API key at aistudio.google.com. The default models are Flash tier, whi
 | `SUPABASE_SERVICE_ROLE_KEY` | the `sb_secret_...` key (legacy variable name; server only) |
 | `GOOGLE_API_KEY` | Gemini API key (the paid project) |
 | `GOOGLE_API_KEY_FREE` | optional: a key from a Google project with no billing (free tier). Tried first for every AI call; the paid key takes over when the free tier is busy or out of its allowance |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | optional: phone notifications ("Your paper is marked"). Make a pair with `npx web-push generate-vapid-keys`; the private key as Sensitive. Without them the Notify me button is not shown |
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | from step 2 |
 | `R2_BUCKET_NAME` | `syllabi` (default if unset) |
 | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` | optional fallbacks |
