@@ -24,14 +24,14 @@ function checked(name: string): string | null {
 }
 
 /** The paid Gemini key, checked to be usable in an HTTP header. */
-export function paidGoogleKey(): string {
+function paidGoogleKey(): string {
   const key = checked("GOOGLE_API_KEY");
   if (!key) throw new Error("GOOGLE_API_KEY is not configured");
   return key;
 }
 
 /** The free-tier key, when one is set and differs from the paid one. */
-export function freeGoogleKey(): string | null {
+function freeGoogleKey(): string | null {
   const key = checked("GOOGLE_API_KEY_FREE");
   return key && key !== process.env.GOOGLE_API_KEY?.trim() ? key : null;
 }
@@ -41,8 +41,8 @@ function rest(model: string, message: string) {
   restingUntil.set(model, Date.now() + ms);
 }
 
-/** Whether the free key is resting for this model (for tests and the health page). */
-export const freeKeyResting = (model: string) => (restingUntil.get(model) ?? 0) > Date.now();
+/** Whether the free key is resting for this model. */
+const freeKeyResting = (model: string) => (restingUntil.get(model) ?? 0) > Date.now();
 
 /** Forgets every rest (tests). */
 export const resetFreeKeyRests = () => restingUntil.clear();
