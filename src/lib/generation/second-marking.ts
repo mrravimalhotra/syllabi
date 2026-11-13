@@ -110,23 +110,28 @@ export function markingDisagreements(second: SecondMark[], report: string): Veri
 // Gemini 2.5 Flash-Lite was retired for new keys (404, 2026-11-13); the -latest name follows Google's current Flash-Lite.
 const SECOND_MARKING_MODEL = "gemini-flash-lite-latest";
 
-/** The second, independent marking, or null when it could not be made (never holds the report back). */
-export async function markAgain(input: { question: string; photos: CompletionImage[]; thinking?: number }): Promise<{ marks: SecondMark[]; result: CompletionResult } | null> {
+/**
+ * The second, independent marking, or null when it could not be made (never holds the report back). With `only`, just
+ * those questions are marked (a blind check of the doubtful ones); with `main`, the paper-checking model marks it
+ * rather than the cheaper one.
+ */
+export async function markAgain(input: { question: string; photos: CompletionImage[]; thinking?: number; only?: string[]; main?: boolean }): Promise<{ marks: SecondMark[]; result: CompletionResult } | null> {
   try {
     // A cheaper model than the main marking's, which also makes the second marking more independent of it. If that
     // model can't be used (retired, renamed), the paper-checking model marks it instead, so the second marking still happens.
     const { provider } = await getLlmSetting("paper_check");
+    const which = input.only?.length ? `Mark only these questions: ${input.only.join(", ")}. Leave every other question out.` : "Mark each question";
     const request = {
       taskType: "paper_check" as const,
       systemInstructions: SECOND_MARKING_SYSTEM,
-      prompt: `${input.question}\n\nMark each question and give the marks as JSON.`,
+      prompt: `${input.question}\n\n${which} and give the marks as JSON.`,
       images: input.photos,
       temperature: 0.1,
       maxOutputTokens: 4096,
       thinking: input.thinking ?? 8192,
       jsonSchema: SCHEMA,
     };
-    const cheaper = provider === "google" ? process.env.SECOND_MARKING_MODEL || SECOND_MARKING_MODEL : null;
+    const cheaper = provider === "google" && !input.main ? process.env.SECOND_MARKING_MODEL || SECOND_MARKING_MODEL : null;
     const result = cheaper
       ? await generateCompletion({ ...request, model: cheaper }).catch((err: unknown) => {
           if (err instanceof BlockedReplyError) throw err;

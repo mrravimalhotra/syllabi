@@ -9,7 +9,7 @@ import { systemInstructionsFor } from "@/lib/generation/prompts";
 import { problemForRepair, reviewChecks, verifyAnswer, type VerifyProblem } from "@/lib/generation/verify";
 import { disagreements, solveAgain, type FinalAnswer } from "@/lib/generation/second-solve";
 import { markAgain, markingDisagreements, type SecondMark } from "@/lib/generation/second-marking";
-import { finishMarking, settleMarks, settleMovedMarks, type Settlement } from "@/lib/generation/settle-marking";
+import { confirmMarks, doubtfulQuestions, finishMarking, settleMarks, settleMovedMarks, type Settlement } from "@/lib/generation/settle-marking";
 import { CITING_TASKS, checkCitations, withPageReferences } from "@/lib/generation/citations";
 import { levelLine } from "@/lib/generation/level";
 import type { AnswerLanguage } from "@/lib/generation/language";
@@ -154,6 +154,8 @@ function foundBy(p: VerifyProblem): string {
 
 /** After this long since writing began, the fix and its re-check think less, so the answer is in well within the time limit. */
 const LATE_MS = 120_000;
+/** A checked paper's doubtful questions get a blind marking only if this long since writing began has not passed (the limit is 300 s). */
+const BLIND_CHECK_BY_MS = 190_000;
 /** Rounds of fixing an answer the checks found problems in (the second only before LATE_MS). */
 const MAX_REPAIR_ROUNDS = 2;
 const LATE_THINKING = 1024;
@@ -401,9 +403,23 @@ const nothingToRewrite = (marking: boolean, failed: AnswerCheck[], review: Verif
   failed.length + (review?.length ?? 0) === 0 || (marking && failed.length === 0 && (review ?? []).every((p) => p.settledMark));
 
 /** A checked paper's last step: moved marks settled, then one final mark per question with the confidence. */
-async function finishPaper(input: Omit<Parameters<typeof settleMoved>[0], "settlement"> & { settlement: Settlement | null }, runChecks: (text: string) => AnswerCheck[]) {
-  const final = input.settlement ? await settleMoved({ ...input, settlement: input.settlement }) : null;
+async function finishPaper(input: Omit<Parameters<typeof settleMoved>[0], "settlement"> & { settlement: Settlement | null; blindCheck: boolean }, runChecks: (text: string) => AnswerCheck[]) {
+  const moved = input.settlement ? await settleMoved({ ...input, settlement: input.settlement }) : null;
+  const final = moved && input.blindCheck ? await blindCheck({ ...input, settlement: moved }) : moved;
   return finishMarking(input.report, final, runChecks);
+}
+
+/**
+ * The questions still in doubt after the head examiner are marked once more, blind (by the paper-checking model, without
+ * any other marking in hand); the majority decides (lib/generation/settle-marking.ts confirmMarks).
+ */
+async function blindCheck(input: { studentId: string; report: string; settlement: Settlement; question: string; photos: CompletionImage[]; late: boolean }): Promise<Settlement> {
+  const doubtful = doubtfulQuestions(input.settlement);
+  if (doubtful.length === 0) return input.settlement;
+  const blind = await markAgain({ question: input.question, photos: input.photos, only: doubtful, main: true, ...(input.late ? { thinking: LATE_THINKING } : {}) });
+  if (!blind) return input.settlement;
+  await recordTokenUsage({ studentId: input.studentId, taskType: "paper_check", provider: blind.result.provider, model: blind.result.model, usage: blind.result.usage });
+  return confirmMarks(input.settlement, input.report, blind.marks);
 }
 
 /** After the report was corrected: marks moved away from the markings' agreement settled too, with the usage recorded. */
@@ -477,7 +493,8 @@ async function checkAndRepair(input: {
   };
   // A checked paper is marked a second time, independently; a question the two markings disagree on is a problem.
   const runSecondMarking = async (): Promise<SecondMark[] | null> => {
-    const second = await markAgain({ question: request.prompt, photos });
+    // A failed second marking is tried once more with the paper-checking model: a paper marked once can't be trusted as much.
+    const second = (await markAgain({ question: request.prompt, photos })) ?? (late() ? null : await markAgain({ question: request.prompt, photos, main: true }));
     if (!second) return null;
     await recordTokenUsage({ studentId, taskType, provider: second.result.provider, model: second.result.model, usage: second.result.usage });
     return second.marks;
@@ -557,7 +574,7 @@ async function checkAndRepair(input: {
   if (marking) {
     // A mark the correction moved away from what both markings agreed on is settled too; then one final mark for
     // each question, with how sure it is.
-    const finished = await finishPaper({ studentId, report: result.text, settlement, question: request.prompt, photos, checks, late: late() }, runChecks);
+    const finished = await finishPaper({ studentId, report: result.text, settlement, question: request.prompt, photos, checks, late: late(), blindCheck: Date.now() - began < BLIND_CHECK_BY_MS }, runChecks);
     return { result: { ...result, text: finished.text }, checks: finished.checks };
   }
   checks = [...checks, ...independentChecks(review, examined)];

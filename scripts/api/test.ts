@@ -1049,10 +1049,14 @@ failures.length = 0;
 
   // A checked paper is marked a second time, independently: a question the markings disagree on is looked at again.
   const report = (m: number, grade: string) => `# Paper check: Maths\n\n| Q | Max | Marks | Steps | Answer |\n|---|---|---|---|---|\n| 1 | 4 | ${m} | 12 x 15 | 170 |\n\n**Total: ${m} / 4 (${m * 25}%) · Grade: ${grade}**`;
-  const paperRun = async (fixTo: number, headExaminer: string | null) => {
+  const paperRun = async (fixTo: number, headExaminer: string | null, blindMark = 2) => {
     calls.length = 0;
     fakeAi.reply = (req) => {
       if (req.systemInstructions === REWRITE_SYSTEM) return { text: '{"queries":[]}' };
+      if (req.systemInstructions === SECOND_MARKING_SYSTEM && /Mark only these questions: 1\./.test((req as unknown as { prompt: string }).prompt)) {
+        blindModel = String((req as { model?: string }).model);
+        return (calls.push("blind"), { text: `{"questions":[{"question":"1","max":4,"marks":${blindMark},"reason":"blind look"}]}` });
+      }
       if (req.systemInstructions === SECOND_MARKING_SYSTEM) {
         secondModel = String((req as { model?: string }).model);
         return (calls.push("mark again"), { text: '{"questions":[{"question":"1","max":4,"marks":2,"reason":"170 is wrong; method shown"}]}' });
@@ -1070,6 +1074,7 @@ failures.length = 0;
   };
   let moderatorPrompt = "";
   let secondModel = "";
+  let blindModel = "";
   const reviews = () => out.checks.filter((c) => c.kind === "review");
   const decided = (marks: number) => `{"questions":[{"question":"1","max":4,"marks":${marks},"correctAnswer":"180","reason":"12 x 15 is 180, not 170; the method is shown."}]}`;
 
@@ -1078,19 +1083,26 @@ failures.length = 0;
   check("marking: the paper is marked twice, and the question the markings differ on goes to a head examiner", calls.slice(0, 2).sort().join() === "mark again,write" && calls[2] === "settle" && /First examiner: 4 \/ 4/.test(moderatorPrompt) && /Second examiner: 2 \/ 4\. Their reason: 170 is wrong/.test(moderatorPrompt), `${calls.join()} | ${moderatorPrompt.slice(0, 300)}`);
   check("marking: the second marking uses the cheaper model", secondModel === "gemini-flash-lite-latest", secondModel);
   check("marking: a settled mark is put in by code, with no paid rewrite of the report (only a settled mark to apply)", !calls.includes("fix") && out.text.includes("**Total: 2 / 4 (50%) · Grade: C**") && out.text.includes("| 1 | 4 | 2 |") && out.checks.filter((c) => c.kind === "marks").every((c) => c.ok), `${calls.join()} | ${out.text.slice(0, 300)}`);
-  check("marking: one final mark with a confidence score, and no second opinion left beside it", reviews().length === 1 && reviews()[0].ok && /^Confidence in these marks: 85%\. .*differed on Q1, so a head examiner marked it a third time/.test(reviews()[0].message) && !JSON.stringify(out.checks).includes("second marking gave") && /\*\*Confidence in these marks: 85%\*\*/.test(out.text), JSON.stringify(reviews()));
+  check("marking: one final mark with a confidence score, and no second opinion left beside it", reviews().length === 1 && reviews()[0].ok && /^Confidence in these marks: 95%\. .*differed on Q1, so a head examiner marked it a third time.* A further blind marking agreed on Q1\./.test(reviews()[0].message) && !JSON.stringify(out.checks).includes("second marking gave") && /\*\*Confidence in these marks: 95%\*\*/.test(out.text), JSON.stringify(reviews()));
+  check("marking: the doubtful question is marked once more, blind, by the paper-checking model", calls.filter((c) => c === "blind").length === 1 && blindModel === "undefined", `${calls.join()} ${blindModel}`);
+  out = await paperRun(2, decided(2), 3);
+  check("marking: a blind marking that disagrees leaves the head examiner's mark, at 85%", /\| 1 \| 4 \| 2 \|/.test(out.text) && /^Confidence in these marks: 85%/.test(reviews()[0].message), JSON.stringify(reviews()));
 
   // The rewrite ignores the decision (still 4): the final mark is put in by code, with the total and grade.
   out = await paperRun(4, decided(2));
   check("marking: when the rewrite doesn't follow the head examiner, the final mark is put in by code", /\| 1 \| 4 \| 2 \|/.test(out.text) && out.text.includes("**Total: 2 / 4 (50%) · Grade: C**") && out.checks.some((c) => c.kind === "marks" && c.ok) && !out.checks.some((c) => c.kind === "marks" && !c.ok), out.text);
 
   // The head examiner agrees with neither marking: its mark is used, and the question is named as the least sure.
-  out = await paperRun(3, decided(3));
+  out = await paperRun(3, decided(3), 1);
   check("marking: all three markings differ: the head examiner's mark is used, with lower confidence and the question named", /\| 1 \| 4 \| 3 \|/.test(out.text) && /Confidence in these marks: 65%/.test(reviews()[0].message) && reviews().some((c) => !c.ok && /^Least sure: Q1\. All three markings differed/.test(c.message)), JSON.stringify(reviews()));
+  out = await paperRun(3, decided(3));
+  check("marking: all three differ, and a blind marking agrees with the second marking: that mark has two behind it and is used", /\| 1 \| 4 \| 2 \|/.test(out.text) && /Confidence in these marks: 85%/.test(reviews()[0].message) && !reviews().some((c) => /Least sure/.test(c.message)), `${out.text.slice(0, 300)} ${JSON.stringify(reviews())}`);
 
   // The third marking can't be made: the report's mark stands, and it says plainly the question is unsure.
-  out = await paperRun(4, null);
+  out = await paperRun(4, null, 1);
   check("marking: when the third marking can't be made, the question is named as unsure, without two marks side by side", out.text.includes("Total: 4 / 4") && /Confidence in these marks: 50%\. Every question was marked twice, independently\.$/.test(reviews()[0].message) && reviews().some((c) => !c.ok && /^Least sure: Q1\. The two markings differed and a third could not be made/.test(c.message)) && !JSON.stringify(out.checks).includes("gave 2"), JSON.stringify(reviews()));
+  out = await paperRun(4, null, 4);
+  check("marking: no head examiner, but a blind marking agrees with the first marking: that mark is used at 85%", out.text.includes("Total: 4 / 4") && /Confidence in these marks: 85%/.test(reviews()[0].message) && !reviews().some((c) => /Least sure/.test(c.message)), JSON.stringify(reviews()));
 
   // The markings agree: nothing to settle.
   out = await paperRun(2, decided(2));
@@ -1098,6 +1110,19 @@ failures.length = 0;
   calls.length = 0;
   out = await runGeneration({ student: person(), taskType: "paper_check", prompt: "Mark this. Marks per question (set): 4" });
   check("marking: when the two markings agree, no third marking is made and confidence is high", !calls.includes("settle") && /^Confidence in these marks: 95%\. .*the two markings agreed\.$/.test(reviews()[0].message) && reviews().length === 1, `${calls.join()} ${JSON.stringify(reviews())}`);
+  // The second marking's reply can't be read: it is tried once more with the paper-checking model, so the paper is still marked twice.
+  {
+    const models: string[] = [];
+    fakeAi.reply = (req) => {
+      if (req.systemInstructions === SECOND_MARKING_SYSTEM) {
+        models.push(String((req as { model?: string }).model));
+        return { text: models.length === 1 ? "sorry, I can't" : '{"questions":[{"question":"1","max":4,"marks":4,"reason":"fine"}]}' };
+      }
+      return { text: req.systemInstructions === REWRITE_SYSTEM ? '{"queries":[]}' : report(4, "A+") };
+    };
+    out = await runGeneration({ student: person(), taskType: "paper_check", prompt: "Mark this. Marks per question (set): 4" });
+    check("marking: a second marking that fails is made again with the paper-checking model, so the paper is not marked only once", models.join() === "gemini-flash-lite-latest,undefined" && /^Confidence in these marks: 95%/.test(reviews()[0].message), `${models.join()} ${JSON.stringify(reviews())}`);
+  }
   // The Q4 case (13 Nov): both markings agreed on a question, then correcting the report moved its mark.
   {
     const two = (q1: number, q2: number) => {

@@ -44,12 +44,14 @@ const SCHEMA = {
 };
 
 /** How a question's final mark was arrived at. */
-type Basis = "agreed" | "settled" | "settled alone" | "unsettled" | "single";
+type Basis = "agreed" | "confirmed" | "settled" | "settled alone" | "unsettled" | "single";
 
 export interface Settlement {
   /** The marks the report must show: the second marking's, with each disputed question replaced by the head examiner's (settled: true). */
   marks: SecondMark[];
   basis: Map<string, Basis>;
+  /** The second marking's own mark for each question, before any was settled. */
+  secondOf?: Map<string, number>;
   /** The head examiner's call, for the usage record (none when no question was disputed or the call failed). */
   result?: CompletionResult;
 }
@@ -67,11 +69,12 @@ const MAX_DISPUTES = 12;
 export async function settleMarks(input: { report: string; second: SecondMark[]; question: string; photos: CompletionImage[]; findings: string[]; thinking?: number }): Promise<Settlement> {
   const rows = tableRows(input.report);
   const basis = new Map<string, Basis>(rows.map((r) => [key(r.question), "agreed" as Basis]));
+  const secondOf = new Map(input.second.map((s) => [key(s.question), s.marks]));
   const disputes = rows
     .map((row) => ({ row, other: input.second.find((s) => key(s.question) === key(row.question)) }))
     .filter((d): d is { row: (typeof rows)[number]; other: SecondMark } => d.other !== undefined && differ(d.row.marks, d.other.marks))
     .slice(0, MAX_DISPUTES);
-  if (disputes.length === 0) return { marks: input.second, basis };
+  if (disputes.length === 0) return { marks: input.second, basis, secondOf };
   for (const d of disputes) basis.set(key(d.row.question), "unsettled");
 
   const cases = disputes.map(
@@ -103,10 +106,10 @@ export async function settleMarks(input: { report: string; second: SecondMark[];
       const answer = answers.get(key(s.question));
       return { ...s, marks: marksGiven, max: dispute.row.max, settled: true, reason: `${final.reason}${answer ? ` Correct answer: ${answer}.` : ""}`.trim() };
     });
-    return { marks, basis, result };
+    return { marks, basis, secondOf, result };
   } catch (err) {
     console.error("[settle marking]", err instanceof Error ? err.message : err);
-    return { marks: input.second, basis };
+    return { marks: input.second, basis, secondOf };
   }
 }
 
@@ -137,7 +140,44 @@ export async function settleMovedMarks(input: { report: string; settlement: Sett
     basis.set(key(m.question), "agreed");
     return { ...m, settled: true, reason: `Both markings agreed on ${fmt(m.marks)}, so that mark stands.` };
   });
-  return { marks, basis, result: again?.result };
+  return { ...settlement, marks, basis, result: again?.result };
+}
+
+/** The questions whose mark is still in doubt after the head examiner: worth one more, blind marking. */
+export function doubtfulQuestions(settlement: Settlement): string[] {
+  const doubtful: Basis[] = ["settled", "settled alone", "unsettled"];
+  return settlement.marks.filter((m) => doubtful.includes(settlement.basis.get(key(m.question)) ?? "agreed")).map((m) => m.question);
+}
+
+/**
+ * A blind marking of the doubtful questions, made without seeing any other marking, decides by majority:
+ * - it agrees with the final mark: that mark is confirmed (most markings agree);
+ * - the head examiner differed from both markings, or there was none, and the blind marking agrees with one of them:
+ *   that mark has two markings behind it against one, so it is used;
+ * - otherwise the question stays as it was (and is still said to be unsure).
+ * `report` is the first marking (the report's own marks before settling).
+ */
+export function confirmMarks(settlement: Settlement, report: string, blind: SecondMark[]): Settlement {
+  const rows = tableRows(report);
+  const basis = new Map(settlement.basis);
+  const marks = settlement.marks.map((m) => {
+    const b = basis.get(key(m.question));
+    const check = blind.find((x) => key(x.question) === key(m.question));
+    const first = rows.find((r) => key(r.question) === key(m.question));
+    if (!check || !b || !["settled", "settled alone", "unsettled"].includes(b)) return m;
+    const final = b === "unsettled" ? first?.marks : m.marks;
+    if (typeof final === "number" && !differ(check.marks, final)) {
+      basis.set(key(m.question), b === "unsettled" ? "settled" : b === "settled alone" ? "settled" : "confirmed");
+      return b === "unsettled" ? { ...m, marks: final, settled: true, reason: `A third, blind marking agreed with ${fmt(final)}, so that mark is used.` } : m;
+    }
+    // The head examiner's mark (or none) against two markings that agree: the two decide.
+    const backed = [first?.marks, b === "unsettled" ? m.marks : settlement.secondOf?.get(key(m.question))].find((x): x is number => typeof x === "number" && !differ(x, check.marks));
+    if (backed === undefined || b === "settled") return m;
+    basis.set(key(m.question), "settled");
+    const max = first?.max ?? m.max ?? backed;
+    return { ...m, marks: Math.min(Math.max(backed, 0), max), settled: true, reason: `Two independent markings gave ${fmt(backed)}${check.reason ? ` (${check.reason})` : ""}, so that mark is used.` };
+  });
+  return { ...settlement, marks, basis };
 }
 
 /** The head examiner's own answer to each question, by question, from its reply. */
@@ -151,7 +191,7 @@ function correctAnswers(reply: string): Map<string, string> {
 }
 
 /** How sure a question's mark is, by how it was arrived at. */
-const SURE: Record<Basis, number> = { agreed: 95, settled: 85, "settled alone": 65, unsettled: 50, single: 70 };
+const SURE: Record<Basis, number> = { agreed: 95, confirmed: 95, settled: 85, "settled alone": 65, unsettled: 50, single: 70 };
 /** Each sum the exact calculator still finds wrong in the report takes this off, up to the cap. */
 const PER_FINDING = 5;
 const FINDINGS_CAP = 15;
@@ -182,14 +222,15 @@ export function finishMarking(report: string, settlement: Settlement | null, cod
   const percent = Math.max(30, Math.round(mean - Math.min(wrongSums * PER_FINDING, FINDINGS_CAP)));
 
   const of = (b: Basis) => each.filter((q) => q.basis === b).map((q) => q.question);
-  const third = [...of("settled"), ...of("settled alone")];
+  const third = each.filter((q) => ["confirmed", "settled", "settled alone"].includes(q.basis)).map((q) => q.question);
+  const confirmed = of("confirmed");
   const alone = of("settled alone");
   const open = of("unsettled");
   const twice = "Every question was marked twice, independently";
   const how = !settlement
     ? "The paper could only be marked once this time (the second, independent marking could not run), so check the marks carefully."
     : third.length > 0
-      ? `${twice}. The markings differed on ${list(third)}, so a head examiner marked ${third.length === 1 ? "it" : "them"} a third time with both markings in hand, and that mark is final.`
+      ? `${twice}. The markings differed on ${list(third)}, so a head examiner marked ${third.length === 1 ? "it" : "them"} a third time with both markings in hand, and that mark is final.${confirmed.length ? ` A further blind marking agreed on ${list(confirmed)}.` : ""}`
       : open.length > 0
         ? `${twice}.`
         : `${twice}, and the two markings agreed.`;
