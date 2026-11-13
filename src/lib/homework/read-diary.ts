@@ -105,8 +105,8 @@ export async function readDiary(pages: CompletionImage[], fileName: string, agai
     images: pages,
     temperature: again ? 0.2 : 0,
     maxOutputTokens: 8192,
-    // Copying a diary page needs care, not long reasoning; the page is read twice and the readings compared anyway.
-    thinking: 2048,
+    // No thinking limit: dates and digits must come out exactly, and a diary is read only when one is added (13 Nov:
+    // the quality set's diary pages failed in a run with a 2,048 limit, so accuracy wins here).
     jsonSchema: SCHEMA,
   });
   const days = parseDiary(result.text, pages.length);
