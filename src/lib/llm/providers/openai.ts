@@ -49,19 +49,26 @@ export function openAiCompatibleAdapter(provider: OpenAiCompatible): LlmProvider
     async generateCompletion(req: CompletionRequest & { model: string }): Promise<CompletionResult> {
       const openai = client(provider);
 
-      const completion = await openai.chat.completions.create({
-        model: req.model,
-        temperature: req.temperature ?? 0.4,
-        messages: [
-          { role: "system", content: req.systemInstructions },
-          { role: "user", content: userContent(req) },
-        ],
-      });
+      const completion = await openai.chat.completions.create(
+        {
+          model: req.model,
+          temperature: req.temperature ?? 0.4,
+          messages: [
+            { role: "system", content: req.systemInstructions },
+            { role: "user", content: userContent(req) },
+          ],
+        },
+        req.timeoutMs ? { timeout: req.timeoutMs, maxRetries: 0 } : undefined
+      );
 
       const usage = completion.usage;
+      const text = completion.choices[0]?.message?.content ?? "";
+      // Free models that think first can spend their whole reply on thinking and say nothing: that is a failed
+      // answer (the next service is asked), never a blank one shown as the answer.
+      if (!text.trim()) throw new Error(`503 UNAVAILABLE: ${provider} (${completion.model || req.model}) gave an empty reply`);
 
       return {
-        text: completion.choices[0]?.message?.content ?? "",
+        text,
         truncated: completion.choices[0]?.finish_reason === "length",
         provider: provider as Provider,
         // OpenRouter's free router says which model actually answered.

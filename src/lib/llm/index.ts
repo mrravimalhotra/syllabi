@@ -68,6 +68,32 @@ export async function generateCompletion(req: CompletionRequest): Promise<Comple
   }
 }
 
+// A free first try that fails with a rate limit is not tried again for a while (free models allow about 50
+// requests a day without credit, and are often busy).
+const FREE_FIRST_REST_MS = { busy: 60_000, dailyLimit: 60 * 60_000 };
+let freeFirstRestingUntil = 0;
+
+/**
+ * A small, simple job (search words for a question) tried first with OpenRouter's free models, which cost
+ * nothing; the configured model answers as usual when the free one is not set up, busy, slow, says nothing, or
+ * gives a reply `usable` rejects. Never for marking, maths or anything with pictures: those stay on the main model.
+ */
+export async function generateFreeFirst(req: CompletionRequest, usable: (text: string) => boolean, timeoutMs = 8000): Promise<CompletionResult> {
+  if (hasKey("openrouter") && !req.images?.length && Date.now() >= freeFirstRestingUntil) {
+    const model = process.env.OPENROUTER_FREE_FIRST_MODEL || process.env.OPENROUTER_MODEL || "openrouter/free";
+    try {
+      const result = await ADAPTERS.openrouter.generateCompletion({ ...req, model, timeoutMs, onText: undefined });
+      if (usable(result.text)) return result;
+      console.warn(`[llm] free first try (${result.model}) gave an unusable reply for ${req.taskType}; using the main model`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (/\b429\b/.test(message)) freeFirstRestingUntil = Date.now() + (/per[- ]day|daily/i.test(message) ? FREE_FIRST_REST_MS.dailyLimit : FREE_FIRST_REST_MS.busy);
+      console.warn(`[llm] free first try failed for ${req.taskType}; using the main model:`, message.slice(0, 160));
+    }
+  }
+  return generateCompletion(req);
+}
+
 /**
  * Embeddings always go through Google regardless of the completion provider
  * configured for other task types, since Anthropic has no embeddings API and

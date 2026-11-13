@@ -35,6 +35,8 @@ export interface CompletionRequest {
    * and checking. Added on top of `maxOutputTokens`. Gemini only; unset leaves the model's own default.
    */
   thinking?: number;
+  /** Give up after this long (only the free OpenAI-style services use it, to keep a free first try short). */
+  timeoutMs?: number;
   /**
    * Ask for JSON matching this schema (OpenAPI subset, as Gemini takes it).
    * Providers without structured output get the instruction in the prompt only,

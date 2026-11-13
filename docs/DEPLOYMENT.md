@@ -95,7 +95,7 @@ is set in Vercel → Settings → Environment Variables (then redeploy):
 | Mistral | `MISTRAL_API_KEY` | https://console.mistral.ai/api-keys | Free monthly credit; reads page images |
 | NVIDIA | `NVIDIA_API_KEY` (starts `nvapi-`) | https://build.nvidia.com | Free developer credits; text only. Model override: `NVIDIA_MODEL` (default `meta/llama-3.3-70b-instruct`) |
 
-Models can be changed with `GROQ_MODEL`, `OPENROUTER_MODEL`, `MISTRAL_MODEL`.
+Models can be changed with `GROQ_MODEL`, `OPENROUTER_MODEL`, `MISTRAL_MODEL`. With `OPENROUTER_API_KEY` set, the search words for each question are asked of OpenRouter's free models first (`OPENROUTER_FREE_FIRST_MODEL`, default `openrouter/free`), with Gemini taking over when they can't.
 Admin → Health tests each one. Any of them can also be chosen for a task in
 Admin → AI settings (embeddings stay on Gemini: the database stores 768-number
 Gemini vectors). Free tiers may use requests to train their models; check

@@ -1,4 +1,5 @@
 import { googleAdapter, googleEmbedMany } from "@/lib/llm/providers/google";
+import { generateFreeFirst } from "@/lib/llm";
 import { resetFreeKeyRests } from "@/lib/llm/google-keys";
 import { openAiCompatibleAdapter } from "@/lib/llm/providers/openai";
 import { scene } from "@/lib/study-pack/generate";
@@ -21,6 +22,8 @@ interface SentBody {
 const openAiBodies: { messages: { role: string; content: unknown }[]; temperature?: number; model: string }[] = [];
 type Scenario = (url: string, body: SentBody) => Response | null;
 let scenario: Scenario | null = null;
+// What the OpenAI-style services answer, when a test sets it.
+let openAiReply: (() => Response) | null = null;
 const requests: { url: string; body: SentBody; key: string | null }[] = [];
 const reply = (candidate: object, usage: object = { promptTokenCount: 5, candidatesTokenCount: 3, totalTokenCount: 8 }) =>
   new Response(JSON.stringify({ candidates: [candidate], usageMetadata: usage }), { status: 200, headers: { "content-type": "application/json" } });
@@ -49,6 +52,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   }
   if (url.includes("chat/completions")) {
     openAiBodies.push(JSON.parse(String(init?.body)));
+    if (openAiReply) return openAiReply();
     return new Response(JSON.stringify({ model: "served-model", choices: [{ message: { content: "Groq says hi" }, finish_reason: "length" }], usage: { prompt_tokens: 4, completion_tokens: 2, total_tokens: 6 } }), {
       status: 200,
       headers: { "content-type": "application/json" },
@@ -225,6 +229,40 @@ setScenario(() => ok());
 await asked({ model: "test-free-d" });
 check("without a free key, only the paid key is used", requests.map((r) => r.key).join() === "test-key", JSON.stringify(requests.map((r) => r.key)));
 scenario = null;
+
+// Small jobs (search words) go to OpenRouter's free models first; Gemini answers when the free one can't.
+{
+  process.env.OPENROUTER_API_KEY = "test-openrouter-key";
+  const chat = (content: string, status = 200) =>
+    new Response(status === 200 ? JSON.stringify({ model: "free/model", choices: [{ message: { content }, finish_reason: "stop" }], usage: { prompt_tokens: 3, completion_tokens: 2, total_tokens: 5 } }) : JSON.stringify({ error: { message: content, code: status } }), { status, headers: { "content-type": "application/json" } });
+  const isJson = (t: string) => t.trim().startsWith("{");
+  const small = { taskType: "ad_hoc" as const, systemInstructions: "search words", prompt: "Why did Akbar start Sulh-i-kul?", temperature: 0 };
+  setScenario(() => ok('{"queries":["gemini"]}'));
+  openAiReply = () => chat('{"queries":["free"]}');
+  const free = await generateFreeFirst(small, isJson);
+  check("a small job is answered by the free model first", free.provider === "openrouter" && free.text.includes("free") && requests.length === 0, `${free.provider} ${free.text}`);
+  openAiReply = () => chat("");
+  const empty = await generateFreeFirst(small, isJson);
+  check("an empty free reply is never used: Gemini answers", empty.provider === "google" && empty.text.includes("gemini"), `${empty.provider} ${empty.text}`);
+  openAiReply = () => chat("Sure! Here are some queries.");
+  const unusable = await generateFreeFirst(small, isJson);
+  check("a free reply that isn't what was asked for is not used: Gemini answers", unusable.provider === "google", unusable.provider);
+  openAiReply = () => chat("Rate limit exceeded: free-models-per-day", 429);
+  const limited = await generateFreeFirst(small, isJson);
+  const asked = openAiBodies.length;
+  const after = await generateFreeFirst(small, isJson);
+  check("after the free daily limit, the free model is not asked again for a while", limited.provider === "google" && after.provider === "google" && openAiBodies.length === asked, `${openAiBodies.length} vs ${asked}`);
+  delete process.env.OPENROUTER_API_KEY;
+  openAiReply = null;
+  scenario = null;
+}
+{
+  // A backup that says nothing is a failure, not a blank answer.
+  openAiReply = () => new Response(JSON.stringify({ model: "m", choices: [{ message: { content: "" }, finish_reason: "length" }] }), { status: 200, headers: { "content-type": "application/json" } });
+  const blank = await openAiCompatibleAdapter("groq").generateCompletion({ taskType: "ad_hoc", systemInstructions: "x", prompt: "hi", model: "m" }).then(() => "answered", (e: Error) => e.message);
+  check("an OpenAI-style service that gives an empty reply counts as unable to answer", /empty reply/.test(blank), blank);
+  openAiReply = null;
+}
 
 // Study-pack scenes: only fixed choices and real emoji get through.
 const good = scene({ backdrop: "forest", actors: [{ emoji: "🌳", motion: "sway" }, { emoji: "🐦", motion: "fly" }, { emoji: "👩🏽‍🏫", motion: "bounce" }], caption: "A bird in the trees" });
