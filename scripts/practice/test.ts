@@ -1042,7 +1042,7 @@ function q0(): Question {
   {
     const doubtsOnly = [...doubted, ...doubted];
     const settled = settleWordDoubts(doubtsOnly, true);
-    check(settled.length === 1 && settled[0].ok && /2 page references are in the answer's own words/.test(settled[0].message), "Citations: word-only doubts become one note when the independent check found nothing", JSON.stringify(settled));
+    check(settled.length === 1 && settled[0].ok && /2 page references are in the answer's own words/.test(settled[0].message), "Citations: word-only doubts become one note when the independent check found nothing");
     check(settleWordDoubts(doubtsOnly, false).every((c) => !c.ok), "Citations: word-only doubts stay problems when the independent check found mistakes or couldn't run");
     const missing = checkCitations("**Ans:** Something. [S9]", passages);
     check(settleWordDoubts(missing, true).some((c) => !c.ok), "Citations: a source that doesn't exist stays a problem");
