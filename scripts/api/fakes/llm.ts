@@ -12,6 +12,11 @@ export async function generateCompletion(req: { systemInstructions: string; task
   return { text, truncated: truncated ?? false, provider: "google", model: "test", usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, usedSearchGrounding: false };
 }
 
+/** In tests the free first try is not set up, so the main model answers (as in the app without an OpenRouter key). */
+export async function generateFreeFirst(req: { systemInstructions: string; taskType: string }) {
+  return generateCompletion(req);
+}
+
 export async function embed() {
   return { embedding: [], provider: "google", model: "test", usage: { inputTokens: 1, outputTokens: 0, totalTokens: 1 } };
 }
