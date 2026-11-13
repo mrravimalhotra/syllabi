@@ -110,6 +110,36 @@ export async function settleMarks(input: { report: string; second: SecondMark[];
   }
 }
 
+/**
+ * After the report was corrected: a question both markings agreed on whose mark the correction moved is settled too,
+ * so no question is left with two marks. With time left, the head examiner marks it a third time; otherwise (or if
+ * that fails) the mark both markings agreed on is put back. Returns the settlement to finish with, and the head
+ * examiner's call for the usage record when one was made.
+ */
+export async function settleMovedMarks(input: { report: string; settlement: Settlement; question: string; photos: CompletionImage[]; findings: string[]; late: boolean; thinking?: number }): Promise<Settlement> {
+  const { settlement } = input;
+  const rows = tableRows(input.report);
+  const moved = settlement.marks.filter((m) => {
+    const row = rows.find((r) => key(r.question) === key(m.question));
+    return settlement.basis.get(key(m.question)) === "agreed" && row !== undefined && differ(row.marks, m.marks);
+  });
+  if (moved.length === 0) return settlement;
+  const again = input.late ? null : await settleMarks({ report: input.report, second: moved, question: input.question, photos: input.photos, findings: input.findings, thinking: input.thinking });
+  const basis = new Map(settlement.basis);
+  const marks = settlement.marks.map((m) => {
+    if (!moved.includes(m)) return m;
+    const decided = again?.marks.find((d) => key(d.question) === key(m.question) && d.settled);
+    if (decided) {
+      basis.set(key(m.question), again!.basis.get(key(m.question)) ?? "settled");
+      return decided;
+    }
+    // No third marking: the mark both markings agreed on stands.
+    basis.set(key(m.question), "agreed");
+    return { ...m, settled: true, reason: `Both markings agreed on ${fmt(m.marks)}, so that mark stands.` };
+  });
+  return { marks, basis, result: again?.result };
+}
+
 /** The head examiner's own answer to each question, by question, from its reply. */
 function correctAnswers(reply: string): Map<string, string> {
   try {

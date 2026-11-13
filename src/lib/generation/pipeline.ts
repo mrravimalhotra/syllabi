@@ -9,7 +9,7 @@ import { systemInstructionsFor } from "@/lib/generation/prompts";
 import { problemForRepair, reviewChecks, verifyAnswer, type VerifyProblem } from "@/lib/generation/verify";
 import { disagreements, solveAgain, type FinalAnswer } from "@/lib/generation/second-solve";
 import { markAgain, markingDisagreements, type SecondMark } from "@/lib/generation/second-marking";
-import { finishMarking, settleMarks } from "@/lib/generation/settle-marking";
+import { finishMarking, settleMarks, settleMovedMarks, type Settlement } from "@/lib/generation/settle-marking";
 import { CITING_TASKS, checkCitations, withPageReferences } from "@/lib/generation/citations";
 import { levelLine } from "@/lib/generation/level";
 import type { AnswerLanguage } from "@/lib/generation/language";
@@ -393,6 +393,29 @@ async function settleDisputes(input: { studentId: string; second: SecondMark[] |
   return { settlement, secondMarks: settlement.marks };
 }
 
+/** A checked paper's last step: moved marks settled, then one final mark per question with the confidence. */
+async function finishPaper(input: Omit<Parameters<typeof settleMoved>[0], "settlement"> & { settlement: Settlement | null }, runChecks: (text: string) => AnswerCheck[]) {
+  const final = input.settlement ? await settleMoved({ ...input, settlement: input.settlement }) : null;
+  return finishMarking(input.report, final, runChecks);
+}
+
+/** After the report was corrected: marks moved away from the markings' agreement settled too, with the usage recorded. */
+async function settleMoved(input: { studentId: string; report: string; settlement: Settlement; question: string; photos: CompletionImage[]; checks: AnswerCheck[]; late: boolean }) {
+  const settled = await settleMovedMarks({
+    report: input.report,
+    settlement: input.settlement,
+    question: input.question,
+    photos: input.photos,
+    findings: input.checks.filter((c) => !c.ok).map((c) => c.message),
+    late: input.late,
+    ...(input.late ? { thinking: LATE_THINKING } : {}),
+  });
+  if (settled.result && settled.result !== input.settlement.result) {
+    await recordTokenUsage({ studentId: input.studentId, taskType: "paper_check", provider: settled.result.provider, model: settled.result.model, usage: settled.result.usage });
+  }
+  return settled;
+}
+
 /**
  * Checks a finished draft and fixes it when needed. Every answer is checked twice over: by code (calculations recomputed, a paper's marks added up and its
  * answer key compared, a worksheet's questions counted) and by a second, independent AI reading against
@@ -525,8 +548,9 @@ async function checkAndRepair(input: {
   // What the independent checks still find is shown with the answer, so the parent knows what to look at; a clean
   // result only when the check really ran.
   if (marking) {
-    // One final mark for each question, with how sure it is.
-    const finished = finishMarking(result.text, settlement, runChecks);
+    // A mark the correction moved away from what both markings agreed on is settled too; then one final mark for
+    // each question, with how sure it is.
+    const finished = await finishPaper({ studentId, report: result.text, settlement, question: request.prompt, photos, checks, late: late() }, runChecks);
     return { result: { ...result, text: finished.text }, checks: finished.checks };
   }
   checks = [...checks, ...independentChecks(review, examined)];

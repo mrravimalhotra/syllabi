@@ -1095,6 +1095,43 @@ failures.length = 0;
   calls.length = 0;
   out = await runGeneration({ student: person(), taskType: "paper_check", prompt: "Mark this. Marks per question (set): 4" });
   check("marking: when the two markings agree, no third marking is made and confidence is high", !calls.includes("settle") && /^Confidence in these marks: 95%\. .*the two markings agreed\.$/.test(reviews()[0].message) && reviews().length === 1, `${calls.join()} ${JSON.stringify(reviews())}`);
+  // The Q4 case (13 Nov): both markings agreed on a question, then correcting the report moved its mark.
+  {
+    const two = (q1: number, q2: number) => {
+      const total = q1 + q2;
+      return `# Paper check: Maths\n\n**Total: ${total} / 8 (${total * 12.5}%) · Grade: ${total >= 7.2 ? "A+" : total >= 6.4 ? "A" : total >= 5.6 ? "B+" : total >= 4.8 ? "B" : total >= 4 ? "C" : "D"}**\n\n| Q | Max | Marks | Steps | Answer |\n|---|---|---|---|---|\n| 1 | 4 | ${q1} | ✓ | ✓ |\n| 2 | 4 | ${q2} | ~ | ✗ |\n\n## Question 1 — ${q1}/4\n**Marks:** fine.\n\n## Question 2 — ${q2}/4\n**Marks:** fine.`;
+    };
+    const run = async (headExaminer: (string | null)[]) => {
+      const replies = [...headExaminer];
+      const asked: string[] = [];
+      fakeAi.reply = (req) => {
+        if (req.systemInstructions === REWRITE_SYSTEM) return { text: '{"queries":[]}' };
+        if (req.systemInstructions === SECOND_MARKING_SYSTEM) return { text: '{"questions":[{"question":"1","max":4,"marks":4,"reason":"right"},{"question":"2","max":4,"marks":2,"reason":"answer wrong"}]}' };
+        if (req.systemInstructions === MODERATOR_SYSTEM) {
+          asked.push((req as unknown as { prompt: string }).prompt.match(/Question (\d) \(out of/g)?.join() ?? "");
+          return { text: replies.shift() ?? "sorry" };
+        }
+        // The first report gives 4 and 4; the correction settles Q2 at 2 but also moves Q1 (agreed at 4) to 3.
+        const fixing = (req as unknown as { prompt: string }).prompt.includes("Your draft answer below has these problems");
+        // The first report also has a wrong total, which the correction puts right (so the correction is kept).
+        return { text: fixing ? two(3, 2) : two(4, 4).replace("**Total: 8 / 8 (100%)", "**Total: 7 / 8 (100%)") };
+      };
+      const result = await runGeneration({ student: person(), taskType: "paper_check", prompt: "Mark this. Marks per question (set): 4" });
+      return { result, asked };
+    };
+    const settledQ2 = '{"questions":[{"question":"2","max":4,"marks":2,"correctAnswer":"12","reason":"The answer is wrong."}]}';
+
+    // With time left, the head examiner marks the moved question too, and its mark is final.
+    let { result, asked } = await run([settledQ2, '{"questions":[{"question":"1","max":4,"marks":3,"correctAnswer":"7","reason":"A step is missing."}]}']);
+    const notes = result.checks.filter((c) => c.kind === "review");
+    check("marking: a mark the correction moved away from both markings' agreement goes to the head examiner too", asked.join(" | ") === "Question 2 (out of | Question 1 (out of" && /\| 1 \| 4 \| 3 \|/.test(result.text) && result.text.includes("Total: 5 / 8"), `${asked.join(" | ")} ${result.text.slice(0, 300)}`);
+    check("marking: then every question has one final mark, and none is left unresolved", !notes.some((c) => /could not be made/.test(c.message)) && /differed on Q1 and Q2/.test(notes[0].message), JSON.stringify(notes));
+
+    // If that third marking can't be made, the mark both markings agreed on is put back.
+    ({ result, asked } = await run([settledQ2, null]));
+    const after = result.checks.filter((c) => c.kind === "review");
+    check("marking: if it can't be settled, the agreed mark is put back instead of leaving the question unsure", /\| 1 \| 4 \| 4 \|/.test(result.text) && result.text.includes("Both markings agreed on 4, so that mark stands.") && result.text.includes("Total: 6 / 8") && !after.some((c) => /Least sure: Q1/.test(c.message)) && result.checks.filter((c) => c.kind === "marks").every((c) => c.ok), `${JSON.stringify(after)} ${result.text.slice(0, 250)}`);
+  }
   check("second marking: its reply is read, and a bad one is null", parseMarking('{"questions":[{"question":"Q2(a)","max":3,"marks":1.5}]}')?.[0].question === "2(a)" && parseMarking("no") === null);
 
   // Maths is solved a second time: a wrong method with right arithmetic (which the calculator can't see) is caught.
