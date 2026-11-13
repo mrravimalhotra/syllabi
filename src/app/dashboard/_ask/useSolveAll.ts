@@ -4,6 +4,8 @@ import { useRef, useState } from "react";
 import type { GenerationResult } from "@/app/dashboard/_ask/constants";
 import { isNoQuestions } from "@/lib/generation/solve-parts";
 import { OFFLINE_MESSAGE, failedRequestMessage } from "@/lib/http-errors";
+import { AnswerCutError, readAnswerStream } from "@/lib/answer-stream";
+import { recoverAnswer } from "@/app/dashboard/_ask/recover";
 
 export interface SolvePartState {
   label: string;
@@ -13,6 +15,39 @@ export interface SolvePartState {
   id?: string;
   text?: string;
   error?: string;
+}
+
+/**
+ * Asks for one part as the main Ask screen does: streamed, so the server's pings keep the connection open while
+ * the part is solved (a silent request of a minute or more can be cut by a router or network); a request that
+ * never got through is sent once more; and when the connection drops after the server began, the part is picked
+ * up from the server when it is saved.
+ */
+async function askPart(body: Record<string, unknown>, signal: AbortSignal): Promise<{ id?: string | null; text: string }> {
+  const started = Date.now();
+  const send = () => fetch("/api/generate/solution", { ...JSON_POST, signal, body: JSON.stringify({ ...body, stream: true }) });
+  let res: Response;
+  try {
+    res = await send();
+  } catch (err) {
+    if (signal.aborted || !(err instanceof TypeError) || navigator.onLine === false) throw err;
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    res = await send();
+  }
+  const runId = res.headers.get("X-Run-Id");
+  try {
+    if (res.ok && res.body && (res.headers.get("content-type") ?? "").includes("application/x-ndjson")) {
+      return await readAnswerStream<{ id?: string | null; text: string }>(res.body, { onText: () => {}, onReset: () => {} });
+    }
+    const data = (await res.json().catch(() => ({}))) as { id?: string | null; text?: string; error?: string };
+    if (!res.ok || typeof data.text !== "string") throw new Error(data.error ?? failedRequestMessage(res.status, "solve this part"));
+    return { id: data.id, text: data.text };
+  } catch (err) {
+    if (signal.aborted || !runId || !(err instanceof AnswerCutError || err instanceof TypeError)) throw err;
+    const recovered = await recoverAnswer(runId, started, signal);
+    if (recovered && recovered !== "failed") return { id: recovered.id, text: recovered.text };
+    throw new Error("The connection dropped while this part was solved. Try it again.");
+  }
 }
 
 /** Parts asked for at the same time. */
@@ -40,13 +75,7 @@ export function useSolveAll(onDone: (result: GenerationResult) => void, onError:
   async function solve(index: number, signal: AbortSignal) {
     update(index, { status: "working", error: undefined });
     try {
-      const res = await fetch("/api/generate/solution", {
-        ...JSON_POST,
-        signal,
-        body: JSON.stringify({ prompt: partsRef.current[index].prompt, documentIds: request.current!.bookIds, language: request.current!.language, photos: [], attachedText: "" }),
-      });
-      const data = (await res.json().catch(() => ({}))) as { id?: string | null; text?: string; error?: string };
-      if (!res.ok || typeof data.text !== "string") throw new Error(data.error ?? failedRequestMessage(res.status, "solve this part"));
+      const data = await askPart({ prompt: partsRef.current[index].prompt, documentIds: request.current!.bookIds, language: request.current!.language, photos: [], attachedText: "" }, signal);
       update(index, { status: isNoQuestions(data.text) ? "empty" : "done", id: data.id ?? undefined, text: data.text });
     } catch (err) {
       if (signal.aborted) return update(index, { status: "waiting" });

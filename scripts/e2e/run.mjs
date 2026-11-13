@@ -464,6 +464,32 @@ await test("Solve all exercise questions: done a few pages at a time; a failed p
   if (asked.length !== 4 || combined?.parts?.map((p) => p.id).join() !== "p1,p2,p3" || !/^All exercise questions: Maths Chapter 3/.test(combined.title)) throw new Error(`asked ${asked.length}, combined ${JSON.stringify(combined)}`);
 });
 
+await test("Solve all exercise questions: a part whose connection drops is picked up from the server, not failed", async (page, ctx) => {
+  await baseRoutes(ctx, { books: [{ ...books[0], id: "b1", source_type: "textbook" }] });
+  let combined = null;
+  await ctx.route("**/api/generate/solution", (r) => {
+    const body = r.request().postDataJSON();
+    if (!body.stream) throw new Error("a part was not streamed");
+    // The first part's connection drops after the server began (only a ping arrived); the second answers.
+    if (body.prompt.includes("pages 1 to 3")) return r.fulfill({ ...ndjson([{ type: "ping" }]), headers: { "X-Run-Id": "3f2a91c0-0000-4000-8000-000000000009" } });
+    return r.fulfill(ndjson([{ type: "done", answer: { ...answer, id: "p2", text: "**Q2.** Second part answer." } }]));
+  });
+  await ctx.route("**/api/generate/runs/*", (r) => json(r, { stage: "done", outcome: "answered", documentId: "p1" }));
+  await ctx.route("**/api/documents/p1", (r) => json(r, { answer: { ...answer, id: "p1", text: "**Q1.** First part answer.", pack: null } }));
+  await ctx.route("**/api/generate/solution/parts", (r) =>
+    json(r, { parts: ["pages 1 to 3", "pages 4 to 5"].map((pages) => ({ label: `Maths Chapter 3: ${pages}`, prompt: `Solve every question printed on ${pages} of "Maths Chapter 3".` })) })
+  );
+  await ctx.route("**/api/documents/combine", (r) => {
+    combined = r.request().postDataJSON();
+    return json(r, { ...answer, id: "whole", title: combined.title, text: "## Maths Chapter 3: pages 1 to 3\n\n**Q1.** First part answer." });
+  });
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
+  await tap(page.getByRole("button", { name: /Solve all exercise questions/ }));
+  await page.getByRole("button", { name: /^Generate$/ }).click();
+  await page.getByText("First part answer.").first().waitFor({ timeout: 20000 });
+  if (combined?.parts?.map((p) => p.id).join() !== "p1,p2") throw new Error(`combined ${JSON.stringify(combined)}`);
+});
+
 await test("Ask: the command, with no exercise book or textbook uploaded, says so and keeps the selection", async (page, ctx) => {
   await ctx.route("**/api/me", (r) => json(r, me));
   await ctx.route("**/api/library**", (r) => json(r, { documents: [{ id: "p1", title: "Only Papers", subject: null, grade: null, source_type: "past_paper", status: "ready", created_at: now, pages: null }] }));
