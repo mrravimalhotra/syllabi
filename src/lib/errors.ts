@@ -15,8 +15,12 @@ export class BlockedReplyError extends UserError {
   }
 }
 
-/** A provider error saying the free tier's daily allowance for a model is used up (retrying today won't help). */
-export const DAILY_LIMIT = /PerDay|per day|daily limit/i;
+/**
+ * A provider error saying a limit is used up for now: the free tier's daily allowance, or the paid project's monthly
+ * spending cap. Retrying in a few seconds won't help.
+ */
+export const DAILY_LIMIT = /PerDay|per day|daily limit|spending cap/i;
+const SPENDING_CAP = /spending cap/i;
 
 const GENERIC = "Something went wrong. Please try again.";
 
@@ -58,6 +62,9 @@ export function userMessage(err: unknown, context: string, fallback = GENERIC): 
   console.error(`[${context}]`, err);
   // The AI provider's limits, said plainly rather than "something went wrong".
   const message = errorText(err);
+  if (SPENDING_CAP.test(message)) {
+    return "Syllabi's Google AI spending limit for this month has been reached, so answers can't be written right now. The person who runs Syllabi can raise the limit in Google AI Studio (Spend); otherwise it resets next month.";
+  }
   if (DAILY_LIMIT.test(message)) {
     return "The AI service's free daily limit is used up for today. It resets around 12:30 to 1:30 pm India time. The person who runs Syllabi can turn on billing for more.";
   }

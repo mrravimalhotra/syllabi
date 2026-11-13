@@ -22,6 +22,8 @@ interface SentBody {
 const openAiBodies: { messages: { role: string; content: unknown }[]; temperature?: number; model: string }[] = [];
 type Scenario = (url: string, body: SentBody) => Response | null;
 let scenario: Scenario | null = null;
+// Set while the answer-quality test runs, so the fake also answers for the stand-in (to show it is never asked).
+let answerTest = false;
 // What the OpenAI-style services answer, when a test sets it.
 let openAiReply: (() => Response) | null = null;
 const requests: { url: string; body: SentBody; key: string | null }[] = [];
@@ -58,7 +60,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       headers: { "content-type": "application/json" },
     });
   }
-  if (scenario && model.startsWith("test-")) {
+  if (scenario && (model.startsWith("test-") || model.startsWith("gemini-answer") || (model === "gemini-flash-lite-latest" && answerTest))) {
     const body = init?.body ? JSON.parse(String(init.body)) : null;
     requests.push({ url, body, key: new Headers(init?.headers).get("x-goog-api-key") });
     const made = scenario(url, body);
@@ -85,7 +87,8 @@ const check = (name: string, ok: boolean, detail = "") => {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${ok ? "" : `  (${detail})`}`);
 };
 
-const base = { taskType: "ad_hoc" as const, systemInstructions: "x", prompt: "hi", model: "gemini-flash-latest" };
+// The stand-in is for jobs other than answers (here, reading a page); answers never switch (tested below).
+const base = { taskType: "ocr_extraction" as const, systemInstructions: "x", prompt: "hi", model: "gemini-flash-latest" };
 
 const started = Date.now();
 const pieces: string[] = [];
@@ -127,7 +130,7 @@ delete process.env.GEMINI_FIRST_WORDS_TIMEOUT_MS;
 delete process.env.GEMINI_STALL_TIMEOUT_MS;
 
 // How a single call is built and read (the model name starts with "test-" so the fake above lets the scenario answer).
-const one = { taskType: "ad_hoc" as const, systemInstructions: "x", prompt: "hi", model: "gemini-test-model" };
+const one = { taskType: "ocr_extraction" as const, systemInstructions: "x", prompt: "hi", model: "gemini-test-model" };
 const ok = (text = "Fine.", extra: object = {}) => reply({ content: { parts: [{ text }], role: "model" }, finishReason: "STOP", ...extra });
 // The stand-in for a "gemini-" model is the lite model; scenarios answer it normally unless they say otherwise.
 const setScenario = (fn: Scenario) => {
@@ -262,6 +265,20 @@ scenario = null;
   const blank = await openAiCompatibleAdapter("groq").generateCompletion({ taskType: "ad_hoc", systemInstructions: "x", prompt: "hi", model: "m" }).then(() => "answered", (e: Error) => e.message);
   check("an OpenAI-style service that gives an empty reply counts as unable to answer", /empty reply/.test(blank), blank);
   openAiReply = null;
+}
+
+// Answers are written only by the main model: no stand-in, even when it is out of allowance (owner: no compromise on quality).
+{
+  answerTest = true;
+  setScenario((url) => (url.includes("gemini-answer-model") ? errorReply(429, "Your project has exceeded its monthly spending cap.", "RESOURCE_EXHAUSTED") : ok("Stand-in answer.")));
+  const started = Date.now();
+  const outcome = await googleAdapter
+    .generateCompletion({ taskType: "solution", systemInstructions: "x", prompt: "Solve Q1", model: "gemini-answer-model" })
+    .then((r) => `answered by ${r.model}`, (e: Error) => e.message);
+  check("an answer is never written by the lighter stand-in", /spending cap/.test(outcome) && !requests.some((r) => !r.url.includes("gemini-answer-model")), `${outcome} | ${requests.map((r) => r.url.split("models/")[1]).join()}`);
+  check("a spending cap is not waited out with retries", Date.now() - started < 3000 && requests.length === 1, `${Date.now() - started} ms, ${requests.length} requests`);
+  answerTest = false;
+  scenario = null;
 }
 
 // Study-pack scenes: only fixed choices and real emoji get through.

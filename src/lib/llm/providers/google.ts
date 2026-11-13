@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI, type Part } from "@google/generative-ai";
 import type { CompletionRequest, CompletionResult, EmbeddingResult, LlmProviderAdapter } from "@/lib/llm/types";
 import { withFreeKeyFirst } from "@/lib/llm/google-keys";
+import { answerQualityFirst } from "@/lib/llm/quality";
 import { withNetworkRetry, fetchOrThrowTransient } from "@/lib/llm/retry";
 import { BlockedReplyError, DAILY_LIMIT } from "@/lib/errors";
 
@@ -285,7 +286,8 @@ export async function googlePost<T>(model: string, method: string, body: object,
 
 export const googleAdapter: LlmProviderAdapter = {
   async generateCompletion(req: CompletionRequest & { model: string }): Promise<CompletionResult> {
-    const other = standInFor(req.model);
+    // An answer is written by the model chosen for it: no lighter stand-in (it waits out a busy spell instead).
+    const other = answerQualityFirst(req.taskType) ? null : standInFor(req.model);
     // Skip a model that was busy a moment ago and go straight to its stand-in.
     if (other && isPaused(req.model) && !isPaused(other)) {
       try {

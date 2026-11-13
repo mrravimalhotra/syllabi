@@ -3,6 +3,7 @@ import { googleAdapter, googleEmbedMany } from "@/lib/llm/providers/google";
 import { anthropicAdapter } from "@/lib/llm/providers/anthropic";
 import { hasKey, openAiCompatibleAdapter, type OpenAiCompatible } from "@/lib/llm/providers/openai";
 import { BlockedReplyError, DAILY_LIMIT } from "@/lib/errors";
+import { answerQualityFirst } from "@/lib/llm/quality";
 import type { CompletionRequest, CompletionResult, EmbeddingResult, LlmProviderAdapter } from "@/lib/llm/types";
 import type { Provider } from "@/types/database";
 
@@ -52,8 +53,9 @@ export async function generateCompletion(req: CompletionRequest): Promise<Comple
   try {
     return await adapter.generateCompletion({ ...req, model: req.model ?? model });
   } catch (err) {
-    // Structured (JSON) replies are only asked of Gemini; other services may not keep to the format.
-    if (!worthABackup(err) || req.jsonSchema) throw err;
+    // Structured (JSON) replies are only asked of Gemini; other services may not keep to the format. Answers are
+    // never handed to a backup: a weaker answer is worse than a clear "try again later" (lib/llm/quality.ts).
+    if (!worthABackup(err) || req.jsonSchema || answerQualityFirst(req.taskType)) throw err;
     for (const backup of BACKUPS) {
       if (backup.provider === provider || !hasKey(backup.provider) || (req.images?.length && !backup.readsImages)) continue;
       try {
