@@ -122,4 +122,6 @@ export interface GeneratedDocumentRow {
   /** Follow-up questions asked about this answer, and their replies (see lib/generation/follow-up.ts). */
   follow_ups?: unknown;
   created_at: string;
+  /** A "Solve all" part: the combined answer it belongs to (hidden from My Documents, kept for reuse). */
+  part_of?: string | null;
 }

@@ -13,6 +13,8 @@ export async function GET() {
     .from("generated_documents")
     .select("id, title, task_type, created_at")
     .eq("student_id", student.id)
+    // "Solve all" parts are kept for reuse but shown only as part of their whole answer.
+    .is("part_of", null)
     .order("created_at", { ascending: false });
 
   if (error) return NextResponse.json({ error: userMessage(error, "documents GET") }, { status: 500 });

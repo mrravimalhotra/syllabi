@@ -52,9 +52,10 @@ export async function POST(request: Request) {
       .select("*")
       .single();
     if (saveError) throw saveError;
-    // Only once the whole answer is saved do its parts go.
-    const { error: removeError } = await admin.from("generated_documents").delete().eq("student_id", auth.account.id).in("id", parts.map((p) => p.row.id));
-    if (removeError) console.error("[combine] removing the parts", removeError.message);
+    // The parts are kept as the book's answer key (reused by the next "Solve all"), hidden from My Documents as part
+    // of the whole answer; deleting the whole answer deletes them too.
+    const { error: linkError } = await admin.from("generated_documents").update({ part_of: saved.id }).eq("student_id", auth.account.id).in("id", parts.map((p) => p.row.id));
+    if (linkError) console.error("[combine] linking the parts", linkError.message);
     return NextResponse.json(await savedAnswerResponse(saved as GeneratedDocumentRow, false));
   } catch (err) {
     return errorResponse(err, "documents combine", "Couldn't put the answers together. They are each saved in My Documents. Try again in a moment.");

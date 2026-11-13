@@ -55,6 +55,7 @@ class Query implements PromiseLike<Result> {
   delete() { this.op = "delete"; return this; }
   eq(col: string, val: unknown) { this.filters.push((r) => r[col] === val); return this; }
   neq(col: string, val: unknown) { this.filters.push((r) => r[col] !== val); return this; }
+  is(col: string, val: unknown) { this.filters.push((r) => (r[col] ?? null) === val); return this; }
   in(col: string, vals: unknown[]) { this.filters.push((r) => vals.includes(r[col])); return this; }
   gte(col: string, val: unknown) { this.filters.push((r) => String(r[col] ?? "") >= String(val)); return this; }
   gt(col: string, val: unknown) { this.filters.push((r) => String(r[col] ?? "") > String(val)); return this; }
