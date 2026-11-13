@@ -57,6 +57,8 @@ export interface VerifyProblem {
   fromSecondSolution?: boolean;
   /** Found by marking the paper a second time, independently (the paper checker). */
   fromSecondMarking?: boolean;
+  /** Only a mark the head examiner settled, which code puts into the report itself: no rewrite is needed for it. */
+  settledMark?: boolean;
   where: string;
   problem: string;
   fix: string;

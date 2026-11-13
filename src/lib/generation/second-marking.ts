@@ -2,6 +2,7 @@ import { generateCompletion } from "@/lib/llm";
 import type { CompletionImage, CompletionResult } from "@/lib/llm/types";
 import { tableRows } from "@/lib/checks/paper";
 import type { VerifyProblem } from "@/lib/generation/verify";
+import { getLlmSetting } from "@/lib/llm/config";
 
 // A checked paper is marked twice: a second examiner marks the same pages independently and gives only each
 // question's marks, and code compares them with the report's marks table. A question the two markings disagree
@@ -85,6 +86,7 @@ export function markingDisagreements(second: SecondMark[], report: string): Veri
         {
           kind: "wrong" as const,
           fromSecondMarking: true,
+          settledMark: true,
           where: `Q${row.question}`,
           problem: `The two markings differed, so the head examiner marked it a third time and settled it at ${fmt(s.marks)} / ${fmt(row.max)}${s.reason ? `: ${s.reason}` : "."} The report says ${fmt(row.marks)} / ${fmt(row.max)}.`,
           fix: `Give Q${row.question} exactly ${fmt(s.marks)} / ${fmt(row.max)}: rewrite its section (correct answer, the ✓ and ✗ lines, the Marks line) to agree with the head examiner, and correct the table, total and grade.`,
@@ -103,10 +105,16 @@ export function markingDisagreements(second: SecondMark[], report: string): Veri
   });
 }
 
+/** The model for the second marking when papers are marked with Gemini (SECOND_MARKING_MODEL changes it). */
+const SECOND_MARKING_MODEL = "gemini-2.5-flash-lite";
+
 /** The second, independent marking, or null when it could not be made (never holds the report back). */
 export async function markAgain(input: { question: string; photos: CompletionImage[]; thinking?: number }): Promise<{ marks: SecondMark[]; result: CompletionResult } | null> {
   try {
+    // A cheaper model than the main marking's, which also makes the second marking more independent of it.
+    const { provider } = await getLlmSetting("paper_check");
     const result = await generateCompletion({
+      ...(provider === "google" ? { model: process.env.SECOND_MARKING_MODEL || SECOND_MARKING_MODEL } : {}),
       taskType: "paper_check",
       systemInstructions: SECOND_MARKING_SYSTEM,
       prompt: `${input.question}\n\nMark each question and give the marks as JSON.`,

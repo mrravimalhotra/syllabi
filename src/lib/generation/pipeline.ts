@@ -393,6 +393,13 @@ async function settleDisputes(input: { studentId: string; second: SecondMark[] |
   return { settlement, secondMarks: settlement.marks };
 }
 
+/**
+ * Whether the draft needs no rewrite: nothing was found, or (a checked paper) the only problems are marks the head
+ * examiner settled, which code puts in itself (finishMarking), so no rewrite is paid for.
+ */
+const nothingToRewrite = (marking: boolean, failed: AnswerCheck[], review: VerifyProblem[] | null) =>
+  failed.length + (review?.length ?? 0) === 0 || (marking && failed.length === 0 && (review ?? []).every((p) => p.settledMark));
+
 /** A checked paper's last step: moved marks settled, then one final mark per question with the confidence. */
 async function finishPaper(input: Omit<Parameters<typeof settleMoved>[0], "settlement"> & { settlement: Settlement | null }, runChecks: (text: string) => AnswerCheck[]) {
   const final = input.settlement ? await settleMoved({ ...input, settlement: input.settlement }) : null;
@@ -503,7 +510,7 @@ async function checkAndRepair(input: {
   // Up to two rounds of fixing: a second only when the first helped, problems remain and there is time.
   for (let round = 0; round < MAX_REPAIR_ROUNDS && (round === 0 || !late()); round++) {
     const problems = checks.filter((c) => !c.ok);
-    if (problemCount(problems, review) === 0) break;
+    if (nothingToRewrite(marking, problems, review)) break;
     onStage?.("fixing");
     const found = [
       ...problems.map((c) => `- ${c.message} (found by Syllabi's exact calculator or marks counter)`),
