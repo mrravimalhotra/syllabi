@@ -328,6 +328,20 @@ await new Promise((r) => setTimeout(r, 50));
   const streamedRun = runs.find((r) => r.id === streamed.headers.get("x-run-id"));
   const failedRun = runs.find((r) => r.id === failed.headers.get("x-run-id"));
   check("progress records: one per request, saying how each ended", outcomes === "answered,answered,answered,answered,answered,failed,failed,reused", outcomes);
+{
+  // "Solve all" parts are the book's answer key: reused at any age (the 7-day limit is for other answers), made afresh on request.
+  const callsBefore = pipeline.calls;
+  const partPrompt = 'Solve every question printed on pages 9 to 11 of "Unit 16".';
+  await expect("generate: a Solve all part is answered and kept", adhoc.POST, 200, null, { prompt: partPrompt, part: true });
+  const keyRow = (tables.generated_documents ?? []).at(-1)!;
+  keyRow.created_at = new Date(Date.now() - 40 * 86_400_000).toISOString();
+  const kept = await expect("generate: the same part 40 days later comes from the book's answer key", adhoc.POST, 200, null, { prompt: partPrompt, part: true });
+  check("generate: a kept part uses no AI and says it was saved", pipeline.calls === callsBefore + 1 && Boolean(kept.json?.reusedFrom), `${pipeline.calls - callsBefore} calls`);
+  const plain = await expect("generate: the same words as an ordinary question are not served from the answer key", adhoc.POST, 200, null, { prompt: partPrompt });
+  check("generate: an ordinary question doesn't use a part's key", !plain.json?.reusedFrom && pipeline.calls === callsBefore + 2);
+  const again = await expect("generate: Solve again makes the part afresh", adhoc.POST, 200, null, { prompt: partPrompt, part: true, fresh: true });
+  check("generate: a fresh part uses the AI", !again.json?.reusedFrom && pipeline.calls === callsBefore + 3);
+}
   check("progress records: a streamed answer's record is named in its reply and shows when the first words came", Boolean(streamedRun) && streamedRun?.stage === "done" && "first words" in ((streamedRun?.details as { stages?: Record<string, number> })?.stages ?? {}) && typeof streamedRun?.document_id === "string");
   check("progress records: a failure keeps its error and the stage it ended at", failedRun?.stage === "failed" && /The AI is down/.test(String(failedRun?.error)));
   check("progress records: sizes only, never the question's text", runs.length > 0 && !JSON.stringify(runs).includes("photosynthesis") && (runs[0].details as { request?: { promptChars?: number } }).request?.promptChars === 22);

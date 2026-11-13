@@ -237,10 +237,10 @@ export async function runGeneration({
   timings.searchMs = Date.now() - searchStart;
 
   const imagesStart = Date.now();
-  const { images: sourcePageImages, byPath: sourceImages } = await loadSourceImages(retrieval.chunks, retrieval.stats.mode === "search" ? undefined : MAX_PAGE_IMAGES, namedPages(askedFor ?? prompt));
+  const { images: sourcePageImages, byPath: sourceImages, leftOut: picturesLeftOut } = await loadSourceImages(retrieval.chunks, retrieval.stats.mode === "search" ? undefined : MAX_PAGE_IMAGES, namedPages(askedFor ?? prompt));
   timings.loadingImagesMs = Date.now() - imagesStart;
   onProgress?.("writing", {
-    books: { mode: retrieval.stats.mode, books: retrieval.stats.books, chars: retrieval.stats.totalChars, passages: retrieval.chunks.length, pagePictures: sourcePageImages.length },
+    books: { mode: retrieval.stats.mode, books: retrieval.stats.books, chars: retrieval.stats.totalChars, passages: retrieval.chunks.length, pagePictures: sourcePageImages.length, picturesLeftOut },
   });
 
   const { result, checks } = await writeAndCheck({
@@ -252,6 +252,7 @@ export async function runGeneration({
     coverageLow: retrieval.coverageLow,
     photos,
     sourcePageImages,
+    attachedPages: new Set(sourceImages.keys()),
     searchQuery,
     timings,
     onText,
@@ -329,13 +330,15 @@ export async function writeAndCheck(input: {
   coverageLow: boolean;
   photos: CompletionImage[];
   sourcePageImages: CompletionImage[];
+  /** The pages whose pictures are attached (the rest are sent as text only). */
+  attachedPages?: ReadonlySet<string>;
   searchQuery: string;
   timings: GenerationTimings;
   onText?: (delta: string) => void;
   onRestart?: () => void;
   onStage?: (stage: AnswerStage) => void;
 }): Promise<{ result: CompletionResult; checks: AnswerCheck[] }> {
-  const { taskType, student, prompt, language, chunks, coverageLow, photos, sourcePageImages, searchQuery, timings, onText, onRestart, onStage } = input;
+  const { taskType, student, prompt, language, chunks, coverageLow, photos, sourcePageImages, attachedPages, searchQuery, timings, onText, onRestart, onStage } = input;
   const photoNote =
     photos.length > 0
       ? `\n\n(The first ${photos.length} attached image(s) are photos from the user — the question to work on. Any further images are reference-material pages.)`
@@ -345,7 +348,7 @@ export async function writeAndCheck(input: {
     taskType,
     systemInstructions: systemInstructionsFor(taskType, levelLine(student), language),
     prompt: `${prompt}${photoNote}`,
-    context: taskType === "paper_check" ? "(No reference material is needed: mark the student's work with your own mathematical knowledge.)" : formatContext(chunks),
+    context: taskType === "paper_check" ? "(No reference material is needed: mark the student's work with your own mathematical knowledge.)" : formatContext(chunks, attachedPages),
     images: [...photos, ...sourcePageImages],
     // Search grounding is opt-in per the RAG-first policy: only fires when
     // coverage from the books is weak.

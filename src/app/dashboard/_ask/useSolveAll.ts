@@ -15,6 +15,8 @@ export interface SolvePartState {
   id?: string;
   text?: string;
   error?: string;
+  /** When the part came from the book's saved answer key: the date it was made. */
+  reusedFrom?: string;
 }
 
 /**
@@ -23,7 +25,7 @@ export interface SolvePartState {
  * never got through is sent once more; and when the connection drops after the server began, the part is picked
  * up from the server when it is saved.
  */
-async function askPart(body: Record<string, unknown>, signal: AbortSignal): Promise<{ id?: string | null; text: string }> {
+async function askPart(body: Record<string, unknown>, signal: AbortSignal): Promise<{ id?: string | null; text: string; reusedFrom?: string }> {
   const started = Date.now();
   const send = () => fetch("/api/generate/solution", { ...JSON_POST, signal, body: JSON.stringify({ ...body, stream: true }) });
   let res: Response;
@@ -39,9 +41,9 @@ async function askPart(body: Record<string, unknown>, signal: AbortSignal): Prom
     if (res.ok && res.body && (res.headers.get("content-type") ?? "").includes("application/x-ndjson")) {
       return await readAnswerStream<{ id?: string | null; text: string }>(res.body, { onText: () => {}, onReset: () => {} });
     }
-    const data = (await res.json().catch(() => ({}))) as { id?: string | null; text?: string; error?: string };
+    const data = (await res.json().catch(() => ({}))) as { id?: string | null; text?: string; error?: string; reusedFrom?: string };
     if (!res.ok || typeof data.text !== "string") throw new Error(data.error ?? failedRequestMessage(res.status, "solve this part"));
-    return { id: data.id, text: data.text };
+    return { id: data.id, text: data.text, reusedFrom: data.reusedFrom };
   } catch (err) {
     if (signal.aborted || !runId || !(err instanceof AnswerCutError || err instanceof TypeError)) throw err;
     const recovered = await recoverAnswer(runId, started, signal);
@@ -64,7 +66,9 @@ export function useSolveAll(onDone: (result: GenerationResult) => void, onError:
   const [running, setRunning] = useState(false);
   const [saving, setSaving] = useState(false);
   const partsRef = useRef<SolvePartState[]>([]);
-  const request = useRef<{ bookIds: string[]; language: string; title: string } | null>(null);
+  const request = useRef<{ bookIds: string[]; language: string; title: string; fresh?: boolean } | null>(null);
+  // After the answers are put together: how many parts came from the saved answer key, so they can be solved again.
+  const [lastRun, setLastRun] = useState<{ parts: SolvePartState[]; reused: number; from?: string } | null>(null);
   const abort = useRef<AbortController | null>(null);
 
   const update = (index: number, patch: Partial<SolvePartState>) => {
@@ -75,8 +79,10 @@ export function useSolveAll(onDone: (result: GenerationResult) => void, onError:
   async function solve(index: number, signal: AbortSignal) {
     update(index, { status: "working", error: undefined });
     try {
-      const data = await askPart({ prompt: partsRef.current[index].prompt, documentIds: request.current!.bookIds, language: request.current!.language, photos: [], attachedText: "" }, signal);
-      update(index, { status: isNoQuestions(data.text) ? "empty" : "done", id: data.id ?? undefined, text: data.text });
+      const { bookIds, language, fresh } = request.current!;
+      // part: the answer is kept as the book's answer key for these pages, and reused next time (unless fresh).
+      const data = await askPart({ prompt: partsRef.current[index].prompt, documentIds: bookIds, language, photos: [], attachedText: "", part: true, fresh }, signal);
+      update(index, { status: isNoQuestions(data.text) ? "empty" : "done", id: data.id ?? undefined, text: data.text, reusedFrom: data.reusedFrom });
     } catch (err) {
       if (signal.aborted) return update(index, { status: "waiting" });
       update(index, { status: "failed", error: err instanceof TypeError ? OFFLINE_MESSAGE : err instanceof Error ? err.message : "Couldn't solve this part." });
@@ -108,6 +114,8 @@ export function useSolveAll(onDone: (result: GenerationResult) => void, onError:
       const res = await fetch("/api/documents/combine", { ...JSON_POST, body: JSON.stringify({ title: request.current?.title, parts: finished.map((p) => ({ id: p.id, label: p.label })) }) });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? failedRequestMessage(res.status, "put the answers together"));
+      const reused = finished.filter((p) => p.reusedFrom);
+      setLastRun(reused.length ? { parts: partsRef.current, reused: reused.length, from: reused[0].reusedFrom } : null);
       partsRef.current = [];
       setParts(null);
       onDone(data as GenerationResult);
@@ -128,6 +136,7 @@ export function useSolveAll(onDone: (result: GenerationResult) => void, onError:
       const data = (await res.json().catch(() => ({}))) as { parts?: { label: string; prompt: string }[] };
       if (!res.ok || !Array.isArray(data.parts) || data.parts.length < 2) return false;
       request.current = { bookIds, language, title };
+      setLastRun(null);
       partsRef.current = data.parts.map((p) => ({ ...p, status: "waiting" as const }));
       setParts(partsRef.current);
     } catch {
@@ -150,6 +159,16 @@ export function useSolveAll(onDone: (result: GenerationResult) => void, onError:
       void run();
     },
     save,
+    lastRun,
+    /** Solves every part afresh, instead of using the book's saved answer key. */
+    solveAgain: () => {
+      if (!lastRun || !request.current) return;
+      request.current = { ...request.current, fresh: true };
+      partsRef.current = lastRun.parts.map((p) => ({ label: p.label, prompt: p.prompt, status: "waiting" as const }));
+      setParts(partsRef.current);
+      setLastRun(null);
+      void run();
+    },
     /** Gives up on this run (finished parts stay in My Documents). */
     clear: () => {
       abort.current?.abort();

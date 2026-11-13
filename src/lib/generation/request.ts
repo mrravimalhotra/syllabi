@@ -31,6 +31,8 @@ export interface GenerationRequest {
   fresh: boolean;
   /** Send the first draft piece by piece as it is written. */
   stream: boolean;
+  /** One part of "Solve all exercise questions": its answer is kept as the book's answer key for those pages. */
+  part: boolean;
 }
 
 /** Checks a request for an answer and returns it cleaned up, or the message to show. */
@@ -72,6 +74,7 @@ export function parseGenerationRequest(
       language: isAnswerLanguage(b.language) ? b.language : defaultLanguage,
       fresh: b.fresh === true,
       stream: b.stream === true,
+      part: b.part === true,
     },
   };
 }

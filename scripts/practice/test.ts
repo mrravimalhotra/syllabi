@@ -44,6 +44,7 @@ import { readAnswerStream } from "@/lib/answer-stream";
 import { factChecks, parseJudge, scoreCase } from "../quality/grade";
 import { disagreements, numbersIn, parseFinals } from "@/lib/generation/second-solve";
 import { checkCitations, withPageReferences } from "@/lib/generation/citations";
+import { pageNeedsPicture } from "@/lib/rag/page-pictures";
 import { entriesFrom, givenDate, isNothing, normaliseSubject, parseDiaryDate } from "@/lib/homework/diary";
 import { byDueDate, bySubject, helpQuestion, missingDiaryDay, pairUp } from "@/lib/homework/schedule";
 import { diaryFromPages, diaryFromText } from "@/lib/homework/diary-text";
@@ -1024,6 +1025,19 @@ function q0(): Question {
   check(checkCitations("**Ans:** Something. [S9]", passages).some((c) => !c.ok && c.message.includes("source 9")), "Citations: a source number that is not in the material is caught");
   check(withPageReferences(good, passages).endsWith("releasing oxygen. (p. 14)"), "Citations: marks become page references");
   check(withPageReferences("Fact. [S1, S2]", [passages[0], chunk("c", 7, "x", "History")]) === "Fact. (Science, p. 14; History, p. 7)", "Citations: with several books, the book is named");
+  // Page pictures only where the text can't say it all (owner, 13 Nov: process once, don't resend what isn't needed).
+  {
+    const story = "Holmes picked up the battered hat and turned it over in his hands. ".repeat(8);
+    const page = (content: string, source_type = "textbook", similarity = 0.8) => [{ ...chunk("p", 5, content, "Story"), source_type, similarity, image_path: "pages/5.jpg" } as MatchedChunk];
+    check(!pageNeedsPicture(page(story), false), "Pictures: a plain story page is sent as text only");
+    check(pageNeedsPicture(page(story), true), "Pictures: a page the request names keeps its picture");
+    check(pageNeedsPicture(page(story + "[Figure 2: Holmes with the goose]"), false), "Pictures: a page with a figure keeps its picture");
+    check(pageNeedsPicture(page(story + "\n| Word | Meaning |\n| keen | sharp |"), false), "Pictures: a page with a table keeps its picture");
+    check(pageNeedsPicture(page(story + " Look at the map and answer."), false), "Pictures: a question pointing at a visual keeps its picture");
+    check(pageNeedsPicture(page("Q1. Fill in."), false), "Pictures: a page with little text keeps its picture");
+    check(pageNeedsPicture(page(story, "exercise"), false) && !pageNeedsPicture(page(story, "exercise"), false, true), "Pictures: exercise pages keep theirs, unless the request names other pages");
+    check(pageNeedsPicture(page(story, "textbook", 0), false, true), "Pictures: a page added for a whole exercise keeps its picture");
+  }
   // Report #10: an interpretation that cites the story was also marked "(general knowledge)".
   check(
     withPageReferences("- **Logical reasoning:** He deduced it from the hat. (general knowledge) [S1]\n**Ans:** Yes, I read them. (general knowledge)", passages) ===

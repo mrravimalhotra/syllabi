@@ -490,6 +490,38 @@ await test("Solve all exercise questions: a part whose connection drops is picke
   if (combined?.parts?.map((p) => p.id).join() !== "p1,p2") throw new Error(`combined ${JSON.stringify(combined)}`);
 });
 
+await test("Solve all exercise questions: parts come from the book's saved answers, and can be solved again", async (page, ctx) => {
+  await baseRoutes(ctx, { books: [{ ...books[0], id: "b1", source_type: "textbook" }] });
+  const sent = [];
+  await ctx.route("**/api/generate/solution", (r) => {
+    const body = r.request().postDataJSON();
+    sent.push(body);
+    if (!body.part) throw new Error("a part was not sent as an answer-key part");
+    const which = body.prompt.includes("pages 1 to 3") ? "p1" : "p2";
+    // Saved answers come back at once (no AI); a fresh request is streamed.
+    if (!body.fresh) return json(r, { ...answer, id: which, text: `**Q.** Saved ${which}.`, reusedFrom: "2026-11-13T10:00:00Z" });
+    return r.fulfill(ndjson([{ type: "done", answer: { ...answer, id: `${which}-new`, text: `**Q.** Fresh ${which}.` } }]));
+  });
+  await ctx.route("**/api/generate/solution/parts", (r) =>
+    json(r, { parts: ["pages 1 to 3", "pages 4 to 5"].map((pages) => ({ label: `Maths Chapter 3: ${pages}`, prompt: `Solve every question printed on ${pages} of "Maths Chapter 3".` })) })
+  );
+  const combined = [];
+  await ctx.route("**/api/documents/combine", (r) => {
+    combined.push(r.request().postDataJSON().parts.map((p) => p.id).join());
+    return json(r, { ...answer, id: "whole", text: `Combined ${combined.length}.` });
+  });
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
+  await tap(page.getByRole("button", { name: /Solve all exercise questions/ }));
+  await page.getByRole("button", { name: /^Generate$/ }).click();
+  await page.getByText("Combined 1.").first().waitFor({ timeout: 15000 });
+  const note = page.getByTestId("solve-all-saved");
+  await note.getByText(/2 of 2 parts came from this book's saved answers \(made 13 Nov\)/).waitFor();
+  await tap(note.getByRole("button", { name: "Solve again" }));
+  await page.getByText("Combined 2.").first().waitFor({ timeout: 15000 });
+  if (combined.join(" | ") !== "p1,p2 | p1-new,p2-new" || !sent.slice(2).every((b) => b.fresh === true)) throw new Error(`combined ${combined.join(" | ")}; fresh ${sent.map((b) => b.fresh).join()}`);
+  if ((await page.getByTestId("solve-all-saved").count()) !== 0) throw new Error("the saved-answers note stayed after solving afresh");
+});
+
 await test("Ask: the command, with no exercise book or textbook uploaded, says so and keeps the selection", async (page, ctx) => {
   await ctx.route("**/api/me", (r) => json(r, me));
   await ctx.route("**/api/library**", (r) => json(r, { documents: [{ id: "p1", title: "Only Papers", subject: null, grade: null, source_type: "past_paper", status: "ready", created_at: now, pages: null }] }));

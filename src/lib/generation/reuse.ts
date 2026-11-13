@@ -11,9 +11,10 @@ const REUSE_DAYS = 7;
  * made after the books it could draw on were last read. `books` is the chosen
  * books (an empty list means all the account's books); null when no book is used.
  */
-export async function findReusable(studentId: string, cacheKey: string, books: string[] | null): Promise<GeneratedDocumentRow | null> {
+export async function findReusable(studentId: string, cacheKey: string, books: string[] | null, anyAge = false): Promise<GeneratedDocumentRow | null> {
   const admin = createAdminClient();
-  const since = new Date(Date.now() - REUSE_DAYS * 86_400_000).toISOString();
+  // A book's answer key (anyAge) is kept until the book's pages are read again; other answers for REUSE_DAYS.
+  const since = new Date(anyAge ? 0 : Date.now() - REUSE_DAYS * 86_400_000).toISOString();
   const { data } = await admin
     .from("generated_documents")
     .select("*")

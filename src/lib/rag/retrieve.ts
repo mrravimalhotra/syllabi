@@ -1,3 +1,4 @@
+import { pageNeedsPicture } from "@/lib/rag/page-pictures";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { embed, embedMany } from "@/lib/llm";
 import { handwritingIn, withoutHandwriting } from "@/lib/rag/handwriting";
@@ -280,17 +281,19 @@ export async function loadSourceImages(
   limit?: number,
   /** Pages the request names ("pages 12 to 14"): their pictures come first. */
   firstPages: number[] = []
-): Promise<{ images: CompletionImage[]; byPath: Map<string, CompletionImage> }> {
+): Promise<{ images: CompletionImage[]; byPath: Map<string, CompletionImage>; leftOut: number }> {
   // Pages added for a whole exercise (similarity 0) come first and get more room: its questions refer to their figures.
   const wholeSection = chunks.some((c) => c.similarity === 0);
   // Then exercise pages, then the rest by how close they are: when whole books are passed, these are the pages whose pictures matter most.
   const named = (c: MatchedChunk) => c.page_number !== null && firstPages.includes(c.page_number);
   const rank = (c: MatchedChunk) => (named(c) ? -1 : c.similarity === 0 ? 0 : c.source_type === "exercise" ? 1 : 2);
   const ordered = [...chunks].sort((a, b) => rank(a) - rank(b) || b.similarity - a.similarity);
-  const uniquePaths = [...new Set(ordered.map((c) => c.image_path).filter((p): p is string => Boolean(p)))].slice(
-    0,
-    limit ?? (wholeSection ? MAX_SECTION_IMAGES : MAX_SOURCE_IMAGES)
-  );
+  const allPaths = [...new Set(ordered.map((c) => c.image_path).filter((p): p is string => Boolean(p)))];
+  const needed = allPaths.filter((path) => {
+    const page = chunks.filter((c) => c.image_path === path);
+    return pageNeedsPicture(page, page.some(named), firstPages.length > 0);
+  });
+  const uniquePaths = needed.slice(0, limit ?? (wholeSection ? MAX_SECTION_IMAGES : MAX_SOURCE_IMAGES));
 
   const byPath = new Map<string, CompletionImage>();
   await Promise.all(
@@ -300,17 +303,18 @@ export async function loadSourceImages(
     })
   );
 
-  return { images: [...byPath.values()], byPath };
+  return { images: [...byPath.values()], byPath, leftOut: allPaths.length - needed.length };
 }
 
 /** Formats retrieved chunks into a single context block for the completion prompt. */
-export function formatContext(chunks: MatchedChunk[]): string {
+export function formatContext(chunks: MatchedChunk[], attached: ReadonlySet<string> = new Set()): string {
   if (chunks.length === 0) return "(No matching material found in the books.)";
 
   return chunks
     .map((c, i) => {
       const loc = [c.section_label, c.page_number ? `p.${c.page_number}` : null].filter(Boolean).join(", ");
-      const imageNote = c.image_path ? " — the original scanned page image is attached below" : "";
+      // Only a page whose picture really is attached says so (a plain-text page is sent as text only).
+      const imageNote = c.image_path && attached.has(c.image_path) ? " — the original scanned page image is attached below" : "";
       // The printed text and the student's handwriting on it are kept apart, so an answer is never copied from the handwriting.
       const attempt = handwritingIn(c.content);
       const attemptNote = attempt.length > 0 ? `\n[Student's handwritten attempt, for reference only. It may be wrong. Never copy it: ${attempt.join(" / ")}]` : "";

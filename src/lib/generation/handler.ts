@@ -241,7 +241,12 @@ export function createGenerationRoute(taskType: GenerationTaskType) {
       // The same question again (same attachments, books, language, class, model and instructions) gets its saved answer back:
       // instant, identical, and no AI used. "Make a new answer" sends fresh: true.
       const { provider, model } = await getLlmSetting(taskType);
-      const cacheKey = answerKey({
+      // A "Solve all" part is the book's answer key for those pages: kept by the books, pages, language and class only,
+      // so it is not made again when the instructions or the model change (owner, 13 Nov: process once, keep the result).
+      // "Solve again" sends fresh: true.
+      const cacheKey = req.part
+        ? answerKey({ v: "book-answer-key-1", taskType, prompt: req.prompt, documentIds: [...(req.documentIds ?? [])].sort(), language: req.language, level: levelLine(student) })
+        : answerKey({
         v: 1,
         taskType,
         prompt: req.prompt,
@@ -253,7 +258,7 @@ export function createGenerationRoute(taskType: GenerationTaskType) {
         instructions: systemInstructionsFor(taskType, levelLine(student), req.language),
       });
       if (!req.fresh) {
-        const saved = await findReusable(student.id, cacheKey, req.documentIds ?? []);
+        const saved = await findReusable(student.id, cacheKey, req.documentIds ?? [], req.part);
         if (saved) {
           run.finish("reused", { documentId: saved.id });
           return withRunId(NextResponse.json(await savedAnswerResponse(saved)), run);

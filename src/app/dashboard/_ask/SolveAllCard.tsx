@@ -8,7 +8,7 @@ import { Spinner, button, card, cx } from "@/components/ui";
 /** "Solve all exercise questions" in progress: each part of the books with how it is going, and the answers so far. */
 export function SolveAllCard({ run }: { run: ReturnType<typeof useSolveAll> }) {
   const parts = run.parts;
-  if (!parts) return null;
+  if (!parts) return run.lastRun ? <SavedKeyNote run={run} /> : null;
   const finished = parts.filter((p) => p.status === "done" || p.status === "empty").length;
   const failed = parts.filter((p) => p.status === "failed").length;
   const waiting = parts.some((p) => p.status === "waiting");
@@ -43,6 +43,7 @@ export function SolveAllCard({ run }: { run: ReturnType<typeof useSolveAll> }) {
                 <p className={cx("[overflow-wrap:anywhere]", p.status === "waiting" ? "text-slate-400" : "text-slate-900")}>
                   {p.label}
                   {p.status === "empty" && <span className="text-slate-500"> (no questions here)</span>}
+                  {p.reusedFrom && <span className="text-slate-500"> (saved answer)</span>}
                 </p>
                 {p.error && <p className="text-xs text-red-700">{p.error}</p>}
                 {p.status === "done" && p.text && (
@@ -77,6 +78,23 @@ export function SolveAllCard({ run }: { run: ReturnType<typeof useSolveAll> }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+const day = (iso?: string) => (iso ? new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "earlier");
+
+/** After "Solve all": the parts that came from the book's saved answer key, with a way to solve them afresh. */
+function SavedKeyNote({ run }: { run: ReturnType<typeof useSolveAll> }) {
+  const last = run.lastRun!;
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-slate-500 print:hidden" data-testid="solve-all-saved">
+      <span className="min-w-0 flex-1">
+        {last.reused} of {last.parts.length} parts came from this book&apos;s saved answers (made {day(last.from)}), so no AI was used for them.
+      </span>
+      <button type="button" onClick={run.solveAgain} className={button.small}>
+        Solve again
+      </button>
     </div>
   );
 }
