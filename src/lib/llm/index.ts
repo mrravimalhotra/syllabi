@@ -24,8 +24,9 @@ const ADAPTERS: Record<Provider, LlmProviderAdapter> = {
  */
 export const BACKUPS: { provider: OpenAiCompatible; model: () => string; readsImages: boolean }[] = [
   { provider: "groq", model: () => process.env.GROQ_MODEL || "openai/gpt-oss-120b", readsImages: false },
-  // NVIDIA's free catalogue: a strong open model; reads text only.
-  { provider: "nvidia", model: () => process.env.NVIDIA_MODEL || "meta/llama-3.3-70b-instruct", readsImages: false },
+  // NVIDIA's free catalogue: Nemotron 3.5 Super VL reads pictures too, and was the fastest free backup tested
+  // (13 Nov 2026: a photo of a sum read and checked in 2 s). Llama 3.3 70B, the earlier default, was retired in Aug 2026.
+  { provider: "nvidia", model: () => process.env.NVIDIA_MODEL || "nvidia/nemotron-3.5-super-vl-120b-a12b", readsImages: true },
   // OpenRouter's free router picks a free model that can handle the request (images included).
   { provider: "openrouter", model: () => process.env.OPENROUTER_MODEL || "openrouter/free", readsImages: true },
   { provider: "mistral", model: () => process.env.MISTRAL_MODEL || "mistral-small-latest", readsImages: true },
