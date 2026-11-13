@@ -73,7 +73,7 @@ function pageOf(c: MatchedChunk): string {
  * An answer cannot be both from the book and from general knowledge: a "(general knowledge)" mark on a line that
  * also cites a book source is removed (the citation, which code checks, stands).
  */
-export function withoutContradictoryTags(text: string): string {
+function withoutContradictoryTags(text: string): string {
   return text.replace(/[ \t]*\((?:general knowledge|not from the book)\)(?=[^\n]*\[S\s*\d)/gi, "");
 }
 
