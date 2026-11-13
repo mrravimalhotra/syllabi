@@ -1,8 +1,13 @@
 import type { GenerationResult } from "@/app/dashboard/_ask/constants";
 
-/** How often the server is asked how the answer is going, and how long after it began there is no point asking. */
+/**
+ * How often the server is asked how the answer is going. It is waited for while it is still moving on (a busy model
+ * can stretch an answer past five minutes: Report, 13 Nov, a part saved after 362 s); it is given up on when it has
+ * been quiet this long (it stopped), or after the longest any answer could take.
+ */
 const ASK_EVERY_MS = 5000;
-const GIVE_UP_AFTER_S = 330;
+const STOPPED_AFTER_QUIET_S = 240;
+const GIVE_UP_AFTER_S = 900;
 
 /** Waits a while, or less: coming back to the app (from another app, or unlocking the phone) asks at once. */
 const pause = (ms: number, signal: AbortSignal) =>
@@ -54,20 +59,27 @@ export function pendingAnswer(): PendingAnswer | null {
  * to the answer, "failed" when the server says it failed, or null when it never finished (or waiting was stopped).
  * `interval` is only shortened by tests.
  */
+/** One look at the request: "waiting" while it is still being made, otherwise how it ended. */
+async function lookAt(runId: string, signal: AbortSignal): Promise<GenerationResult | "failed" | "waiting" | null> {
+  // Still offline, or the server unreachable: ask again shortly. A request the server doesn't know can't be picked up.
+  const res = await fetch(`/api/generate/runs/${runId}`, { signal }).catch(() => null);
+  if (res?.status === 404) return null;
+  const run = (res?.ok ? await res.json().catch(() => null) : null) as { outcome?: string | null; documentId?: string | null; quietFor?: number } | null;
+  if (!run?.outcome) return (run?.quietFor ?? 0) > STOPPED_AFTER_QUIET_S ? null : "waiting";
+  if (run.outcome === "failed") return "failed";
+  if (!run.documentId) return null;
+  const saved = (await fetch(`/api/documents/${run.documentId}`, { signal })
+    .then((r) => (r.ok ? r.json() : null))
+    .catch(() => null)) as { answer?: GenerationResult & { pack?: GenerationResult["pack"] | null } } | null;
+  return saved?.answer ? { ...saved.answer, pack: saved.answer.pack ?? undefined } : "waiting";
+}
+
 export async function recoverAnswer(runId: string, startedAt: number, signal: AbortSignal, interval = ASK_EVERY_MS): Promise<GenerationResult | "failed" | null> {
   for (let first = true; !signal.aborted && (first || Date.now() - startedAt < GIVE_UP_AFTER_S * 1000); first = false) {
     if (!first) await pause(interval, signal);
     if (signal.aborted) return null;
-    // Still offline, or the server unreachable: ask again shortly. A request the server doesn't know can't be picked up.
-    const res = await fetch(`/api/generate/runs/${runId}`, { signal }).catch(() => null);
-    if (res?.status === 404) return null;
-    const run = (res?.ok ? await res.json().catch(() => null) : null) as { outcome?: string | null; documentId?: string | null } | null;
-    if (!run?.outcome) continue;
-    if (run.outcome === "failed" || !run.documentId) return run.outcome === "failed" ? "failed" : null;
-    const saved = (await fetch(`/api/documents/${run.documentId}`, { signal })
-      .then((res) => (res.ok ? res.json() : null))
-      .catch(() => null)) as { answer?: GenerationResult & { pack?: GenerationResult["pack"] | null } } | null;
-    if (saved?.answer) return { ...saved.answer, pack: saved.answer.pack ?? undefined };
+    const seen = await lookAt(runId, signal);
+    if (seen !== "waiting") return seen;
   }
   return null;
 }
