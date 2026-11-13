@@ -3,8 +3,7 @@
 
 import { createHash } from "node:crypto";
 import { downloadFile, uploadSourceFile } from "@/lib/storage";
-import { assertHeaderSafe } from "@/lib/llm/assert-header-safe";
-import { withNetworkRetry, fetchOrThrowTransient } from "@/lib/llm/retry";
+import { googlePost } from "@/lib/llm/providers/google";
 import { pcmToWav, splitForSpeech } from "@/lib/tts/wav";
 import { UserError } from "@/lib/errors";
 
@@ -45,27 +44,19 @@ const cacheKey = (text: string, language: string, kind: SpeechKind) =>
   `speech/${createHash("sha256").update(JSON.stringify([model(), voice(), language, text, ...(kind === "sound" ? ["sound"] : [])])).digest("hex").slice(0, 40)}.wav`;
 
 async function synthesizeOne(text: string, language: string, kind: SpeechKind): Promise<Buffer> {
-  const apiKey = process.env.GOOGLE_API_KEY;
-  if (!apiKey) throw new Error("GOOGLE_API_KEY is not configured");
-  assertHeaderSafe("GOOGLE_API_KEY", apiKey);
-
-  const response = await withNetworkRetry(() =>
-    fetchOrThrowTransient(`https://generativelanguage.googleapis.com/v1beta/models/${model()}:generateContent`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: `${styleFor(language, kind)} ${text}` }] }],
-        generationConfig: {
-          responseModalities: ["AUDIO"],
-          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice() } } },
-        },
-      }),
-      signal: AbortSignal.timeout(60_000),
-    })
+  type Speech = { candidates?: { content?: { parts?: { inlineData?: { data?: string; mimeType?: string } }[] } }[] };
+  const data = await googlePost<Speech>(
+    model(),
+    "generateContent",
+    {
+      contents: [{ parts: [{ text: `${styleFor(language, kind)} ${text}` }] }],
+      generationConfig: {
+        responseModalities: ["AUDIO"],
+        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice() } } },
+      },
+    },
+    60_000
   );
-  if (!response.ok) throw new Error(`Gemini speech failed (${response.status}): ${(await response.text()).slice(0, 300)}`);
-
-  const data = (await response.json()) as { candidates?: { content?: { parts?: { inlineData?: { data?: string; mimeType?: string } }[] } }[] };
   const part = data.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
   if (!part?.inlineData?.data) throw new Error("Gemini speech returned no audio");
   return Buffer.from(part.inlineData.data, "base64");

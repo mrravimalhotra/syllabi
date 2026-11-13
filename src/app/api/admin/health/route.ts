@@ -40,7 +40,7 @@ function safeError(err: unknown): string {
     .replace(/AIza[\w-]{10,}/g, "[key]")
     .replace(/sb_(secret|publishable)_[\w-]+/g, "[key]")
     .replace(/eyJ[\w-]+\.[\w-]+\.[\w-]+/g, "[key]");
-  for (const name of ["R2_SECRET_ACCESS_KEY", "R2_ACCESS_KEY_ID", "SUPABASE_SERVICE_ROLE_KEY", "GOOGLE_API_KEY"]) {
+  for (const name of ["R2_SECRET_ACCESS_KEY", "R2_ACCESS_KEY_ID", "SUPABASE_SERVICE_ROLE_KEY", "GOOGLE_API_KEY", "GOOGLE_API_KEY_FREE"]) {
     const value = process.env[name];
     if (value && value.length > 6) text = text.split(value).join("[key]");
   }
@@ -80,11 +80,15 @@ const checkDatabase = async (adminId: string) => {
   return `Connected. ${count ?? 0} account(s). Your usage this month: ${quota.used.toLocaleString("en-IN")} of ${quota.quota.toLocaleString("en-IN")} tokens.`;
 };
 
+/** Which Gemini key answered, once a free-tier key is set (it is tried first; the paid key takes over when it can't). */
+const keyUsed = (result: { provider: string; freeTier?: boolean }) =>
+  result.provider !== "google" || !process.env.GOOGLE_API_KEY_FREE ? "" : result.freeTier ? " with the free-tier key" : " with the paid key (the free tier couldn't answer just now)";
+
 /** Who really answered: a backup or stand-in is named, so a green check never hides that the chosen model is down. */
-const answeredBy = (result: { provider: string; model: string; standInFor?: string }, provider: string, model: string) =>
-  result.provider === provider && !result.standInFor
+const answeredBy = (result: { provider: string; model: string; standInFor?: string; freeTier?: boolean }, provider: string, model: string) =>
+  (result.provider === provider && !result.standInFor
     ? `${provider} / ${model}`
-    : `${result.provider} / ${result.model} (a backup: ${provider} / ${model} didn't answer)`;
+    : `${result.provider} / ${result.model} (a backup: ${provider} / ${model} didn't answer)`) + keyUsed(result);
 
 const checkAnswers = async () => {
   const { provider, model } = await getLlmSetting("ad_hoc");

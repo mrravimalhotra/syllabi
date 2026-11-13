@@ -363,7 +363,7 @@ export async function writeAndCheck(input: {
     onRestart,
   });
   timings.writingMs = Date.now() - writingStart;
-  timings.model = `${result.provider} / ${result.model}${result.standInFor ? ` (stand-in: ${result.standInFor} was busy)` : ""}`;
+  timings.model = `${result.provider} / ${result.model}${result.standInFor ? ` (stand-in: ${result.standInFor} was busy)` : ""}${result.freeTier ? " (free tier)" : ""}`;
   await recordTokenUsage({
     studentId: student.id,
     taskType,

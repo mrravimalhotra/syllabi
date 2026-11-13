@@ -1,24 +1,12 @@
 import { GoogleGenerativeAI, type Part } from "@google/generative-ai";
 import type { CompletionRequest, CompletionResult, EmbeddingResult, LlmProviderAdapter } from "@/lib/llm/types";
-import { assertHeaderSafe } from "@/lib/llm/assert-header-safe";
+import { withFreeKeyFirst } from "@/lib/llm/google-keys";
 import { withNetworkRetry, fetchOrThrowTransient } from "@/lib/llm/retry";
 import { BlockedReplyError, DAILY_LIMIT } from "@/lib/errors";
 
 // Long worksheets and 80-mark papers with answer keys need room; Flash models
 // allow far more than this.
 const DEFAULT_MAX_OUTPUT_TOKENS = 32_768;
-
-/** The Gemini API key, checked to be usable in an HTTP header. */
-function googleApiKey(): string {
-  const apiKey = process.env.GOOGLE_API_KEY;
-  if (!apiKey) throw new Error("GOOGLE_API_KEY is not configured");
-  assertHeaderSafe("GOOGLE_API_KEY", apiKey);
-  return apiKey;
-}
-
-function client() {
-  return new GoogleGenerativeAI(googleApiKey());
-}
 
 // Google's free tier gives each model its own allowance, so when one model is
 // out of requests for the day, or stays overloaded after retries, the other
@@ -236,9 +224,18 @@ async function completeWith(req: CompletionRequest & { model: string }, patient 
   }
 }
 
-/** One Gemini call with the given model (search first when allowed, then without). With `patient` false, a busy or rate-limited reply fails at once instead of waiting and retrying. */
-async function completeOnce(req: CompletionRequest & { model: string }, patient = true): Promise<CompletionResult> {
-  const genAI = client();
+/** One Gemini call, with the free-tier key first when there is one (it never waits out a busy reply), then the paid key. */
+function completeOnce(req: CompletionRequest & { model: string }, patient = true): Promise<CompletionResult> {
+  return withFreeKeyFirst(
+    req.model,
+    async (key, free) => ({ ...(await completeWithKey(req, key, patient && !free)), ...(free ? { freeTier: true } : {}) }),
+    () => req.onRestart?.()
+  );
+}
+
+/** One Gemini call with the given model and key (search first when allowed, then without). With `patient` false, a busy or rate-limited reply fails at once instead of waiting and retrying. */
+async function completeWithKey(req: CompletionRequest & { model: string }, key: string, patient: boolean): Promise<CompletionResult> {
+  const genAI = new GoogleGenerativeAI(key);
   const modelWith = (search: boolean) =>
     genAI.getGenerativeModel({
       model: req.model,
@@ -265,6 +262,25 @@ async function completeOnce(req: CompletionRequest & { model: string }, patient 
   result ??= await generatePlain(() => generate(modelWith(false)), patient);
 
   return toResult(req.model, result.response, searchSkipped);
+}
+
+/**
+ * A direct call to the Gemini REST API (embeddings, speech), with the free-tier key first when there is one. The free
+ * key is asked once; the paid key is retried through brief busy spells as before.
+ */
+export async function googlePost<T>(model: string, method: string, body: object, timeoutMs?: number): Promise<T> {
+  return withFreeKeyFirst(model, async (key, free) => {
+    const send = () =>
+      fetchOrThrowTransient(`https://generativelanguage.googleapis.com/v1beta/models/${model}:${method}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+        body: JSON.stringify(body),
+        ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
+      });
+    const response = await (free ? send() : withNetworkRetry(send));
+    if (!response.ok) throw new Error(`Gemini ${method} failed (${response.status}): ${(await response.text()).slice(0, 500)}`);
+    return (await response.json()) as T;
+  });
 }
 
 export const googleAdapter: LlmProviderAdapter = {
@@ -305,29 +321,14 @@ export const googleAdapter: LlmProviderAdapter = {
   },
 
   async embed(text: string, model: string): Promise<EmbeddingResult> {
-    const apiKey = googleApiKey();
-
     // Called directly against the REST API rather than through the SDK: the
     // installed @google/generative-ai SDK's embedContent() type doesn't expose
     // outputDimensionality, but gemini-embedding-001 defaults to 3072 dimensions
     // otherwise — this pins it to 768, matching chunks.embedding's vector(768).
-    const response = await withNetworkRetry(() =>
-      fetchOrThrowTransient(`https://generativelanguage.googleapis.com/v1beta/models/${model}:embedContent`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-        body: JSON.stringify({
-          content: { parts: [{ text }] },
-          outputDimensionality: 768,
-        }),
-      })
-    );
-
-    if (!response.ok) {
-      const errorBody = await response.text();
-      throw new Error(`Gemini embedContent failed (${response.status}): ${errorBody}`);
-    }
-
-    const data = (await response.json()) as { embedding: { values: number[] } };
+    const data = await googlePost<{ embedding: { values: number[] } }>(model, "embedContent", {
+      content: { parts: [{ text }] },
+      outputDimensionality: 768,
+    });
 
     // The embeddings API doesn't return token usage; approximate for quota purposes.
     const approxTokens = Math.ceil(text.length / 4);
@@ -350,29 +351,16 @@ const EMBED_BATCH_SIZE = 100;
  * of a multi-question worksheet separately.
  */
 export async function googleEmbedMany(texts: string[], model: string): Promise<EmbeddingResult[]> {
-  const apiKey = googleApiKey();
-
   const results: EmbeddingResult[] = [];
   for (let start = 0; start < texts.length; start += EMBED_BATCH_SIZE) {
     const batch = texts.slice(start, start + EMBED_BATCH_SIZE);
-    const response = await withNetworkRetry(() =>
-      fetchOrThrowTransient(`https://generativelanguage.googleapis.com/v1beta/models/${model}:batchEmbedContents`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-        body: JSON.stringify({
-          requests: batch.map((text) => ({
-            model: `models/${model}`,
-            content: { parts: [{ text }] },
-            outputDimensionality: 768,
-          })),
-        }),
-      })
-    );
-    if (!response.ok) {
-      const errorBody = await response.text();
-      throw new Error(`Gemini batchEmbedContents failed (${response.status}): ${errorBody}`);
-    }
-    const data = (await response.json()) as { embeddings: { values: number[] }[] };
+    const data = await googlePost<{ embeddings: { values: number[] }[] }>(model, "batchEmbedContents", {
+      requests: batch.map((text) => ({
+        model: `models/${model}`,
+        content: { parts: [{ text }] },
+        outputDimensionality: 768,
+      })),
+    });
     if (data.embeddings?.length !== batch.length) {
       throw new Error(`Gemini batchEmbedContents returned ${data.embeddings?.length ?? 0} embeddings for ${batch.length} texts`);
     }

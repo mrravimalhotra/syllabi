@@ -35,7 +35,8 @@ Create an API key at aistudio.google.com. The default models are Flash tier, whi
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | the `sb_publishable_...` key (legacy variable name) |
 | `SUPABASE_SERVICE_ROLE_KEY` | the `sb_secret_...` key (legacy variable name; server only) |
-| `GOOGLE_API_KEY` | Gemini API key |
+| `GOOGLE_API_KEY` | Gemini API key (the paid project) |
+| `GOOGLE_API_KEY_FREE` | optional: a key from a Google project with no billing (free tier). Tried first for every AI call; the paid key takes over when the free tier is busy or out of its allowance |
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | from step 2 |
 | `R2_BUCKET_NAME` | `syllabi` (default if unset) |
 | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` | optional fallbacks |

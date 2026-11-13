@@ -64,6 +64,8 @@ export interface CompletionResult {
   searchSuggestionsHtml?: string;
   /** Set when the configured model was skipped or failed and this model answered instead. */
   standInFor?: string;
+  /** Answered with the free-tier key (no charge). */
+  freeTier?: boolean;
   /** True when the answer stopped at the output length limit. */
   truncated?: boolean;
 }

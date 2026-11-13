@@ -1,4 +1,5 @@
-import { googleAdapter } from "@/lib/llm/providers/google";
+import { googleAdapter, googleEmbedMany } from "@/lib/llm/providers/google";
+import { resetFreeKeyRests } from "@/lib/llm/google-keys";
 import { openAiCompatibleAdapter } from "@/lib/llm/providers/openai";
 import { scene } from "@/lib/study-pack/generate";
 import { pcmToWav, splitForSpeech } from "@/lib/tts/wav";
@@ -20,7 +21,7 @@ interface SentBody {
 const openAiBodies: { messages: { role: string; content: unknown }[]; temperature?: number; model: string }[] = [];
 type Scenario = (url: string, body: SentBody) => Response | null;
 let scenario: Scenario | null = null;
-const requests: { url: string; body: SentBody }[] = [];
+const requests: { url: string; body: SentBody; key: string | null }[] = [];
 const reply = (candidate: object, usage: object = { promptTokenCount: 5, candidatesTokenCount: 3, totalTokenCount: 8 }) =>
   new Response(JSON.stringify({ candidates: [candidate], usageMetadata: usage }), { status: 200, headers: { "content-type": "application/json" } });
 const errorReply = (status: number, message: string, code = "ERROR") =>
@@ -55,7 +56,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   }
   if (scenario && model.startsWith("test-")) {
     const body = init?.body ? JSON.parse(String(init.body)) : null;
-    requests.push({ url, body });
+    requests.push({ url, body, key: new Headers(init?.headers).get("x-goog-api-key") });
     const made = scenario(url, body);
     if (made) return made;
   }
@@ -195,6 +196,35 @@ const groq = await openAiCompatibleAdapter("groq").generateCompletion({ taskType
 const userMessage = openAiBodies[0].messages[1].content as { type: string; text?: string; image_url?: { url: string } }[];
 check("an OpenAI-style call sends the instructions, the question with its reference material, and the pictures", openAiBodies[0].messages[0].content === "be kind" && userMessage[0].text === "Reference material (RAG context):\nPlants.\n\nhi" && userMessage[1].image_url?.url === "data:image/png;base64,QUJD" && openAiBodies[0].temperature === 0.4, JSON.stringify(openAiBodies[0]).slice(0, 200));
 check("its answer, tokens and the model that really answered are reported", groq.text === "Groq says hi" && groq.truncated === true && groq.model === "served-model" && groq.usage.totalTokens === 6 && groq.usedSearchGrounding === false);
+
+// The free-tier key goes first; the paid key takes over when the free tier can't answer.
+process.env.GOOGLE_API_KEY_FREE = "free-key";
+resetFreeKeyRests();
+setScenario(() => ok("Free answer."));
+const freeAnswer = await asked({ model: "test-free-a" });
+check("with a free key set, it is asked first and the answer says so", freeAnswer.freeTier === true && requests.length === 1 && requests[0].key === "free-key", JSON.stringify(requests.map((r) => r.key)));
+setScenario(() => (requests.at(-1)?.key === "free-key" ? errorReply(429, "Quota exceeded for metric: GenerateRequestsPerDayPerProjectPerModel-FreeTier", "RESOURCE_EXHAUSTED") : ok("Paid answer.")));
+let restarted = 0;
+const paidAnswer = await asked({ model: "test-free-b", onRestart: () => restarted++ });
+check("the free tier over its daily limit hands over to the paid key at once", paidAnswer.text === "Paid answer." && !paidAnswer.freeTier && requests.map((r) => r.key).join() === "free-key,test-key" && restarted >= 1, JSON.stringify(requests.map((r) => r.key)));
+requests.length = 0;
+await asked({ model: "test-free-b" });
+check("a model the free key just failed on goes straight to the paid key", requests.map((r) => r.key).join() === "test-key", JSON.stringify(requests.map((r) => r.key)));
+setScenario(() => (requests.at(-1)?.key === "free-key" ? errorReply(400, "Some bad request") : ok()));
+await asked({ model: "test-free-c" }).catch(() => null);
+check("another refusal from the free key also falls back to the paid key", requests[0].key === "free-key" && requests.at(-1)?.key === "test-key", JSON.stringify(requests.map((r) => r.key)));
+setScenario(() =>
+  requests.at(-1)?.key === "free-key"
+    ? errorReply(503, "The model is overloaded.", "UNAVAILABLE")
+    : new Response(JSON.stringify({ embeddings: [{ values: [1, 2] }] }), { status: 200, headers: { "content-type": "application/json" } })
+);
+const embedded = await googleEmbedMany(["plants"], "test-embed");
+check("embeddings use the free key first and the paid key when it is busy", embedded[0].embedding.join() === "1,2" && requests.map((r) => r.key).join() === "free-key,test-key", JSON.stringify(requests.map((r) => r.key)));
+delete process.env.GOOGLE_API_KEY_FREE;
+setScenario(() => ok());
+await asked({ model: "test-free-d" });
+check("without a free key, only the paid key is used", requests.map((r) => r.key).join() === "test-key", JSON.stringify(requests.map((r) => r.key)));
+scenario = null;
 
 // Study-pack scenes: only fixed choices and real emoji get through.
 const good = scene({ backdrop: "forest", actors: [{ emoji: "🌳", motion: "sway" }, { emoji: "🐦", motion: "fly" }, { emoji: "👩🏽‍🏫", motion: "bounce" }], caption: "A bird in the trees" });

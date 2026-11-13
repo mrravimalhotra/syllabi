@@ -275,7 +275,7 @@ export async function generateStudyPack(input: StudyPackInput): Promise<StudyPac
   // Each call is streamed (its words are not shown) so that a model that goes silent is given up on, and each reports when it is done.
   const call = async (part: string, systemInstructions: string, jsonSchema: Record<string, unknown>) => {
     const result = await generateCompletion({ taskType: "study_pack", systemInstructions, prompt, jsonSchema, temperature: 0.3, onText: () => {} });
-    input.onProgress?.(`${part} written`, { [`${part}Model`]: `${result.provider} / ${result.model}${result.standInFor ? ` (stand-in: ${result.standInFor} was busy)` : ""}`, [`${part}Chars`]: result.text.length });
+    input.onProgress?.(`${part} written`, { [`${part}Model`]: `${result.provider} / ${result.model}${result.standInFor ? ` (stand-in: ${result.standInFor} was busy)` : ""}${result.freeTier ? " (free tier)" : ""}`, [`${part}Chars`]: result.text.length });
     return result;
   };
 
