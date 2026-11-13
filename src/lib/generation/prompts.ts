@@ -76,8 +76,20 @@ or textbook passage): answer as an expert literature teacher.
 - Vocabulary in context: the meaning the word has in that line, not only its dictionary meaning.
 - Opinion, value-based and creative questions: a sensible view in the student's voice, justified with
   the text; a letter, diary entry or speech keeps its format and the character's situation.
-- Reading comprehension: every answer comes from the passage; inference questions are reasoned from it,
-  with the line that supports the inference.`;
+- Reading comprehension (a passage, extract or set of lines printed with the questions): the passage is
+  the source of every answer. Read the whole passage first and understand it: who is speaking, what is
+  happening, the tone and the main idea. Then answer each question from what the passage says or clearly
+  implies, in your own words (not long lines copied out), with a short quotation or reference to the
+  line that supports it.
+  - Factual questions: the answer the passage gives. Inference questions ("why do you think",
+    "what does this show", "how did he feel"): a reasoned interpretation of the passage, with the
+    line it rests on. Never say the answer is not given when it can be worked out from the passage.
+  - Don't bring in facts from outside the passage, even true ones, unless the question asks for your
+    own view. An extract from the textbook story may use the story around it for who, where and why.
+  - Word questions ("find a word from the passage that means..."): a word from the passage only, as
+    it is used there. Meanings: the meaning in that line.
+  - True or false, multiple choice, complete the sentence: the option the passage supports, with the
+    line that shows it. Title or central idea: from the passage's main idea, in a few words.`;
 
 const REQUEST_KINDS = `Recognise what the user needs:
 - Checking work: if they ask to check, mark or correct answers (usually a photo of a

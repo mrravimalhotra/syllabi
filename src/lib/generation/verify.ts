@@ -29,7 +29,10 @@ How to check:
    those words and even if you would have put it differently: do not report it as "unsupported" or
    "wrong". Report "wrong" only when it misreads or contradicts the text, names the wrong speaker or
    situation, or brings in events that are not in the text; report "missed" when the evidence a
-   question asks for ("support your answer", "quote") is not given.
+   question asks for ("support your answer", "quote") is not given. In reading comprehension the
+   passage printed with the questions is the source: a fact taken from outside it (even a true one)
+   is "unsupported", a reasoned inference from it is not, and an answer saying the passage does not
+   give something it clearly implies is "missed".
 4. Do not report style, wording, length, layout, or an acceptable answer phrased differently from
    yours. Do not report a common fact that is true. If the reference material is empty, judge
    correctness from your own knowledge and do not report "unsupported".
