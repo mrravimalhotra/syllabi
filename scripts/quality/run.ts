@@ -139,7 +139,17 @@ if (args.includes("--save-baseline")) {
 }
 // The pass mark: below it the run fails, so a change that makes answers worse can't go live unnoticed.
 const minPass = Number(process.env.QUALITY_MIN_PASS || 0.8);
-const rate = passed / Math.max(1, results.length);
+// A question the AI couldn't answer because the key's daily allowance was used up says nothing about quality: it
+// is left out. When most of the set couldn't run, nothing was measured, which is not a failure of the answers.
+const unmeasured = (r: { notes?: string }) => /^failed:/.test(r.notes ?? "") && /per day|PerDay|daily limit/i.test(r.notes ?? "");
+const measured = results.filter((r) => !unmeasured(r));
+if (measured.length < results.length / 2) {
+  console.log(`\nNOT MEASURED: the Gemini key's daily allowance was used up for ${results.length - measured.length} of ${results.length} questions. Run it again when the allowance resets.`);
+  console.log("::warning title=Answer quality not measured::The Gemini key's daily allowance was used up, so the answers could not be checked this time.");
+  process.exit(0);
+}
+const rate = measured.filter((r) => r.pass).length / Math.max(1, measured.length);
+if (measured.length < results.length) console.log(`(${results.length - measured.length} questions left out: the daily allowance ran out before them.)`);
 if (rate < minPass) {
   console.log(`\nBELOW THE PASS MARK: ${Math.round(rate * 100)}% passed, ${Math.round(minPass * 100)}% needed.`);
   process.exit(1);
