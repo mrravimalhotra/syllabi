@@ -87,3 +87,24 @@ export function withPageReferences(text: string, chunks: MatchedChunk[]): string
     return refs.length ? `(${refs.join("; ")})` : "";
   });
 }
+
+/** The citation check's word-matching doubt (as opposed to a source that doesn't exist). */
+const WORDS_DONT_MATCH = /but its words don't closely match that page/;
+
+/**
+ * When the independent AI check read the answer against the books and found no mistakes, a page reference that only
+ * failed the word-matching test is not a problem: it is an answer in its own words (an interpretation, a summary).
+ * It is shown as a note and doesn't lower the confidence (Report #11: three such doubts took a clean answer from
+ * about 95% to 55%). A missing source, or anything when the check found problems, stays a problem.
+ */
+export function settleWordDoubts(checks: AnswerCheck[], reviewFoundNothing: boolean): AnswerCheck[] {
+  const doubts = checks.filter((c) => c.kind === "citation" && !c.ok && WORDS_DONT_MATCH.test(c.message));
+  if (!reviewFoundNothing || doubts.length === 0) return checks;
+  const note: AnswerCheck = {
+    kind: "citation",
+    ok: true,
+    message: `${doubts.length} page reference${doubts.length === 1 ? " is" : "s are"} in the answer's own words (an interpretation or summary), so ${doubts.length === 1 ? "it" : "they"} couldn't be matched word for word; the independent check against your books found no mistakes`,
+  };
+  return [...checks.filter((c) => !doubts.includes(c)), note];
+}
+

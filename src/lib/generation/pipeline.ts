@@ -10,7 +10,7 @@ import { problemForRepair, reviewChecks, verifyAnswer, type VerifyProblem } from
 import { disagreements, solveAgain, type FinalAnswer } from "@/lib/generation/second-solve";
 import { markAgain, markingDisagreements, type SecondMark } from "@/lib/generation/second-marking";
 import { confirmMarks, doubtfulQuestions, finishMarking, settleMarks, settleMovedMarks, type Settlement } from "@/lib/generation/settle-marking";
-import { CITING_TASKS, checkCitations, withPageReferences } from "@/lib/generation/citations";
+import { CITING_TASKS, checkCitations, withPageReferences, settleWordDoubts } from "@/lib/generation/citations";
 import { levelLine } from "@/lib/generation/level";
 import type { AnswerLanguage } from "@/lib/generation/language";
 import type { CompletionImage, CompletionResult } from "@/lib/llm/types";
@@ -142,6 +142,15 @@ function independentChecks(review: VerifyProblem[] | null, examined: boolean): A
   if (review?.length) return [...reviewChecks(review), ...(examined ? [] : [NOT_DOUBLE_CHECKED])];
   if (!examined) return [NOT_DOUBLE_CHECKED];
   return [reviewChecks([])[0]];
+}
+
+/**
+ * The checks shown with the answer: the code checks, with page references in the answer's own words that the
+ * independent check found right settled as a note (Report #11), then the independent check's result.
+ */
+function finalChecks(checks: AnswerCheck[], review: VerifyProblem[] | null, examined: boolean): AnswerCheck[] {
+  const reviewFoundNothing = examined && (review ?? []).length === 0;
+  return [...settleWordDoubts(checks, reviewFoundNothing), ...independentChecks(review, examined)];
 }
 
 /** Which independent check found a problem, as told to the writer when it is asked to fix it. */
@@ -583,7 +592,7 @@ async function checkAndRepair(input: {
     const finished = await finishPaper({ studentId, report: result.text, settlement, question: request.prompt, photos, checks, late: late(), blindCheck: Date.now() - began < BLIND_CHECK_BY_MS }, runChecks);
     return { result: { ...result, text: finished.text }, checks: finished.checks };
   }
-  checks = [...checks, ...independentChecks(review, examined)];
+  checks = finalChecks(checks, review, examined);
   // The checked "[S2]" marks become page references the parent can follow.
   if (cites) result = { ...result, text: withPageReferences(result.text, chunks) };
   return { result, checks };

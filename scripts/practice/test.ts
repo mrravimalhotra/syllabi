@@ -43,7 +43,7 @@ import { LOGIN_ID, internalEmail, looksLikeLoginId, normaliseLoginId } from "@/l
 import { readAnswerStream } from "@/lib/answer-stream";
 import { factChecks, parseJudge, scoreCase } from "../quality/grade";
 import { disagreements, numbersIn, parseFinals } from "@/lib/generation/second-solve";
-import { checkCitations, withPageReferences } from "@/lib/generation/citations";
+import { checkCitations, settleWordDoubts, withPageReferences } from "@/lib/generation/citations";
 import { pageNeedsPicture } from "@/lib/rag/page-pictures";
 import { entriesFrom, givenDate, isNothing, normaliseSubject, parseDiaryDate } from "@/lib/homework/diary";
 import { byDueDate, bySubject, helpQuestion, missingDiaryDay, pairUp } from "@/lib/homework/schedule";
@@ -1037,6 +1037,15 @@ function q0(): Question {
     check(pageNeedsPicture(page("Q1. Fill in."), false), "Pictures: a page with little text keeps its picture");
     check(pageNeedsPicture(page(story, "exercise"), false) && !pageNeedsPicture(page(story, "exercise"), false, true), "Pictures: exercise pages keep theirs, unless the request names other pages");
     check(pageNeedsPicture(page(story, "textbook", 0), false, true), "Pictures: a page added for a whole exercise keeps its picture");
+  }
+  // Report #11: page references in the answer's own words, found right by the independent check, are not problems.
+  {
+    const doubtsOnly = [...doubted, ...doubted];
+    const settled = settleWordDoubts(doubtsOnly, true);
+    check(settled.length === 1 && settled[0].ok && /2 page references are in the answer's own words/.test(settled[0].message), "Citations: word-only doubts become one note when the independent check found nothing", JSON.stringify(settled));
+    check(settleWordDoubts(doubtsOnly, false).every((c) => !c.ok), "Citations: word-only doubts stay problems when the independent check found mistakes or couldn't run");
+    const missing = checkCitations("**Ans:** Something. [S9]", passages);
+    check(settleWordDoubts(missing, true).some((c) => !c.ok), "Citations: a source that doesn't exist stays a problem");
   }
   // Report #10: an interpretation that cites the story was also marked "(general knowledge)".
   check(
