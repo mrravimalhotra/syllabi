@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnswerCutError, readAnswerStream } from "@/lib/answer-stream";
-import { recoverAnswer } from "@/app/dashboard/_ask/recover";
+import { pendingAnswer, recoverAnswer, rememberPending } from "@/app/dashboard/_ask/recover";
 import { OFFLINE_MESSAGE, SERVER_UNREACHABLE_MESSAGE, answerStoppedMessage, failedRequestMessage } from "@/lib/http-errors";
 import { findProblems, solve } from "@/lib/worked/detect";
 import type { WorkedExample } from "@/lib/worked/types";
@@ -32,13 +32,17 @@ function reportFailure(task: GenerationTaskType, message: string, runId: string 
   }).catch(() => {});
 }
 
+/** Said while the answer is picked up again: the phone cut the connection, which is expected, not a fault. */
+const WAITING_NOTICE =
+  "Syllabi is still working on your answer. Your phone paused the connection (switching apps or locking the screen does this), which is fine: you can leave and come back, and the answer will be here when it is ready.";
+
 /**
  * The connection dropped after the server had begun (a phone network, a locked screen): the server carries on, so
  * wait for it and hand back the answer when it is saved; null when it can't be picked up.
  */
 async function pickedUpAgain(err: unknown, runId: string | null, started: number, signal: AbortSignal, say: (notice: string | null) => void): Promise<GenerationResult | null> {
   if (!runId || !(err instanceof AnswerCutError || err instanceof TypeError)) return null;
-  say("The connection dropped, but Syllabi is still making your answer. It will appear here when it is ready. Keep this page open.");
+  say(WAITING_NOTICE);
   const recovered = await recoverAnswer(runId, started, signal);
   say(null);
   return recovered === "failed" ? null : recovered;
@@ -66,6 +70,35 @@ async function sendWithRetries(route: string, body: string, signal: AbortSignal,
   }
 }
 
+/**
+ * The phone closed the page while an answer was being made (switching apps, a locked screen): when the page opens
+ * again, the answer is waited for (or fetched, if already saved) and shown.
+ */
+function usePickUpOnOpen(begin: (controller: AbortController, task: GenerationTaskType) => void, end: () => void, say: (v: string | null) => void, onAnswer: (answer: GenerationResult) => void) {
+  useEffect(() => {
+    const pending = pendingAnswer();
+    if (!pending) return;
+    const controller = new AbortController();
+    begin(controller, pending.task as GenerationTaskType);
+    say(WAITING_NOTICE);
+    recoverAnswer(pending.runId, pending.startedAt, controller.signal)
+      .then((answer) => {
+        if (answer && answer !== "failed") {
+          say(null);
+          onAnswer(answer);
+        } else if (!controller.signal.aborted) {
+          say(answer === "failed" ? "Your last answer couldn't be finished. Try again." : "Your last answer is taking longer than usual. When it is ready, it will be in My Documents.");
+        }
+      })
+      .finally(() => {
+        rememberPending(null);
+        end();
+      });
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when the page opens
+  }, []);
+}
+
 interface LastRequest {
   route: string;
   body: Record<string, unknown>;
@@ -78,7 +111,7 @@ interface LastRequest {
  * messages for a stopped or failed request. `onFinished` runs after a request
  * ends with an answer (to refresh the usage bar).
  */
-export function useGeneration(onFinished: () => void) {
+export function useGeneration(onFinished: () => void, onPickedUp?: (task: GenerationTaskType) => void) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -110,6 +143,7 @@ export function useGeneration(onFinished: () => void) {
     return () => window.removeEventListener("beforeunload", warn);
   }, [loading]);
 
+  usePickUpOnOpen((c, task) => ((abortRef.current = c), (busyRef.current = true), setLoading(true), onPickedUp?.(task)), () => ((abortRef.current = null), (busyRef.current = false), setLoading(false)), setNotice, (answer) => (setResult(answer), onFinished()));
   useEffect(() => {
     if (result) resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [result]);
@@ -187,6 +221,7 @@ export function useGeneration(onFinished: () => void) {
       setNotice(null);
       replied = true;
       runId = res.headers.get("X-Run-Id");
+      if (runId) rememberPending({ runId, startedAt: started, task });
       const data = await readResponse(res);
       setLoading(false);
       setResult(data);
@@ -210,6 +245,8 @@ export function useGeneration(onFinished: () => void) {
         setError(runId ? `${message} (Reference ${runId.slice(0, 8)})` : message);
       }
     } finally {
+      // Answered, failed or stopped: nothing left to pick up when the page opens again.
+      rememberPending(null);
       abortRef.current = null;
       busyRef.current = false;
       if (draftFrame.current !== null) cancelAnimationFrame(draftFrame.current);

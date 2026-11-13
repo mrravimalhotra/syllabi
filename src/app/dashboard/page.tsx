@@ -79,7 +79,8 @@ function AskSyllabi() {
   }
 
   const books = useBooks();
-  const generation = useGeneration(() => void loadMe().catch(() => {}));
+  // An answer left being made when the phone closed the page: its screen opens again, to show it when ready.
+  const generation = useGeneration(() => void loadMe().catch(() => {}), (task) => (setAnswerTask(task), setLastTool(task), router.replace(`/dashboard?tool=${task}`)));
   const { error, notice, setError, setNotice } = generation;
   const attachments = useAttachments(setError, setNotice);
   // "Solve all exercise questions" is done a few pages at a time and put together at the end.

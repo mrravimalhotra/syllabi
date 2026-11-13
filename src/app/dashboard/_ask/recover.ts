@@ -4,11 +4,49 @@ import type { GenerationResult } from "@/app/dashboard/_ask/constants";
 const ASK_EVERY_MS = 5000;
 const GIVE_UP_AFTER_S = 330;
 
+/** Waits a while, or less: coming back to the app (from another app, or unlocking the phone) asks at once. */
 const pause = (ms: number, signal: AbortSignal) =>
   new Promise<void>((resolve) => {
-    const timer = setTimeout(resolve, ms);
-    signal.addEventListener("abort", () => (clearTimeout(timer), resolve()), { once: true });
+    const done = () => {
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", back);
+      resolve();
+    };
+    const back = () => document.visibilityState === "visible" && done();
+    const timer = setTimeout(done, ms);
+    document.addEventListener("visibilitychange", back);
+    signal.addEventListener("abort", done, { once: true });
   });
+
+const PENDING_KEY = "syllabi:pending-answer";
+
+/** An answer being made, remembered so that it can be picked up after the phone closed the page (switching apps, a locked screen). */
+export interface PendingAnswer {
+  runId: string;
+  startedAt: number;
+  task: string;
+}
+
+export function rememberPending(pending: PendingAnswer | null) {
+  try {
+    if (pending) localStorage.setItem(PENDING_KEY, JSON.stringify(pending));
+    else localStorage.removeItem(PENDING_KEY);
+  } catch {
+    // Private browsing: the answer is still saved in My Documents.
+  }
+}
+
+/** The answer still being made when the page was last open, if it began recently enough to be waited for or fetched. */
+export function pendingAnswer(): PendingAnswer | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(PENDING_KEY) ?? "null") as PendingAnswer | null;
+    if (v && typeof v.runId === "string" && typeof v.startedAt === "number" && typeof v.task === "string" && Date.now() - v.startedAt < 30 * 60_000) return v;
+  } catch {
+    // Unreadable: forget it.
+  }
+  rememberPending(null);
+  return null;
+}
 
 /**
  * The connection dropped while an answer was being made (a phone network, a locked screen), but the server carries
@@ -17,8 +55,8 @@ const pause = (ms: number, signal: AbortSignal) =>
  * `interval` is only shortened by tests.
  */
 export async function recoverAnswer(runId: string, startedAt: number, signal: AbortSignal, interval = ASK_EVERY_MS): Promise<GenerationResult | "failed" | null> {
-  while (!signal.aborted && Date.now() - startedAt < GIVE_UP_AFTER_S * 1000) {
-    await pause(interval, signal);
+  for (let first = true; !signal.aborted && (first || Date.now() - startedAt < GIVE_UP_AFTER_S * 1000); first = false) {
+    if (!first) await pause(interval, signal);
     if (signal.aborted) return null;
     // Still offline, or the server unreachable: ask again shortly. A request the server doesn't know can't be picked up.
     const res = await fetch(`/api/generate/runs/${runId}`, { signal }).catch(() => null);

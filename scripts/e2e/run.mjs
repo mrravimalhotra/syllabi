@@ -297,9 +297,30 @@ await test("Ask: when the connection drops while the server is still working, th
   await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
   await page.locator("textarea").fill("Explain photosynthesis");
   await page.getByRole("button", { name: /^Generate$/ }).click();
-  await page.getByText(/The connection dropped, but Syllabi is still making your answer/).waitFor({ timeout: 10000 });
+  await page.getByText(/Syllabi is still working on your answer\. Your phone paused the connection/).waitFor({ timeout: 10000 });
   await page.getByText("Plants make food from sunlight.").first().waitFor({ timeout: 25000 });
   if (asked < 2 || (await page.getByText(/The answer stopped after/).count()) !== 0) throw new Error(`asked ${asked} times`);
+});
+
+await test("Ask: when the phone closes the page while an answer is made, it is picked up when the page opens again", async (page, ctx) => {
+  await baseRoutes(ctx);
+  let ready = false;
+  await ctx.route("**/api/log-error", (r) => json(r, { ok: true }));
+  await ctx.route("**/api/generate/**", (r) => r.fulfill({ ...ndjson([{ type: "ping" }]), headers: { "X-Run-Id": "3f2a91c0-0000-4000-8000-000000000003" } }));
+  await ctx.route("**/api/generate/runs/*", (r) => json(r, ready ? { stage: "done", outcome: "answered", documentId: "a10" } : { stage: "writing", outcome: null, documentId: null, seconds: 30 }));
+  await ctx.route("**/api/documents/a10", (r) => json(r, { answer: { ...answer, id: "a10", text: "Marked: 48 / 50.", pack: null } }));
+  await page.goto(`${BASE}/dashboard?tool=solution`, { waitUntil: "networkidle" });
+  await page.locator("textarea").fill("Explain photosynthesis");
+  await page.getByRole("button", { name: /^Generate$/ }).click();
+  await page.getByText(/Syllabi is still working on your answer/).waitFor({ timeout: 10000 });
+  // The phone closes the page (another app was opened); the answer is finished meanwhile; the page opens again.
+  ready = true;
+  page.on("dialog", (d) => d.accept());
+  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.getByText("Marked: 48 / 50.").first().waitFor({ timeout: 15000 });
+  if (!page.url().includes("tool=solution")) throw new Error(`the answer's screen did not open: ${page.url()}`);
+  const left = await page.evaluate(() => localStorage.getItem("syllabi:pending-answer"));
+  if (left !== null) throw new Error(`the picked-up answer is still remembered: ${left}`);
 });
 
 await test("Ask: switching kind clears the text and the old answer", async (page, ctx) => {
