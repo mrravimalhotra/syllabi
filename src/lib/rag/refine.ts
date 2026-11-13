@@ -36,7 +36,9 @@ function json(text: string): Record<string, unknown> | null {
 
 async function ask(ownerId: string, systemInstructions: string, prompt: string, schema: Record<string, unknown>): Promise<Record<string, unknown> | null> {
   try {
-    const result = await generateCompletion({ taskType: "ad_hoc", systemInstructions, prompt, temperature: 0, maxOutputTokens: 512, jsonSchema: schema });
+    // A short, simple job (a few search words, or which passages help): a little thinking is plenty. Without a limit
+    // the model may think for thousands of tokens, paid for like the answer.
+    const result = await generateCompletion({ taskType: "ad_hoc", systemInstructions, prompt, temperature: 0, maxOutputTokens: 512, thinking: 1024, jsonSchema: schema });
     await recordTokenUsage({ studentId: ownerId, taskType: "ad_hoc", provider: result.provider, model: result.model, usage: result.usage });
     return json(result.text);
   } catch (err) {

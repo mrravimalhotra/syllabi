@@ -109,6 +109,8 @@ export async function POST(request: Request, { params }: Params) {
       ]
         .filter(Boolean)
         .join("\n"),
+      // One answer rewritten as asked: a little thinking is enough.
+      thinking: 1024,
       temperature: 0.3,
       maxOutputTokens: 4096,
     });

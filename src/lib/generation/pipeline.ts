@@ -469,7 +469,8 @@ async function checkAndRepair(input: {
   const runReview = async (text: string): Promise<VerifyProblem[] | null> => {
     // The paper checker's marking is checked by code (lib/checks/paper.ts); it has no book to check against.
     if (taskType === "paper_check") return null;
-    const examine = () => verifyAnswer({ taskType, question: request.prompt, answer: text, context: request.context, photos, ...(late() ? { thinking: LATE_THINKING } : {}) });
+    // The examiner thinks as much as the writer did (notes less than maths), not always the most.
+    const examine = () => verifyAnswer({ taskType, question: request.prompt, answer: text, context: request.context, photos, thinking: late() ? LATE_THINKING : THINKING[taskType] || 2048 });
     // A check that couldn't run (busy, an unreadable reply) is tried once more while there is time, rather than
     // showing the answer as not double-checked.
     const verified = (await examine()) ?? (late() ? null : await examine());
@@ -486,7 +487,7 @@ async function checkAndRepair(input: {
   // Maths (an answer with calculations in it) is also solved a second time, independently; its final answers
   // must match the answer's, and a mismatch is a problem like the examiner's.
   const runSecondSolve = async (): Promise<FinalAnswer[] | null> => {
-    const second = await solveAgain({ taskType, question: request.prompt, context: request.context, photos });
+    const second = await solveAgain({ taskType, question: request.prompt, context: request.context, photos, thinking: THINKING[taskType] || 2048 });
     if (!second) return null;
     await recordTokenUsage({ studentId, taskType, provider: second.result.provider, model: second.result.model, usage: second.result.usage });
     return second.finals;

@@ -105,6 +105,8 @@ export async function readDiary(pages: CompletionImage[], fileName: string, agai
     images: pages,
     temperature: again ? 0.2 : 0,
     maxOutputTokens: 8192,
+    // Copying a diary page needs care, not long reasoning; the page is read twice and the readings compared anyway.
+    thinking: 2048,
     jsonSchema: SCHEMA,
   });
   const days = parseDiary(result.text, pages.length);

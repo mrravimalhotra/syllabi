@@ -54,6 +54,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       context: context || undefined,
       temperature: 0.3,
       maxOutputTokens: 2048,
+      // A short reply about an answer already made: a limit keeps the model from thinking at length.
+      thinking: 2048,
     });
     await recordTokenUsage({ studentId: user.id, taskType: saved.task_type, provider: result.provider, model: result.model, usage: result.usage });
 

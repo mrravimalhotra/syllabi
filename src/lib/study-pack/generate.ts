@@ -12,6 +12,9 @@ import { levelLine } from "@/lib/generation/level";
 import { languageLine, type AnswerLanguage } from "@/lib/generation/language";
 import { SCENE_BACKDROPS, SCENE_MOTIONS, type PackQuestion, type Scene, type StudyPack, type VocabularyItem, type WalkthroughPart } from "@/lib/study-pack/types";
 
+/** How much the model may think before writing each part of a study pack. */
+const STUDY_PACK_THINKING = 2048;
+
 // About 40 dense textbook pages; longer books should be split into chapters.
 const MAX_CHAPTER_CHARS = 150_000;
 const MAX_FOCUS_CHARS = 1_000;
@@ -274,7 +277,8 @@ export async function generateStudyPack(input: StudyPackInput): Promise<StudyPac
   const prompt = packPrompt(input, chapter.text);
   // Each call is streamed (its words are not shown) so that a model that goes silent is given up on, and each reports when it is done.
   const call = async (part: string, systemInstructions: string, jsonSchema: Record<string, unknown>) => {
-    const result = await generateCompletion({ taskType: "study_pack", systemInstructions, prompt, jsonSchema, temperature: 0.3, onText: () => {} });
+    // Writing from the chapter text: some thinking helps, an unlimited amount only costs (and slows) more.
+    const result = await generateCompletion({ taskType: "study_pack", systemInstructions, prompt, jsonSchema, temperature: 0.3, thinking: STUDY_PACK_THINKING, onText: () => {} });
     input.onProgress?.(`${part} written`, { [`${part}Model`]: `${result.provider} / ${result.model}${result.standInFor ? ` (stand-in: ${result.standInFor} was busy)` : ""}${result.freeTier ? " (free tier)" : ""}`, [`${part}Chars`]: result.text.length });
     return result;
   };
