@@ -3,6 +3,7 @@ import type { CompletionImage, CompletionResult } from "@/lib/llm/types";
 import { tableRows } from "@/lib/checks/paper";
 import type { VerifyProblem } from "@/lib/generation/verify";
 import { getLlmSetting } from "@/lib/llm/config";
+import { BlockedReplyError } from "@/lib/errors";
 
 // A checked paper is marked twice: a second examiner marks the same pages independently and gives only each
 // question's marks, and code compares them with the report's marks table. A question the two markings disagree
@@ -106,16 +107,17 @@ export function markingDisagreements(second: SecondMark[], report: string): Veri
 }
 
 /** The model for the second marking when papers are marked with Gemini (SECOND_MARKING_MODEL changes it). */
-const SECOND_MARKING_MODEL = "gemini-2.5-flash-lite";
+// Gemini 2.5 Flash-Lite was retired for new keys (404, 2026-11-13); the -latest name follows Google's current Flash-Lite.
+const SECOND_MARKING_MODEL = "gemini-flash-lite-latest";
 
 /** The second, independent marking, or null when it could not be made (never holds the report back). */
 export async function markAgain(input: { question: string; photos: CompletionImage[]; thinking?: number }): Promise<{ marks: SecondMark[]; result: CompletionResult } | null> {
   try {
-    // A cheaper model than the main marking's, which also makes the second marking more independent of it.
+    // A cheaper model than the main marking's, which also makes the second marking more independent of it. If that
+    // model can't be used (retired, renamed), the paper-checking model marks it instead, so the second marking still happens.
     const { provider } = await getLlmSetting("paper_check");
-    const result = await generateCompletion({
-      ...(provider === "google" ? { model: process.env.SECOND_MARKING_MODEL || SECOND_MARKING_MODEL } : {}),
-      taskType: "paper_check",
+    const request = {
+      taskType: "paper_check" as const,
       systemInstructions: SECOND_MARKING_SYSTEM,
       prompt: `${input.question}\n\nMark each question and give the marks as JSON.`,
       images: input.photos,
@@ -123,7 +125,15 @@ export async function markAgain(input: { question: string; photos: CompletionIma
       maxOutputTokens: 4096,
       thinking: input.thinking ?? 8192,
       jsonSchema: SCHEMA,
-    });
+    };
+    const cheaper = provider === "google" ? process.env.SECOND_MARKING_MODEL || SECOND_MARKING_MODEL : null;
+    const result = cheaper
+      ? await generateCompletion({ ...request, model: cheaper }).catch((err: unknown) => {
+          if (err instanceof BlockedReplyError) throw err;
+          console.warn(`[second marking] ${cheaper} failed; using the paper-checking model`, err instanceof Error ? err.message : err);
+          return generateCompletion(request);
+        })
+      : await generateCompletion(request);
     const marks = parseMarking(result.text);
     return marks && marks.length > 0 ? { marks, result } : null;
   } catch (err) {

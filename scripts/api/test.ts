@@ -1076,7 +1076,7 @@ failures.length = 0;
   // The two markings differ (4 and 2): a head examiner marks the question a third time, and that mark is final.
   out = await paperRun(2, decided(2));
   check("marking: the paper is marked twice, and the question the markings differ on goes to a head examiner", calls.slice(0, 2).sort().join() === "mark again,write" && calls[2] === "settle" && /First examiner: 4 \/ 4/.test(moderatorPrompt) && /Second examiner: 2 \/ 4\. Their reason: 170 is wrong/.test(moderatorPrompt), `${calls.join()} | ${moderatorPrompt.slice(0, 300)}`);
-  check("marking: the second marking uses the cheaper model", secondModel === "gemini-2.5-flash-lite", secondModel);
+  check("marking: the second marking uses the cheaper model", secondModel === "gemini-flash-lite-latest", secondModel);
   check("marking: a settled mark is put in by code, with no paid rewrite of the report (only a settled mark to apply)", !calls.includes("fix") && out.text.includes("**Total: 2 / 4 (50%) · Grade: C**") && out.text.includes("| 1 | 4 | 2 |") && out.checks.filter((c) => c.kind === "marks").every((c) => c.ok), `${calls.join()} | ${out.text.slice(0, 300)}`);
   check("marking: one final mark with a confidence score, and no second opinion left beside it", reviews().length === 1 && reviews()[0].ok && /^Confidence in these marks: 85%\. .*differed on Q1, so a head examiner marked it a third time/.test(reviews()[0].message) && !JSON.stringify(out.checks).includes("second marking gave") && /\*\*Confidence in these marks: 85%\*\*/.test(out.text), JSON.stringify(reviews()));
 
