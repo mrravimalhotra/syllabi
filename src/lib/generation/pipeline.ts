@@ -543,7 +543,9 @@ async function checkAndRepair(input: {
       prompt:
         `${request.prompt}\n\nYour draft answer below has these problems:\n${found.join("\n")}\n` +
         "Check each one against the reference material. Fix every real problem, and anything that follows from it; for a claim the books do not support, " +
-        'remove it or mark it "(general knowledge)". If a reported problem is not actually a mistake, keep that part as it is. ' +
+        'remove it or mark it "(general knowledge)". An interpretation of a story, poem or passage drawn from the text, an opinion, a personal response ' +
+        "or a piece the student writes is not general knowledge: keep it, with its citation and without that mark. " +
+        "If a reported problem is not actually a mistake, keep that part as it is. " +
         "Write the complete answer again, keeping everything else the same." +
         `\n\nDraft answer:\n${result.text}`,
     });

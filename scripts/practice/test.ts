@@ -1024,6 +1024,13 @@ function q0(): Question {
   check(checkCitations("**Ans:** Something. [S9]", passages).some((c) => !c.ok && c.message.includes("source 9")), "Citations: a source number that is not in the material is caught");
   check(withPageReferences(good, passages).endsWith("releasing oxygen. (p. 14)"), "Citations: marks become page references");
   check(withPageReferences("Fact. [S1, S2]", [passages[0], chunk("c", 7, "x", "History")]) === "Fact. (Science, p. 14; History, p. 7)", "Citations: with several books, the book is named");
+  // Report #10: an interpretation that cites the story was also marked "(general knowledge)".
+  check(
+    withPageReferences("- **Logical reasoning:** He deduced it from the hat. (general knowledge) [S1]\n**Ans:** Yes, I read them. (general knowledge)", passages) ===
+      "- **Logical reasoning:** He deduced it from the hat. (p. 14)\n**Ans:** Yes, I read them. (general knowledge)",
+    "Citations: an answer that cites a page loses a contradictory \"(general knowledge)\" mark; one without a citation keeps it"
+  );
+  check(/interpretation of a story, poem or passage drawn from that page keeps its citation/.test(doubted[0].message), "Citations: a doubted citation tells the fix that an interpretation keeps its citation");
 }
 {
   // Dark mode: the automatic block and the chosen-Dark block in globals.css hold the same colours.

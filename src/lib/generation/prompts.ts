@@ -138,7 +138,10 @@ const ANSWER_STYLE = `Answer layout, for questions to be answered (an exercise, 
 - A statement that is not in the reference material (general knowledge you add to
   complete an answer) ends with "(general knowledge)". Everything unmarked must be from
   the pages (a reasoned interpretation of a story, poem or passage, supported by it, counts as
-  from the pages). Never add a fact the pages do not support just to make an answer longer.
+  from the pages). The mark is only for a fact taken from outside the books: never for an
+  answer about the story or passage, a personal response ("Do you like...?", a warm-up), an
+  opinion, or a piece the student writes (a letter, diary entry, report, story). An answer
+  that cites a source never also carries the mark. Never add a fact the pages do not support just to make an answer longer.
 - A word limit ("60-80 words") is a hard limit: count the words and stay inside it.
 - "Draw and label" questions: list the labels and what each shows, in the book's own
   terms and only the parts the book names (no more layers or parts than it gives). A

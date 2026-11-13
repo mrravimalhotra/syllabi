@@ -47,7 +47,10 @@ export function checkCitations(text: string, chunks: MatchedChunk[]): AnswerChec
     checked++;
     const cited = nums.map((n) => withoutHandwriting(chunks[n - 1].content) + " " + (chunks[n - 1].section_label ?? "")).join(" ");
     if (support(piece, cited) < MIN_SUPPORT) {
-      problems.push(`${label(before)} cites ${nums.map((n) => pageOf(chunks[n - 1])).join(", ")}, but that page does not seem to contain what it says: cite the right source, or mark it "(general knowledge)".`);
+      // Word overlap can't tell an interpretation of a story or passage (in the writer's own words) from a claim
+      // the page doesn't hold, so the fix is told both ways out (Report #10: interpretations were being marked
+      // "(general knowledge)" while still citing the page).
+      problems.push(`${label(before)} cites ${nums.map((n) => pageOf(chunks[n - 1])).join(", ")}, but its words don't closely match that page: cite the source it really comes from. An interpretation of a story, poem or passage drawn from that page keeps its citation, with no "(general knowledge)" mark; only a fact from outside the books is marked "(general knowledge)", without a citation.`);
     }
   }
   if (problems.length) return problems.slice(0, 8).map((message) => ({ kind: "citation", ok: false, message }));
@@ -66,8 +69,17 @@ function pageOf(c: MatchedChunk): string {
   return c.page_number ? `p. ${c.page_number}` : c.section_label || "a passage";
 }
 
+/**
+ * An answer cannot be both from the book and from general knowledge: a "(general knowledge)" mark on a line that
+ * also cites a book source is removed (the citation, which code checks, stands).
+ */
+export function withoutContradictoryTags(text: string): string {
+  return text.replace(/[ \t]*\((?:general knowledge|not from the book)\)(?=[^\n]*\[S\s*\d)/gi, "");
+}
+
 /** The "[S2]" marks as page references: "(p. 12)", with the book's name when several books were used. */
 export function withPageReferences(text: string, chunks: MatchedChunk[]): string {
+  text = withoutContradictoryTags(text);
   if (chunks.length === 0) return text.replace(CITE, "").replace(/[ \t]+$/gm, "");
   const books = new Set(chunks.map((c) => c.book ?? c.document_id));
   return text.replace(CITE, (whole, inside: string) => {
