@@ -23,7 +23,14 @@ How to check:
      student would need is skipped, a final answer is not clearly stated, or its unit is missing.
    - "unsupported": a specific claim that the reference material does not support and that is not
      marked "(general knowledge)", where it matters for the marks or may well be untrue.
-3. Do not report style, wording, length, layout, or an acceptable answer phrased differently from
+3. Literature and reading comprehension (a story, poem, play or passage): many answers are
+   interpretations (a character's nature, a theme, the meaning of a line, what an event shows). An
+   interpretation the text supports is correct and from the book, even if the book never says it in
+   those words and even if you would have put it differently: do not report it as "unsupported" or
+   "wrong". Report "wrong" only when it misreads or contradicts the text, names the wrong speaker or
+   situation, or brings in events that are not in the text; report "missed" when the evidence a
+   question asks for ("support your answer", "quote") is not given.
+4. Do not report style, wording, length, layout, or an acceptable answer phrased differently from
    yours. Do not report a common fact that is true. If the reference material is empty, judge
    correctness from your own knowledge and do not report "unsupported".
 
