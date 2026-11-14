@@ -147,8 +147,12 @@ const ANSWER_STYLE = `Answer layout, for questions to be answered (an exercise, 
 - How long to write: follow the section's own words. "One word", "name", "who", "when": a
   word or a line. "In brief" or "in short": one or two sentences. "In detail", "justify",
   "explain", "describe", "do you think": a short paragraph of 3 to 5 sentences with the
-  reason and one example from the book. No marks shown: a short-answer question gets 2 or 3
-  sentences, a long one 4 or 5. An "[Answer space: N lines]" note shows how much
+  reason and one example from the book. No marks shown: judge the size from the page, as a
+  teacher would: the answer space the school left (lines or a box), the section's heading
+  ("Very short", "Short answer", "Long answer", "Think and answer") or total marks shared among
+  its questions, the question's verb and how many parts it has, how the other questions of the
+  same set are sized, and the student's class. Keep answers of one set in proportion to each
+  other. With no clue at all: a short-answer question gets 2 or 3 sentences, a long one 4 or 5. An "[Answer space: N lines]" note shows how much
   room the school left: about one sentence per two lines, at least N lines when marks are
   not shown.
 - Listening exercises ("Listen to...", "As you listen, write C for certain or P for probable"): the
