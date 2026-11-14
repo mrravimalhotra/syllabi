@@ -3,12 +3,7 @@
 import { useState } from "react";
 import { describeDetails, levelOf, type AnswerConfidence, type Level } from "@/lib/generation/confidence";
 import { cx } from "@/components/ui";
-
-const CHIP: Record<Level, string> = {
-  green: "bg-emerald-100 text-emerald-800 ring-emerald-300",
-  amber: "bg-amber-100 text-amber-900 ring-amber-300",
-  red: "bg-red-100 text-red-800 ring-red-300",
-};
+import { CHIP, ScorePair } from "@/components/ScorePair";
 const WORD: Record<Level, string> = { green: "High", amber: "Medium", red: "Low" };
 
 /**
@@ -78,7 +73,7 @@ export function ConfidenceBadge({ confidence }: { confidence: AnswerConfidence |
                 <li key={r.index}>
                   <button
                     type="button"
-                    onClick={() => document.getElementById(`review-${r.index}`)?.scrollIntoView({ behavior: "smooth", block: "center" })}
+                    onClick={() => document.getElementById(`q-${r.index}`)?.scrollIntoView({ behavior: "smooth", block: "center" })}
                     className={cx("rounded-md px-2 py-1 font-medium ring-1", r.level === "red" ? CHIP.red : CHIP.amber)}
                     title={r.reason}
                   >
@@ -89,6 +84,7 @@ export function ConfidenceBadge({ confidence }: { confidence: AnswerConfidence |
             </ul>
           </div>
         )}
+        <ByQuestion confidence={confidence} />
         <Diagnostics confidence={confidence} />
         <p className="text-slate-500">
           Green is 80 or more, amber 60 to 79, red below 60. These are estimates made by Syllabi&apos;s own checks, not a guarantee: still
@@ -164,3 +160,29 @@ function Diagnostics({ confidence }: { confidence: AnswerConfidence }) {
     </details>
   );
 }
+
+/** Every question's own two numbers, in order (grouped by part in an answer put together from parts); press one to go to it. */
+function ByQuestion({ confidence }: { confidence: AnswerConfidence }) {
+  const questions = confidence.questions ?? [];
+  if (questions.length === 0) return null;
+  return (
+    <div data-testid="by-question">
+      <p className="mb-1 font-medium text-slate-800">By question (correct : from your books)</p>
+      <ul className="flex flex-wrap gap-1.5">
+        {questions.map((q) => (
+          <li key={q.index}>
+            <button
+              type="button"
+              onClick={() => document.getElementById(`q-${q.index}`)?.scrollIntoView({ behavior: "smooth", block: "center" })}
+              className="inline-flex items-center gap-1.5 rounded-md bg-white px-1.5 py-1 ring-1 ring-slate-200 hover:bg-slate-100"
+            >
+              <span className="font-medium text-slate-700">{q.group ? `${q.group} · ${q.label}` : q.label}</span>
+              <ScorePair correct={q.correct} fromBook={q.fromBook} label={q.label} />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+

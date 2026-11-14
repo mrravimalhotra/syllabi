@@ -51,6 +51,18 @@ interface ReviewItem {
   reason: string;
 }
 
+/** One question's own two numbers (owner, 13 Nov: "each question should have its own grounding and confidence score"). */
+interface QuestionScore {
+  /** Which block of the answer (see splitAnswerBlocks). */
+  index: number;
+  /** "Q3.2". */
+  label: string;
+  /** In an answer put together from parts: the part it came from ("pages 9 to 11"). */
+  group?: string;
+  correct: number;
+  fromBook: number;
+}
+
 export interface AnswerConfidence {
   /** 0 to 99: how sure we are the answers are correct and grounded in the books. */
   correct: number;
@@ -62,6 +74,8 @@ export interface AnswerConfidence {
   details?: ConfidenceDetails;
   /** Answers worth checking by a person, for an exercise answered question by question. */
   review?: ReviewItem[];
+  /** Each question's own numbers, for an exercise answered question by question; the two numbers above are their average. */
+  questions?: QuestionScore[];
 }
 
 interface ConfidencePassage {
@@ -273,6 +287,78 @@ function correctness(input: ConfidenceInput, fromBook: number, reasons: string[]
   return fromBook < 40 ? Math.min(correct, 65) : correct;
 }
 
+/** A label as written in a check's message: "Q1 (a)" and "Q1(a)" are the same. */
+const labelKey = (label: string) => label.toLowerCase().replace(/[\s().]/g, "");
+
+/** Whether a check's message is about this question (its label, not a longer one such as Q11 for Q1). */
+function mentions(message: string, label: string): boolean {
+  const text = labelKey(message);
+  const key = labelKey(label);
+  for (let at = text.indexOf(key); at !== -1; at = text.indexOf(key, at + 1)) {
+    if (!/[0-9]/.test(text[at + key.length] ?? "")) return true;
+  }
+  return false;
+}
+
+const NOT_CHECKED = (c: AnswerCheck) => c.kind === "review" && !c.ok && c.message.startsWith("Not double-checked");
+// An answer that names the page it rests on: "(p. 4)", "(Unit 16, p. 4)", or a source mark before it becomes one.
+const CITES_PAGE = /\(([^()]*,\s*)?p\.\s*\d|\[S\s*\d/;
+const clamp = (n: number) => Math.max(5, Math.min(99, Math.round(n)));
+
+/** The answer-wide things that lower every question's first number: web search, weak matches, hard-to-read pages. */
+function sharedPenalty(input: ConfidenceInput): number {
+  return (input.usedSearchGrounding ? 8 : 0) + (input.coverageLow && input.context.length > 0 ? 10 : 0) + Math.min(15, 5 * input.weakPages);
+}
+
+/**
+ * Each question's two numbers. Correct: high when the independent check read the answer against the books and found
+ * nothing in this question; low when it, or a code check, found a problem here; in between when it couldn't run.
+ * From the book: the share of its words in the pages; an answer citing its page that the check found right counts as
+ * from the book even in its own words (an interpretation, a summary: Report #11).
+ */
+function questionScores(input: ConfidenceInput): (QuestionScore & { problems: number })[] {
+  const blocks = splitAnswerBlocks(input.text);
+  if (blocks.filter((b) => b.label !== null).length < MIN_BLOCKS) return [];
+  const known = knownWords(input.context);
+  const failed = input.checks.filter((c) => !c.ok && !NOT_CHECKED(c));
+  const labels = blocks.flatMap((b) => (b.label === null ? [] : [b.label]));
+  // A problem that names no question (a wrong sum found by the calculator, say) counts against every question.
+  const everywhere = failed.filter((c) => !labels.some((l) => mentions(c.message, l))).length;
+  const checkedClean = (problems: number) => problems === 0 && input.checks.some((c) => c.kind === "review" && c.ok);
+  const unchecked = input.checks.some(NOT_CHECKED);
+  const shared = sharedPenalty(input);
+  return blocks.flatMap((block, index) => {
+    if (block.label === null) return [];
+    const label = block.label;
+    const problems = everywhere + failed.filter((c) => mentions(c.message, label)).length;
+    // A short answer (True, a word) has too little to judge: judge the question it answers instead.
+    const own = analyse(block.text, input.context, known).share ?? analyse(block.text.replace(/\*\*/g, " ").replace(/\bAns(?:wer)?:/gi, ". "), input.context, known).share;
+    // Still too little (a one-word answer to a short question): go by how well the pages matched, as for a whole answer.
+    const share = input.context.length === 0 ? 0 : (own ?? (input.coverageLow ? 40 : 85));
+    const confirmed = checkedClean(problems) && CITES_PAGE.test(block.text) && !OUTSIDE_NOTE.test(block.text);
+    const fromBook = confirmed ? Math.max(share, 85) : share;
+    // The same rule as the whole answer's (see correctness), applied to this question alone.
+    let correct = 55 + 0.4 * fromBook - Math.min(40, 20 * problems) + (checkedClean(problems) ? 5 : 0) - (unchecked ? 10 : 0);
+    if (OUTSIDE_NOTE.test(block.text) || fromBook < 40) correct = Math.min(correct, 65);
+    return [{ index, label, correct: clamp(correct - shared), fromBook: Math.round(fromBook), problems }];
+  });
+}
+
+/** The questions a person should look at first: a problem found, or mostly not from the books. */
+function toCheck(questions: (QuestionScore & { problems: number })[], input: ConfidenceInput): ReviewItem[] {
+  if (input.context.length === 0) return [];
+  const blocks = splitAnswerBlocks(input.text);
+  return questions
+    .filter((q) => q.problems > 0 || q.fromBook < REVIEW_BELOW)
+    .map((q) => {
+      const general = OUTSIDE_NOTE.test(blocks[q.index]?.text ?? "");
+      const reason = general ? "From general knowledge, not from your books." : q.fromBook < REVIEW_BELOW ? `Only ${q.fromBook}% of this answer's words are in your books.` : "A check found a problem in this answer.";
+      return { index: q.index, label: q.label, found: q.fromBook, level: q.fromBook < REVIEW_RED_BELOW || q.problems > 0 ? "red" : "amber", reason };
+    });
+}
+
+const average = (values: number[]) => Math.round(values.reduce((sum, v) => sum + v, 0) / values.length);
+
 /** Works out both numbers for an answer. */
 export function scoreAnswer(input: ConfidenceInput): AnswerConfidence {
   const reasons: string[] = [];
@@ -287,8 +373,16 @@ export function scoreAnswer(input: ConfidenceInput): AnswerConfidence {
   }
   if (fromBook < 80 && input.context.length > 0) reasons.push(`About ${100 - fromBook}% of the answer is not found in the pages of your books.`);
 
-  const correct = correctness(input, fromBook, reasons);
-  const review = reviewItems(input.text, input.context);
+  let correct = correctness(input, fromBook, reasons);
+  // An exercise answered question by question: each question is scored on its own, and the answer's numbers are their average.
+  const scored = questionScores(input);
+  const questions: QuestionScore[] = scored.map((q) => ({ index: q.index, label: q.label, correct: q.correct, fromBook: q.fromBook }));
+  if (questions.length > 0) {
+    correct = average(questions.map((q) => q.correct));
+    fromBook = average(questions.map((q) => q.fromBook));
+    reasons.push(`Each of the ${questions.length} questions is scored on its own (see "By question"); the two numbers are their average.`);
+  }
+  const review = questions.length > 0 ? toCheck(scored, input) : reviewItems(input.text, input.context);
   if (review.length > 0) reasons.push(`${review.length} answer${review.length === 1 ? "" : "s"} should be checked: ${review.slice(0, 5).map((r) => r.label).join(", ")}${review.length > 5 ? " and more" : ""}.`);
   if (reasons.length === 0) reasons.push("The answer follows the pages of your books, and the automatic checks found nothing wrong.");
   const details: ConfidenceDetails = {
@@ -305,7 +399,7 @@ export function scoreAnswer(input: ConfidenceInput): AnswerConfidence {
     failedChecks: input.checks.filter((c) => !c.ok).length,
     outside: analysis.outside,
   };
-  return { correct: Math.max(5, Math.min(99, Math.round(correct))), fromBook, reasons, details, ...(review.length > 0 ? { review } : {}) };
+  return { correct: clamp(correct), fromBook, reasons, details, ...(review.length > 0 ? { review } : {}), ...(questions.length > 0 ? { questions } : {}) };
 }
 
 /** The facts behind the two numbers as plain text, to read on screen or paste into a problem report. Empty for answers made before these were kept. */
@@ -325,3 +419,35 @@ export function describeDetails(c: AnswerConfidence): string {
       : ["Every statement judged was found in the books."]),
   ].join("\n");
 }
+
+/**
+ * The confidence of an answer put together from parts ("Solve all"): every part's questions, each with its own two
+ * numbers and the part it came from, lined up with the questions of the combined text; the answer's numbers are their
+ * average. Parts scored before questions were (or a text whose questions don't line up): the least sure part speaks
+ * for the whole, as before.
+ */
+export function combinedConfidence(parts: { label: string; confidence: AnswerConfidence | null }[], combinedText: string): AnswerConfidence | null {
+  const scored = parts.filter((p): p is { label: string; confidence: AnswerConfidence } => p.confidence !== null);
+  const leastSure = [...scored].sort((a, b) => a.confidence.correct - b.confidence.correct)[0]?.confidence ?? null;
+  if (scored.length === 0 || scored.some((p) => !p.confidence.questions?.length)) return leastSure;
+  const group = (label: string) => label.split(": ").pop() ?? label;
+  const all = scored.flatMap((p) => p.confidence.questions!.map((q) => ({ ...q, group: group(p.label) })));
+  const labelled = splitAnswerBlocks(combinedText)
+    .map((b, index) => ({ b, index }))
+    .filter((x) => x.b.label !== null);
+  if (labelled.length !== all.length || labelled.some((x, i) => x.b.label !== all[i].label)) return leastSure;
+  const questions = all.map((q, i) => ({ ...q, index: labelled[i].index }));
+  const review = questions.filter((q) => q.correct < 60 || q.fromBook < REVIEW_BELOW).map((q) => {
+    const from = scored.flatMap((p) => p.confidence.review ?? []).find((r) => r.label === q.label && r.found === q.fromBook);
+    return { index: q.index, label: q.label, found: q.fromBook, level: (q.correct < 60 || q.fromBook < REVIEW_RED_BELOW ? "red" : "amber") as "red" | "amber", reason: from?.reason ?? "A check found a problem in this answer." };
+  });
+  return {
+    ...leastSure!,
+    correct: average(questions.map((q) => q.correct)),
+    fromBook: average(questions.map((q) => q.fromBook)),
+    reasons: [`Each of the ${questions.length} questions is scored on its own (see "By question"); these numbers are their average.`, ...scored.flatMap((p) => p.confidence.reasons.slice(1, 3)).filter((r, i, a) => a.indexOf(r) === i).slice(0, 4)],
+    questions,
+    ...(review.length > 0 ? { review } : { review: undefined }),
+  };
+}
+

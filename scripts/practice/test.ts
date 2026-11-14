@@ -28,7 +28,7 @@ import { handwritingIn, withoutHandwriting } from "@/lib/rag/handwriting";
 import { chunkPageText } from "@/lib/ingestion/chunk";
 import { fullContextBudget } from "@/lib/rag/budget";
 import { COMMANDS, booksOfKinds, commandsInView, noBooksMessage, planCommand } from "@/app/dashboard/_ask/commands";
-import { bookShare, describeDetails, levelOf, scoreAnswer } from "@/lib/generation/confidence";
+import { bookShare, combinedConfidence, describeDetails, levelOf, scoreAnswer } from "@/lib/generation/confidence";
 import { scrub, scrubText } from "@/lib/debug/scrub";
 import { parseBugReport, reportMarkdown, statusLabel } from "@/lib/bug-report";
 import { pdfDisposition } from "@/lib/pdf/disposition";
@@ -790,6 +790,32 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
   check((r.review ?? []).every((x) => x.level === "red" && x.index >= 3) && (r.review ?? [])[2].reason === "From general knowledge, not from your books." && /Only \d+% of this answer's words are in your books\./.test((r.review ?? [])[0].reason), "Review: each flag says why, and general-knowledge answers say so");
   check(!(r.review ?? []).some((x) => x.label === "Q1 (ii)"), "Review: a short true answer (Red soil) is judged by its question, and passes");
   check(/3 answers should be checked: Q1 \(iii\), Q2\.1, Warm-up Q1\./.test(r.reasons.join(" ")), "Review: the confidence reasons name the answers to check");
+  // Each question has its own two numbers; the answer's are their average (owner, 13 Nov).
+  {
+    const qs = r.questions ?? [];
+    check(qs.map((q) => q.label).join("|") === "Q1 (i)|Q1 (ii)|Q1 (iii)|Q2.1|Warm-up Q1", "Per question: every question gets its own numbers");
+    const avg = (k: "correct" | "fromBook") => Math.round(qs.reduce((n, q) => n + q[k], 0) / qs.length);
+    check(r.correct === avg("correct") && r.fromBook === avg("fromBook"), "Per question: the answer's two numbers are the questions' average");
+    check(qs[0].fromBook >= 90 && qs[0].correct >= 90 && qs[2].fromBook === 0 && qs[2].correct <= 65, "Per question: a grounded answer scores high, an invented one low, each on its own");
+    const reviewed = scoreAnswer({ ...base, text: SOIL_EXERCISE_ANSWER, checks: [{ kind: "review", ok: false, message: "May be wrong: Q1 (i): The soil is wrong. Correct: Black soil" }] });
+    const [i, ii] = reviewed.questions ?? [];
+    check(i.correct <= 75 && ii.correct >= 80, `Per question: a problem the check found lowers only its own question (${i.correct}, ${ii.correct})`);
+    check(scoreAnswer({ ...base, text: SOIL_EXERCISE_ANSWER, checks: [{ kind: "calculation", ok: false, message: "12 × 15 = 180, not 170" }] }).questions!.every((q) => q.correct <= 75), "Per question: a problem naming no question lowers them all");
+    // Report #11: an interpretation in its own words that cites its page, which the check found right, counts as from the book.
+    const own = "**Q1. What does this show about Holmes?**\n**Ans:** It shows his keen eye and sharp reasoning, as he reads a whole life from an old hat. (Unit 16, p. 4)\n\n**Q2. Which soil is black?**\n**Ans:** Black soil formed from weathering of volcanic basalt rock rich in clay.";
+    const clean = scoreAnswer({ ...base, text: own, checks: [{ kind: "review", ok: true, message: "An independent AI check of the answer against your books found no mistakes" }] });
+    check(clean.questions![0].fromBook >= 85 && clean.questions![0].correct >= 90, `Per question: an interpretation citing its page, checked right, is from the book (${clean.questions![0].correct}:${clean.questions![0].fromBook})`);
+    const unconfirmed = scoreAnswer({ ...base, text: own });
+    check(unconfirmed.questions![0].fromBook < 85, "Per question: without the independent check, the words decide");
+    // Solve all: the parts' questions carry into the combined answer, with the part they came from.
+    const partText = "**Q1. One?**\n**Ans:** Black soil formed from weathering of volcanic basalt rock.\n\n**Q2. Two?**\n**Ans:** Red soil.";
+    const part = scoreAnswer({ ...base, text: partText });
+    const combinedText = `## Book: pages 1 to 3\n\n${partText}\n\n---\n\n## Book: pages 4 to 5\n\n${partText}`;
+    const whole = combinedConfidence([{ label: "Book: pages 1 to 3", confidence: part }, { label: "Book: pages 4 to 5", confidence: part }], combinedText);
+    check(whole?.questions?.length === 4 && whole.questions[2].group === "pages 4 to 5" && whole.questions.every((q, n) => n === 0 || q.index > whole.questions![n - 1].index), "Per question: Solve all keeps every part's questions, in order, with their part");
+    check(whole?.correct === part.correct, "Per question: the combined numbers are the questions' average");
+    check(combinedConfidence([{ label: "a", confidence: { correct: 70, fromBook: 80, reasons: [] } }, { label: "b", confidence: { correct: 90, fromBook: 90, reasons: [] } }], "x")?.correct === 70, "Per question: older parts without question scores fall back to the least sure part");
+  }
   const good = scoreAnswer({ ...base, text: SOIL_GROUNDED });
   check(good.review === undefined, "Review: an answer that follows the book has nothing to check");
   check(scoreAnswer({ ...base, text: "**Q1 Soil?**\n**Ans:** Volcanic eruptions create pillow lava formations underwater near ridges." }).review === undefined, "Review: a single answer isn't flagged (an exercise needs two or more questions)");

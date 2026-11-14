@@ -1,3 +1,4 @@
+import { combinedConfidence } from "@/lib/generation/confidence";
 import { NextResponse } from "next/server";
 import { apiError, authenticate, errorResponse } from "@/lib/api";
 import { savedAnswerResponse } from "@/lib/generation/handler";
@@ -34,15 +35,16 @@ export async function POST(request: Request) {
 
     const seen = new Set<string>();
     const sources = answered.flatMap((p) => p.row.sources ?? []).filter((s) => !seen.has(s.id) && Boolean(seen.add(s.id)));
-    // The least sure part speaks for the whole answer.
-    const confidence = answered.map((p) => p.row.confidence).filter((c) => c !== null).sort((a, b) => a.correct - b.correct)[0] ?? null;
+    const content = answered.map((p) => `## ${p.label}\n\n${(p.row.content ?? "").trim()}`).join("\n\n---\n\n");
+    // Every question keeps its own numbers; the whole answer's are their average (older parts: the least sure part's).
+    const confidence = combinedConfidence(answered.map((p) => ({ label: p.label, confidence: p.row.confidence })), content);
     const { data: saved, error: saveError } = await admin
       .from("generated_documents")
       .insert({
         student_id: auth.account.id,
         task_type: "solution",
         title: cleanText(body?.title, 200) ?? "All exercise questions",
-        content: answered.map((p) => `## ${p.label}\n\n${(p.row.content ?? "").trim()}`).join("\n\n---\n\n"),
+        content,
         sources,
         used_search_grounding: answered.some((p) => p.row.used_search_grounding),
         search_suggestions_html: answered.map((p) => p.row.search_suggestions_html).find(Boolean) ?? null,

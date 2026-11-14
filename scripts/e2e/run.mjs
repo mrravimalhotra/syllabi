@@ -1975,6 +1975,27 @@ await test("A saved answer that used whole books lists one line per book, not ev
   if ((await page.locator("ol li", { hasText: "[1]" }).count()) !== 0) throw new Error("Every passage was listed.");
 });
 
+await test("Per question: every question shows its own two numbers, listed under By question, and a print shows none of it", async (page, ctx) => {
+  const text = "**Q1. Who examined the hat?**\n**Ans:** Sherlock Holmes.\n\n**Q2. What does it show about him?**\n**Ans:** His sharp reasoning. (p. 4)";
+  const confidence = { correct: 94, fromBook: 90, reasons: ["Each of the 2 questions is scored on its own."], questions: [
+    { index: 0, label: "Q1", correct: 97, fromBook: 95 },
+    { index: 1, label: "Q2", group: "pages 9 to 11", correct: 91, fromBook: 85 },
+  ] };
+  const a = { ...answer, taskType: "solution", createdAt: now, pack: null, worked: null, id: "pq1", title: "Exercise answers", text, confidence };
+  await ctx.route("**/api/documents/pq1", (r) => json(r, { answer: a }));
+  await page.goto(`${BASE}/dashboard/documents/pq1`, { waitUntil: "networkidle" });
+  // The numbers on the answer itself (the panel below repeats them, hidden until opened).
+  const chips = page.locator('section[id^="q-"]').getByTestId("question-score");
+  await chips.first().waitFor();
+  const inline = await chips.allTextContents();
+  if (inline.length !== 2 || inline[0].replace(/\s/g, "") !== "97:95" || inline[1].replace(/\s/g, "") !== "91:85") throw new Error(`question numbers on the answer: ${JSON.stringify(inline)}`);
+  await page.getByTestId("confidence").locator("summary").click();
+  const list = page.getByTestId("by-question");
+  await list.getByText("pages 9 to 11 · Q2").waitFor();
+  await page.emulateMedia({ media: "print" });
+  if (await chips.first().isVisible()) throw new Error("the numbers show in a print");
+});
+
 await test("Answers to check: the weak answers of an exercise are highlighted, listed and can be jumped to, and a print shows none of it", async (page, ctx) => {
   const text = "**Q1 (i). Which soil is found in northern Maharashtra?**\n**Ans:** Black soil.\n\n**Q1 (ii). Name the largest desert on Earth.**\n**Ans:** Antarctic Desert.\n\n**Q2.1 Research Mirabai.**\n**Ans:** A saint from Rajasthan. This is from general knowledge, not from the book.";
   const confidence = { correct: 71, fromBook: 64, reasons: ["2 answers should be checked: Q1 (ii), Q2.1."], review: [
