@@ -16,6 +16,12 @@ on:
       judge_model:
         description: "Model that grades them (empty = the same)"
         required: false
+      writer:
+        description: "A free NVIDIA model that writes the first drafts instead (empty = Gemini writes). Needs the NVIDIA_API_KEY secret"
+        required: false
+      only:
+        description: "Only these cases: id fragments separated by commas (empty = all)"
+        required: false
   schedule:
     # Mondays 02:17 UTC (07:47 in India); odd weeks skip themselves (see "Which week").
     - cron: "17 2 * * 1"
@@ -60,11 +66,14 @@ jobs:
         if: env.RUN == 'true'
       - name: Answer and grade the test set
         if: env.RUN == 'true'
-        run: npm run test:quality
+        run: npm run test:quality -- ${ONLY:+--only "$ONLY"}
         env:
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
           QUALITY_MODEL: ${{ inputs.model }}
           QUALITY_JUDGE_MODEL: ${{ inputs.judge_model }}
+          QUALITY_WRITER: ${{ inputs.writer }}
+          ONLY: ${{ inputs.only }}
       - name: Keep the full results
         if: always() && env.RUN == 'true'
         uses: actions/upload-artifact@v4

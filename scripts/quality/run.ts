@@ -10,7 +10,9 @@ import { DIARY_CASES, runDiaryCase } from "./diary";
 const DIR = join(process.cwd(), "scripts/quality");
 const args = process.argv.slice(2);
 const only = args.includes("--only") ? args[args.indexOf("--only") + 1] : null;
-const cases = (JSON.parse(readFileSync(join(DIR, "cases.json"), "utf8")) as QualityCase[]).filter((c) => !only || c.id.includes(only));
+// --only takes one id fragment, or several separated by commas (a fixed subset to compare two runs on).
+const wanted = (id: string) => !only || only.split(",").some((part) => part.trim() && id.includes(part.trim()));
+const cases = (JSON.parse(readFileSync(join(DIR, "cases.json"), "utf8")) as QualityCase[]).filter((c) => wanted(c.id));
 // A few at a time: fast, without tripping the AI's rate limit.
 const AT_ONCE = Number(process.env.QUALITY_PARALLEL || 3);
 
@@ -108,7 +110,7 @@ for (let i = 0; i < cases.length; i += AT_ONCE) {
 }
 
 // Class diary photos: every entry must come out exactly as the diary says.
-for (const c of DIARY_CASES.filter((d) => !only || d.id.includes(only))) {
+for (const c of DIARY_CASES.filter((d) => wanted(d.id))) {
   const r = await runDiaryCase(c);
   used.tokens += r.tokens;
   results.push({ id: r.id, score: r.score, pass: r.pass, missing: [], unwanted: [], correct: null, complete: null, grounded: null, notes: r.notes, flagged: [], answer: "" });
@@ -131,7 +133,7 @@ if (existsSync(baselineFile) && !only) {
 }
 
 mkdirSync(join(DIR, "results"), { recursive: true });
-const report = { at: new Date().toISOString(), model: process.env.QUALITY_MODEL || "gemini-flash-latest", average, passed, total: results.length, results };
+const report = { at: new Date().toISOString(), model: process.env.QUALITY_WRITER || process.env.QUALITY_MODEL || "gemini-flash-latest", average, passed, total: results.length, results };
 writeFileSync(join(DIR, "results/latest.json"), JSON.stringify(report, null, 2));
 if (args.includes("--save-baseline")) {
   writeFileSync(baselineFile, JSON.stringify({ ...report, results: results.map(({ id, pass, score }) => ({ id, pass, score })) }, null, 2) + "\n");

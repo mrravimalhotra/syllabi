@@ -5,7 +5,8 @@
 //   npm run test:quality                    all cases
 //   npm run test:quality -- --only sci      cases whose id contains "sci"
 //   npm run test:quality -- --save-baseline keep this run as the baseline to compare with
-// Models: QUALITY_MODEL (answers, default gemini-flash-latest), QUALITY_JUDGE_MODEL (grading, default the same).
+// Models: QUALITY_MODEL (answers, default gemini-flash-latest), QUALITY_JUDGE_MODEL (grading, default the same),
+// QUALITY_WRITER (a free NVIDIA model that writes the first drafts instead; needs NVIDIA_API_KEY).
 import { build } from "esbuild";
 import { mkdirSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
@@ -33,6 +34,15 @@ await build({
     "@": join(ROOT, "src"),
   },
   packages: "external",
+  // "@/lib/llm" itself goes through the writer switch (llm-writer.ts), which imports the real one by its path.
+  plugins: [
+    {
+      name: "answer-writer",
+      setup(b) {
+        b.onResolve({ filter: /^@\/lib\/llm$/ }, () => ({ path: here("llm-writer.ts") }));
+      },
+    },
+  ],
   logLevel: "error",
 });
 await import(pathToFileURL(out).href);
