@@ -814,6 +814,18 @@ check(internalEmail("guest") === "guest@guest.syllabi-study.vercel.app", "Stand-
     const whole = combinedConfidence([{ label: "Book: pages 1 to 3", confidence: part }, { label: "Book: pages 4 to 5", confidence: part }], combinedText);
     check(whole?.questions?.length === 4 && whole.questions[2].group === "pages 4 to 5" && whole.questions.every((q, n) => n === 0 || q.index > whole.questions![n - 1].index), "Per question: Solve all keeps every part's questions, in order, with their part");
     check(whole?.correct === part.correct, "Per question: the combined numbers are the questions' average");
+    // Report #12: a problem is put to its own question where it can be told, and an unnamed doubt costs each a little.
+    const six = Array.from({ length: 6 }, (_, n) => `**Q${n + 1}. Statement ${n + 1}?**\n**Ans:** Black soil formed from weathering of volcanic basalt rock rich in clay.`).join("\n\n");
+    const qa1 = scoreAnswer({ ...base, text: six, checks: [{ kind: "review", ok: false, message: "May be wrong: Q.A.1: The hat was examined earlier." }] }).questions!;
+    check(qa1[0].correct <= 75 && qa1.slice(1).every((q) => q.correct >= 90), `Per question: "Q.A.1" is put to Q1 only (${qa1.map((q) => q.correct).join(",")})`);
+    const unnamed = scoreAnswer({ ...base, text: six, checks: [{ kind: "citation", ok: false, message: "Q cites p. 7, p. 8, but its words don't closely match that page" }] }).questions!;
+    check(unnamed.every((q) => q.correct >= 85), `Per question: a doubt naming no question costs each only a little (${unnamed.map((q) => q.correct).join(",")})`);
+    const quoted = scoreAnswer({ ...base, text: six.replace("Statement 3?", "When the thief gave the goose away?"), checks: [{ kind: "citation", ok: false, message: '"When the thief gave the…" cites p. 8, but its words don\'t closely match that page' }] }).questions!;
+    check(quoted[2].correct <= 75 && quoted.filter((_, n) => n !== 2).every((q) => q.correct >= 90), "Per question: a doubt quoting a question's text is put to that question");
+    const sum = scoreAnswer({ ...base, text: six, checks: [{ kind: "calculation", ok: false, message: "12 × 15 = 180, not 170" }] }).questions!;
+    check(sum.every((q) => q.correct <= 75), "Per question: a wrong sum found in the whole answer still lowers every question");
+    const twice = combinedConfidence([{ label: "B: pages 1 to 3", confidence: part }, { label: "B: pages 4 to 5", confidence: part }], combinedText)!;
+    check(twice.reasons.filter((x) => /is scored on its own/.test(x)).length === 1, "Per question: the combined reasons say it once");
     check(combinedConfidence([{ label: "a", confidence: { correct: 70, fromBook: 80, reasons: [] } }, { label: "b", confidence: { correct: 90, fromBook: 90, reasons: [] } }], "x")?.correct === 70, "Per question: older parts without question scores fall back to the least sure part");
   }
   const good = scoreAnswer({ ...base, text: SOIL_GROUNDED });

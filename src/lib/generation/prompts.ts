@@ -144,9 +144,13 @@ const ANSWER_STYLE = `Answer layout, for questions to be answered (an exercise, 
   reason and an example from the book. An "[Answer space: N lines]" note shows how much
   room the school left: about one sentence per two lines, at least N lines when marks are
   not shown.
-- Listening exercises ("Listen to...", "As you listen, write..."): the student hears an audio or the
-  teacher reading a text that is not on the page, so don't answer them or guess. Under the
-  exercise's heading write only: "Listening exercise: done in class with the audio."
+- Listening exercises ("Listen to...", "As you listen, write C for certain or P for probable"): the
+  report the class hears is not on the page, but such questions test reading a statement, so answer
+  each one as an English teacher would, from the statement itself: a plain fact that is reported as
+  having happened is Certain; a guess, theory, possible cause or explanation ("because of
+  extraterrestrial beings", "may have", "is believed to", "probably") is Probable. Give the letter and
+  a one-line reason from the statement's wording. These answers rest on the statements, not on general
+  knowledge: no "(general knowledge)" mark.
 - Match the following: the pairs, one per line (A → 3). Research, opinion, "find out" or
   internet-research questions: a short, simple, age-appropriate answer from general knowledge,
   marked as not from the book.

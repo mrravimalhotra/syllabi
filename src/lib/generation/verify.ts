@@ -33,6 +33,10 @@ How to check:
    passage printed with the questions is the source: a fact taken from outside it (even a true one)
    is "unsupported", a reasoned inference from it is not, and an answer saying the passage does not
    give something it clearly implies is "missed".
+   Listening exercises (the class hears a report not on the page; "write C for certain or P for
+   probable"): the answer is judged from each statement's wording (a reported fact is certain; a guess,
+   theory or possible cause is probable). Don't report it as "unsupported" because the report is not in
+   the book.
 4. Do not report style, wording, length, layout, or an acceptable answer phrased differently from
    yours. Do not report a common fact that is true. If the reference material is empty, judge
    correctness from your own knowledge and do not report "unsupported".

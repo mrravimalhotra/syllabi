@@ -300,6 +300,27 @@ function mentions(message: string, label: string): boolean {
   return false;
 }
 
+/**
+ * Which question (block index) a failed check is about: the question its message names; else the question whose
+ * text it quotes ('"2. When the thief gave the…" cites p. 8'); else, for a label such as "Q.A.1" (section A, Q1)
+ * that names no question exactly, the one question with that number. Null when it can't be told.
+ */
+function ownerOf(check: AnswerCheck, blocks: { label: string | null; text: string }[]): number | null {
+  const named = blocks.findIndex((b) => b.label !== null && mentions(check.message, b.label));
+  if (named !== -1) return named;
+  const quoted = /"([^"]{8,}?)…?"/.exec(check.message)?.[1]?.replace(/…$/, "").trim();
+  if (quoted) {
+    const at = blocks.findIndex((b) => b.label !== null && b.text.includes(quoted));
+    if (at !== -1) return at;
+  }
+  const number = /\bQ[.\s]*(?:[A-Z][.\s]*)?(\d+)\b/.exec(check.message)?.[1];
+  if (number) {
+    const same = blocks.flatMap((b, i) => (b.label !== null && new RegExp(`^Q\\.?\\s*${number}(?![0-9])`).test(b.label) ? [i] : []));
+    if (same.length === 1) return same[0];
+  }
+  return null;
+}
+
 const NOT_CHECKED = (c: AnswerCheck) => c.kind === "review" && !c.ok && c.message.startsWith("Not double-checked");
 // An answer that names the page it rests on: "(p. 4)", "(Unit 16, p. 4)", or a source mark before it becomes one.
 const CITES_PAGE = /\(([^()]*,\s*)?p\.\s*\d|\[S\s*\d/;
@@ -321,16 +342,20 @@ function questionScores(input: ConfidenceInput): (QuestionScore & { problems: nu
   if (blocks.filter((b) => b.label !== null).length < MIN_BLOCKS) return [];
   const known = knownWords(input.context);
   const failed = input.checks.filter((c) => !c.ok && !NOT_CHECKED(c));
-  const labels = blocks.flatMap((b) => (b.label === null ? [] : [b.label]));
-  // A problem that names no question (a wrong sum found by the calculator, say) counts against every question.
-  const everywhere = failed.filter((c) => !labels.some((l) => mentions(c.message, l))).length;
+  const owner = (c: AnswerCheck) => ownerOf(c, blocks);
+  // A problem that can't be put to a question: a wrong sum (the calculator found it in the whole answer) counts
+  // fully against every question; a doubt about an unnamed question costs each a little (Report #12: one unnamed
+  // doubt had taken every question of a part from 95 to 55).
+  const unplaced = failed.filter((c) => owner(c) === null);
+  const everywhere = unplaced.filter((c) => c.kind === "calculation" || c.kind === "marks").length;
+  const vague = Math.min(10, 5 * (unplaced.length - everywhere));
   const checkedClean = (problems: number) => problems === 0 && input.checks.some((c) => c.kind === "review" && c.ok);
   const unchecked = input.checks.some(NOT_CHECKED);
   const shared = sharedPenalty(input);
   return blocks.flatMap((block, index) => {
     if (block.label === null) return [];
     const label = block.label;
-    const problems = everywhere + failed.filter((c) => mentions(c.message, label)).length;
+    const problems = everywhere + failed.filter((c) => owner(c) === index).length;
     // A short answer (True, a word) has too little to judge: judge the question it answers instead.
     const own = analyse(block.text, input.context, known).share ?? analyse(block.text.replace(/\*\*/g, " ").replace(/\bAns(?:wer)?:/gi, ". "), input.context, known).share;
     // Still too little (a one-word answer to a short question): go by how well the pages matched, as for a whole answer.
@@ -340,7 +365,7 @@ function questionScores(input: ConfidenceInput): (QuestionScore & { problems: nu
     // The same rule as the whole answer's (see correctness), applied to this question alone.
     let correct = 55 + 0.4 * fromBook - Math.min(40, 20 * problems) + (checkedClean(problems) ? 5 : 0) - (unchecked ? 10 : 0);
     if (OUTSIDE_NOTE.test(block.text) || fromBook < 40) correct = Math.min(correct, 65);
-    return [{ index, label, correct: clamp(correct - shared), fromBook: Math.round(fromBook), problems }];
+    return [{ index, label, correct: clamp(correct - shared - vague), fromBook: Math.round(fromBook), problems }];
   });
 }
 
@@ -445,7 +470,14 @@ export function combinedConfidence(parts: { label: string; confidence: AnswerCon
     ...leastSure!,
     correct: average(questions.map((q) => q.correct)),
     fromBook: average(questions.map((q) => q.fromBook)),
-    reasons: [`Each of the ${questions.length} questions is scored on its own (see "By question"); these numbers are their average.`, ...scored.flatMap((p) => p.confidence.reasons.slice(1, 3)).filter((r, i, a) => a.indexOf(r) === i).slice(0, 4)],
+    reasons: [
+      `Each of the ${questions.length} questions is scored on its own (see "By question"); the two numbers are their average.`,
+      ...scored
+        .flatMap((p) => p.confidence.reasons)
+        .filter((r) => !/is scored on its own/.test(r))
+        .filter((r, i, a) => a.indexOf(r) === i)
+        .slice(0, 4),
+    ],
     questions,
     ...(review.length > 0 ? { review } : { review: undefined }),
   };
