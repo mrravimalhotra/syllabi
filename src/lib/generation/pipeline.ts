@@ -7,6 +7,7 @@ import { retrieveContext, formatContext, loadSourceImages, type RetrievalResult 
 import { checkQuota, QuotaExceededError } from "@/lib/quota";
 import { systemInstructionsFor } from "@/lib/generation/prompts";
 import { problemForRepair, reviewChecks, verifyAnswer, type VerifyProblem } from "@/lib/generation/verify";
+import { freeWriterFor, writeFree, writtenFree } from "@/lib/generation/free-writer";
 import { disagreements, solveAgain, type FinalAnswer } from "@/lib/generation/second-solve";
 import { markAgain, markingDisagreements, type SecondMark } from "@/lib/generation/second-marking";
 import { confirmMarks, doubtfulQuestions, finishMarking, settleMarks, settleMovedMarks, type Settlement } from "@/lib/generation/settle-marking";
@@ -366,16 +367,14 @@ export async function writeAndCheck(input: {
     thinking: THINKING[taskType],
   };
   const writingStart = Date.now();
-  const result = await generateCompletion({
-    ...request,
-    onText:
-      onText &&
-      ((delta) => {
-        timings.firstWordsMs ??= Date.now() - writingStart;
-        onText(delta);
-      }),
-    onRestart,
-  });
+  const shown = (delta: string) => {
+    timings.firstWordsMs ??= Date.now() - writingStart;
+    onText?.(delta);
+  };
+  // A question without photos: the free model writes the first draft (lib/generation/free-writer.ts); Gemini when it can't.
+  const free = freeWriterFor(taskType, photos) ? await writeFree(request) : null;
+  if (free) shown(free.text);
+  const result = free ?? (await generateCompletion({ ...request, onText: onText && shown, onRestart }));
   timings.writingMs = Date.now() - writingStart;
   timings.model = `${result.provider} / ${result.model}${result.standInFor ? ` (stand-in: ${result.standInFor} was busy)` : ""}${result.freeTier ? " (free tier)" : ""}`;
   await recordTokenUsage({
@@ -386,7 +385,17 @@ export async function writeAndCheck(input: {
     usage: result.usage,
   });
 
-  const checked = await checkAndRepair({ taskType, studentId: student.id, request, result, chunks, photos, searchQuery, prompt, timings, onStage });
+  const repairInput = { taskType, studentId: student.id, request, chunks, photos, searchQuery, prompt, timings, onStage };
+  const checked = await checkAndRepair({ ...repairInput, result });
+  // A free-written answer that Gemini couldn't check is not shown unchecked: Gemini writes the answer instead.
+  if (writtenFree(checked.result) && checked.checks.some((c) => c === NOT_DOUBLE_CHECKED)) {
+    console.warn("[free writer] the free answer couldn't be checked; Gemini writes it");
+    onRestart?.();
+    const again = await generateCompletion({ ...request, onText: onText && shown, onRestart });
+    timings.model = `${again.provider} / ${again.model}`;
+    await recordTokenUsage({ studentId: student.id, taskType, provider: again.provider, model: again.model, usage: again.usage });
+    return checkAndRepair({ ...repairInput, result: again });
+  }
   return { result: checked.result, checks: checked.checks };
 }
 
@@ -482,7 +491,9 @@ async function checkAndRepair(input: {
     // The paper checker's marking is checked by code (lib/checks/paper.ts); it has no book to check against.
     if (taskType === "paper_check") return null;
     // The examiner thinks as much as the writer did (notes less than maths), not always the most.
-    const examine = () => verifyAnswer({ taskType, question: request.prompt, answer: text, context: request.context, photos, thinking: late() ? LATE_THINKING : THINKING[taskType] || 2048 });
+    // A draft the free model wrote is checked by Gemini (Flash-Lite), never by the model that wrote it.
+    const gate = writtenFree(input.result) && text === input.result.text;
+    const examine = () => verifyAnswer({ taskType, question: request.prompt, answer: text, context: request.context, photos, gate, thinking: late() ? LATE_THINKING : THINKING[taskType] || 2048 });
     // A check that couldn't run (busy, an unreadable reply) is tried once more while there is time, rather than
     // showing the answer as not double-checked.
     const verified = (await examine()) ?? (late() ? null : await examine());

@@ -1213,6 +1213,59 @@ failures.length = 0;
   fresh();
 }
 {
+  // The free writer: a question without photos is drafted by NVIDIA's free model, checked by Gemini Flash-Lite, and
+  // fixed (or, when it can't be checked, rewritten) by Gemini.
+  fresh();
+  tables.documents = [{ id: "bk", owner_id: ME, title: "History", status: "ready" }];
+  rpcs.match_owner_chunks = () => [{ id: "c1", document_id: "bk", content: "Akbar became emperor in 1556 at the age of 13.", section_label: "Chapter 2", page_number: 12, source_type: "textbook", image_path: null, similarity: 0.82 }];
+  const realFetch = globalThis.fetch;
+  let freeText = "**Ans:** Akbar became emperor in 1556.";
+  let freeAsked = 0;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (!String(input).includes("integrate.api.nvidia.com")) return realFetch(input, init);
+    // The free checker reads Gemini's answers too; only drafts count as the free writer.
+    const system = String((JSON.parse(String(init?.body)) as { messages: { content: unknown }[] }).messages[0].content);
+    if (system.includes("careful examiner")) return new Response(JSON.stringify({ model: "nemotron", choices: [{ message: { content: '{"problems": []}' }, finish_reason: "stop" }] }), { status: 200, headers: { "content-type": "application/json" } });
+    freeAsked++;
+    return new Response(JSON.stringify({ model: "nemotron", choices: [{ message: { content: freeText }, finish_reason: "stop" }], usage: { prompt_tokens: 3, completion_tokens: 2, total_tokens: 5 } }), { status: 200, headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  process.env.NVIDIA_API_KEY = "test-nvidia";
+  const steps: string[] = [];
+  let verdicts: string[] = [];
+  fakeAi.reply = (req) => {
+    if (req.systemInstructions === REWRITE_SYSTEM) return { text: '{"queries":[]}' };
+    if (req.systemInstructions === VERIFY_SYSTEM) {
+      steps.push(`check:${(req as { model?: string }).model ?? "main"}`);
+      return { text: verdicts.shift() ?? '{"problems":[]}' };
+    }
+    const fixing = (req as unknown as { prompt: string }).prompt.includes("Your draft answer below has these problems");
+    steps.push(fixing ? "gemini fix" : "gemini write");
+    return { text: fixing ? "**Ans:** Akbar became emperor in 1556, at 13." : "**Ans:** Gemini's answer: 1556." };
+  };
+  const ask = (photos: { data: string; mimeType: string }[] = []) => runGeneration({ student: person(), taskType: "solution", prompt: "When did Akbar become emperor?", photos });
+
+  let out = await ask();
+  check("free writer: a question without photos is written by the free model and checked by Gemini Flash-Lite, not by itself", out.text.includes("Akbar became emperor in 1556.") && freeAsked === 1 && steps.join() === "check:gemini-flash-lite-latest", `${steps.join()} | free ${freeAsked}`);
+  steps.length = 0;
+  verdicts = ['{"problems":[{"kind":"missed","where":"Q1","problem":"The age is not given.","fix":"At 13."}]}'];
+  out = await ask();
+  check("free writer: a problem the gate finds is fixed by Gemini", steps[0] === "check:gemini-flash-lite-latest" && steps.includes("gemini fix") && out.text.includes("at 13"), steps.join());
+  steps.length = 0;
+  verdicts = ["unreadable", "unreadable", '{"problems":[]}'];
+  out = await ask();
+  check("free writer: an answer the gate couldn't check is not shown: Gemini writes it", steps.includes("gemini write") && out.text.includes("Gemini's answer"), steps.join());
+  steps.length = 0;
+  freeAsked = 0;
+  await runGeneration({ student: person(), taskType: "solution", prompt: "Solve this", photos: [{ data: "QUJD", mimeType: "image/jpeg" }] });
+  check("free writer: a question with photos goes to Gemini", freeAsked === 0 && steps.includes("gemini write"), `${steps.join()} free ${freeAsked}`);
+  steps.length = 0;
+  freeText = "";
+  out = await ask();
+  check("free writer: an empty free draft falls back to Gemini", steps.includes("gemini write") && out.text.includes("Gemini's answer"), steps.join());
+  delete process.env.NVIDIA_API_KEY;
+  globalThis.fetch = realFetch;
+}
+{
   // The homework tracker: a class diary page becomes classwork and homework entries.
   fresh();
   const diary = {

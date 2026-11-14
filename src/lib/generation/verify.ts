@@ -138,11 +138,13 @@ export async function verifyAnswer(input: {
   photos: CompletionImage[];
   /** How much the examiner may think first (it works each answer out itself). */
   thinking?: number;
+  /** The answer was written by the free model: Gemini Flash-Lite checks it, not the free checker (the same model). */
+  gate?: boolean;
 }): Promise<{ problems: VerifyProblem[]; result: CompletionResult } | null> {
   const prompt = `Question(s):\n"""\n${input.question}\n"""\n\nAnswer to check:\n"""\n${input.answer}\n"""\n\nList the problems as JSON.`;
   // The free checker reads it first (owner, 14 Nov: "free checker"). Nothing found: accepted, at no cost. A problem
   // found: Gemini checks again before anything is rewritten, so a free check's false alarm never pays for a fix.
-  const free = await freeCheck(input, prompt);
+  const free = input.gate ? null : await freeCheck(input, prompt);
   if (free && free.problems.length === 0) return free;
   if (free) console.warn(`[verify] the free checker found ${free.problems.length} problem(s); Gemini checks again before any fix`);
   try {
@@ -156,6 +158,7 @@ export async function verifyAnswer(input: {
       maxOutputTokens: 4096,
       thinking: input.thinking ?? 8192,
       jsonSchema: SCHEMA,
+      ...(input.gate ? { model: GATE_MODEL() } : {}),
     });
     const problems = parseProblems(result.text);
     if (!problems) {
@@ -168,6 +171,9 @@ export async function verifyAnswer(input: {
     return null;
   }
 }
+
+// The gate for a free-written answer: Gemini Flash-Lite (cheap, and a different model from the writer).
+const GATE_MODEL = () => process.env.FREE_WRITER_GATE_MODEL || "gemini-flash-lite-latest";
 
 // The free checker: NVIDIA's Nemotron 3.5 Super VL (reads pictures; tested 13 Nov), when NVIDIA_API_KEY is set.
 const FREE_CHECK_MODEL = () => process.env.NVIDIA_CHECK_MODEL || "nvidia/nemotron-3.5-super-vl-120b-a12b";
