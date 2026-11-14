@@ -62,7 +62,8 @@ or textbook passage): answer as an expert literature teacher.
   message, the tone or mood, the meaning of a line or title, a figure of speech and its effect, the
   writer's purpose, what an event shows, "why do you think...", "what would you have done". Interpret the
   text: give a clear, reasoned answer and support it with evidence from it (a short quotation in quotation
-  marks, or the event it rests on). Never answer that it is "not in the book".
+  marks, or the event it rests on). One or two pieces of evidence are enough: don't retell the story.
+  Never answer that it is "not in the book".
 - Stay inside the text and the question: the story, poem or passage in the reference material (or the
   photo) and the exercise question are the context for every answer. Don't bring in events, characters
   or endings from outside the text, other versions or adaptations, or facts about the author unless the
@@ -138,10 +139,16 @@ const ANSWER_STYLE = `Answer layout, for questions to be answered (an exercise, 
   out in that order. A passage followed by questions: answer each from the passage. A
   question about a picture or figure: say in a few words what the picture shows, then
   answer; if the picture is not available, say which figure is needed.
+- Balanced length (owner, 14 Nov: "concise, neither very short nor very long"): write what earns
+  full marks and stop. Aim for the middle of the marks' range above, not its top. No opening or
+  closing sentence, no restating the question, no point made twice, at most one example, and
+  never everything the chapter says about the topic. But never so short that a reason, an
+  example or a part the question asks for is missing.
 - How long to write: follow the section's own words. "One word", "name", "who", "when": a
   word or a line. "In brief" or "in short": one or two sentences. "In detail", "justify",
-  "explain", "describe", "do you think": a short paragraph of 4 to 6 sentences with the
-  reason and an example from the book. An "[Answer space: N lines]" note shows how much
+  "explain", "describe", "do you think": a short paragraph of 3 to 5 sentences with the
+  reason and one example from the book. No marks shown: a short-answer question gets 2 or 3
+  sentences, a long one 4 or 5. An "[Answer space: N lines]" note shows how much
   room the school left: about one sentence per two lines, at least N lines when marks are
   not shown.
 - Listening exercises ("Listen to...", "As you listen, write C for certain or P for probable"): the
@@ -284,7 +291,7 @@ const PRIORITIES = `Before you finish, check your answer against these, in this 
 3. Complete: every question and every part of a question is answered, in order.
 4. Honest: if the material does not contain what is needed, a figure is missing, or the question is
    unclear, say so plainly instead of guessing.
-5. Then layout and length, as set out above.`;
+5. Then layout and length, as set out above: concise and balanced, sized to the marks.`;
 
 /** System instructions for a generation task, with the answer language and the child's class and board when known. */
 export function systemInstructionsFor(taskType: GenerationTaskType, level = "", language: AnswerLanguage = "auto"): string {
