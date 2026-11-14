@@ -27,7 +27,9 @@ const MOST_PAGES = 12;
 const NO_QUESTIONS = "No questions on these pages.";
 export const isNoQuestions = (text: string) => /^\W*no questions on (?:these|this) pages?\b/i.test(text.trim());
 
-const ASKS = /\?\s*$|^\s*(?:Q\.?\s*\d+|\d{1,2}[.)]|\(?[a-z]\)|\(?[ivx]{1,4}\))\s+\S.*\?|\b(?:fill in the blanks?|true or false|match the (?:following|columns?)|answer the following|choose the correct|tick the correct|give reasons?|short answer|long answer|answer in (?:brief|short|detail|one word)|name the following|define the following|exercises?\b|warm[- ]?up|source analysis|think and answer|let us (?:recall|revise))/im;
+// "Exercise" counts only as a heading at the start of a line: a story saying "regular exercise" is not an exercise page (14 Nov:
+// such pages each became a part that cost a full answer to say "no questions here").
+const ASKS = /^\s*(?:#+\s*|\*\*)?exercises?\b|\?\s*$|^\s*(?:Q\.?\s*\d+|\d{1,2}[.)]|\(?[a-z]\)|\(?[ivx]{1,4}\))\s+\S.*\?|\b(?:fill in the blanks?|true or false|match the (?:following|columns?)|answer the following|choose the correct|tick the correct|give reasons?|short answer|long answer|answer in (?:brief|short|detail|one word)|name the following|define the following|warm[- ]?up|source analysis|think and answer|let us (?:recall|revise))/im;
 
 /** Whether a page's text has questions on it (question marks at line ends, numbered questions, the usual exercise headings). */
 function hasQuestions(text: string): boolean {
