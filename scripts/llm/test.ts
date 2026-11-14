@@ -1,5 +1,6 @@
 import { googleAdapter, googleEmbedMany } from "@/lib/llm/providers/google";
 import { generateFreeFirst } from "@/lib/llm";
+import { verifyAnswer } from "@/lib/generation/verify";
 import { resetFreeKeyRests } from "@/lib/llm/google-keys";
 import { openAiCompatibleAdapter } from "@/lib/llm/providers/openai";
 import { scene } from "@/lib/study-pack/generate";
@@ -278,6 +279,32 @@ scenario = null;
   check("an answer is never written by the lighter stand-in", /spending cap/.test(outcome) && !requests.some((r) => !r.url.includes("gemini-answer-model")), `${outcome} | ${requests.map((r) => r.url.split("models/")[1]).join()}`);
   check("a spending cap is not waited out with retries", Date.now() - started < 3000 && requests.length === 1, `${Date.now() - started} ms, ${requests.length} requests`);
   answerTest = false;
+  scenario = null;
+}
+
+// The free checker (NVIDIA) reads an answer first; Gemini checks again only when it finds a problem, or can't check.
+{
+  process.env.NVIDIA_API_KEY = "test-nvidia-key";
+  const chat = (content: string, status = 200) =>
+    new Response(status === 200 ? JSON.stringify({ model: "nemotron", choices: [{ message: { content }, finish_reason: "stop" }], usage: { prompt_tokens: 3, completion_tokens: 2, total_tokens: 5 } }) : JSON.stringify({ error: { message: content } }), { status, headers: { "content-type": "application/json" } });
+  const job = { taskType: "solution" as const, question: "Q1. Who found the stone?", answer: "**Q1.** Peterson's wife.", context: "Peterson's wife found it.", photos: [] };
+  setScenario(() => ok('{"problems":[{"kind":"wrong","where":"Q1","problem":"Gemini agrees it is wrong.","fix":"x"}]}'));
+  openAiReply = () => chat('{"problems": []}');
+  const clean = await verifyAnswer(job);
+  check("the free checker's clean reading is accepted, with no Gemini call", clean?.problems.length === 0 && clean.result.provider === "nvidia" && requests.length === 0, `${clean?.result.provider} ${requests.length}`);
+  openAiReply = () => chat('{"problems": [{"kind": "wrong", "where": "Q1", "problem": "Free checker doubts it.", "fix": "y"}]}');
+  const doubted = await verifyAnswer(job);
+  check("a problem the free checker finds is checked again by Gemini, whose reading counts", doubted?.result.provider === "google" && doubted.problems[0]?.problem === "Gemini agrees it is wrong." && requests.length === 1, `${doubted?.result.provider} ${doubted?.problems[0]?.problem}`);
+  requests.length = 0;
+  openAiReply = () => chat("Sorry, I can't help with that.");
+  const unreadable = await verifyAnswer(job);
+  check("an unreadable free reading falls back to Gemini", unreadable?.result.provider === "google" && requests.length === 1);
+  requests.length = 0;
+  openAiReply = () => chat("busy", 503);
+  const down = await verifyAnswer(job);
+  check("a free checker that can't answer falls back to Gemini", down?.result.provider === "google" && requests.length === 1);
+  delete process.env.NVIDIA_API_KEY;
+  openAiReply = null;
   scenario = null;
 }
 

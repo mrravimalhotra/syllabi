@@ -1,4 +1,5 @@
 import { generateCompletion } from "@/lib/llm";
+import { hasKey, openAiCompatibleAdapter } from "@/lib/llm/providers/openai";
 import type { CompletionImage, CompletionResult } from "@/lib/llm/types";
 import type { AnswerCheck, GenerationTaskType } from "@/types/database";
 
@@ -138,12 +139,18 @@ export async function verifyAnswer(input: {
   /** How much the examiner may think first (it works each answer out itself). */
   thinking?: number;
 }): Promise<{ problems: VerifyProblem[]; result: CompletionResult } | null> {
+  const prompt = `Question(s):\n"""\n${input.question}\n"""\n\nAnswer to check:\n"""\n${input.answer}\n"""\n\nList the problems as JSON.`;
+  // The free checker reads it first (owner, 14 Nov: "free checker"). Nothing found: accepted, at no cost. A problem
+  // found: Gemini checks again before anything is rewritten, so a free check's false alarm never pays for a fix.
+  const free = await freeCheck(input, prompt);
+  if (free && free.problems.length === 0) return free;
+  if (free) console.warn(`[verify] the free checker found ${free.problems.length} problem(s); Gemini checks again before any fix`);
   try {
     const result = await generateCompletion({
       taskType: input.taskType,
       systemInstructions: VERIFY_SYSTEM,
       context: input.context || undefined,
-      prompt: `Question(s):\n"""\n${input.question}\n"""\n\nAnswer to check:\n"""\n${input.answer}\n"""\n\nList the problems as JSON.`,
+      prompt,
       images: input.photos,
       temperature: 0,
       maxOutputTokens: 4096,
@@ -158,6 +165,35 @@ export async function verifyAnswer(input: {
     return { problems, result };
   } catch (err) {
     console.error("[verify] check failed", err);
+    return null;
+  }
+}
+
+// The free checker: NVIDIA's Nemotron 3.5 Super VL (reads pictures; tested 13 Nov), when NVIDIA_API_KEY is set.
+const FREE_CHECK_MODEL = () => process.env.NVIDIA_CHECK_MODEL || "nvidia/nemotron-3.5-super-vl-120b-a12b";
+const FREE_CHECK_TIMEOUT_MS = 90_000;
+// Services without a JSON schema are told the shape in words.
+const JSON_SHAPE = 'Reply with only this JSON, nothing else: {"problems": [{"kind": "wrong" | "missed" | "unsupported", "where": "Q3 (b)", "problem": "...", "fix": "..."}]} (an empty list when there are none).';
+
+/** The free checker's reading, or null when it isn't set up, fails, or its reply can't be read (Gemini checks instead). */
+async function freeCheck(input: { taskType: GenerationTaskType; context: string; photos: CompletionImage[] }, prompt: string): Promise<{ problems: VerifyProblem[]; result: CompletionResult } | null> {
+  if (!hasKey("nvidia")) return null;
+  try {
+    const result = await openAiCompatibleAdapter("nvidia").generateCompletion({
+      taskType: input.taskType,
+      systemInstructions: `${VERIFY_SYSTEM}\n\n${JSON_SHAPE}`,
+      context: input.context || undefined,
+      prompt,
+      images: input.photos,
+      temperature: 0,
+      model: FREE_CHECK_MODEL(),
+      timeoutMs: FREE_CHECK_TIMEOUT_MS,
+    });
+    const problems = parseProblems(result.text);
+    if (!problems) console.warn("[verify] the free checker's reply couldn't be read; Gemini checks instead", result.text.slice(0, 160));
+    return problems ? { problems, result } : null;
+  } catch (err) {
+    console.warn("[verify] the free checker couldn't check; Gemini checks instead:", err instanceof Error ? err.message.slice(0, 200) : err);
     return null;
   }
 }
